@@ -799,6 +799,31 @@ body.loggedIn #toolsLoginArea{ display:none; }
     </div>
   </div>
 
+
+  <!-- Camera Scan Modal (required for the Scan button) -->
+  <div id="camModal" aria-hidden="true">
+    <div class="modalCard" role="dialog" aria-modal="true" aria-label="Camera Scan">
+      <div class="modalHeader">
+        <div class="modalTitle">Scan</div>
+        <button class="modalClose" onclick="closeCameraModal()" aria-label="Close">×</button>
+      </div>
+
+      <div class="camStage">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <img id="camPreview" alt="Capture preview" />
+        <canvas id="camCanvas" style="display:none;"></canvas>
+        <div class="camOverlay"></div>
+      </div>
+
+      <div class="modalBtns">
+        <button class="bigBtn" onclick="camCapture()">Capture</button>
+        <button class="bigBtn" onclick="camImport()">Use</button>
+        <button class="bigBtn" onclick="closeCameraModal()">Close</button>
+      </div>
+      <div class="modalHint">Tip: line the grid up inside the dashed box.</div>
+    </div>
+  </div>
+
 <script>
 /* -------------------- CONFIG -------------------- */
 const rows = 8;
@@ -1897,6 +1922,21 @@ const camPreviewEl = document.getElementById("camPreview");
 
 async function openCameraModal(){
   try{
+    if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
+      alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
+      return;
+    }
+
+    if(!window.isSecureContext){
+      alert("Camera access needs a secure context.\nOpen this page via https:// or http://localhost (not file://).\n\nCurrent URL:\n" + location.href);
+      return;
+    }
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert("Camera API not available in this browser.");
+      return;
+    }
+
     camCapturedDataUrl = null;
     camPreviewEl.style.display = "none";
     camVideoEl.style.display = "block";
@@ -1904,16 +1944,38 @@ async function openCameraModal(){
     camModalEl.classList.add("show");
     camModalEl.setAttribute("aria-hidden", "false");
 
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      alert("Camera not available on this device/browser.");
-      return;
+    const primaryConstraints = { video: { facingMode: { ideal: "environment" } }, audio: false };
+    const fallbackConstraints = { video: true, audio: false };
+
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
+    }catch(err){
+      // Some devices/browsers don't like facingMode constraints.
+      if(err && (err.name === "OverconstrainedError" || err.name === "NotFoundError")){
+        camStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      }else{
+        throw err;
+      }
     }
 
-    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio:false });
     camVideoEl.srcObject = camStream;
     await camVideoEl.play().catch(()=>{});
   }catch(e){
-    alert("Could not open the camera. (Tip: this usually needs HTTPS.)");
+    console.error("Camera open failed:", e);
+    const name = (e && e.name) ? e.name : "Error";
+    const msg  = (e && e.message) ? e.message : "";
+
+    if(name === "NotAllowedError" || name === "SecurityError"){
+      alert("Camera permission was blocked.\n\nFix:\n1) Click the padlock icon in the address bar\n2) Site settings -> Camera -> Allow\n3) Reload the page\n\n(" + name + (msg ? ": " + msg : "") + ")");
+      return;
+    }
+
+    if(name === "NotReadableError"){
+      alert("The camera may be in use by another app/tab (Zoom/Meet/etc).\nClose other apps using the camera, then try again.\n\n(" + name + (msg ? ": " + msg : "") + ")");
+      return;
+    }
+
+    alert("Could not open the camera.\n\n(" + name + (msg ? ": " + msg : "") + ")");
   }
 }
 
