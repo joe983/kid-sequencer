@@ -935,7 +935,7 @@ function bindLockedNudge(el){
 function updateLoginLinks(){
   const current = (location.pathname.split("/").pop() || "index.html");
   document.querySelectorAll("a.loginLink").forEach(a => {
-    a.href = "login_new.html?return=" + encodeURIComponent(current);
+    a.href = "login.html?return=" + encodeURIComponent(current);
   });
 }
 updateLoginLinks();
