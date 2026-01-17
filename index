@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Kid Sequencer</title>
+
+  <style>
+    :root{
+      --cell: 46px;
+      --gap: 4px;
+      --toolW: 210px;
+      --rightW: 110px;
+      --rightLift: 0px;
+      --titleInset: 0px;
+      --contentLift: 0px;
+
+      --wiggleDeg: 1.2deg;
+      --wiggleScale: 0.01;
+    }
+
+    body{
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      background: #f6fbff;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Prevent caret/focus blinking artifacts */
+    *{ caret-color: transparent; }
+    :focus{ outline: none; }
+
+    .bgDots{
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.08;
+      background-image: radial-gradient(circle, #2a2a2a 1.2px, transparent 1.4px);
+      background-size: 26px 26px;
+    }
+
+    #page{
+      min-height: 100vh;
+      display:flex;
+      flex-direction:column;
+      padding-top: 10px;
+      padding-bottom: env(safe-area-inset-bottom);
+      user-select:none;
+    }
+
+    #topBar{
+      height: 92px;
+      padding: 8px 14px 0;
+      box-sizing:border-box;
+      position: relative;
+    }
+
+    #titleBox{
+      width: var(--toolW);
+      height: 58px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.06);
+      box-sizing:border-box;
+
+      display:flex;
+      align-items:center;
+      justify-content:center;
+
+      position:absolute;
+      left: calc(14px + var(--titleInset));
+      top: 8px;
+      overflow:hidden;
+      line-height: 1;
+    }
+
+    #titleBox .titleText{
+      font-family: "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      letter-spacing: 0.6px;
+      color:#1f2a44;
+      white-space:nowrap;
+      line-height: 1;
+      padding: 0; margin: 0;
+      transform: translateY(-0.5px);
+      text-shadow:
+        0 2px 0 rgba(255,255,255,0.9),
+        0 5px 0 rgba(0,0,0,0.08);
+    }
+
+    /* Everything except the title gets lifted together */
+    #contentWrap{
+      transform: translateY(calc(-1 * var(--contentLift)));
+      will-change: transform;
+    }
+
+    #controls{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap: 10px;
+      margin: 6px 0 8px;
+      flex-wrap: nowrap;
+    }
+    #controls .bigBtn{ margin: 0; }
+    .bigBtn{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-size:18px;
+      padding: 10px 16px;
+      margin: 5px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      cursor:pointer;
+      font-weight: 900;
+      box-shadow: 0 12px 0 rgba(0,0,0,0.07);
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+      min-width: 88px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 8px;
+    }
+    .bigBtn.iconBtn{
+      padding: 0;
+      width: 76px;
+      height: 58px;
+    }
+
+    .bigBtn .icon{
+      line-height: 1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width: 100%;
+      height: 100%;
+      transform: none;
+    }
+    .bigBtn .icon svg{
+  display:block;
+  width: 38px;
+  height: 38px;
+}
+.bigBtn .playIcon{ color: #18b118; }
+.bigBtn .stopIcon{ color: #e02b2b; }
+.bigBtn .undoIcon{ color: #111111; }
+.bigBtn .clearIcon{ color: #111111; }
+.bigBtn .cameraIcon{ color: #111111; }
+
+.bigBtn .clearIcon svg{ width: 28px; height: 28px; }
+.bigBtn .undoIcon svg{ width: 32px; height: 32px; }
+.bigBtn .cameraIcon svg{ width: 34px; height: 34px; }
+.bigBtn:hover{ transform: translateY(-1px); }
+
+    #mainLayout{
+      flex: 1;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      gap: 14px;
+      padding: 0 14px 12px;
+      box-sizing:border-box;
+    }
+
+    #tools{
+      width: var(--toolW);
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
+    .tool{
+      width: 100%;
+      height: 58px;
+      border: 4px solid #1d1d1d;
+      background: #ffffff;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      padding: 8px 10px;
+      border-radius: 16px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.06);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      touch-action: manipulation;
+    }
+    .tool:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 12px 0 rgba(0,0,0,0.07);
+      background:#fbfdff;
+    }
+    .tool.selected{
+      background:#eaf2ff;
+      box-shadow: 0 12px 0 rgba(0,0,0,0.10);
+    }
+
+    .toolSymbol{
+      width: 48px;
+      height: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 900;
+      margin-right: 8px;
+      color:#1d1d1d;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+      font-size: 32px;
+      line-height: 1;
+    }
+    .toolSymbol.big{ font-size: 40px; }
+    .toolSymbol.normal{ font-size: 34px; }
+    .toolSymbol.sixteenth{ font-size: 38px; }
+    .toolSymbol.eighth{ font-size: 32px; }
+
+    .toolBarWrap{
+      flex: 1;
+      height: 32px;
+      display:flex;
+      align-items:center;
+      gap: 6px;
+    }
+
+    .toolBar{
+      position: relative;
+      flex: 1;
+      height: 24px;
+      border: 4px solid #1d1d1d;
+      background: #fff;
+      border-radius: 10px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .toolBarFill{
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width: calc(var(--fill) * 100%);
+      background:#1d1d1d;
+      border-top-right-radius: 7px;
+      border-bottom-right-radius: 7px;
+    }
+
+    .toolBarDivs{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity: 0.24;
+      background-image: repeating-linear-gradient(
+        to right,
+        rgba(0,0,0,0) 0,
+        rgba(0,0,0,0) calc((100% / var(--divs)) - 2px),
+        rgba(0,0,0,0.95) calc((100% / var(--divs)) - 2px),
+        rgba(0,0,0,0.95) calc(100% / var(--divs))
+      );
+    }
+
+    .toolLabel{
+      width: 58px;
+      font-size: 14px;
+      font-weight: 900;
+      text-align:right;
+      color:#1f2a44;
+    }
+    .toolLabel.comicWhole{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+    }
+
+    #sequencerShell{
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      background: #ffffff;
+      padding: 12px;
+      box-shadow: 0 14px 0 rgba(0,0,0,0.07);
+      flex: 0 0 auto;
+    }
+
+    #sequencerWrapper{
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .rowWrap{
+      position:relative;
+      margin-bottom: var(--gap);
+      width: calc(var(--cell) * 16 + var(--gap) * 15);
+      height: var(--cell);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(16, var(--cell));
+      gap: var(--gap);
+    }
+
+    .cell{
+      width: var(--cell);
+      height: var(--cell);
+      background:#ffffff;
+      border: 3px solid #1d1d1d;
+      box-sizing:border-box;
+      cursor:pointer;
+      border-radius: 12px;
+      transition: transform 90ms ease;
+      touch-action: manipulation;
+    }
+    .cell:hover{ transform: scale(1.02); }
+
+    .noteLayer{
+      position:absolute;
+      left:0; top:0;
+      width:100%; height:100%;
+      pointer-events:none;
+    }
+
+    .noteBlock{
+      position:absolute;
+      height: var(--cell);
+      border: 4px solid rgba(0,0,0,0.92);
+      box-sizing:border-box;
+      border-radius: 14px;
+      pointer-events:auto;
+      cursor:pointer;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.08);
+      transform-origin:center center;
+      touch-action: manipulation;
+      overflow:hidden; /* needed for candy-bar overlay */
+    }
+
+    /* Candy-bar inner bevel (cartoony) */
+    .noteBlock::before{
+      content:"";
+      position:absolute;
+      inset: 3px;
+      border-radius: 10px;
+      pointer-events:none;
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,0.35),
+        inset 0 -3px 0 rgba(0,0,0,0.10);
+      opacity: 0.9;
+    }
+
+    /* Candy-bar segments overlay (replaces dot pattern) */
+    .noteBlock::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+
+      /* 3 layers:
+         1) alternating panel tint per cell
+         2) separator lines at boundaries
+         3) glossy highlight stripe near the top
+      */
+      background-image:
+        /* 1) alternating panel tint */
+        repeating-linear-gradient(
+          to right,
+          rgba(255,255,255,0.00) 0,
+          rgba(255,255,255,0.00) calc(var(--cell)),
+          rgba(0,0,0,0.06)        calc(var(--cell)),
+          rgba(0,0,0,0.06)        calc(var(--cell) + var(--gap))
+        ),
+
+        /* 2) separators at boundaries */
+        repeating-linear-gradient(
+          to right,
+          rgba(0,0,0,0.00) 0,
+          rgba(0,0,0,0.00) calc(var(--cell) - 3px),
+          rgba(0,0,0,0.24) calc(var(--cell) - 3px),
+          rgba(0,0,0,0.24) calc(var(--cell) - 0px),
+          rgba(0,0,0,0.00) calc(var(--cell)),
+          rgba(0,0,0,0.00) calc(var(--cell) + var(--gap))
+        ),
+
+        /* 3) glossy top highlight */
+        linear-gradient(
+          to bottom,
+          rgba(255,255,255,0.42) 0%,
+          rgba(255,255,255,0.18) 32%,
+          rgba(255,255,255,0.00) 60%
+        );
+
+      background-size:
+        calc(var(--cell) + var(--gap)) 100%,
+        calc(var(--cell) + var(--gap)) 100%,
+        100% 100%;
+
+      background-repeat: repeat, repeat, no-repeat;
+      opacity: 1;
+    }
+
+    @keyframes swell {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.03); }
+      70%  { transform: scale(1.01); }
+      100% { transform: scale(1); }
+    }
+    .noteBlock.playing{ animation: swell 260ms ease-out; }
+
+    #playhead{
+      position:absolute;
+      top:0; bottom:0;
+      width: var(--cell);
+      left: 0;
+      pointer-events:none;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.30);
+      border: 4px solid rgba(0,0,0,0.22);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.25) inset;
+      transition: left 70ms linear;
+      transform-origin: 50% 50%;
+    }
+    #playhead::after{
+      content:"";
+      position:absolute;
+      top:6px; bottom:6px;
+      left: 50%;
+      width: 0;
+      border-left: 3px dashed rgba(0,0,0,0.18);
+      transform: translateX(-50%);
+    }
+
+    @keyframes wiggle {
+      0%   { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+      50%  { transform: rotate(var(--wiggleDeg))           scale(calc(1 + var(--wiggleScale))); }
+      100% { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+    }
+    #playhead.playing{ animation: wiggle 220ms ease-in-out infinite; }
+
+    #rightCol{
+      width: var(--rightW);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 12px;
+      flex: 0 0 auto;
+      transform: translateY(calc(-1 * var(--rightLift)));
+      will-change: transform;
+    }
+
+    #tempoControls{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 8px;
+      width: 100%;
+    }
+    #tempoControls button{
+      width:58px;
+      height:58px;
+      font-size:30px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      cursor:pointer;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+    }
+    #tempoControls button:hover{ transform: translateY(-1px); }
+
+    #tempoBox{
+      width:74px;
+      text-align:center;
+      font-size:22px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      padding: 12px 0;
+      border-radius: 16px;
+      font-weight: 900;
+      color:#1f2a44;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      user-select:none;
+    }
+
+    #instButtons{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      width: 58px;
+    }
+
+    .instBtn{
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 34px;
+      transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease, background 120ms ease;
+      touch-action: manipulation;
+      box-sizing:border-box;
+    }
+    .instBtn:hover{ transform: translateY(-1px); }
+
+    .instBtn.selected{ background:#eaf2ff; opacity: 1; filter: none; }
+    .instBtn.notSelected{ opacity: 0.42; filter: grayscale(0.95); }
+
+    .waveIcon{ width: 46px; height: 28px; display:block; }
+
+    #rotatePrompt{
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(255,255,255,0.95);
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      box-shadow: 0 14px 0 rgba(0,0,0,0.10);
+      padding: 10px 14px;
+      display:none;
+      align-items:center;
+      gap: 10px;
+      max-width: min(520px, calc(100vw - 24px));
+      box-sizing:border-box;
+    }
+    #rotatePrompt .emoji{ font-size: 26px; }
+    #rotatePrompt .text{
+      font-weight: 900;
+      color:#1f2a44;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    #rotatePrompt .sub{
+      display:block;
+      font-weight: 800;
+      opacity: 0.75;
+      margin-top: 2px;
+      font-size: 12px;
+    }
+
+
+    /* Camera scan modal */
+    #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
+    #camModal.show{ display:flex; }
+    .modalCard{ width: min(620px, 96vw); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 16px 0 rgba(0,0,0,0.12); overflow:hidden; }
+    .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
+    .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }
+    .modalClose{ width:46px; height:46px; border-radius: 14px; border: 4px solid #1d1d1d; background:#fff; cursor:pointer; font-weight: 900; font-size: 18px; box-shadow: 0 10px 0 rgba(0,0,0,0.07); }
+    .camStage{ position: relative; aspect-ratio: 4 / 3; background:#111; }
+    #camVideo, #camPreview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    #camPreview{ display:none; }
+    .camOverlay{ position:absolute; inset:10px; border: 4px dashed rgba(255,255,255,0.75); border-radius: 14px; pointer-events:none; }
+    .camOverlay::before{ content:""; position:absolute; inset:0; background-image:
+      repeating-linear-gradient(to right, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 16))),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 8)));
+      border-radius: 10px;
+    }
+    .modalBtns{ display:flex; gap: 10px; justify-content:center; padding: 12px; }
+    .modalHint{ padding: 0 14px 14px; text-align:center; font-weight: 800; opacity: 0.75; font-size: 12px; }
+
+    /* Locked controls + login hints */
+    .tool.locked{
+      opacity: 0.35;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+    .tool.locked:hover{
+      transform: none;
+      background:#f3f5f7;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.06);
+    }
+
+    #tempoControls.locked button,
+    #tempoControls.locked #tempoBox{
+      opacity: 0.35;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+    #tempoControls.locked button:hover{ transform: none; }
+
+    #toolsList{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      width: 100%;
+    }
+    #toolsLoginArea{
+      width: 100%;
+      margin-top: 8px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 8px;
+    }
+    #toolHintSlot{
+      height: 36px;
+      width: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .loginHint{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      color:#1f2a44;
+      text-decoration:none;
+      opacity: 0;
+      transform: translateY(4px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .loginHint.show{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .loginBtn{
+      width: 120px;
+      height: 54px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      color: #18b118;
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 20px;
+      text-decoration:none;
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+    }
+    .loginBtn:hover{ transform: translateY(-1px); }
+
+    #tempoControls{ position:relative; }
+    #tempoLoginHint{
+      position:absolute;
+      left: calc(100% + 12px);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+body.loggedIn #toolsLoginArea{ display:none; }
+
+#loginCtaWrap{
+  position: relative;
+  width: 120px;
+  height: 54px;
+  display: inline-block;
+}
+#loginCtaWrap .loginBtn{
+  position: relative;
+  z-index: 2;
+}
+#loginCtaWrap.pulsing .loginBtn{
+  animation: loginSwell 760ms ease-in-out infinite;
+}
+#loginCtaWrap.pulsing .loginBtn:hover{ transform: none; }
+@keyframes loginSwell{
+  0%,100%{ transform: translateY(0) scale(1); }
+  50%{ transform: translateY(-1px) scale(1.10); }
+}
+#instButtons.locked .instBtn{
+  opacity: 0.35;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+#instButtons.locked .instBtn:hover{ transform: none; }
+
+
+
+
+    /* Logout button */
+    #logoutBtn{
+      position: fixed;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 10px 0 rgba(0,0,0,0.07);
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      cursor:pointer;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      transition: transform 120ms ease;
+      z-index: 9999;
+    }
+    body.loggedIn #logoutBtn{ display:flex; }
+    #logoutBtn:hover{ transform: translateY(-1px); }
+    #logoutBtn:active{ transform: translateY(0); }
+
+
+  </style>
+</head>
+
+<body>
+  <div class="bgDots"></div>
+
+  <div id="page">
+    <div id="topBar">
+      <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+    </div>
+
+    <div id="contentWrap">
+      <div id="controls">
+        
+        <button class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
+  <path d="M7 9h10l-1 12H8L7 9z" fill="currentColor"/>
+  <rect x="9.5" y="11" width="1.8" height="8" fill="#ffffff" opacity="0.6"/>
+  <rect x="12.3" y="11" width="1.8" height="8" fill="#ffffff" opacity="0.6"/>
+</svg></span></button>
+        <button class="bigBtn iconBtn" onclick="undo()" title="Undo" aria-label="Undo"><span class="icon undoIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M9 7H5V3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M5 7c2-3 5-5 9-5 6 0 9 4 9 10 0 5-3 9-9 9-3 0-6-1-8-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span></button>
+        <button class="bigBtn iconBtn" onclick="openCameraModal()" title="Scan" aria-label="Scan"><span class="icon cameraIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M7 7l1.2-2h7.6L17 7h2.5c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H4.5c-1.1 0-2-.9-2-2V9c0-1.1.9-2 2-2H7z" fill="currentColor"/>
+  <circle cx="12" cy="14" r="4" fill="#ffffff" opacity="0.9"/>
+  <circle cx="12" cy="14" r="2.2" fill="currentColor" opacity="0.75"/>
+</svg></span></button>
+      </div>
+
+      <div id="mainLayout">
+        <div id="tools">
+          <div id="toolsList"></div>
+          <div id="toolsLoginArea">
+            <div id="loginCtaWrap" aria-label="Login to unlock">
+<a id="toolLoginBtn" class="loginBtn loginLink" href="login_new.html">Login</a>
+            </div>
+          </div>
+        </div>
+
+        <div id="sequencerShell">
+          <div id="sequencerWrapper">
+            <div id="playhead" style="display:none;"></div>
+            <div id="sequencer"></div>
+          </div>
+        </div>
+
+        <div id="rightCol">
+          <div id="tempoControls" class="locked">
+            <button id="tempoUpBtn" onclick="tempoUp()" aria-disabled="true">▲</button>
+            <div id="tempoBox" aria-disabled="true">120</div>
+            <button id="tempoDownBtn" onclick="tempoDown()" aria-disabled="true">▼</button>
+</div>
+
+          <div id="instButtons">
+            <div class="instBtn" id="btnPiano"   title="Piano / Organ">🎹</div>
+            <div class="instBtn" id="btnTrumpet" title="Trumpet">🎺</div>
+            <div class="instBtn" id="btnStrings" title="Space">🌌</div>
+            <div class="instBtn" id="btnSynth" title="Synth">
+              <svg class="waveIcon" viewBox="0 0 120 70" aria-hidden="true">
+                <polyline
+                  points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40"
+                  fill="none"
+                  stroke="#1f6bff"
+                  stroke-width="7"
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
+
+  <div id="rotatePrompt">
+    <div class="emoji">📱↔️</div>
+    <div class="text">
+      Turn your device sideways for the best view!
+      <span class="sub">Landscape mode makes the grid easier to use.</span>
+    </div>
+  </div>
+
+<script>
+/* -------------------- CONFIG -------------------- */
+const rows = 8;
+const cols = 16;
+
+let CELL = 46;
+const GAP  = 4;
+
+const freqs = [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
+const rowColors = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+
+const toolSteps = [
+  { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
+  { steps: 2,  label: "8th",   symbol: "♪", divs: 8,  symClass:"eighth" },
+  { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
+  { steps: 8,  label: "1/2",   symbol: "𝅗𝅥", divs: 2,  symClass:"normal" },
+  { steps: 16, label: "Whole", symbol: "𝅝", divs: 1,  symClass:"normal" }
+];
+
+let selectedSteps = 1;
+
+let isLoggedIn = false;
+try{ isLoggedIn = localStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+const LOCKED_STEPS = new Set([4,8,16]);
+
+/* -------------------- STATE -------------------- */
+let notesByRow = Array.from({length: rows}, () => []);
+let occ = Array.from({length: rows}, () => Array(cols).fill(null));
+
+let audioCtx = null;
+let tempo = 120;
+let pendingTempo = null;
+let step = 0;
+let timer = null;
+
+let masterGain = null;
+let masterComp = null;
+
+let startTimeout = null;
+let audioPrimed = false;
+let hasEverStartedPlayback = false;
+let lastStopAt = null;
+
+/* track when audio last actually made a sound */
+let lastAudioActivityAt = null;
+
+const liveNodes = new Set();
+let bus = null;
+
+let instrument = "piano";
+
+const LEVEL = {
+  piano:   0.95,
+  trumpet: 1.18,
+  strings: 1.30,
+  synth:   0.92
+};
+
+/* Undo history (max 10 user actions) */
+const undoStack = [];
+const UNDO_MAX = 10;
+
+function cloneState(){
+  return {
+    notesByRow: notesByRow.map(row => row.map(n => ({ id:n.id, start:n.start, len:n.len }))),
+    occ: occ.map(row => row.slice()),
+    nextId
+  };
+}
+function pushUndo(){
+  undoStack.push(cloneState());
+  while(undoStack.length > UNDO_MAX) undoStack.shift();
+}
+function undo(){
+  if(!undoStack.length) return;
+  const snap = undoStack.pop();
+  notesByRow = snap.notesByRow.map(row => row.map(n => ({...n})));
+  occ = snap.occ.map(row => row.slice());
+  nextId = snap.nextId;
+  redrawAllNotes();
+}
+
+/* DOM */
+const tempoBox = document.getElementById("tempoBox");
+const sequencerEl = document.getElementById("sequencer");
+const toolsEl = document.getElementById("tools");
+const toolsListEl = document.getElementById("toolsList");
+const toolLoginBtnEl = document.getElementById("toolLoginBtn");
+const logoutBtnEl = document.getElementById("logoutBtn");
+
+
+const tempoControlsEl = document.getElementById("tempoControls");
+const tempoUpBtnEl = document.getElementById("tempoUpBtn");
+const tempoDownBtnEl = document.getElementById("tempoDownBtn");
+const instButtonsEl = document.getElementById("instButtons");
+const playheadEl = document.getElementById("playhead");
+const rotatePromptEl = document.getElementById("rotatePrompt");
+const controlsEl = document.getElementById("controls");
+const mainLayoutEl = document.getElementById("mainLayout");
+const titleBoxEl = document.getElementById("titleBox");
+
+const btnPiano   = document.getElementById("btnPiano");
+const btnTrumpet = document.getElementById("btnTrumpet");
+const btnStrings = document.getElementById("btnStrings");
+const btnSynth   = document.getElementById("btnSynth");
+
+btnPiano.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("piano"); };
+btnTrumpet.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("trumpet"); };
+btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
+
+/* -------------------- LOCKED UI (Login nudges) -------------------- */
+const loginCtaWrapEl = document.getElementById("loginCtaWrap");
+
+let lockNudgeHideT = null;
+function showLockNudge(){
+  if(!loginCtaWrapEl) return;
+  clearTimeout(lockNudgeHideT);
+  loginCtaWrapEl.classList.add("pulsing");
+}
+function hideLockNudgeSoon(ms=0){
+  if(!loginCtaWrapEl) return;
+  clearTimeout(lockNudgeHideT);
+  lockNudgeHideT = setTimeout(() => loginCtaWrapEl.classList.remove("pulsing"), ms);
+}
+function bindLockedNudge(el){
+  if(!el) return;
+  el.addEventListener("mouseenter", () => { if(!isLoggedIn) showLockNudge(); });
+  el.addEventListener("mouseleave", () => { if(!isLoggedIn) hideLockNudgeSoon(0); });
+  el.addEventListener("pointerdown", () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); } }, { passive:true });
+}
+
+/* Make login links return to this page */
+function updateLoginLinks(){
+  const current = (location.pathname.split("/").pop() || "index.html");
+  document.querySelectorAll("a.loginLink").forEach(a => {
+    a.href = "login_new.html?return=" + encodeURIComponent(current);
+  });
+}
+updateLoginLinks();
+
+function applyLockState(){
+  const locked = !isLoggedIn;
+  if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
+  if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
+  document.body.classList.toggle("loggedIn", isLoggedIn);
+}
+applyLockState();
+
+function logout(){
+  try{ localStorage.removeItem("kidseq_logged_in"); }catch(e){}
+  isLoggedIn = false;
+  if(LOCKED_STEPS.has(selectedSteps)) selectedSteps = 1;
+  try{ stop(); }catch(e){}
+  applyLockState();
+  buildTools();
+}
+
+
+/* Bind hover nudges for locked groups */
+bindLockedNudge(tempoUpBtnEl);
+bindLockedNudge(tempoDownBtnEl);
+bindLockedNudge(tempoBox);
+
+[btnPiano, btnTrumpet, btnStrings, btnSynth].forEach(bindLockedNudge);
+
+/* Prime audio */
+function primeAudioOnce(){
+  if (audioPrimed) return;
+  audioPrimed = true;
+  getAudio();
+}
+window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
+window.addEventListener("keydown", primeAudioOnce, { once: true });
+
+/* Prevent focus caret */
+window.addEventListener("pointerdown", () => {
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}, { passive: true });
+
+/* Spacebar start/stop */
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "Space") return;
+  e.preventDefault();
+  if (timer || startTimeout) stop();
+  else play();
+});
+
+/* -------------------- PLAYHEAD WOBBLE SCALING -------------------- */
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+function setPlayheadWobbleFromTempo(t){
+  const ratio = (t >= 90) ? 1 : clamp01((t - 40) / (90 - 40));
+  document.documentElement.style.setProperty("--wiggleDeg",   (1.2 * ratio).toFixed(3) + "deg");
+  document.documentElement.style.setProperty("--wiggleScale", (0.01 * ratio).toFixed(4));
+}
+
+/* -------------------- RESPONSIVE FIT -------------------- */
+function fitToViewport(){
+  const vw = Math.max(320, window.innerWidth);
+  const vh = Math.max(480, window.innerHeight);
+
+  const headerH = 92;
+  const controlsH = 70;
+  const vMargins = 26;
+  const gridExtra = 26;
+
+  let toolW = Math.min(220, Math.max(160, Math.floor(vw * 0.30)));
+  let rightW = Math.min(120, Math.max(100, Math.floor(vw * 0.18)));
+
+  const outerPadding = 28;
+  const gaps = 14 * 2;
+  const maxCellByWidth = Math.floor(
+    (vw - toolW - rightW - outerPadding - gaps - (cols - 1) * GAP - gridExtra) / cols
+  );
+
+  const availableH = vh - headerH - controlsH - vMargins - gridExtra;
+  const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / rows);
+
+  let cell = Math.min(maxCellByWidth, maxCellByHeight);
+  cell = Math.max(26, Math.min(56, cell));
+
+  if(cell <= 34){
+    toolW = Math.max(150, Math.floor(vw * 0.28));
+    rightW = Math.max(96, Math.floor(vw * 0.16));
+  }
+
+  document.documentElement.style.setProperty("--toolW", toolW + "px");
+  document.documentElement.style.setProperty("--rightW", rightW + "px");
+  document.documentElement.style.setProperty("--cell", cell + "px");
+  CELL = cell;
+
+  const toolsRect = toolsEl.getBoundingClientRect();
+  const pageLeft = 14;
+  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
+
+  const controlsRect = controlsEl.getBoundingClientRect();
+  const mainRect = mainLayoutEl.getBoundingClientRect();
+  document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
+
+  const playBtn = controlsEl.querySelector(".bigBtn");
+  if (playBtn) {
+    const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
+
+    const playRect  = playBtn.getBoundingClientRect();
+    const titleRect = titleBoxEl.getBoundingClientRect();
+
+    const playCenter  = playRect.top  + playRect.height / 2;
+    const titleCenter = titleRect.top + titleRect.height / 2;
+
+    const delta = Math.round(playCenter - titleCenter);
+    let newLift = Math.round(currentLift + delta);
+    newLift = Math.max(0, Math.min(260, newLift));
+    document.documentElement.style.setProperty("--contentLift", newLift + "px");
+  }
+
+  const portrait = vh > vw * 1.05;
+  const phoneish = vw < 820;
+  rotatePromptEl.style.display = (portrait && phoneish) ? "flex" : "none";
+}
+
+window.addEventListener("resize", () => {
+  requestAnimationFrame(() => {
+    fitToViewport();
+    buildGrid();
+  });
+});
+
+/* -------------------- AUDIO -------------------- */
+function ensureAudioRunning(){
+  if (!audioCtx) return;
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(()=>{});
+}
+
+function trackNode(node){
+  liveNodes.add(node);
+  node.onended = () => liveNodes.delete(node);
+}
+
+function makeHallImpulse(ctx, seconds, decay){
+  const rate = ctx.sampleRate;
+  const length = Math.floor(rate * seconds);
+  const impulse = ctx.createBuffer(2, length, rate);
+  for(let ch=0; ch<2; ch++){
+    const data = impulse.getChannelData(ch);
+    for(let i=0;i<length;i++){
+      const t = i / length;
+      const env = Math.pow(1 - t, decay);
+      data[i] = (Math.random()*2 - 1) * env * (ch === 0 ? 1 : 0.96);
+    }
+  }
+  return impulse;
+}
+
+function makeInstrumentBuses(ctx, masterOut){
+  const pianoIR   = makeHallImpulse(ctx, 1.60, 2.4);
+  const trumpetIR = makeHallImpulse(ctx, 0.70, 2.0);
+  const stringsIR = makeHallImpulse(ctx, 1.30, 2.5);
+  const synthIR   = makeHallImpulse(ctx, 0.45, 2.0);
+
+  function buildBus(ir, dryAmt, wetAmt){
+    const input = ctx.createGain();
+
+    const dry = ctx.createGain();
+    dry.gain.value = dryAmt;
+
+    const wet = ctx.createGain();
+    wet.gain.value = wetAmt;
+
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+
+    input.connect(dry);
+    input.connect(conv);
+    conv.connect(wet);
+
+    dry.connect(masterOut);
+    wet.connect(masterOut);
+
+    return { input };
+  }
+
+  return {
+    piano:   buildBus(pianoIR,   0.72, 0.46),
+    trumpet: buildBus(trumpetIR, 0.90, 0.12),
+    strings: buildBus(stringsIR, 0.76, 0.32),
+    synth:   buildBus(synthIR,   0.92, 0.12)
+  };
+}
+
+function getAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
+
+    masterComp = audioCtx.createDynamicsCompressor();
+    masterComp.threshold.setValueAtTime(-18, audioCtx.currentTime);
+    masterComp.knee.setValueAtTime(18, audioCtx.currentTime);
+    masterComp.ratio.setValueAtTime(3.4, audioCtx.currentTime);
+    masterComp.attack.setValueAtTime(0.004, audioCtx.currentTime);
+    masterComp.release.setValueAtTime(0.12, audioCtx.currentTime);
+
+    masterGain.connect(masterComp);
+    masterComp.connect(audioCtx.destination);
+
+    bus = makeInstrumentBuses(audioCtx, masterGain);
+
+    warmUpAudio(2);
+  }
+  ensureAudioRunning();
+}
+
+function warmUpAudio(pulses = 2){
+  if(!audioCtx || !masterGain) return;
+  const now = audioCtx.currentTime;
+
+  for(let i=0;i<pulses;i++){
+    const t0 = now + i * 0.03;
+
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+
+    g.gain.setValueAtTime(0.0004, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(220, t0);
+
+    osc.connect(g);
+    g.connect(masterGain);
+
+    trackNode(osc);
+    osc.start(t0);
+    osc.stop(t0 + 0.03);
+  }
+}
+
+function hardResetAudioEngine(){
+  try{
+    if(audioCtx){
+      try { audioCtx.close(); } catch(e){}
+    }
+  }catch(e){}
+
+  audioCtx = null;
+  masterGain = null;
+  masterComp = null;
+  bus = null;
+
+  for(const n of Array.from(liveNodes)){
+    try { n.stop(0); } catch(e){}
+    liveNodes.delete(n);
+  }
+
+  getAudio();
+  warmUpAudio(4);
+}
+
+function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
+
+async function ensureAudioReady(){
+  getAudio();
+
+  const nowMs = performance.now();
+  const audioIdleMs = (lastAudioActivityAt == null) ? Infinity : (nowMs - lastAudioActivityAt);
+
+  if(audioIdleMs > 25000){
+    hardResetAudioEngine();
+  }
+
+  if(!audioCtx) return;
+
+  try{
+    if(audioCtx.state !== "running"){
+      const p = audioCtx.resume();
+      await p;
+    }
+  }catch(e){}
+
+  const t1 = audioCtx.currentTime;
+  await sleep(40);
+  const t2 = audioCtx.currentTime;
+
+  if(!(t2 > t1 + 0.0005)){
+    hardResetAudioEngine();
+    if(audioCtx){
+      try{
+        if(audioCtx.state !== "running") await audioCtx.resume();
+      }catch(e){}
+      warmUpAudio(4);
+    }
+  }else{
+    warmUpAudio(2);
+  }
+}
+
+function stopAllAudioNow(){
+  if(!audioCtx || !masterGain) return;
+
+  for (const n of Array.from(liveNodes)){
+    try { n.stop(0); } catch(e) {}
+    liveNodes.delete(n);
+  }
+
+  const now = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(now);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+  masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
+  masterGain.gain.setValueAtTime(1, now + 0.03);
+}
+
+function stepDurationSec(){
+  return (60 / tempo) / 4;
+}
+
+/* -------------------- INSTRUMENT UI -------------------- */
+function setInstrument(name){
+  instrument = name;
+
+  const all = [btnPiano, btnTrumpet, btnStrings, btnSynth];
+  all.forEach(b => { b.classList.remove("selected","notSelected"); });
+
+  const map = { piano: btnPiano, trumpet: btnTrumpet, strings: btnStrings, synth: btnSynth };
+  const selected = map[name];
+  selected.classList.add("selected");
+  all.forEach(b => { if(b !== selected) b.classList.add("notSelected"); });
+}
+
+/* -------------------- TOOLS UI -------------------- */
+function buildTools(){
+  if(!toolsListEl) return;
+  toolsListEl.innerHTML = "";
+
+  toolSteps.forEach((t) => {
+    const tool = document.createElement("div");
+    tool.className = "tool";
+
+    const isLocked = (!isLoggedIn) && LOCKED_STEPS.has(t.steps);
+    if(isLocked){
+      tool.classList.add("locked");
+      tool.setAttribute("aria-disabled","true");
+    }
+
+    const sym = document.createElement("div");
+    sym.className = "toolSymbol " + (t.symClass || "");
+    sym.textContent = t.symbol;
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "toolBarWrap";
+
+    const bar = document.createElement("div");
+    bar.className = "toolBar";
+    bar.style.setProperty("--fill", (t.steps / 16).toFixed(4));
+    bar.style.setProperty("--divs", String(t.divs));
+
+    const fill = document.createElement("div");
+    fill.className = "toolBarFill";
+
+    const divs = document.createElement("div");
+    divs.className = "toolBarDivs";
+    if(t.steps === 16) divs.style.display = "none";
+
+    bar.appendChild(fill);
+    bar.appendChild(divs);
+
+    const lab = document.createElement("div");
+    lab.className = "toolLabel";
+    lab.textContent = t.label;
+    if(t.steps === 16) lab.classList.add("comicWhole");
+
+    barWrap.appendChild(bar);
+    barWrap.appendChild(lab);
+
+    tool.appendChild(sym);
+    tool.appendChild(barWrap);
+
+        if(isLocked){
+      bindLockedNudge(tool);
+    }
+    tool.onclick = () => {
+      if(isLocked){
+        showLockNudge();
+        hideLockNudgeSoon(900);
+        return;
+      }
+      selectedSteps = t.steps;
+      toolsListEl.querySelectorAll(".tool").forEach(x => x.classList.remove("selected"));
+      tool.classList.add("selected");
+    };
+
+    if(t.steps === selectedSteps) tool.classList.add("selected");
+    toolsListEl.appendChild(tool);
+  });
+}
+
+/* -------------------- GRID -------------------- */
+let noteLayerEls = [];
+let nextId = 1;
+
+function buildGrid(){
+  sequencerEl.innerHTML = "";
+  noteLayerEls = [];
+
+  for(let r=0;r<rows;r++){
+    const wrap = document.createElement("div");
+    wrap.className = "rowWrap";
+    wrap.style.width = `${cols * CELL + (cols-1) * GAP}px`;
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+
+    const layer = document.createElement("div");
+    layer.className = "noteLayer";
+
+    for(let c=0;c<cols;c++){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.onmousedown = (e) => e.preventDefault();
+      cell.onclick = () => onCellClick(r, c);
+      grid.appendChild(cell);
+    }
+
+    wrap.appendChild(grid);
+    wrap.appendChild(layer);
+    sequencerEl.appendChild(wrap);
+
+    noteLayerEls.push(layer);
+  }
+
+  redrawAllNotes();
+}
+
+function canPlace(r, start, len){
+  if(start < 0) return false;
+  if(start + len > cols) return false;
+  for(let c=start; c<start+len; c++){
+    if(occ[r][c] !== null) return false;
+  }
+  return true;
+}
+
+function placeNote(r, start, len){
+  const id = nextId++;
+  notesByRow[r].push({ id, start, len });
+  for(let c=start; c<start+len; c++) occ[r][c] = id;
+}
+
+function deleteNoteById(r, id){
+  const idx = notesByRow[r].findIndex(n => n.id === id);
+  if(idx === -1) return;
+  const { start, len } = notesByRow[r][idx];
+  for(let c=start; c<start+len; c++) occ[r][c] = null;
+  notesByRow[r].splice(idx, 1);
+}
+
+function overlappingNoteIds(r, start, len){
+  const set = new Set();
+  for(let c=start; c<start+len; c++){
+    const id = occ[r][c];
+    if(id !== null) set.add(id);
+  }
+  return set;
+}
+
+function smartPlaceNote(r, clickCol, len){
+  let baseStart = Math.min(clickCol, cols - len);
+  baseStart = Math.max(0, baseStart);
+
+  for(let start = baseStart; start >= 0; start--){
+    if(start + len > cols) continue;
+    if(canPlace(r, start, len)){
+      placeNote(r, start, len);
+      return;
+    }
+  }
+
+  const overlaps = overlappingNoteIds(r, baseStart, len);
+  overlaps.forEach(id => deleteNoteById(r, id));
+  placeNote(r, baseStart, len);
+}
+
+function onCellClick(r, c){
+  const existing = occ[r][c];
+  if(existing !== null){
+    pushUndo();
+    deleteNoteById(r, existing);
+    redrawRowNotes(r);
+    return;
+  }
+
+  pushUndo();
+  smartPlaceNote(r, c, selectedSteps);
+  redrawRowNotes(r);
+}
+
+function redrawAllNotes(){
+  for(let r=0;r<rows;r++) redrawRowNotes(r);
+}
+
+function redrawRowNotes(r){
+  const layer = noteLayerEls[r];
+  layer.innerHTML = "";
+
+  for(const note of notesByRow[r]){
+    const block = document.createElement("div");
+    block.className = "noteBlock";
+    block.dataset.id = String(note.id);
+
+    const left = note.start * (CELL + GAP);
+    const width = note.len * CELL + (note.len - 1) * GAP;
+
+    block.style.left = `${left}px`;
+    block.style.top = `0px`;
+    block.style.width = `${width}px`;
+    block.style.background = rowColors[r];
+
+    block.onmousedown = (e) => e.preventDefault();
+
+    block.onclick = (e) => {
+      e.stopPropagation();
+      pushUndo();
+      deleteNoteById(r, note.id);
+      redrawRowNotes(r);
+    };
+
+    layer.appendChild(block);
+  }
+}
+
+/* -------------------- PLAYHEAD -------------------- */
+function setPlayheadVisible(on){ playheadEl.style.display = on ? "block" : "none"; }
+function setPlayheadPlaying(isPlaying){ playheadEl.classList.toggle("playing", isPlaying); }
+function movePlayheadToStep(s){ playheadEl.style.left = `${s * (CELL + GAP)}px`; }
+function resetPlayheadInstant(){
+  playheadEl.style.transition = "none";
+  movePlayheadToStep(0);
+  void playheadEl.offsetWidth;
+  playheadEl.style.transition = "left 70ms linear";
+}
+
+/* -------------------- ENVELOPE -------------------- */
+function scheduleEnvelope(g, now, hold, attack, peak, sustain, release, decay1){
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + attack);
+  if(decay1 > 0){
+    g.gain.exponentialRampToValueAtTime(sustain, now + attack + decay1);
+  }else{
+    g.gain.setValueAtTime(sustain, now + attack);
+  }
+  g.gain.setValueAtTime(sustain, now + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + hold + release);
+}
+
+/* -------------------- INSTRUMENTS -------------------- */
+function playPiano(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+
+  const release = Math.min(0.32, Math.max(0.16, hold * 0.12));
+  const stopAt = now + hold + release + 0.20;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.012, 0.70, 0.62, release, 0.03);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.piano, now);
+  env.connect(level);
+
+  const partials = [
+    { mult: 1, amp: 0.34 },
+    { mult: 2, amp: 0.24 },
+    { mult: 3, amp: 0.18 },
+    { mult: 4, amp: 0.13 },
+    { mult: 5, amp: 0.09 },
+    { mult: 6, amp: 0.06 },
+    { mult: 8, amp: 0.04 }
+  ];
+
+  const mix = audioCtx.createGain();
+  mix.gain.setValueAtTime(1.0, now);
+
+  const oscs = [];
+  for(const p of partials){
+    const o = audioCtx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq * p.mult, now);
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(p.amp, now);
+
+    o.connect(g);
+    g.connect(mix);
+
+    oscs.push(o);
+  }
+
+  const chiffBuf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.04), audioCtx.sampleRate);
+  const data = chiffBuf.getChannelData(0);
+  for(let i=0;i<data.length;i++){
+    const t = i / data.length;
+    data[i] = (Math.random()*2-1) * Math.pow(1 - t, 5);
+  }
+  const chiff = audioCtx.createBufferSource();
+  chiff.buffer = chiffBuf;
+
+  const chiffBP = audioCtx.createBiquadFilter();
+  chiffBP.type = "bandpass";
+  chiffBP.frequency.setValueAtTime(2400, now);
+  chiffBP.Q.setValueAtTime(0.9, now);
+
+  const chiffG = audioCtx.createGain();
+  chiffG.gain.setValueAtTime(0.0001, now);
+  chiffG.gain.exponentialRampToValueAtTime(0.10, now + 0.005);
+  chiffG.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+  chiff.connect(chiffBP);
+  chiffBP.connect(chiffG);
+  chiffG.connect(env);
+
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(80, now);
+  hp.Q.setValueAtTime(0.7, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(4200, now);
+  lp.Q.setValueAtTime(0.6, now);
+
+  mix.connect(hp);
+  hp.connect(lp);
+  lp.connect(env);
+
+  level.connect(bus.piano.input);
+
+  for(const o of oscs) trackNode(o);
+  trackNode(chiff);
+
+  for(const o of oscs) o.start(now);
+  chiff.start(now);
+
+  for(const o of oscs) o.stop(stopAt);
+  chiff.stop(now + 0.05);
+}
+
+function playTrumpet(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  const release = Math.min(0.16, Math.max(0.09, hold * 0.08));
+  const stopAt = now + hold + release + 0.10;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.016, 0.36, 0.24, release, 0.07);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.trumpet, now);
+  env.connect(level);
+
+  const o1 = audioCtx.createOscillator();
+  const o2 = audioCtx.createOscillator();
+  o1.type = "sawtooth";
+  o2.type = "sawtooth";
+  o1.frequency.setValueAtTime(freq, now);
+  o2.frequency.setValueAtTime(freq, now);
+  o2.detune.setValueAtTime(+8, now);
+
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(freq * 2.5, now);
+  bp.Q.setValueAtTime(0.95, now);
+
+  const lfo = audioCtx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(5.4, now);
+  const lfoG = audioCtx.createGain();
+  lfoG.gain.setValueAtTime(9, now);
+  lfo.connect(lfoG);
+  lfoG.connect(o1.detune);
+  lfoG.connect(o2.detune);
+
+  const g1 = audioCtx.createGain();
+  const g2 = audioCtx.createGain();
+  g1.gain.setValueAtTime(0.60, now);
+  g2.gain.setValueAtTime(0.55, now);
+
+  o1.connect(g1); o2.connect(g2);
+  g1.connect(bp); g2.connect(bp);
+  bp.connect(env);
+
+  level.connect(bus.trumpet.input);
+
+  trackNode(o1); trackNode(o2); trackNode(lfo);
+
+  o1.start(now); o2.start(now); lfo.start(now);
+  o1.stop(stopAt); o2.stop(stopAt); lfo.stop(stopAt);
+}
+
+function playStrings(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+
+  const padHold = Math.max(hold, 0.22);
+  const release = Math.min(0.55, Math.max(0.22, padHold * 0.35));
+  const stopAt = now + padHold + release + 0.18;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, padHold, 0.045, 0.38, 0.26, release, 0.18);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.strings, now);
+  env.connect(level);
+
+  const s1 = audioCtx.createOscillator();
+  const s2 = audioCtx.createOscillator();
+  const s3 = audioCtx.createOscillator();
+  const sub = audioCtx.createOscillator();
+
+  s1.type = "sawtooth";
+  s2.type = "sawtooth";
+  s3.type = "sawtooth";
+  sub.type = "triangle";
+
+  s1.frequency.setValueAtTime(freq, now);
+  s2.frequency.setValueAtTime(freq, now);
+  s3.frequency.setValueAtTime(freq, now);
+  sub.frequency.setValueAtTime(freq * 0.5, now);
+
+  s2.detune.setValueAtTime(+9, now);
+  s3.detune.setValueAtTime(-11, now);
+
+  const lfo = audioCtx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(0.35, now);
+  const lfoG = audioCtx.createGain();
+  lfoG.gain.setValueAtTime(10, now);
+  lfo.connect(lfoG);
+  lfoG.connect(s1.detune);
+  lfoG.connect(s2.detune);
+  lfoG.connect(s3.detune);
+
+  const mix = audioCtx.createGain();
+  const g1 = audioCtx.createGain();
+  const g2 = audioCtx.createGain();
+  const g3 = audioCtx.createGain();
+  const gs = audioCtx.createGain();
+  g1.gain.setValueAtTime(0.30, now);
+  g2.gain.setValueAtTime(0.28, now);
+  g3.gain.setValueAtTime(0.28, now);
+  gs.gain.setValueAtTime(0.20, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(1900, now);
+  lp.frequency.exponentialRampToValueAtTime(980, now + 0.40);
+  lp.Q.setValueAtTime(0.85, now);
+
+  const shelf = audioCtx.createBiquadFilter();
+  shelf.type = "highshelf";
+  shelf.frequency.setValueAtTime(3400, now);
+  shelf.gain.setValueAtTime(2.0, now);
+
+  s1.connect(g1); s2.connect(g2); s3.connect(g3); sub.connect(gs);
+  g1.connect(mix); g2.connect(mix); g3.connect(mix); gs.connect(mix);
+
+  mix.connect(lp);
+  lp.connect(shelf);
+  shelf.connect(env);
+
+  level.connect(bus.strings.input);
+
+  trackNode(s1); trackNode(s2); trackNode(s3); trackNode(sub); trackNode(lfo);
+
+  s1.start(now); s2.start(now); s3.start(now); sub.start(now); lfo.start(now);
+  s1.stop(stopAt); s2.stop(stopAt); s3.stop(stopAt); sub.stop(stopAt); lfo.stop(stopAt);
+}
+
+function playSynth(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  const release = Math.min(0.18, Math.max(0.10, hold * 0.08));
+  const stopAt = now + hold + release + 0.12;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.0025, 0.62, 0.22, release, 0.055);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.synth, now);
+  env.connect(level);
+
+  const osc = audioCtx.createOscillator();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(freq, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(2600, now);
+  lp.frequency.exponentialRampToValueAtTime(1800, now + 0.10);
+  lp.Q.setValueAtTime(0.9, now);
+
+  osc.connect(lp);
+  lp.connect(env);
+  level.connect(bus.synth.input);
+
+  trackNode(osc);
+  osc.start(now);
+  osc.stop(stopAt);
+}
+
+function playInstrument(freq, steps){
+  lastAudioActivityAt = performance.now();
+
+  if(instrument === "piano")   return playPiano(freq, steps);
+  if(instrument === "trumpet") return playTrumpet(freq, steps);
+  if(instrument === "strings") return playStrings(freq, steps);
+  return playSynth(freq, steps);
+}
+
+/* -------------------- PLAYBACK -------------------- */
+async function play(){
+  await ensureAudioReady();
+
+  stop();
+
+  step = 0;
+  setPlayheadVisible(true);
+  setPlayheadPlaying(false);
+  resetPlayheadInstant();
+
+  const nowMs = performance.now();
+  const idleMs = (lastStopAt === null) ? Infinity : (nowMs - lastStopAt);
+  const audioIdleMs = (lastAudioActivityAt == null) ? Infinity : (nowMs - lastAudioActivityAt);
+
+  let delayMs = 80;
+  if(!hasEverStartedPlayback) delayMs = 500;
+  else if(Math.max(idleMs, audioIdleMs) > 25000) delayMs = 750;
+  else if(Math.max(idleMs, audioIdleMs) > 5000) delayMs = 500;
+
+  startTimeout = setTimeout(() => {
+    startTimeout = null;
+    startSequencer();
+    hasEverStartedPlayback = true;
+  }, delayMs);
+}
+
+function startSequencer(){
+  let firstTick = true;
+
+  function tick(){
+    movePlayheadToStep(step);
+
+    if(firstTick){
+      setPlayheadPlaying(true);
+      firstTick = false;
+    }
+
+    for(let r=0;r<rows;r++){
+      const note = notesByRow[r].find(n => n.start === step);
+      if(note){
+        playInstrument(freqs[r], note.len);
+
+        const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
+        if(block){
+          block.classList.remove("playing");
+          void block.offsetWidth;
+          block.classList.add("playing");
+        }
+      }
+    }
+
+    step = (step + 1) % cols;
+
+    if(step === 0 && pendingTempo !== null){
+      tempo = pendingTempo;
+      pendingTempo = null;
+      updateTempoBox();
+      setPlayheadWobbleFromTempo(tempo);
+      restartInterval(stepDurationSec() * 1000);
+    }
+  }
+
+  function restartInterval(intervalMs){
+    if(timer){
+      clearInterval(timer);
+      timer = null;
+    }
+    timer = setInterval(tick, intervalMs);
+  }
+
+  tick();
+  restartInterval(stepDurationSec() * 1000);
+}
+
+function stop(){
+  if(timer){
+    clearInterval(timer);
+    timer = null;
+  }
+  if(startTimeout){
+    clearTimeout(startTimeout);
+    startTimeout = null;
+  }
+  setPlayheadPlaying(false);
+  setPlayheadVisible(false);
+  stopAllAudioNow();
+  lastStopAt = performance.now();
+}
+
+/* -------------------- TEMPO -------------------- */
+function updateTempoBox(){
+  tempoBox.textContent = (pendingTempo !== null) ? pendingTempo : tempo;
+}
+function requestTempo(newTempo){
+  newTempo = Math.max(40, Math.min(200, newTempo));
+  if(timer){
+    pendingTempo = newTempo;
+    updateTempoBox();
+    setPlayheadWobbleFromTempo(pendingTempo);
+    return;
+  }
+  tempo = newTempo;
+  pendingTempo = null;
+  updateTempoBox();
+  setPlayheadWobbleFromTempo(tempo);
+}
+function tempoUp(){
+  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  requestTempo(base + 5);
+}
+function tempoDown(){
+  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  requestTempo(base - 5);
+}
+
+/* -------------------- CLEAR -------------------- */
+function clearGrid(){
+  pushUndo();
+  notesByRow = Array.from({length: rows}, () => []);
+  occ = Array.from({length: rows}, () => Array(cols).fill(null));
+  redrawAllNotes();
+}
+
+
+
+/* -------------------- CAMERA SCAN (simple heuristic) -------------------- */
+let camStream = null;
+let camCapturedDataUrl = null;
+
+const camModalEl = document.getElementById("camModal");
+const camVideoEl = document.getElementById("camVideo");
+const camCanvasEl = document.getElementById("camCanvas");
+const camPreviewEl = document.getElementById("camPreview");
+
+async function openCameraModal(){
+  try{
+    camCapturedDataUrl = null;
+    camPreviewEl.style.display = "none";
+    camVideoEl.style.display = "block";
+
+    camModalEl.classList.add("show");
+    camModalEl.setAttribute("aria-hidden", "false");
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert("Camera not available on this device/browser.");
+      return;
+    }
+
+    camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio:false });
+    camVideoEl.srcObject = camStream;
+    await camVideoEl.play().catch(()=>{});
+  }catch(e){
+    alert("Could not open the camera. (Tip: this usually needs HTTPS.)");
+  }
+}
+
+function closeCameraModal(){
+  camModalEl.classList.remove("show");
+  camModalEl.setAttribute("aria-hidden", "true");
+  try{
+    if(camStream){
+      camStream.getTracks().forEach(t => { try{ t.stop(); }catch(e){} });
+    }
+  }catch(e){}
+  camStream = null;
+}
+
+function camCapture(){
+  if(!camVideoEl || !camVideoEl.videoWidth) return;
+  const w = camVideoEl.videoWidth;
+  const h = camVideoEl.videoHeight;
+  camCanvasEl.width = w;
+  camCanvasEl.height = h;
+  const ctx = camCanvasEl.getContext("2d");
+  ctx.drawImage(camVideoEl, 0, 0, w, h);
+  camCapturedDataUrl = camCanvasEl.toDataURL("image/png");
+  camPreviewEl.src = camCapturedDataUrl;
+  camPreviewEl.style.display = "block";
+  camVideoEl.style.display = "none";
+}
+
+function camImport(){
+  if(!camCapturedDataUrl){
+    camCapture();
+    if(!camCapturedDataUrl) return;
+  }
+  importGridFromDataUrl(camCapturedDataUrl);
+  closeCameraModal();
+}
+
+function importGridFromDataUrl(dataUrl){
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    camCanvasEl.width = w;
+    camCanvasEl.height = h;
+    const ctx = camCanvasEl.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const { data } = ctx.getImageData(0, 0, w, h);
+
+    // centered crop to reduce background impact
+    const cropX = Math.floor(w * 0.10);
+    const cropY = Math.floor(h * 0.12);
+    const cropW = Math.floor(w * 0.80);
+    const cropH = Math.floor(h * 0.76);
+
+    function idx(px, py){ return (py * w + px) * 4; }
+
+    function sampleCell(r, c){
+      // sample a few points inside the cell
+      const x0 = cropX + Math.floor((c + 0.15) * cropW / cols);
+      const x1 = cropX + Math.floor((c + 0.85) * cropW / cols);
+      const y0 = cropY + Math.floor((r + 0.20) * cropH / rows);
+      const y1 = cropY + Math.floor((r + 0.80) * cropH / rows);
+
+      const pts = [
+        [x0, y0],
+        [x1, y0],
+        [Math.floor((x0+x1)/2), Math.floor((y0+y1)/2)],
+        [x0, y1],
+        [x1, y1]
+      ];
+
+      let satSum = 0;
+      let lumSum = 0;
+      for(const [x,y] of pts){
+        const i = idx(Math.max(0, Math.min(w-1, x)), Math.max(0, Math.min(h-1, y)));
+        const R = data[i]/255, G = data[i+1]/255, B = data[i+2]/255;
+        const maxv = Math.max(R,G,B);
+        const minv = Math.min(R,G,B);
+        const lum = (maxv + minv) * 0.5;
+        const sat = (maxv === 0) ? 0 : (maxv - minv) / maxv; // simple saturation proxy
+        satSum += sat;
+        lumSum += lum;
+      }
+      const sat = satSum / pts.length;
+      const lum = lumSum / pts.length;
+
+      // heuristic: colored if reasonably saturated and not near-white
+      return (sat > 0.18) && (lum < 0.92);
+    }
+
+    pushUndo();
+    notesByRow = Array.from({length: rows}, () => []);
+    occ = Array.from({length: rows}, () => Array(cols).fill(null));
+    nextId = 1;
+
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        if(sampleCell(r,c)){
+          if(canPlace(r, c, 1)) placeNote(r, c, 1);
+        }
+      }
+    }
+
+    redrawAllNotes();
+  };
+  img.src = dataUrl;
+}
+
+
+/* -------------------- INIT -------------------- */
+function init(){
+  fitToViewport();
+  buildTools();
+  buildGrid();
+  setInstrument("piano");
+  updateTempoBox();
+  setPlayheadWobbleFromTempo(tempo);
+
+  requestAnimationFrame(() => fitToViewport());
+}
+init();
+</script>
+</body>
+</html>
+
