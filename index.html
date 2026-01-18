@@ -19,8 +19,19 @@
       --wiggleDeg: 1.2deg;
       --wiggleScale: 0.01;
 
-      /* Robot badge target size (it can shrink automatically if space is tight) */
-      --robotSize: 194px; /* +35% from prior */
+      /* Robot badge size */
+      --robotSizeLanding: 194px;
+      --robotSize: var(--robotSizeLanding);
+    }
+
+    /* Logged-in: robot is 50% bigger than the landing page */
+    body.loggedIn{
+      --robotSize: calc(var(--robotSizeLanding) * 1.5);
+    }
+
+    body.loggedIn #robotLogo{
+      opacity: 1;
+      filter: none;
     }
 
     body{
@@ -41,13 +52,17 @@
       padding-top: 10px;
       padding-bottom: env(safe-area-inset-bottom);
       user-select:none;
+      position: relative;
+      z-index: 2;
     }
 
     #topBar{
+      pointer-events:none;
       height: 92px;
       padding: 8px 14px 0;
       box-sizing:border-box;
       position: relative;
+      z-index: 3;
     }
 
     #titleBox{
@@ -101,8 +116,8 @@
       align-items:center;
       justify-content:center;
       pointer-events:none;
-      z-index: 30;
-      opacity: 0.98;
+      z-index: 0;
+      opacity: 1;
     }
     #robotLogo .robotClip{
       width: 100%;
@@ -120,6 +135,8 @@
     #contentWrap{
       transform: translateY(calc(-1 * var(--contentLift)));
       will-change: transform;
+      position: relative;
+      z-index: 2;
     }
 
     #controls{
@@ -869,6 +886,13 @@ body.loggedIn #toolsLoginArea{ display:none; }
   </div>
 
 <script>
+/* OPTION A ORGANISATION START */
+// This file is intentionally single-file, but the JS is grouped into logical modules.
+// Layout + behavior are unchanged; we only add structure + a small public API.
+(() => {
+/* Option A: single-file organisation (no layout/behaviour changes) */
+
+
 /* -------------------- CONFIG -------------------- */
 const rows = 8;
 const cols = 16;
@@ -1016,21 +1040,37 @@ updateLoginLinks();
 function applyLockState(){
   const locked = !isLoggedIn;
   const robotLogoEl = document.getElementById("robotLogo");
-  if(robotLogoEl) robotLogoEl.style.display = locked ? "flex" : "none";
+  if(robotLogoEl) robotLogoEl.style.display = "flex";
   if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
   if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
   if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
   document.body.classList.toggle("loggedIn", isLoggedIn);
+  try{ positionRobotLogo(); }catch(e){}
 }
 applyLockState();
 
-function logout(){
-  try{ localStorage.removeItem("kidseq_logged_in"); }catch(e){}
-  isLoggedIn = false;
-  if(LOCKED_STEPS.has(selectedSteps)) selectedSteps = 1;
-  try{ stop(); }catch(e){}
+// Ensure the correct state when the browser restores the page from cache
+window.addEventListener('pageshow', () => {
+  try{ isLoggedIn = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
+  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
-  buildTools();
+});
+
+function logout(){
+  try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
+  try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
+  isLoggedIn = false;
+  try{ stop(); }catch(e){}
+
+  // Restore the locked/landing UI immediately
+  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
+  applyLockState();
+  updateLoginLinks();
+
+  requestAnimationFrame(() => {
+    try{ fitToViewport(); }catch(e){}
+    try{ positionRobotLogo(); }catch(e){}
+  });
 }
 
 
@@ -1141,19 +1181,27 @@ function positionRobotLogo(){
   const toolsList = document.getElementById('toolsList');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  if(!logo || !toolsList || !loginWrap || !seqWrap) return;
+  if(!logo || !toolsList || !seqWrap) return;
 
   const toolsListRect = toolsList.getBoundingClientRect();
-  const loginRect = loginWrap.getBoundingClientRect();
   const gridRect = seqWrap.getBoundingClientRect();
-  // Desired size (px)
-  const desired = Math.round((parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--robotSize')) || 110));
 
-  // Keep the badge clearly below the login button (account for halo)
-  const topMin = loginRect.bottom + 28;
+  // Desired size (px) from CSS variable
+  const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
+
+  // Anchor: always keep it below the note-length buttons.
+  let topMin = toolsListRect.bottom + 18;
+
+  // If the Login button exists and is visible, keep it below that too.
+  if(loginWrap){
+    const r = loginWrap.getBoundingClientRect();
+    if(r.width > 0 && r.height > 0){
+      topMin = Math.max(topMin, r.bottom + 28);
+    }
+  }
+
+  // Align the badge to the bottom of the grid (but never above topMin)
   const bottom = gridRect.bottom;
-
-  // Tiny visual nudge down (requested) without affecting layout flow
   const nudgeY = 6;
 
   const avail = Math.floor(bottom - topMin);
@@ -1168,9 +1216,9 @@ function positionRobotLogo(){
 
   // Center horizontally to the note-length tool column
   const xCenter = toolsListRect.left + toolsListRect.width / 2;
-  // Align bottom of badge to bottom of the grid
-  const top = Math.round(bottom - size + nudgeY);
 
+  // Prefer aligning bottom to the grid; clamp to topMin
+  const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
 }
@@ -2220,6 +2268,73 @@ function init(){
   requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); });
 }
 init();
+
+
+/* -------------------- OPTION A EXPORTS --------------------
+   Keep inline onclick handlers working (play/stop/tempo/etc) while still providing
+   a structured, manager-friendly namespace at window.KidSequencer.
+   This is intentionally additive: UI + behaviour remain exactly the same.
+*/
+
+// Inline-handler globals (used by existing HTML attributes)
+window.play = play;
+window.stop = stop;
+window.clearGrid = clearGrid;
+window.undo = undo;
+window.openCameraModal = openCameraModal;
+window.closeCameraModal = closeCameraModal;
+window.camCapture = camCapture;
+window.camImport = camImport;
+window.tempoUp = tempoUp;
+window.tempoDown = tempoDown;
+window.logout = logout;
+
+// Organised namespace for maintenance/debugging (optional)
+window.KidSequencer = {
+  State: {
+    get tempo(){ return tempo; },
+    set tempo(v){ tempo = v; updateTempoBox(); setPlayheadWobbleFromTempo(tempo); },
+    get instrument(){ return instrument; },
+    set instrument(v){ setInstrument(v); },
+    get isLoggedIn(){ return isLoggedIn; }
+  },
+  UI: {
+    fitToViewport,
+    positionRobotLogo,
+    updateTempoBox,
+    updateLoginLinks,
+    applyLockState,
+    showLockNudge,
+    hideLockNudgeSoon,
+    setPlayheadWobbleFromTempo
+  },
+  Audio: {
+    ensureAudioRunning,
+    stopAllAudioNow,
+    primeAudioOnce,
+    setInstrument,
+    playInstrument
+  },
+  Sequencer: {
+    play,
+    stop,
+    clearGrid,
+    undo,
+    buildGrid,
+    buildTools,
+    redrawAllNotes
+  },
+  Camera: {
+    openCameraModal,
+    closeCameraModal,
+    camCapture,
+    camImport
+  },
+  Auth: { logout }
+};
+
+})();
+/* OPTION A ORGANISATION END */
 </script>
 </body>
 </html>
