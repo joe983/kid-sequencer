@@ -101,7 +101,6 @@
     }
 
     #robotLogo{
-      /* Must behave like the rest of the layout (scrolls with the page) */
       position: absolute;
       left: 0;
       top: 0;
@@ -116,27 +115,22 @@
       display:flex;
       align-items:center;
       justify-content:center;
+      overflow: hidden; /* clip any square SVG/img edges to the circle */
       pointer-events:none;
-      z-index: 4;
+      z-index: 0;
       opacity: 1;
-      overflow: hidden; /* clip any square SVG viewport corners */
     }
     #robotLogo .robotClip{
       width: 100%;
       height: 100%;
-      border-radius: 50%;
+      border-radius: 18px;
       overflow: hidden;
       display:flex;
       align-items:center;
       justify-content:center;
     }
     #robotLogo svg,
-    #robotLogo img{
-      width:100%;
-      height:100%;
-      display:block;
-      object-fit: contain;
-    }
+    #robotLogo img{ width:100%; height:100%; display:block; object-fit: contain; }
 
 
     /* Everything except the title gets lifted together */
@@ -1094,78 +1088,132 @@ body.loggedIn #toolsLoginArea{ display:none; }
       z-index: 50;
     }
 
-    /* -------------------- Mobile portrait tabs (Grid / Tools / Sounds) -------------------- */
-    #mobileTabs{ display:none; }
+
+    /* -------------------- Mobile portrait tabs + scaling -------------------- */
+    #mobileTabs{
+      display:none;
+      position: relative;
+      z-index: 60;
+      gap: 10px;
+      padding: 6px 14px 0;
+      pointer-events: auto;
+    }
+    #mobileTabs .mTab{
+      flex: 1 1 0;
+      height: 42px;
+      border-radius: 999px;
+      border: 3px solid #1d1d1d;
+      background: #ffffff;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.06);
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing: 0.2px;
+      color:#1f2a44;
+      cursor: pointer;
+    }
+    #mobileTabs .mTab.active{
+      background:#dff1ff;
+    }
+
     @media (max-width: 820px) and (orientation: portrait){
-      /* Portrait mobile uses tabs, so don't nag users to rotate */
+      :root{
+        --mobileScale: 0.75;
+        --instBtnSize: calc(58px * var(--mobileScale));
+        --instGap:     calc(10px * var(--mobileScale));
+      }
+
+      /* show tabs */
+      #mobileTabs{ display:flex; }
+
+      /* hide rotate prompt (portrait is supported via tabs) */
       #rotatePrompt{ display:none !important; }
 
-      /* Keep the robot badge sensible on phones */
-      :root{ --robotSizeLanding: clamp(96px, 28vw, 150px); }
-      body.loggedIn{ --robotSize: calc(var(--robotSizeLanding) * 1.2); }
+      /* Make the whole UI smaller (roughly 75% size) */
+      #topBar{
+        height: calc(92px * var(--mobileScale));
+        padding: calc(8px * var(--mobileScale)) calc(14px * var(--mobileScale)) 0;
+      }
+      #titleBox{
+        height: calc(58px * var(--mobileScale));
+        border-width: calc(4px * var(--mobileScale));
+        border-radius: calc(16px * var(--mobileScale));
+      }
+      #titleBox .titleText{ font-size: calc(28px * var(--mobileScale)); }
 
-      #page{
-        padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+      #memberPill{
+        top: calc(18px * var(--mobileScale));
+        height: calc(34px * var(--mobileScale));
+        padding: 0 calc(14px * var(--mobileScale));
+        border-width: calc(3px * var(--mobileScale));
+        font-size: calc(13px * var(--mobileScale));
+        box-shadow: 0 calc(6px * var(--mobileScale)) 0 rgba(0,0,0,0.06);
       }
 
-      #mainLayout{
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-        padding: 0 12px 12px;
+      #controls{
+        padding-top: calc(8px * var(--mobileScale));
+        gap: calc(10px * var(--mobileScale));
+      }
+      .bigBtn{
+        border-width: calc(4px * var(--mobileScale));
+        border-radius: calc(16px * var(--mobileScale));
+        box-shadow: 0 calc(9px * var(--mobileScale)) 0 rgba(0,0,0,0.06);
+      }
+      .bigBtn.iconBtn{
+        width: calc(76px * var(--mobileScale));
+        height: calc(58px * var(--mobileScale));
+      }
+      .bigBtn .icon svg{
+        width: calc(38px * var(--mobileScale));
+        height: calc(38px * var(--mobileScale));
+      }
+      .bigBtn .clearIcon svg{
+        width: calc(30px * var(--mobileScale));
+        height: calc(30px * var(--mobileScale));
+      }
+      .bigBtn .undoIcon svg{
+        width: calc(34px * var(--mobileScale));
+        height: calc(34px * var(--mobileScale));
       }
 
-      /* Tabs: fixed bottom bar */
-      #mobileTabs{
-        display:flex;
+      .tool{
+        height: calc(58px * var(--mobileScale));
+        border-width: calc(4px * var(--mobileScale));
+        border-radius: calc(16px * var(--mobileScale));
+        box-shadow: 0 calc(9px * var(--mobileScale)) 0 rgba(0,0,0,0.06);
+      }
+      .toolSymbol{
+        width: calc(48px * var(--mobileScale));
+        font-size: calc(32px * var(--mobileScale));
+      }
+
+      /* Stacked layout + tab visibility */
+      #mainLayout{ flex-direction: column; align-items: stretch; }
+      #tools, #sequencerShell, #rightCol{ width: 100% !important; }
+
+      body[data-mtab="grid"]  #tools,
+      body[data-mtab="grid"]  #rightCol{ display:none !important; }
+
+      body[data-mtab="tools"] #sequencerShell,
+      body[data-mtab="tools"] #rightCol{ display:none !important; }
+
+      body[data-mtab="sounds"] #sequencerShell,
+      body[data-mtab="sounds"] #tools{ display:none !important; }
+
+      /* Robot: bottom-left and 85% smaller in portrait */
+      #robotLogo{
         position: fixed;
         left: 10px;
-        right: 10px;
-        bottom: calc(env(safe-area-inset-bottom) + 8px);
-        height: 56px;
-        background:#ffffff;
-        border: 4px solid #1d1d1d;
-        border-radius: 18px;
-        box-shadow: 0 8px 0 rgba(0,0,0,0.06);
-        box-sizing: border-box;
-        z-index: 120;
-        padding: 4px;
-        gap: 4px;
+        bottom: 10px;
+        top: auto;
+        width: calc(var(--robotSizeLanding) * 0.15);
+        height: calc(var(--robotSizeLanding) * 0.15);
+        padding: 3px;
+        z-index: 999;
+        pointer-events:none;
       }
-      #mobileTabs .tabBtn{
-        flex:1;
-        border: none;
-        background: transparent;
-        border-radius: 14px;
-        font-family: "Fredoka","Trebuchet MS",Arial,sans-serif;
-        font-weight: 900;
-        font-size: 16px;
-        color:#1f2a44;
-        cursor: pointer;
-      }
-      #mobileTabs .tabBtn.active{
-        background:#eaf2ff;
-        box-shadow: inset 0 0 0 3px #1d1d1d;
-      }
-
-      /* Full-width panels on mobile */
-      #tools, #rightCol{ width: 100%; }
-      #sequencerShell{ width: 100%; display:flex; justify-content:center; }
-
-      /* Make tool buttons fit comfortably */
-      #toolsList{ display:flex; flex-wrap:wrap; gap: 10px; justify-content:center; }
-      #toolsList .tool{ width: calc(50% - 6px); max-width: 320px; }
-
-      /* Tab panel visibility */
-      body[data-mobile-tab="grid"]  #tools,
-      body[data-mobile-tab="grid"]  #rightCol{ display:none; }
-
-      body[data-mobile-tab="tools"] #sequencerShell,
-      body[data-mobile-tab="tools"] #rightCol{ display:none; }
-
-      body[data-mobile-tab="sounds"] #sequencerShell,
-      body[data-mobile-tab="sounds"] #tools{ display:none; }
     }
+    /* ---------------------------------------------------------------------- */
 </style>
 </head>
 
@@ -1173,14 +1221,23 @@ body.loggedIn #toolsLoginArea{ display:none; }
   <div id="page">
     <div id="topBar">
 <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
-<div id="memberPill" aria-live="polite">Guest</div>
+      <div id="memberPill" aria-live="polite">Guest</div>
     </div>
+
+    
 
     <div id="robotLogo" aria-hidden="true">
       <div class="robotClip">
         <img src="kid_Tech_Robot.svg" alt="" draggable="false" />
       </div>
     </div>
+
+    <div id="mobileTabs" role="tablist" aria-label="Mobile tabs">
+      <button class="mTab active" data-tab="grid" role="tab" aria-selected="true">Grid</button>
+      <button class="mTab" data-tab="tools" role="tab" aria-selected="false">Tools</button>
+      <button class="mTab" data-tab="sounds" role="tab" aria-selected="false">Sounds</button>
+    </div>
+
 
     <div id="contentWrap">
       <div id="controls">
@@ -1282,7 +1339,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
                   <div class="seqCap"></div>
                 </div>
 
-                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8" tabindex="-1">
+                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="10" tabindex="-1" style="top: 10px;">
                   <div class="seqKnobStripe"></div>
                 </div>
               </div>
@@ -1300,13 +1357,6 @@ body.loggedIn #toolsLoginArea{ display:none; }
   </div>
 
   <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
-
-  <!-- Mobile portrait navigation tabs -->
-  <div id="mobileTabs" role="tablist" aria-label="Mobile navigation">
-    <button class="tabBtn" type="button" data-tab="grid" role="tab" aria-selected="true">Grid</button>
-    <button class="tabBtn" type="button" data-tab="tools" role="tab" aria-selected="false">Tools</button>
-    <button class="tabBtn" type="button" data-tab="sounds" role="tab" aria-selected="false">Sounds</button>
-  </div>
 
   <div id="rotatePrompt">
     <div class="emoji">📱↔️</div>
@@ -1354,7 +1404,7 @@ const rows = 8;
 const cols = 16;
 
 let CELL = 46;
-const GAP  = 4;
+let GAP  = 4;
 
 const freqs = [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
@@ -1722,129 +1772,106 @@ function fitToViewport(){
 
   const portrait = vh > vw * 1.05;
   const phoneish = vw < 820;
-  rotatePromptEl.style.display = (portrait && phoneish) ? "flex" : "none";
+  const mobilePortrait = phoneish && portrait;
+
+  // When in mobile portrait, we support tabs, so don't show the rotate prompt.
+  rotatePromptEl.style.display = (mobilePortrait) ? "none" : ((portrait && phoneish) ? "flex" : "none");
+
+  // Make the UI a bit smaller in mobile portrait (roughly 75% size).
+  if(mobilePortrait){
+    const scale = 0.75;
+    GAP = Math.max(2, Math.round(4 * scale));
+    document.documentElement.style.setProperty('--gap', GAP + 'px');
+
+    const toolScaled  = Math.max(120, Math.round(toolW * scale));
+    const rightScaled = Math.max(90,  Math.round(rightW * scale));
+    const cellScaled  = Math.max(18,  Math.round(cell * scale));
+
+    document.documentElement.style.setProperty("--toolW", toolScaled + "px");
+    document.documentElement.style.setProperty("--rightW", rightScaled + "px");
+    document.documentElement.style.setProperty("--cell", cellScaled + "px");
+    CELL = cellScaled;
+  }else{
+    GAP = 4;
+    document.documentElement.style.setProperty('--gap', GAP + 'px');
+  }
+}
+
+function isMobilePortrait(){
+  return window.matchMedia("(max-width: 820px) and (orientation: portrait)").matches;
 }
 
 function positionRobotLogo(){
   const logo = document.getElementById('robotLogo');
-  const page = document.getElementById('page');
+  if(!logo) return;
+
+  // Mobile portrait: tiny badge at bottom-left
+  if(isMobilePortrait()){
+    const base = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--robotSizeLanding')) || 220;
+    const size = Math.max(22, Math.round(base * 0.15));
+    logo.style.position = 'fixed';
+    logo.style.left = '10px';
+    logo.style.bottom = '10px';
+    logo.style.top = 'auto';
+    logo.style.width = size + 'px';
+    logo.style.height = size + 'px';
+    logo.style.padding = Math.max(2, Math.round(size * 0.12)) + 'px';
+    logo.style.zIndex = '999';
+    return;
+  }
+
+  // Desktop/tablet: place relative to layout, and scroll with the page
   const toolsList = document.getElementById('toolsList');
-  const toolsCol = document.getElementById('tools');
-  const rightCol = document.getElementById('rightCol');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  if(!logo || !page || !seqWrap) return;
+  const page = document.getElementById('page');
+  if(!toolsList || !seqWrap || !page) return;
 
+  const toolsListRect = toolsList.getBoundingClientRect();
+  const gridRect = seqWrap.getBoundingClientRect();
+  const pageRect = page.getBoundingClientRect();
   const sx = window.scrollX || window.pageXOffset || 0;
   const sy = window.scrollY || window.pageYOffset || 0;
-  const pageRect = page.getBoundingClientRect();
-  const pageX = pageRect.left + sx;
-  const pageY = pageRect.top  + sy;
+  const pageDocX = pageRect.left + sx;
+  const pageDocY = pageRect.top + sy;
 
-  const toPage = (r) => ({
-    left:   r.left   + sx - pageX,
-    right:  r.right  + sx - pageX,
-    top:    r.top    + sy - pageY,
-    bottom: r.bottom + sy - pageY,
-    width:  r.width,
-    height: r.height
-  });
-
-  const gridRect = toPage(seqWrap.getBoundingClientRect());
-  const toolsListRect = (toolsList ? toPage(toolsList.getBoundingClientRect()) : {left:0, top:0, bottom:0, width:0, height:0});
-  const toolsRect = (toolsCol ? toPage(toolsCol.getBoundingClientRect()) : toolsListRect);
-  const rightRect = (rightCol ? toPage(rightCol.getBoundingClientRect()) : gridRect);
-
+  // Desired size (px) from CSS variable
   const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
-  const isPortraitTabs = window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
-  const activeTab = (document.body.dataset.mobileTab || 'grid').toLowerCase();
 
-  // Choose an anchor based on what's visible (important in mobile tab mode)
-  let anchorRect = gridRect;
-  if(isPortraitTabs){
-    if(activeTab === 'tools') anchorRect = (toolsListRect.width > 10 ? toolsListRect : toolsRect);
-    else if(activeTab === 'sounds') anchorRect = rightRect;
-    else anchorRect = gridRect;
-  }
+  // Anchor: below note-length buttons
+  let topMinDoc = toolsListRect.bottom + sy + 18;
 
-  // Vertical constraints
-  let topMin;
-  if(isPortraitTabs && activeTab !== 'grid'){
-    topMin = anchorRect.top + 10;
-  } else {
-    topMin = (toolsListRect.width > 10 ? toolsListRect.bottom + 18 : anchorRect.top + 10);
-  }
-
+  // If Login CTA is visible, keep it below that too
   if(loginWrap){
-    const r = toPage(loginWrap.getBoundingClientRect());
-    if(r.width > 0 && r.height > 0) topMin = Math.max(topMin, r.bottom + 28);
+    const r = loginWrap.getBoundingClientRect();
+    if(r.width > 0 && r.height > 0){
+      topMinDoc = Math.max(topMinDoc, r.bottom + sy + 28);
+    }
   }
 
-  const bottom = anchorRect.bottom;
-  const avail = Math.floor(bottom - topMin);
-  if (avail < 40) return;
-
-  const size = Math.max(40, Math.min(desired, avail));
-
-  // Apply size (and scale padding so it stays "button-like")
-  logo.style.width  = size + 'px';
-  logo.style.height = size + 'px';
-  logo.style.padding = Math.round(size * 0.12) + 'px';
-
-  // Horizontal placement
-  let xCenter;
-  if(!isPortraitTabs && toolsListRect.width > 10){
-    xCenter = toolsListRect.left + toolsListRect.width / 2;
-  } else if(isPortraitTabs && activeTab === 'grid'){
-    // Put it on the left edge of the grid in portrait (no left tool column)
-    xCenter = gridRect.left + (size / 2) + 12;
-  } else {
-    xCenter = anchorRect.left + anchorRect.width / 2;
-  }
+  // Bottom aligned to grid bottom
+  const bottomDoc = gridRect.bottom + sy;
+  const avail = Math.floor(bottomDoc - topMinDoc);
+  if(avail < 40) return;
 
   const nudgeY = 6;
-  const top = Math.round(bottom - size + nudgeY);
-  logo.style.left = Math.round(xCenter - size/2) + 'px';
-  logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
+  const size = Math.max(40, Math.min(desired, avail));
+
+  logo.style.position = 'absolute';
+  logo.style.zIndex = '0';
+  logo.style.width = size + 'px';
+  logo.style.height = size + 'px';
+  logo.style.padding = Math.round(size * 0.12) + 'px';
+  logo.style.bottom = '';
+
+  const xCenterDoc = toolsListRect.left + sx + (toolsListRect.width / 2);
+  const topDoc = Math.max(topMinDoc, Math.round(bottomDoc - size + nudgeY));
+
+  // Convert document coords to #page coords
+  logo.style.left = Math.round(xCenterDoc - size/2 - pageDocX) + 'px';
+  logo.style.top  = Math.round(topDoc - pageDocY) + 'px';
 }
 
-function setupMobileTabs(){
-  const tabs = document.getElementById('mobileTabs');
-  if(!tabs) return;
-  const btns = Array.from(tabs.querySelectorAll('.tabBtn'));
-  if(btns.length === 0) return;
-
-  const setTab = (tab) => {
-    const t = (tab || 'grid').toLowerCase();
-    document.body.dataset.mobileTab = t;
-    btns.forEach(b => {
-      const on = (b.dataset.tab || '').toLowerCase() === t;
-      b.classList.toggle('active', on);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-
-    requestAnimationFrame(() => {
-      fitToViewport();
-      buildGrid();
-      positionRobotLogo();
-    });
-  };
-
-  // Default tab
-  if(!document.body.dataset.mobileTab) setTab('grid');
-  else setTab(document.body.dataset.mobileTab);
-
-  tabs.addEventListener('click', (e) => {
-    const b = e.target && e.target.closest ? e.target.closest('.tabBtn') : null;
-    if(!b) return;
-    setTab(b.dataset.tab);
-  });
-
-  // Re-apply styling on orientation changes
-  window.addEventListener('orientationchange', () => {
-    setTimeout(() => setTab(document.body.dataset.mobileTab || 'grid'), 60);
-  });
-}
 
 
 window.addEventListener("resize", () => {
@@ -3195,9 +3222,45 @@ function importGridFromDataUrl(dataUrl){
 
 
 /* -------------------- INIT -------------------- */
+
+function setupMobileTabs(){
+  const tabs = document.getElementById('mobileTabs');
+  if(!tabs) return;
+  const btns = Array.from(tabs.querySelectorAll('button[data-tab]'));
+  if(!btns.length) return;
+
+  function apply(tab){
+    document.body.dataset.mtab = tab;
+    btns.forEach(b => {
+      const on = (b.dataset.tab === tab);
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  btns.forEach(b => b.addEventListener('click', () => apply(b.dataset.tab)));
+
+  function sync(){
+    if(isMobilePortrait()){
+      if(!document.body.dataset.mtab) apply('grid');
+    }else{
+      delete document.body.dataset.mtab;
+      apply('grid');
+    }
+  }
+
+  sync();
+
+  // Keep in sync when rotating
+  const mq = window.matchMedia('(max-width: 820px) and (orientation: portrait)');
+  const onChange = () => { sync(); try{ fitToViewport(); }catch(e){} try{ buildGrid(); }catch(e){} try{ positionRobotLogo(); }catch(e){} };
+  if(mq.addEventListener) mq.addEventListener('change', onChange);
+  else window.addEventListener('orientationchange', () => setTimeout(onChange, 80));
+}
+
 function init(){
-  setupMobileTabs();
   fitToViewport();
+  setupMobileTabs();
   buildGrid();
   positionRobotLogo();
   setInstrument("piano");
