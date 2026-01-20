@@ -101,11 +101,7 @@
     }
 
     #robotLogo{
-      /*
-        The robot badge should move/scroll exactly with the rest of the page.
-        We position it absolutely inside #page using *document* coordinates
-        (computed in JS with scroll offsets).
-      */
+      /* Must behave like the rest of the layout (scrolls with the page) */
       position: absolute;
       left: 0;
       top: 0;
@@ -121,20 +117,26 @@
       align-items:center;
       justify-content:center;
       pointer-events:none;
-      z-index: 6;
+      z-index: 4;
       opacity: 1;
+      overflow: hidden; /* clip any square SVG viewport corners */
     }
     #robotLogo .robotClip{
       width: 100%;
       height: 100%;
-      border-radius: 18px;
+      border-radius: 50%;
       overflow: hidden;
       display:flex;
       align-items:center;
       justify-content:center;
     }
     #robotLogo svg,
-    #robotLogo img{ width:100%; height:100%; display:block; }
+    #robotLogo img{
+      width:100%;
+      height:100%;
+      display:block;
+      object-fit: contain;
+    }
 
 
     /* Everything except the title gets lifted together */
@@ -846,7 +848,8 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
 
 
-    /* Logout button */
+    /* Guest mode stamp */
+    body.loggedIn /* Logout button */
     #logoutBtn{
       position: fixed;
       left: 14px;
@@ -998,8 +1001,6 @@ body.loggedIn #toolsLoginArea{ display:none; }
       align-items:center;
       justify-content:center;
       pointer-events:none;
-      opacity: 0;
-      will-change: top;
     }
 
     .seqKnobStripe{
@@ -1092,19 +1093,93 @@ body.loggedIn #toolsLoginArea{ display:none; }
       user-select:none;
       z-index: 50;
     }
+
+    /* -------------------- Mobile portrait tabs (Grid / Tools / Sounds) -------------------- */
+    #mobileTabs{ display:none; }
+    @media (max-width: 820px) and (orientation: portrait){
+      /* Portrait mobile uses tabs, so don't nag users to rotate */
+      #rotatePrompt{ display:none !important; }
+
+      /* Keep the robot badge sensible on phones */
+      :root{ --robotSizeLanding: clamp(96px, 28vw, 150px); }
+      body.loggedIn{ --robotSize: calc(var(--robotSizeLanding) * 1.2); }
+
+      #page{
+        padding-bottom: calc(env(safe-area-inset-bottom) + 72px);
+      }
+
+      #mainLayout{
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 0 12px 12px;
+      }
+
+      /* Tabs: fixed bottom bar */
+      #mobileTabs{
+        display:flex;
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(env(safe-area-inset-bottom) + 8px);
+        height: 56px;
+        background:#ffffff;
+        border: 4px solid #1d1d1d;
+        border-radius: 18px;
+        box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+        box-sizing: border-box;
+        z-index: 120;
+        padding: 4px;
+        gap: 4px;
+      }
+      #mobileTabs .tabBtn{
+        flex:1;
+        border: none;
+        background: transparent;
+        border-radius: 14px;
+        font-family: "Fredoka","Trebuchet MS",Arial,sans-serif;
+        font-weight: 900;
+        font-size: 16px;
+        color:#1f2a44;
+        cursor: pointer;
+      }
+      #mobileTabs .tabBtn.active{
+        background:#eaf2ff;
+        box-shadow: inset 0 0 0 3px #1d1d1d;
+      }
+
+      /* Full-width panels on mobile */
+      #tools, #rightCol{ width: 100%; }
+      #sequencerShell{ width: 100%; display:flex; justify-content:center; }
+
+      /* Make tool buttons fit comfortably */
+      #toolsList{ display:flex; flex-wrap:wrap; gap: 10px; justify-content:center; }
+      #toolsList .tool{ width: calc(50% - 6px); max-width: 320px; }
+
+      /* Tab panel visibility */
+      body[data-mobile-tab="grid"]  #tools,
+      body[data-mobile-tab="grid"]  #rightCol{ display:none; }
+
+      body[data-mobile-tab="tools"] #sequencerShell,
+      body[data-mobile-tab="tools"] #rightCol{ display:none; }
+
+      body[data-mobile-tab="sounds"] #sequencerShell,
+      body[data-mobile-tab="sounds"] #tools{ display:none; }
+    }
 </style>
 </head>
 
 <body>
   <div id="page">
+    <div id="topBar">
+<div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+<div id="memberPill" aria-live="polite">Guest</div>
+    </div>
+
     <div id="robotLogo" aria-hidden="true">
       <div class="robotClip">
         <img src="kid_Tech_Robot.svg" alt="" draggable="false" />
       </div>
-    </div>
-    <div id="topBar">
-      <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
-      <div id="memberPill" aria-live="polite">Guest</div>
     </div>
 
     <div id="contentWrap">
@@ -1207,7 +1282,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
                   <div class="seqCap"></div>
                 </div>
 
-                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="10" tabindex="-1">
+                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8" tabindex="-1">
                   <div class="seqKnobStripe"></div>
                 </div>
               </div>
@@ -1225,6 +1300,13 @@ body.loggedIn #toolsLoginArea{ display:none; }
   </div>
 
   <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
+
+  <!-- Mobile portrait navigation tabs -->
+  <div id="mobileTabs" role="tablist" aria-label="Mobile navigation">
+    <button class="tabBtn" type="button" data-tab="grid" role="tab" aria-selected="true">Grid</button>
+    <button class="tabBtn" type="button" data-tab="tools" role="tab" aria-selected="false">Tools</button>
+    <button class="tabBtn" type="button" data-tab="sounds" role="tab" aria-selected="false">Sounds</button>
+  </div>
 
   <div id="rotatePrompt">
     <div class="emoji">📱↔️</div>
@@ -1512,7 +1594,8 @@ function applyLockState(){
   if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
   document.body.classList.toggle("loggedIn", isLoggedIn);
 
-  }
+  try{ positionRobotLogo(); }catch(e){}
+}
 applyLockState();
 
 // Ensure the correct state when the browser restores the page from cache
@@ -1535,7 +1618,8 @@ function logout(){
 
   requestAnimationFrame(() => {
     try{ fitToViewport(); }catch(e){}
-    });
+    try{ positionRobotLogo(); }catch(e){}
+  });
 }
 
 
@@ -1643,37 +1727,60 @@ function fitToViewport(){
 
 function positionRobotLogo(){
   const logo = document.getElementById('robotLogo');
+  const page = document.getElementById('page');
   const toolsList = document.getElementById('toolsList');
+  const toolsCol = document.getElementById('tools');
+  const rightCol = document.getElementById('rightCol');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  if(!logo || !toolsList || !seqWrap) return;
+  if(!logo || !page || !seqWrap) return;
 
-  // Viewport-relative rects...
-  const toolsListRect = toolsList.getBoundingClientRect();
-  const gridRect = seqWrap.getBoundingClientRect();
-
-  // Convert viewport coords -> document coords so the badge scrolls with the page.
   const sx = window.scrollX || window.pageXOffset || 0;
   const sy = window.scrollY || window.pageYOffset || 0;
+  const pageRect = page.getBoundingClientRect();
+  const pageX = pageRect.left + sx;
+  const pageY = pageRect.top  + sy;
 
-  // Desired size (px) from CSS variable
+  const toPage = (r) => ({
+    left:   r.left   + sx - pageX,
+    right:  r.right  + sx - pageX,
+    top:    r.top    + sy - pageY,
+    bottom: r.bottom + sy - pageY,
+    width:  r.width,
+    height: r.height
+  });
+
+  const gridRect = toPage(seqWrap.getBoundingClientRect());
+  const toolsListRect = (toolsList ? toPage(toolsList.getBoundingClientRect()) : {left:0, top:0, bottom:0, width:0, height:0});
+  const toolsRect = (toolsCol ? toPage(toolsCol.getBoundingClientRect()) : toolsListRect);
+  const rightRect = (rightCol ? toPage(rightCol.getBoundingClientRect()) : gridRect);
+
   const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
+  const isPortraitTabs = window.matchMedia('(max-width: 820px) and (orientation: portrait)').matches;
+  const activeTab = (document.body.dataset.mobileTab || 'grid').toLowerCase();
 
-  // Anchor: always keep it below the note-length buttons.
-  let topMin = (toolsListRect.bottom + 18) + sy;
-
-  // If the Login button exists and is visible, keep it below that too.
-  if(loginWrap){
-    const r = loginWrap.getBoundingClientRect();
-    if(r.width > 0 && r.height > 0){
-      topMin = Math.max(topMin, (r.bottom + 28) + sy);
-    }
+  // Choose an anchor based on what's visible (important in mobile tab mode)
+  let anchorRect = gridRect;
+  if(isPortraitTabs){
+    if(activeTab === 'tools') anchorRect = (toolsListRect.width > 10 ? toolsListRect : toolsRect);
+    else if(activeTab === 'sounds') anchorRect = rightRect;
+    else anchorRect = gridRect;
   }
 
-  // Align the badge to the bottom of the grid (but never above topMin)
-  const bottom = gridRect.bottom + sy;
-  const nudgeY = 6;
+  // Vertical constraints
+  let topMin;
+  if(isPortraitTabs && activeTab !== 'grid'){
+    topMin = anchorRect.top + 10;
+  } else {
+    topMin = (toolsListRect.width > 10 ? toolsListRect.bottom + 18 : anchorRect.top + 10);
+  }
 
+  if(loginWrap){
+    const r = toPage(loginWrap.getBoundingClientRect());
+    if(r.width > 0 && r.height > 0) topMin = Math.max(topMin, r.bottom + 28);
+  }
+
+  const bottom = anchorRect.bottom;
   const avail = Math.floor(bottom - topMin);
   if (avail < 40) return;
 
@@ -1684,15 +1791,60 @@ function positionRobotLogo(){
   logo.style.height = size + 'px';
   logo.style.padding = Math.round(size * 0.12) + 'px';
 
-  // Center horizontally to the note-length tool column
-  const xCenter = (toolsListRect.left + toolsListRect.width / 2) + sx;
+  // Horizontal placement
+  let xCenter;
+  if(!isPortraitTabs && toolsListRect.width > 10){
+    xCenter = toolsListRect.left + toolsListRect.width / 2;
+  } else if(isPortraitTabs && activeTab === 'grid'){
+    // Put it on the left edge of the grid in portrait (no left tool column)
+    xCenter = gridRect.left + (size / 2) + 12;
+  } else {
+    xCenter = anchorRect.left + anchorRect.width / 2;
+  }
 
-  // Prefer aligning bottom to the grid; clamp to topMin
+  const nudgeY = 6;
   const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
 }
 
+function setupMobileTabs(){
+  const tabs = document.getElementById('mobileTabs');
+  if(!tabs) return;
+  const btns = Array.from(tabs.querySelectorAll('.tabBtn'));
+  if(btns.length === 0) return;
+
+  const setTab = (tab) => {
+    const t = (tab || 'grid').toLowerCase();
+    document.body.dataset.mobileTab = t;
+    btns.forEach(b => {
+      const on = (b.dataset.tab || '').toLowerCase() === t;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+
+    requestAnimationFrame(() => {
+      fitToViewport();
+      buildGrid();
+      positionRobotLogo();
+    });
+  };
+
+  // Default tab
+  if(!document.body.dataset.mobileTab) setTab('grid');
+  else setTab(document.body.dataset.mobileTab);
+
+  tabs.addEventListener('click', (e) => {
+    const b = e.target && e.target.closest ? e.target.closest('.tabBtn') : null;
+    if(!b) return;
+    setTab(b.dataset.tab);
+  });
+
+  // Re-apply styling on orientation changes
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => setTab(document.body.dataset.mobileTab || 'grid'), 60);
+  });
+}
 
 
 window.addEventListener("resize", () => {
@@ -1700,7 +1852,6 @@ window.addEventListener("resize", () => {
     fitToViewport();
     buildGrid();
     positionRobotLogo();
-
   });
 });
 
@@ -3045,18 +3196,15 @@ function importGridFromDataUrl(dataUrl){
 
 /* -------------------- INIT -------------------- */
 function init(){
+  setupMobileTabs();
   fitToViewport();
   buildGrid();
   positionRobotLogo();
-
   setInstrument("piano");
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
 
-  requestAnimationFrame(() => {
-    fitToViewport();
-    positionRobotLogo();
-  });
+  requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); });
 }
 init();
 
@@ -3091,6 +3239,7 @@ window.KidSequencer = {
   },
   UI: {
     fitToViewport,
+    positionRobotLogo,
     updateTempoBox,
     updateLoginLinks,
     applyLockState,
@@ -3250,7 +3399,6 @@ window.KidSequencer = {
       const v = Number(range.value);
       updateDisplayFromValue(v);
       setKnobCenterY(valueToCenterY(v));
-      knob.style.opacity = "1";
     }
 
     let dragging = false;
