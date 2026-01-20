@@ -1218,8 +1218,18 @@ body.loggedIn #toolsLoginArea{ display:none; }
     @media (max-width: 920px) and (orientation: landscape){
       :root{
         /* Mobile landscape: make the note-length buttons much narrower */
-        --toolW: 74px;
+        --toolW: 54px;
       }
+
+      /* Title box 60% smaller in mobile landscape */
+      #topBar{ height: 58px; }
+      #titleBox{
+        height: 36px;
+        border-width: 3px;
+        border-radius: 16px;
+        padding: 6px 10px;
+      }
+      #titleBox .titleText{ font-size: 14px; letter-spacing: 0.5px; }
 
       #tools{ gap: 6px; }
       #toolsList{ gap: 5px; }
@@ -1233,7 +1243,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
       }
 
       .toolSymbol{
-        width: 18px;
+        width: 14px;
         margin-right: 2px;
         font-size: 18px;
         line-height: 1;
@@ -1243,18 +1253,18 @@ body.loggedIn #toolsLoginArea{ display:none; }
       .toolSymbol.sixteenth{ font-size: 20px; }
       .toolSymbol.eighth{ font-size: 18px; }
 
-      .toolBarWrap{ height: 20px; gap: 3px; }
+      /* Make the middle "note length" bar much shorter (less wide) */
+      .toolBarWrap{ height: 20px; gap: 0px; flex: 0 0 16px; width: 16px; }
       .toolBar{
+        flex: 0 0 16px;
+        width: 16px;
         height: 14px;
         border-width: 3px;
         border-radius: 8px;
       }
 
-      .toolLabel{
-        width: 26px;
-        font-size: 10px;
-        line-height: 1;
-      }
+      /* Hide the fraction label in landscape to keep the column ultra-narrow */
+      .toolLabel{ display:none; }
     }
     /* ---------------------------------------------------------------------- */
 </style>
@@ -1818,9 +1828,31 @@ function fitToViewport(){
   const portrait = vh > vw * 1.05;
   const phoneish = vw < 820;
   const mobilePortrait = phoneish && portrait;
+  const mobileLandscape = phoneish && !portrait;
 
   // When in mobile portrait, we support tabs, so don't show the rotate prompt.
   rotatePromptEl.style.display = (mobilePortrait) ? "none" : ((portrait && phoneish) ? "flex" : "none");
+
+  // Mobile landscape: aggressively slim the left tools column.
+  // We recompute cell sizing so the grid still fits.
+  if(mobileLandscape){
+    const toolW2 = 54;                 // drastically narrower tools column
+    const rightW2 = rightW;            // keep right column usable
+    const maxCellByWidth2 = Math.floor(
+      (vw - toolW2 - rightW2 - outerPadding - gaps - (cols - 1) * GAP - gridExtra) / cols
+    );
+    let cell2 = Math.min(maxCellByWidth2, maxCellByHeight);
+    cell2 = Math.max(22, Math.min(56, cell2));
+
+    toolW = toolW2;
+    rightW = rightW2;
+    cell = cell2;
+
+    document.documentElement.style.setProperty("--toolW", toolW + "px");
+    document.documentElement.style.setProperty("--rightW", rightW + "px");
+    document.documentElement.style.setProperty("--cell", cell + "px");
+    CELL = cell;
+  }
 
   // Make the UI a bit smaller in mobile portrait (roughly 75% size).
   if(mobilePortrait){
