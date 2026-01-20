@@ -77,6 +77,10 @@
       margin: 0;
     }
 
+    .brandText{
+      margin-top: 14px;
+    }
+
     .tagline{
       margin: 0;
       font-weight: 900;
@@ -87,7 +91,7 @@
     .bullets{
       display:grid;
       gap: 10px;
-      margin-top: 8px;
+      margin-top: 18px;
     }
     .bullet{
       display:flex;
@@ -278,18 +282,20 @@
 </g>
 </svg>
       </div>
-      <div>
-        <h1 class="appTitle">Kid Sequencer</h1>
-        <p class="tagline">Sign in to unlock the greyed-out tools. Free account, no emails sent.</p>
+      <div class="brandText">
+        <div>
+          <h1 class="appTitle">Kid Sequencer</h1>
+          <p class="tagline">Sign in to unlock the greyed-out tools. Free account, no emails sent.</p>
+        </div>
+
+        <div class="bullets">
+          <div class="bullet"><span class="dot"></span><span>Unlock extra note lengths + instruments</span></div>
+          <div class="bullet"><span class="dot"></span><span>Log in on any device</span></div>
+          <div class="bullet"><span class="dot"></span><span>Or ... just continue as Guest</span></div>
+        </div>
       </div>
 
-      <div class="bullets">
-        <div class="bullet"><span class="dot"></span><span>Unlock extra note lengths + instruments</span></div>
-        <div class="bullet"><span class="dot"></span><span>Save your browser account locally</span></div>
-        <div class="bullet"><span class="dot"></span><span>Or just continue as guest</span></div>
-      </div>
-
-      <p class="hint">This is a simple offline login for now (stored on this device only).</p>
+      <p class="hint"></p>
     </div>
 
     <div class="panel auth">
@@ -298,15 +304,10 @@
         <button class="tab" id="tabRegister" type="button">Create account</button>
       </div>
 
-      <div class="quick">
-        <button class="qbtn" type="button" id="qGoogle">Continue with Google</button>
-        <button class="qbtn" type="button" id="qMicrosoft">Continue with Microsoft</button>
-        <button class="qbtn" type="button" id="qApple">Continue with Apple</button>
-      </div>
-
-      <div class="divider">or use email</div>
-
+      <div class="divider">Use email</div>
       <div class="err" id="errBox"></div>
+
+      <p class="hint" id="infoMsg" style="display:none;"></p>
 
       <form id="signInForm" autocomplete="on">
         <div>
@@ -318,7 +319,7 @@
           <input id="siPass" name="password" type="password" placeholder="••••••••" required />
         </div>
         <button class="primary" type="submit">Sign in</button>
-        <p class="hint">No name field. Just email + password.</p>
+        <p class="hint"></p>
       </form>
 
       <form id="registerForm" autocomplete="on" style="display:none;">
@@ -335,141 +336,138 @@
           <input id="rePass2" name="password2" type="password" placeholder="Repeat password" required />
         </div>
         <button class="primary" type="submit">Create free account</button>
-        <p class="hint">Your account is stored locally in this browser (basic demo).</p>
-      </form>
+</form>
 
       <div class="foot">
-        <button class="secondary" id="guestBtn" type="button">Continue without login</button>
-        <div class="linkRow">
-          <a href="#" id="backLink">Back to sequencer</a>
-          <a href="#" id="helpLink">What is this?</a>
-        </div>
-      </div>
+        <button class="secondary" id="guestBtn" type="button">Continue as Guest</button>
+</div>
     </div>
   </div>
 
-  <script>
-    const params = new URLSearchParams(location.search);
-    const returnTo = params.get("return") || "index.html";
+  <script type="module">
+    import { auth } from './js/firebase-init.js';
+    import {
+      createUserWithEmailAndPassword,
+      signInWithEmailAndPassword,
+      signOut
+    } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
-    const USERS_KEY = 'kidseq_users';
+    const params = new URLSearchParams(location.search);
+    const returnTo = params.get('return') || 'index.html';
 
     const tabSignIn = document.getElementById('tabSignIn');
     const tabRegister = document.getElementById('tabRegister');
     const signInForm = document.getElementById('signInForm');
     const registerForm = document.getElementById('registerForm');
     const errBox = document.getElementById('errBox');
-
+    const infoMsg = document.getElementById('infoMsg');
+    const guestBtn = document.getElementById('guestBtn');
     function showError(msg){
+      if (!errBox) return;
       errBox.textContent = msg;
       errBox.style.display = 'block';
     }
     function clearError(){
+      if (!errBox) return;
       errBox.style.display = 'none';
       errBox.textContent = '';
     }
 
+    function showInfo(msg){
+      if(!infoMsg) return;
+      infoMsg.textContent = msg || '';
+      infoMsg.style.display = msg ? 'block' : 'none';
+    }
+
+    function navTo(url){
+      // Bust bfcache/caching so the sequencer ALWAYS re-runs its lock/unlock logic.
+      const sep = url.includes('?') ? '&' : '?';
+      const target = url + sep + 'ts=' + Date.now();
+      window.location.replace(target);
+    }
+
     function setTab(which){
       clearError();
+      showInfo('');
       const signIn = which === 'signin';
-      tabSignIn.classList.toggle('active', signIn);
-      tabRegister.classList.toggle('active', !signIn);
-      signInForm.style.display = signIn ? 'grid' : 'none';
-      registerForm.style.display = signIn ? 'none' : 'grid';
+      tabSignIn?.classList.toggle('active', signIn);
+      tabRegister?.classList.toggle('active', !signIn);
+      if (signInForm) signInForm.style.display = signIn ? 'grid' : 'none';
+      if (registerForm) registerForm.style.display = signIn ? 'none' : 'grid';
     }
 
-    tabSignIn.addEventListener('click', () => setTab('signin'));
-    tabRegister.addEventListener('click', () => setTab('register'));
-
-    function loadUsers(){
-      try{
-        const raw = localStorage.getItem(USERS_KEY);
-        return raw ? JSON.parse(raw) : {};
-      }catch(e){
-        return {};
-      }
-    }
-
-    function saveUsers(users){
-      try{ localStorage.setItem(USERS_KEY, JSON.stringify(users)); }catch(e){}
-    }
-
-    async function sha256(str){
-      if (window.crypto && crypto.subtle && window.TextEncoder){
-        const data = new TextEncoder().encode(str);
-        const hash = await crypto.subtle.digest('SHA-256', data);
-        return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
-      }
-      // Fallback (still local-only): not cryptographically secure
-      return btoa(unescape(encodeURIComponent(str)));
-    }
-
-    function finishLogin(email){
-      try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
-      try{ localStorage.setItem('kidseq_user_email', email || ''); }catch(e){}
-      location.href = returnTo;
-    }
-
-    // Quick providers (demo)
-    document.getElementById('qGoogle').addEventListener('click', () => finishLogin('google@local'));
-    document.getElementById('qMicrosoft').addEventListener('click', () => finishLogin('microsoft@local'));
-    document.getElementById('qApple').addEventListener('click', () => finishLogin('apple@local'));
-
-    document.getElementById('guestBtn').addEventListener('click', () => finishLogin(''));
-
-    document.getElementById('backLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      location.href = returnTo;
-    });
-
-    document.getElementById('helpLink').addEventListener('click', (e) => {
-      e.preventDefault();
-      alert('This login is a simple offline demo. Accounts are stored only in this browser.');
-    });
-
-    signInForm.addEventListener('submit', async (e) => {
+    tabSignIn?.addEventListener('click', () => setTab('signin'));
+    tabRegister?.addEventListener('click', () => setTab('register'));
+    signInForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
-      const email = document.getElementById('siEmail').value.trim().toLowerCase();
-      const pass = document.getElementById('siPass').value;
-      if(!email || !pass){ showError('Please enter email and password.'); return; }
+      showInfo('Signing in...');
+      const btn = signInForm.querySelector('button[type="submit"]');
+      const oldTxt = btn ? btn.textContent : '';
+      if (btn){ btn.disabled = true; btn.textContent = 'Signing in...'; }
+      const email = document.getElementById('siEmail')?.value?.trim();
+      const password = document.getElementById('siPass')?.value || '';
+      if (!email || !password){
+        if (btn){ btn.disabled = false; btn.textContent = oldTxt; }
+        showInfo('');
+        return showError('Enter email and password.');
+      }
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+        try{ localStorage.setItem('kidseq_user_email', email || ''); }catch(e){}
 
-      const users = loadUsers();
-      if(!users[email]){ showError('No account found for that email. Try Create account.'); return; }
-
-      const hash = await sha256(pass);
-      if(users[email].hash !== hash){ showError('Incorrect password.'); return; }
-
-      finishLogin(email);
+        navTo(returnTo);
+      } catch (err) {
+        if (btn){ btn.disabled = false; btn.textContent = oldTxt; }
+        showInfo('');
+        showError(err?.message || 'Sign in failed.');
+      }
     });
 
-    registerForm.addEventListener('submit', async (e) => {
+    registerForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
-      const email = document.getElementById('reEmail').value.trim().toLowerCase();
-      const pass = document.getElementById('rePass').value;
-      const pass2 = document.getElementById('rePass2').value;
+      showInfo('Creating account...');
+      const btn = registerForm.querySelector('button[type="submit"]');
+      const oldTxt = btn ? btn.textContent : '';
+      if (btn){ btn.disabled = true; btn.textContent = 'Creating...'; }
+      const email = document.getElementById('reEmail')?.value?.trim();
+      const pass1 = document.getElementById('rePass')?.value || '';
+      const pass2 = document.getElementById('rePass2')?.value || '';
+      if (!email || !pass1 || !pass2){
+        if (btn){ btn.disabled = false; btn.textContent = oldTxt; }
+        showInfo('');
+        return showError('Enter email and password.');
+      }
+      if (pass1 !== pass2){
+        if (btn){ btn.disabled = false; btn.textContent = oldTxt; }
+        showInfo('');
+        return showError('Passwords do not match.');
+      }
+      try {
+        await createUserWithEmailAndPassword(auth, email, pass1);
+        try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+        try{ localStorage.setItem('kidseq_user_email', email || ''); }catch(e){}
 
-      if(!email || !pass || !pass2){ showError('Please fill in all fields.'); return; }
-      if(pass.length < 6){ showError('Password should be at least 6 characters.'); return; }
-      if(pass !== pass2){ showError('Passwords do not match.'); return; }
-
-      const users = loadUsers();
-      if(users[email]){ showError('That email already has an account. Try Sign in.'); return; }
-
-      const hash = await sha256(pass);
-      users[email] = { hash, createdAt: Date.now() };
-      saveUsers(users);
-
-      finishLogin(email);
+        navTo(returnTo);
+      } catch (err) {
+        if (btn){ btn.disabled = false; btn.textContent = oldTxt; }
+        showInfo('');
+        showError(err?.message || 'Account creation failed.');
+      }
     });
 
-    // If already logged in, just go back
-    try{
-      if(localStorage.getItem('kidseq_logged_in') === '1'){
-        // keep it calm: only auto-return if user intentionally opened this page
-      }
-    }catch(e){}
+    guestBtn?.addEventListener('click', async () => {
+      // Guest = locked experience
+      showInfo('Continuing as guest...');
+      // Don't await signOut (it can be slow); we just need local lock state.
+      try{ signOut(auth).catch(()=>{}); }catch(e){}
+      try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
+      try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
+      navTo(returnTo);
+    });
   </script>
+
 </body>
 </html>

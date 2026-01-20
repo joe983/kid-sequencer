@@ -1,0 +1,3284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Kid Sequencer</title>
+
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800;900&display=swap");
+    :root{
+      --cell: 46px;
+      --gap: 4px;
+      --toolW: 210px;
+      --rightW: 110px;
+      --rightLift: 0px;
+      --titleInset: 0px;
+      --contentLift: 0px;
+
+      --wiggleDeg: 1.2deg;
+      --wiggleScale: 0.01;
+
+      /* Robot badge size */
+      --robotSizeLanding: 220px;
+      --robotSize: var(--robotSizeLanding);
+    }
+
+    /* Logged-in: robot is 50% bigger than the landing page */
+    body.loggedIn{
+      --robotSize: calc(var(--robotSizeLanding) * 1.5);
+    }
+
+    body.loggedIn #robotLogo{
+      opacity: 1;
+      filter: none;
+    }
+
+    body{
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      background: #f6fbff;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+
+    /* Prevent caret/focus blinking artifacts */
+    *{ caret-color: transparent; }
+    :focus{ outline: none; }
+    #page{
+      min-height: 100vh;
+      display:flex;
+      flex-direction:column;
+      padding-top: 10px;
+      padding-bottom: env(safe-area-inset-bottom);
+      user-select:none;
+      position: relative;
+      z-index: 2;
+    }
+
+    #topBar{
+      pointer-events:none;
+      height: 92px;
+      padding: 8px 14px 0;
+      box-sizing:border-box;
+      position: relative;
+      z-index: 3;
+    }
+
+    #titleBox{
+      width: var(--toolW);
+      height: 58px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+      box-sizing:border-box;
+
+      display:flex;
+      align-items:center;
+      justify-content:center;
+
+      position:absolute;
+      left: calc(14px + var(--titleInset));
+      top: 8px;
+      overflow:hidden;
+      line-height: 1;
+    }
+
+    #titleBox .titleText{
+      font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 28px;
+      letter-spacing: 0.6px;
+      color:#1f2a44;
+      white-space:nowrap;
+      line-height: 1;
+      padding: 0; margin: 0;
+      transform: translateY(-0.5px);
+      text-shadow:
+        0 2px 0 rgba(255,255,255,0.9),
+        0 5px 0 rgba(0,0,0,0.08);
+    }
+
+    #robotLogo{
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: var(--robotSize);
+      height: var(--robotSize);
+      padding: 8px;
+      box-sizing: border-box;
+      border-radius: 50%;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+      z-index: 0;
+      opacity: 1;
+    }
+    #robotLogo .robotClip{
+      width: 100%;
+      height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #robotLogo svg{ width:100%; height:100%; display:block; }
+
+
+    /* Everything except the title gets lifted together */
+    #contentWrap{
+      transform: translateY(calc(-1 * var(--contentLift)));
+      will-change: transform;
+      position: relative;
+      z-index: 2;
+    }
+
+    #controls{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap: 10px;
+      margin: 6px 0 8px;
+      flex-wrap: nowrap;
+    }
+    #controls .bigBtn{ margin: 0; }
+    .bigBtn{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-size:18px;
+      padding: 10px 16px;
+      margin: 5px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      cursor:pointer;
+      font-weight: 900;
+      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+      min-width: 88px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap: 8px;
+    }
+    .bigBtn.iconBtn{
+      padding: 0;
+      width: 76px;
+      height: 58px;
+    }
+
+    .bigBtn .icon{
+      line-height: 1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      width: 100%;
+      height: 100%;
+      transform: none;
+    }
+    .bigBtn .icon svg{
+  display:block;
+  width: 38px;
+  height: 38px;
+}
+.bigBtn .playIcon{ color: #18b118; }
+.bigBtn .stopIcon{ color: #e02b2b; }
+.bigBtn .undoIcon{ color: #111111; }
+.bigBtn .clearIcon{ color: #111111; }
+.bigBtn .cameraIcon{ color: #111111; }
+
+.bigBtn .clearIcon svg{ width: 28px; height: 28px; }
+.bigBtn .undoIcon svg{ width: 30px; height: 30px; transform: translateX(-1px); }
+.bigBtn .cameraIcon svg{ width: 34px; height: 34px; }
+.bigBtn:hover{ transform: translateY(-1px); }
+
+    #mainLayout{
+      flex: 1;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+      gap: 14px;
+      padding: 0 14px 12px;
+      box-sizing:border-box;
+    }
+
+    #tools{
+      width: var(--toolW);
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      flex: 0 0 auto;
+    }
+
+    .tool{
+      width: 100%;
+      height: 58px;
+      border: 4px solid #1d1d1d;
+      background: #ffffff;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      padding: 8px 10px;
+      border-radius: 16px;
+      box-sizing: border-box;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+      touch-action: manipulation;
+    }
+    .tool:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
+      background:#fbfdff;
+    }
+    .tool.selected{
+      background:#eaf2ff;
+      box-shadow: 0 9px 0 rgba(0,0,0,0.10);
+    }
+
+    .toolSymbol{
+      width: 48px;
+      height: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight: 900;
+      margin-right: 8px;
+      color:#1d1d1d;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+      font-size: 32px;
+      line-height: 1;
+    }
+    .toolSymbol.big{ font-size: 40px; }
+    .toolSymbol.normal{ font-size: 34px; }
+    .toolSymbol.sixteenth{ font-size: 38px; }
+    .toolSymbol.eighth{ font-size: 32px; }
+
+    .toolBarWrap{
+      flex: 1;
+      height: 32px;
+      display:flex;
+      align-items:center;
+      gap: 6px;
+    }
+
+    .toolBar{
+      position: relative;
+      flex: 1;
+      height: 24px;
+      border: 4px solid #1d1d1d;
+      background: #fff;
+      border-radius: 10px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    .toolBarFill{
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width: calc(var(--fill) * 100%);
+      background:#1d1d1d;
+      border-top-right-radius: 7px;
+      border-bottom-right-radius: 7px;
+    }
+
+    .toolBarDivs{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      opacity: 0.24;
+      background-image: repeating-linear-gradient(
+        to right,
+        rgba(0,0,0,0) 0,
+        rgba(0,0,0,0) calc((100% / var(--divs)) - 2px),
+        rgba(0,0,0,0.95) calc((100% / var(--divs)) - 2px),
+        rgba(0,0,0,0.95) calc(100% / var(--divs))
+      );
+    }
+
+    .toolLabel{
+      width: 58px;
+      font-size: 14px;
+      font-weight: 900;
+      text-align:right;
+      color:#1f2a44;
+    }
+    .toolLabel.comicWhole{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+    }
+
+    #sequencerShell{
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      background: #ffffff;
+      padding: 12px;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      flex: 0 0 auto;
+    }
+
+    #sequencerWrapper{
+      position: relative;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    /* -------------------- DRUMS PANEL -------------------- */
+    #drumPanel{
+      margin-top: 10px;
+      width: calc(var(--cell) * 16 + var(--gap) * 15);
+      border: 4px solid #1d1d1d;
+      border-radius: 16px;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+      padding: 8px 10px;
+      box-sizing:border-box;
+      display:flex;
+      align-items:center;
+      justify-content: flex-start;
+      gap: 10px;
+      user-select:none;
+    }
+
+    #drumLeft{
+      display:flex;
+      flex-direction:column;
+      gap: 2px;
+      min-width: 86px;
+    }
+
+    .drumTitle{
+      font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 18px;
+      color:#1f2a44;
+      line-height: 1;
+    }
+
+    .drumStatus{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 12px;
+      opacity: 0.78;
+      color:#1f2a44;
+      line-height: 1;
+    }
+
+    #drumControls{
+      width: 100%;
+      display:flex;
+      align-items:center;
+      justify-content: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .drumMiniBtn{
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      cursor:pointer;
+      font-size: 24px;
+      font-weight: 900;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition: transform 120ms ease, background 120ms ease, opacity 120ms ease, filter 120ms ease;
+      touch-action: manipulation;
+      padding: 0;
+    }
+    .drumMiniBtn:hover{ transform: translateY(-1px); }
+    .drumMiniBtn:active{ transform: translateY(0); }
+    .drumMiniBtn.muted{ opacity: 0.72; }
+
+    .drumStyleGroup{ display:flex; gap: 8px; flex-wrap: wrap; justify-content:flex-start; }
+
+    .drumStyleBtn{
+      width: 56px;
+      height: 56px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 0;
+      border: 3px solid #1d1d1d;
+      border-radius: 14px;
+      background:#ffffff;
+      cursor:pointer;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.08);
+      transition: transform 90ms ease;
+    }
+.drumStyleBtn:hover{ transform: translateY(-1px); }
+    .drumStyleBtn:active{ transform: translateY(0); }
+    .drumStyleBtn.selected{ background:#eaf2ff; }
+
+    .drumIcon{
+      width: 82%;
+      height: 82%;
+      display:block;
+      object-fit: contain;
+      pointer-events:none;
+    }
+
+
+
+    .rowWrap{
+      position:relative;
+      margin-bottom: var(--gap);
+      width: calc(var(--cell) * 16 + var(--gap) * 15);
+      height: var(--cell);
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(16, var(--cell));
+      gap: var(--gap);
+    }
+
+    .cell{
+      width: var(--cell);
+      height: var(--cell);
+      background:#ffffff;
+      border: 3px solid #1d1d1d;
+      box-sizing:border-box;
+      cursor:pointer;
+      border-radius: 12px;
+      transition: transform 90ms ease;
+      touch-action: manipulation;
+    }
+    .cell:hover{ transform: scale(1.02); }
+
+    .noteLayer{
+      position:absolute;
+      left:0; top:0;
+      width:100%; height:100%;
+      pointer-events:none;
+    }
+
+    .noteBlock{
+      position:absolute;
+      height: var(--cell);
+      border: 4px solid rgba(0,0,0,0.92);
+      box-sizing:border-box;
+      border-radius: 14px;
+      pointer-events:auto;
+      cursor:pointer;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.08);
+      transform-origin:center center;
+      touch-action: manipulation;
+      overflow:hidden; /* needed for candy-bar overlay */
+    }
+
+    /* Candy-bar inner bevel (cartoony) */
+    .noteBlock::before{
+      content:"";
+      position:absolute;
+      inset: 3px;
+      border-radius: 10px;
+      pointer-events:none;
+      box-shadow:
+        inset 0 3px 0 rgba(255,255,255,0.35),
+        inset 0 -3px 0 rgba(0,0,0,0.10);
+      opacity: 0.9;
+    }
+
+    /* Candy-bar segments overlay (replaces dot pattern) */
+    .noteBlock::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+
+      /* 3 layers:
+         1) alternating panel tint per cell
+         2) separator lines at boundaries
+         3) glossy highlight stripe near the top
+      */
+      background-image:
+        /* 1) alternating panel tint */
+        repeating-linear-gradient(
+          to right,
+          rgba(255,255,255,0.00) 0,
+          rgba(255,255,255,0.00) calc(var(--cell)),
+          rgba(0,0,0,0.06)        calc(var(--cell)),
+          rgba(0,0,0,0.06)        calc(var(--cell) + var(--gap))
+        ),
+
+        /* 2) separators at boundaries */
+        repeating-linear-gradient(
+          to right,
+          rgba(0,0,0,0.00) 0,
+          rgba(0,0,0,0.00) calc(var(--cell) - 3px),
+          rgba(0,0,0,0.24) calc(var(--cell) - 3px),
+          rgba(0,0,0,0.24) calc(var(--cell) - 0px),
+          rgba(0,0,0,0.00) calc(var(--cell)),
+          rgba(0,0,0,0.00) calc(var(--cell) + var(--gap))
+        ),
+
+        /* 3) glossy top highlight */
+        linear-gradient(
+          to bottom,
+          rgba(255,255,255,0.42) 0%,
+          rgba(255,255,255,0.18) 32%,
+          rgba(255,255,255,0.00) 60%
+        );
+
+      background-size:
+        calc(var(--cell) + var(--gap)) 100%,
+        calc(var(--cell) + var(--gap)) 100%,
+        100% 100%;
+
+      background-repeat: repeat, repeat, no-repeat;
+      opacity: 1;
+    }
+
+    @keyframes swell {
+      0%   { transform: scale(1,1); }
+      40%  { transform: scale(var(--sx,1.03), var(--sy,1.03)); }
+      70%  { transform: scale(var(--sx2,1.01), var(--sy2,1.01)); }
+      100% { transform: scale(1,1); }
+    }
+    .noteBlock.playing{ animation: swell 260ms ease-out; }
+
+    #playhead{
+      position:absolute;
+      top:0; bottom:0;
+      width: var(--cell);
+      left: 0;
+      pointer-events:none;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.30);
+      border: 4px solid rgba(0,0,0,0.22);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.25) inset;
+      transition: left 70ms linear;
+      transform-origin: 50% 50%;
+    }
+    #playhead::after{
+      content:"";
+      position:absolute;
+      top:6px; bottom:6px;
+      left: 50%;
+      width: 0;
+      border-left: 3px dashed rgba(0,0,0,0.18);
+      transform: translateX(-50%);
+    }
+
+    @keyframes wiggle {
+      0%   { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+      50%  { transform: rotate(var(--wiggleDeg))           scale(calc(1 + var(--wiggleScale))); }
+      100% { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+    }
+    #playhead.playing{ animation: wiggle 220ms ease-in-out infinite; }
+
+    #rightCol{
+      width: var(--rightW);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 12px;
+      flex: 0 0 auto;
+      transform: translateY(calc(-1 * var(--rightLift)));
+      will-change: transform;
+    }
+
+    #tempoControls{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 8px;
+      width: 100%;
+    }
+    #tempoControls button{
+      width:58px;
+      height:58px;
+      font-size:30px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      cursor:pointer;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+    }
+    #tempoControls button:hover{ transform: translateY(-1px); }
+
+    #tempoBox{
+      width:74px;
+      text-align:center;
+      font-size:22px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      padding: 12px 0;
+      border-radius: 16px;
+      font-weight: 900;
+      color:#1f2a44;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      user-select:none;
+    }
+
+    #instButtons{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      width: 58px;
+    }
+
+    .instBtn{
+      width: 58px;
+      height: 58px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size: 34px;
+      transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease, background 120ms ease;
+      touch-action: manipulation;
+      box-sizing:border-box;
+    }
+    .instBtn:hover{ transform: translateY(-1px); }
+
+    .instBtn.selected{ background:#eaf2ff; opacity: 1; filter: none; }
+    .instBtn.notSelected{ opacity: 0.42; filter: grayscale(0.95); }
+
+    .waveIcon{ width: 46px; height: 28px; display:block; }
+
+    #rotatePrompt{
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(255,255,255,0.95);
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.10);
+      padding: 10px 14px;
+      display:none;
+      align-items:center;
+      gap: 10px;
+      max-width: min(520px, calc(100vw - 24px));
+      box-sizing:border-box;
+    }
+    #rotatePrompt .emoji{ font-size: 26px; }
+    #rotatePrompt .text{
+      font-weight: 900;
+      color:#1f2a44;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    #rotatePrompt .sub{
+      display:block;
+      font-weight: 800;
+      opacity: 0.75;
+      margin-top: 2px;
+      font-size: 12px;
+    }
+
+
+    /* Camera scan modal */
+    #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
+    #camModal.show{ display:flex; }
+    .modalCard{ width: min(620px, 96vw); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 9px 0 rgba(0,0,0,0.12); overflow:hidden; }
+    .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
+    .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }
+    .modalClose{ width:46px; height:46px; border-radius: 14px; border: 4px solid #1d1d1d; background:#fff; cursor:pointer; font-weight: 900; font-size: 18px; box-shadow: 0 8px 0 rgba(0,0,0,0.07); }
+    .camStage{ position: relative; aspect-ratio: 4 / 3; background:#111; }
+    #camVideo, #camPreview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    #camPreview{ display:none; }
+    .camOverlay{ position:absolute; inset:10px; border: 4px dashed rgba(255,255,255,0.75); border-radius: 14px; pointer-events:none; }
+    .camOverlay::before{ content:""; position:absolute; inset:0; background-image:
+      repeating-linear-gradient(to right, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 16))),
+      repeating-linear-gradient(to bottom, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 8)));
+      border-radius: 10px;
+    }
+    .modalBtns{ display:flex; gap: 10px; justify-content:center; padding: 12px; }
+    .modalHint{ padding: 0 14px 14px; text-align:center; font-weight: 800; opacity: 0.75; font-size: 12px; }
+
+    /* Locked controls + login hints */
+    .tool.locked{
+      opacity: 0.35;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+    .tool.locked:hover{
+      transform: none;
+      background:#f3f5f7;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+    }
+
+    /* Grey out individual control buttons when locked */
+    .bigBtn.locked{ opacity: 0.35; filter: grayscale(1); cursor: not-allowed; }
+    .bigBtn.locked:hover{ transform: none; }
+    .bigBtn.locked:active{ transform: none; }
+
+    #tempoControls.locked button,
+    #tempoControls.locked #tempoBox{
+      opacity: 0.35;
+      filter: grayscale(1);
+      cursor: not-allowed;
+    }
+    #tempoControls.locked button:hover{ transform: none; }
+
+    #toolsList{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      width: 100%;
+    }
+    #toolsLoginArea{
+      width: 100%;
+      margin-top: 8px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 8px;
+    }
+    #toolHintSlot{
+      height: 36px;
+      width: 100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .loginHint{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      color:#1f2a44;
+      text-decoration:none;
+      opacity: 0;
+      transform: translateY(4px);
+      pointer-events: none;
+      transition: opacity 140ms ease, transform 140ms ease;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .loginHint.show{
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
+    .loginBtn{
+      width: 120px;
+      height: 54px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius: 16px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      color: #18b118;
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 20px;
+      text-decoration:none;
+      transition: transform 120ms ease;
+      touch-action: manipulation;
+    }
+    .loginBtn:hover{ transform: translateY(-1px); }
+
+    #tempoControls{ position:relative; }
+    #tempoLoginHint{
+      position:absolute;
+      left: calc(100% + 12px);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+body.loggedIn #toolsLoginArea{ display:none; }
+
+#loginCtaWrap{
+  position: relative;
+  width: 120px;
+  height: 54px;
+  display: inline-block;
+}
+#loginCtaWrap .loginBtn{
+  position: relative;
+  z-index: 2;
+}
+#loginCtaWrap.pulsing .loginBtn{
+  animation: loginSwell 760ms ease-in-out infinite;
+}
+#loginCtaWrap.pulsing .loginBtn:hover{ transform: none; }
+@keyframes loginSwell{
+  0%,100%{ transform: translateY(0) scale(1,1); }
+  18%{ transform: translateY(-1px) scale(1.08,0.96); }
+  50%{ transform: translateY(-2px) scale(0.96,1.12); }
+  72%{ transform: translateY(-1px) scale(1.05,0.98); }
+  86%{ transform: translateY(-1px) scale(1.02,1.02); }
+}
+
+
+
+#instButtons.locked .instBtn{
+  opacity: 0.35;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+#instButtons.locked .instBtn:hover{ transform: none; }
+
+
+
+
+
+
+    /* Guest mode stamp */
+    body.loggedIn /* Logout button */
+    #logoutBtn{
+      position: fixed;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      cursor:pointer;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      transition: transform 120ms ease;
+      z-index: 9999;
+    }
+    body.loggedIn #logoutBtn{ display:flex; }
+    #logoutBtn:hover{ transform: translateY(-1px); }
+    #logoutBtn:active{ transform: translateY(0); }
+
+
+  
+
+    /* -------------------- MASTER VOLUME FADER (UI ONLY) -------------------- */
+    :root{ --instBtnSize: 58px; --instGap: 10px; }
+
+    /* Give the right column enough width for fader + VOL box */
+    :root{ --rightW: 150px; }
+
+    .seqFaderRow{
+      width: 100%;
+      position: relative;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center; /* center the fader itself */
+      margin-top: 6px;
+      padding-bottom: 2px;
+    }
+
+    .seqFaderPanel{
+      width: var(--instBtnSize);
+      border-radius: 18px;
+      border: 3px solid #1d1d1d; /* thinner */
+      background:#ffffff;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 6px 4px;
+    }
+
+    .seqTrackArea{
+      position: relative;
+      /* Much shorter, while still ending at grid bottom */
+      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 70px);
+      width: var(--instBtnSize);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .seqTrack{
+      position: relative;
+      width: 3px;      /* just enough to host the line */
+      height: 100%;
+      border: none;    /* remove surrounding shape */
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
+    }
+
+    
+    .seqTrack:before{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:0;
+      transform: translateX(-50%);
+      width: 3px; /* thin central line */
+      height: 100%;
+      border-radius: 999px;
+      background:#0f0f0f;
+      opacity: 1;
+      pointer-events:none;
+    }
+.seqIncTicks{
+      position:absolute;
+      left: 50%;          /* left edge sits on the track center line */
+      margin-left: 0;
+      top: 10px;          /* inset to match the visible track between caps */
+      bottom: 10px;
+      height: auto;
+      width: 6px;         /* small container */
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between; /* evenly space 8 ticks */
+      pointer-events:none;
+      opacity: 0.95;
+    }
+    .seqIncTicks .t{
+      width: 4px;   /* one third as long */
+      height: 2px;
+      background:#0f0f0f;
+      border-radius: 2px;
+    }
+    
+    .seqIncTicks .t:first-of-type,
+    .seqIncTicks .t:last-of-type{ visibility:hidden; }
+
+    .seqCaps{
+      position:absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 100%;
+      width: 9px;
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center; /* ensure caps are centered on the track line */
+      pointer-events:none;
+    }
+    .seqCap{
+      display:block;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      border: 2px solid #1d1d1d;
+      background:#fff;
+      box-shadow: 0 2px 0 rgba(0,0,0,0.05);
+    }
+
+    .seqKnob{
+      position:absolute;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: calc(var(--instBtnSize) - 10px); /* slightly narrower than sound buttons */
+      height: 16px;              /* thinner */
+      border-radius: 11px;
+      border: 3px solid #1d1d1d; /* thin outline */
+      background:#ffffff;
+      box-shadow:
+        0 5px 0 rgba(0,0,0,0.05),
+        inset 0 2px 0 rgba(255,255,255,0.85);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+    }
+
+    .seqKnobStripe{
+      width: 70%;
+      height: 7px;
+      border-radius: 999px;
+      border: 3px solid rgba(29,29,29,0.70);
+      background: rgba(216,240,255,0.75);
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.55);
+    }
+
+    .seqReadout{
+      position:absolute;
+      left: 50%;
+      transform: translateX(calc(var(--instBtnSize) / 2 + 10px)); /* sits to the right without shifting fader */
+      bottom: 2px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 3px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px;
+      flex: 0 0 auto;
+    }
+    .seqReadout .small{
+      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
+      font-weight: 800;
+      font-size: 9px;
+      color: rgba(31,42,68,0.70);
+      letter-spacing: 0.4px;
+      line-height: 1;
+    }
+    .seqReadout .num{
+      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 16px;
+      color:#1f2a44;
+      line-height: 1;
+      text-shadow:
+        0 2px 0 rgba(255,255,255,0.9),
+        0 4px 0 rgba(0,0,0,0.08);
+    }
+    /* ---------------------------------------------------------------------- */
+
+  
+    /* --- Master volume fader interaction --- */
+    .seqTrackArea{ position: relative; }
+    .seqVolRange{
+      position:absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%) rotate(-90deg);
+      transform-origin: center;
+      width: calc(100% - 6px); /* matches track height after rotation */
+      height: 28px;
+      opacity: 0; /* invisible but interactive */
+      cursor: pointer;
+      z-index: 20;
+    }
+    /* prevent default focus ring from shifting layout */
+    .seqVolRange:focus{ outline: none; }
+
+</style>
+</head>
+
+<body>
+</div>
+  <div id="page">
+    <div id="topBar">
+      <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+      <div id="robotLogo" aria-hidden="true">
+        <div class="robotClip">
+<svg xmlns="http://www.w3.org/2000/svg" width="718" height="591" viewBox="0 0 718 591">
+<g>
+<path d="M 326.09 577.14 L 324.18 579.50 L 273.84 579.73 C223.48,579.97 220.96,579.83 218.77,576.59 C217.30,574.41 218.02,563.26 220.00,557.49 C222.88,549.12 226.23,543.87 232.02,538.67 C237.43,533.81 247.95,528.01 251.41,527.98 C256.01,527.95 256.52,526.72 256.17,516.29 C255.81,505.42 257.87,493.13 261.12,486.77 C262.20,484.66 262.81,482.50 262.48,481.97 C262.15,481.43 257.72,481.00 252.62,481.00 C236.72,481.00 227.33,476.44 221.48,465.88 L 218.50 460.50 L 217.86 415.00 L 212.63 415.00 C209.00,415.00 205.80,414.20 202.19,412.41 C197.75,410.19 196.53,409.97 193.89,410.89 C188.10,412.91 178.79,413.20 170.75,411.62 C166.48,410.78 162.25,409.68 161.34,409.17 C160.19,408.53 158.07,408.99 154.29,410.73 C148.50,413.37 137.89,414.27 131.00,412.70 C127.63,411.93 127.39,412.07 124.67,416.43 C119.23,425.14 112.76,428.40 105.60,426.03 C96.67,423.09 94.40,413.66 100.06,403.04 L 103.12 397.30 L 101.06 391.18 C96.38,377.30 99.22,362.56 108.25,353.76 C115.73,346.47 119.83,344.74 131.21,344.07 L 140.91 343.50 L 151.11 328.50 C156.72,320.25 165.95,306.58 171.61,298.12 L 181.90 282.73 L 181.32 276.49 C180.55,268.29 181.49,263.76 184.75,259.89 C190.15,253.46 199.75,251.29 206.79,254.90 C214.06,258.63 217.00,263.62 217.00,272.23 C217.00,280.79 211.84,287.69 203.90,289.75 C200.80,290.55 199.12,292.98 181.70,321.87 L 162.85 353.12 L 166.47 357.53 C168.46,359.95 170.58,363.36 171.19,365.10 L 172.29 368.27 L 178.89 367.67 C190.40,366.63 192.27,365.72 194.22,360.24 C196.39,354.13 200.21,350.50 207.61,347.50 L 213.50 345.12 L 215.28 335.81 C216.25,330.69 217.45,323.06 217.95,318.85 C219.42,306.26 223.99,299.32 233.89,294.63 L 240.50 291.50 L 307.50 290.50 L 307.81 285.05 C307.98,282.06 307.86,278.59 307.55,277.35 L 306.99 275.10 L 272.74 274.80 C239.76,274.51 238.35,274.42 234.50,272.32 C225.06,267.19 219.09,258.04 218.24,247.39 L 217.75 241.25 L 212.94 240.68 C210.30,240.37 206.35,239.20 204.17,238.09 C200.20,236.06 196.00,230.69 196.00,227.65 C196.00,226.76 194.54,225.40 192.75,224.63 C188.11,222.64 183.54,217.44 180.34,210.50 C177.99,205.41 177.51,202.88 177.17,193.83 C176.85,184.89 177.13,182.11 178.93,176.72 C181.21,169.86 186.33,162.98 191.44,159.89 C193.12,158.88 195.66,155.90 197.08,153.27 C200.15,147.61 205.55,144.20 212.81,143.34 L 217.76 142.75 L 218.21 135.01 C218.56,128.96 219.24,126.27 221.32,122.72 C224.55,117.21 231.09,111.42 235.93,109.79 C238.40,108.96 251.62,108.48 278.65,108.25 L 317.79 107.91 L 318.48 104.25 C320.80,91.91 333.01,79.59 345.51,77.00 C352.14,75.62 352.19,75.50 351.79,60.60 L 351.50 49.70 L 347.77 48.41 C334.54,43.83 328.62,28.98 335.05,16.48 C338.89,9.03 344.07,5.82 353.24,5.23 C359.31,4.85 361.31,5.12 364.56,6.79 C372.83,11.06 378.00,19.02 378.00,27.50 C378.00,36.24 373.42,43.19 364.75,47.61 L 360.00 50.03 L 360.02 61.77 C360.02,68.22 360.37,74.03 360.78,74.67 C361.18,75.31 362.87,76.17 364.51,76.56 C370.54,78.02 378.65,82.92 383.33,87.93 C388.08,93.00 393.00,102.21 393.00,106.03 C393.00,107.96 393.85,108.00 430.32,108.00 C471.72,108.00 474.33,108.32 482.18,114.31 C488.96,119.48 492.12,125.49 492.87,134.67 L 493.50 142.43 L 497.50 143.27 C499.70,143.73 502.50,144.32 503.73,144.57 C507.09,145.26 512.42,150.39 514.45,154.88 C515.57,157.37 517.31,159.30 519.11,160.05 C523.13,161.71 528.76,168.25 531.86,174.88 C534.23,179.92 534.49,181.64 534.44,191.50 C534.39,201.58 534.12,203.13 531.17,210.09 C527.81,218.01 524.38,222.16 519.78,223.90 C518.06,224.55 516.48,226.32 515.48,228.71 C512.28,236.36 505.73,241.00 498.15,241.00 L 494.23 241.00 L 493.54 246.75 C492.19,258.03 485.82,267.94 477.21,272.18 C472.64,274.43 471.52,274.51 438.50,275.00 L 404.50 275.50 L 404.19 280.95 C404.02,283.94 404.13,287.40 404.44,288.63 L 405.01 290.87 L 437.25 291.25 C472.08,291.66 473.60,291.87 481.65,297.28 C488.29,301.75 492.11,308.28 493.02,316.76 C494.19,327.57 497.24,344.39 498.28,345.75 C498.81,346.44 500.11,347.00 501.16,347.00 C503.83,347.00 510.07,350.34 512.66,353.15 C513.85,354.44 515.88,357.75 517.17,360.50 C519.41,365.28 519.75,365.55 525.01,366.65 C528.03,367.29 532.54,367.85 535.02,367.90 C539.25,367.99 539.67,367.76 541.52,364.31 C542.61,362.28 544.98,359.18 546.79,357.42 L 550.09 354.21 L 535.88 330.86 C528.07,318.01 519.48,303.85 516.80,299.40 C512.59,292.41 511.40,291.14 508.10,290.15 C497.91,287.09 492.13,276.14 495.45,266.16 C499.03,255.38 510.39,250.27 520.54,254.88 C529.08,258.76 533.12,267.24 531.12,277.11 L 529.98 282.72 L 546.74 307.18 C555.96,320.63 565.45,334.53 567.82,338.07 L 572.15 344.50 L 580.82 344.51 C587.97,344.52 590.27,344.93 593.89,346.85 C600.54,350.38 607.65,357.59 610.69,363.87 C613.04,368.72 613.42,370.75 613.42,378.50 C613.42,385.64 612.97,388.49 611.24,392.28 L 609.05 397.06 L 612.52 403.61 C614.44,407.22 616.00,411.27 616.00,412.62 C616.00,423.11 603.36,430.49 595.07,424.84 C593.18,423.55 590.05,420.14 588.10,417.24 C584.68,412.15 584.47,412.01 581.04,412.74 C579.09,413.16 574.12,413.49 570.00,413.47 C564.11,413.45 561.32,412.90 557.00,410.90 L 551.50 408.35 L 546.00 410.39 C539.34,412.84 524.96,413.21 517.73,411.11 C513.57,409.91 512.73,409.92 511.23,411.22 C508.61,413.49 503.25,415.00 497.85,415.00 L 493.00 415.00 L 492.98 437.25 C492.95,462.34 492.39,464.87 485.20,472.33 C478.66,479.12 475.10,480.38 461.25,480.82 C450.17,481.17 449.00,481.38 449.00,483.04 C449.00,484.05 449.44,485.15 449.97,485.48 C450.50,485.81 452.15,489.77 453.63,494.29 C455.90,501.22 456.33,504.35 456.41,514.35 L 456.50 526.21 L 462.78 528.57 C478.80,534.60 489.64,546.57 492.88,561.80 C494.71,570.44 494.35,574.75 491.55,577.55 L 489.09 580.00 L 439.59 580.00 C403.89,580.00 389.38,579.67 387.52,578.83 C384.28,577.35 383.63,574.72 384.22,565.46 C384.82,556.15 388.91,547.37 396.45,539.23 L 401.75 533.50 L 400.96 522.00 C399.99,507.82 398.23,500.94 392.75,490.00 L 388.50 481.50 L 355.88 481.24 L 323.26 480.97 L 319.69 487.77 C314.82,497.05 311.23,510.03 310.02,522.73 L 309.02 533.34 L 314.33 538.92 C321.19,546.13 324.55,551.97 326.44,560.01 C328.54,568.91 328.43,574.25 326.09,577.14 ZM 242.31 471.92 C243.86,472.24 295.61,472.49 357.31,472.47 C446.41,472.45 470.12,472.18 472.50,471.16 C476.70,469.36 481.77,464.22 482.99,460.53 C483.65,458.54 484.10,431.45 484.24,385.44 C484.46,314.67 484.43,313.42 482.43,309.99 C480.06,305.95 475.26,302.45 470.12,301.02 C467.79,300.37 426.62,300.03 354.50,300.06 C347.40,300.06 340.72,300.06 334.44,300.07 C245.85,300.08 237.04,300.09 232.87,304.49 C232.11,305.29 231.50,306.23 230.60,307.34 L 227.50 311.18 L 227.20 383.34 C227.00,431.64 227.25,456.70 227.95,459.11 C229.87,465.71 235.16,470.44 242.31,471.92 ZM 258.00 266.00 C268.17,266.27 319.70,266.39 372.50,266.25 C478.13,265.98 474.11,266.22 479.44,259.88 C480.82,258.25 482.43,255.24 483.03,253.20 C483.76,250.68 484.01,230.13 483.80,188.82 C483.51,129.16 483.47,128.10 481.42,125.32 C480.27,123.77 477.12,121.27 474.42,119.77 L 469.50 117.05 L 355.21 117.02 C243.72,117.00 240.83,117.05 237.09,118.96 C232.23,121.44 228.25,126.13 227.50,130.28 C227.18,132.05 227.05,160.53 227.21,193.57 L 227.50 253.65 L 230.25 257.80 C234.90,264.82 236.96,265.43 258.00,266.00 ZM 315.93 463.25 C315.14,465.04 313.80,466.63 312.94,466.79 C311.27,467.09 308.71,464.63 307.68,461.75 C307.11,460.14 304.81,460.00 278.68,460.00 C250.84,460.00 250.23,459.96 246.90,457.73 C245.65,456.90 244.63,456.29 243.79,455.49 C239.99,451.86 240.00,444.25 240.00,393.62 C240.00,391.40 240.00,389.10 240.00,386.72 C240.00,384.82 240.00,382.99 240.00,381.20 C240.00,329.30 240.00,322.18 243.49,317.94 C244.17,317.12 244.98,316.41 245.94,315.50 L 249.13 312.50 L 355.49 312.50 C461.79,312.50 461.86,312.50 464.68,314.59 C466.23,315.74 468.56,318.57 469.85,320.89 L 472.20 325.09 L 472.12 387.18 C472.11,390.40 472.11,393.47 472.11,396.39 C472.05,444.53 472.05,451.86 468.38,455.37 C467.50,456.21 466.40,456.83 465.05,457.75 L 461.70 460.00 L 317.36 460.00 ZM 83.16 294.47 C74.16,296.36 56.57,296.33 48.66,294.42 C45.44,293.64 39.21,291.13 34.81,288.84 C8.09,274.94 -2.42,248.23 6.93,217.96 C13.21,197.62 34.63,174.24 57.50,162.75 C68.42,157.26 77.21,155.50 93.50,155.54 C107.25,155.58 109.12,155.81 115.90,158.28 C125.43,161.76 131.41,165.65 138.18,172.77 C147.22,182.26 151.39,190.89 152.97,203.32 C154.08,212.12 152.72,225.86 149.98,233.50 C149.89,233.76 149.80,234.01 149.71,234.25 C148.01,239.00 147.14,241.41 147.56,243.56 C148.01,245.88 149.95,247.92 153.92,252.28 C157.82,256.55 161.00,260.62 161.00,261.33 C161.00,265.96 155.91,267.68 139.50,268.62 C128.51,269.25 128.50,269.25 124.50,272.99 C114.54,282.30 96.56,291.65 83.16,294.47 ZM 667.00 293.51 C661.69,295.47 638.05,296.44 631.08,294.97 C618.29,292.29 600.96,283.94 590.99,275.66 C585.60,271.18 583.63,270.15 579.49,269.66 C576.75,269.33 570.22,268.54 565.00,267.89 C550.15,266.06 548.75,263.38 557.61,253.66 C562.99,247.75 565.07,245.57 565.27,243.23 C565.39,241.80 564.80,240.31 563.83,237.85 C563.77,237.68 563.69,237.50 563.62,237.31 C560.60,229.60 559.00,220.39 559.00,210.72 C559.00,194.53 563.51,183.32 574.41,172.39 C586.35,160.42 600.41,155.00 619.53,155.00 C653.09,155.00 686.28,177.05 701.54,209.50 C707.00,221.09 708.42,227.30 708.33,239.00 C708.19,255.04 704.23,265.19 693.62,276.65 C687.00,283.79 678.24,289.35 667.00,293.51 ZM 55.76 286.97 C77.02,290.55 100.20,283.01 119.24,266.32 C124.60,261.62 125.42,261.25 131.74,260.65 C135.46,260.30 140.86,260.01 143.75,260.01 C146.64,260.00 149.00,259.73 149.00,259.41 C149.00,259.09 146.73,256.27 143.96,253.16 C137.83,246.28 137.16,244.02 139.50,238.08 C152.87,204.07 140.99,174.74 110.09,165.42 C93.85,160.53 71.39,164.18 53.50,174.62 C42.70,180.92 27.92,195.70 21.62,206.50 C8.07,229.70 9.03,253.93 24.15,270.47 C32.02,279.08 43.01,284.82 55.76,286.97 ZM 635.50 287.02 C643.02,288.09 655.90,287.42 662.66,285.61 C681.15,280.66 693.73,268.36 698.14,250.91 C703.33,230.40 695.74,208.16 677.03,189.08 C663.54,175.32 647.95,167.17 629.07,164.00 C611.45,161.05 591.86,166.56 580.64,177.62 C571.42,186.71 567.64,196.85 567.65,212.50 C567.65,221.43 568.04,223.64 571.35,233.24 C575.59,245.53 575.57,245.68 568.04,254.22 C567.85,254.44 567.66,254.65 567.48,254.86 C565.82,256.73 564.82,257.86 565.05,258.61 C565.42,259.83 569.02,260.05 578.25,260.87 C587.96,261.72 588.02,261.74 592.75,266.15 C604.37,276.99 620.60,284.91 635.50,287.02 ZM 249.00 324.91 L 249.00 372.00 L 464.00 372.00 L 464.00 325.85 L 461.08 322.92 L 458.15 320.00 L 253.91 320.00 L 251.45 322.45 ZM 250.75 449.75 C252.40,451.40 258.57,451.48 356.44,451.23 C451.31,450.98 460.55,450.82 462.21,449.31 C463.91,447.77 464.01,445.48 463.76,414.08 L 463.50 380.50 L 445.50 380.50 L 445.23 398.47 C444.95,416.33 444.94,416.46 442.33,419.18 C439.98,421.63 439.77,422.44 440.31,427.00 C441.03,433.02 439.91,436.58 437.01,437.50 C433.27,438.68 432.00,436.41 432.00,428.57 C432.00,421.74 431.85,421.26 429.00,419.16 L 426.00 416.94 L 426.00 399.67 C426.00,381.17 425.70,380.00 421.00,380.00 C416.31,380.00 416.00,381.20 416.00,399.16 L 416.00 415.91 L 412.50 418.71 C409.18,421.36 409.00,421.82 409.00,427.67 C409.00,435.35 408.38,437.00 405.52,437.00 C401.94,437.00 400.51,434.32 400.38,427.35 C400.30,423.61 399.69,420.33 398.88,419.35 C397.86,418.13 397.37,412.82 397.00,399.10 L 396.50 380.50 L 390.67 380.20 C381.79,379.74 381.73,379.85 382.04,396.97 C382.39,416.19 382.35,416.60 379.83,418.95 C378.03,420.62 377.70,421.93 377.88,426.55 C378.20,434.32 376.53,439.00 373.46,439.00 C370.18,439.00 369.00,436.28 369.00,428.75 C369.00,422.97 368.72,422.11 366.00,419.50 L 363.00 416.63 L 363.00 399.44 C363.00,380.38 362.75,379.61 356.82,380.18 L 353.50 380.50 L 353.00 398.19 C352.50,415.82 352.49,415.88 349.75,418.74 C347.32,421.28 347.00,422.37 347.00,428.23 C347.00,432.92 346.54,435.32 345.43,436.43 C341.42,440.44 338.00,436.28 338.00,427.39 C338.00,421.92 337.72,421.05 335.50,419.59 C333.04,417.98 333.00,417.73 332.99,404.73 C332.99,397.45 332.71,389.19 332.37,386.37 L 331.75 381.25 L 326.46 380.62 C326.08,380.58 325.72,380.54 325.38,380.49 C322.67,380.16 320.95,379.95 319.86,380.68 C317.99,381.94 317.99,386.00 318.00,397.04 C318.00,397.85 318.00,398.70 318.00,399.58 L 318.00 417.95 L 315.50 419.59 C313.27,421.05 313.00,421.91 313.00,427.53 C313.00,435.31 312.39,437.00 309.59,437.00 C306.07,437.00 305.00,435.02 305.00,428.48 C305.00,422.75 304.78,422.17 301.50,419.27 L 298.00 416.17 L 298.00 381.04 L 295.58 380.43 L 295.51 380.41 C293.56,379.92 292.25,379.59 291.35,380.06 C289.48,381.02 289.37,385.40 289.00,398.84 L 288.50 417.16 L 285.75 419.17 C283.26,420.98 283.00,421.76 283.00,427.36 C283.00,431.35 282.45,434.35 281.44,435.78 C279.59,438.43 278.28,438.56 275.83,436.35 C274.41,435.06 274.00,433.21 274.00,428.02 C274.00,422.21 273.68,421.05 271.52,419.02 C269.08,416.73 269.04,416.40 268.77,398.60 L 268.50 380.50 L 260.50 380.20 C259.23,380.16 258.09,380.08 257.06,380.01 C254.11,379.81 252.16,379.67 250.88,380.54 C248.36,382.23 248.42,387.73 248.59,404.01 C248.61,406.89 248.65,410.11 248.67,413.71 C248.78,431.74 248.90,446.84 248.94,447.25 C248.97,447.66 249.79,448.79 250.75,449.75 ZM 447.00 359.00 C445.04,360.96 443.67,361.00 382.11,361.00 C323.36,361.00 319.08,360.88 317.03,359.22 C315.11,357.67 314.77,356.16 314.28,347.28 C313.69,336.74 314.70,331.71 317.62,330.59 C318.41,330.29 347.72,330.01 382.76,329.98 C442.10,329.92 446.55,330.03 447.73,331.65 C448.59,332.82 449.00,337.23 449.00,345.19 C449.00,355.67 448.77,357.23 447.00,359.00 ZM 449.50 201.12 C443.33,203.84 432.25,204.56 426.32,202.62 C413.67,198.48 406.30,189.00 405.28,175.54 C404.80,169.15 405.05,167.64 407.50,162.17 C414.34,146.93 430.78,139.88 446.72,145.35 C452.80,147.43 461.26,154.60 463.90,159.89 C471.94,176.01 465.67,193.97 449.50,201.12 ZM 286.38 201.87 C278.39,204.93 267.44,204.42 260.26,200.66 C245.62,192.98 239.72,174.89 247.06,160.20 C254.40,145.51 272.82,139.27 287.54,146.48 C299.59,152.37 305.48,161.43 305.46,174.03 C305.44,187.26 298.64,197.18 286.38,201.87 ZM 393.29 565.50 L 392.72 571.00 L 485.28 571.00 L 484.69 566.00 C483.42,555.28 475.72,544.51 465.65,539.35 C451.47,532.08 423.46,532.27 409.77,539.72 C400.84,544.58 394.41,554.65 393.29,565.50 ZM 227.28 565.53 L 226.72 571.00 L 318.00 571.00 L 318.00 566.54 C318.00,555.23 310.54,544.39 299.16,539.14 C280.51,530.55 251.38,532.87 238.78,543.96 C233.03,549.02 228.02,558.43 227.28,565.53 ZM 66.95 264.91 C64.50,266.28 61.45,267.00 58.04,267.00 C53.63,267.00 52.40,266.56 49.92,264.08 C42.87,257.02 50.02,244.00 60.95,244.00 C63.74,244.00 64.00,243.72 64.00,240.66 C64.00,237.82 61.78,225.18 58.08,207.02 C57.01,201.74 58.10,199.01 61.29,198.98 C63.09,198.97 93.41,189.03 99.03,186.61 C99.87,186.25 101.29,186.53 102.18,187.23 C104.43,188.99 112.03,223.94 112.74,235.76 L 113.30 245.03 L 109.26 248.87 C107.04,250.98 103.76,253.00 101.98,253.35 C97.60,254.23 91.42,252.44 89.54,249.75 C87.49,246.83 87.59,240.51 89.73,236.88 C91.57,233.77 98.19,230.00 101.82,230.00 C104.57,230.00 104.58,228.74 101.95,216.23 C99.66,205.35 98.20,201.00 96.84,201.00 C96.33,201.00 94.25,201.84 92.21,202.86 C90.17,203.89 84.00,206.19 78.50,207.99 C73.00,209.78 68.13,211.59 67.67,212.01 C67.21,212.42 68.45,220.80 70.42,230.63 C72.39,240.46 74.01,250.46 74.00,252.85 C74.00,258.33 71.72,262.23 66.95,264.91 ZM 369.06 252.07 C362.89,254.41 354.11,255.24 348.36,254.02 C337.14,251.64 325.14,242.11 320.66,232.00 C317.04,223.83 316.72,221.56 318.85,218.94 L 320.68 216.67 L 331.59 219.05 C346.36,222.28 366.35,222.32 379.33,219.15 C390.55,216.42 391.79,216.45 393.17,219.48 C395.68,224.98 386.83,241.38 378.09,247.44 C375.98,248.90 371.92,250.98 369.06,252.07 ZM 619.65 255.49 C614.46,258.89 605.60,258.05 601.30,253.75 C598.08,250.53 597.13,243.98 599.39,240.53 C602.00,236.55 608.56,233.69 613.76,234.28 L 618.16 234.77 L 617.45 213.62 C616.83,195.27 616.94,192.30 618.26,191.20 C619.52,190.16 622.95,190.57 637.25,193.46 C646.85,195.41 656.07,197.00 657.73,197.00 C659.39,197.00 661.22,197.56 661.79,198.25 C663.34,200.13 665.22,217.90 665.37,232.00 C665.52,246.66 664.36,249.68 657.22,253.14 C650.32,256.48 643.17,254.05 640.40,247.42 C639.16,244.45 639.16,243.55 640.40,240.58 C642.27,236.10 646.19,233.64 652.44,233.01 L 657.50 232.50 L 657.14 222.00 C656.94,216.23 656.32,210.94 655.76,210.25 C655.21,209.56 653.57,208.99 652.13,208.97 C650.68,208.95 644.11,207.85 637.53,206.52 C624.51,203.89 623.51,204.11 624.45,209.28 C624.73,210.81 625.23,220.04 625.56,229.78 C626.13,246.45 626.04,247.69 624.13,250.70 C623.01,252.45 621.00,254.61 619.65,255.49 ZM 323.00 337.98 L 323.00 352.00 L 441.09 352.00 L 440.50 338.50 ZM 428.59 194.43 C439.25,198.33 451.70,193.34 457.06,183.00 C458.97,179.32 458.69,169.17 456.56,165.00 C445.61,143.52 414.12,150.14 414.02,173.93 C413.98,183.62 419.22,190.99 428.59,194.43 ZM 267.71 194.43 C277.10,197.39 288.17,193.84 293.49,186.16 C296.21,182.25 296.50,181.07 296.50,174.00 C296.50,166.91 296.22,165.77 293.48,161.88 C287.38,153.20 274.84,149.61 265.50,153.87 C259.68,156.52 254.51,162.72 253.05,168.80 C250.49,179.45 257.16,191.10 267.71,194.43 ZM 317.00 275.00 L 317.00 291.00 L 355.93 291.00 C359.58,291.00 362.91,291.01 365.94,291.01 C387.87,291.06 394.30,291.07 395.78,288.36 C396.40,287.24 396.16,285.65 395.83,283.40 C395.72,282.65 395.60,281.83 395.49,280.93 L 394.80 275.00 ZM 494.74 231.81 C497.19,233.64 501.85,232.52 505.21,229.30 L 508.00 226.63 L 508.00 192.95 C508.00,160.98 507.90,159.14 506.03,156.77 C503.69,153.79 499.09,151.71 495.84,152.17 L 493.50 152.50 L 493.24 191.50 C492.99,227.77 493.10,230.59 494.74,231.81 ZM 289.19 359.89 C283.80,362.61 280.04,363.06 275.22,361.54 C268.59,359.45 266.01,357.27 263.38,351.51 C261.47,347.35 261.09,345.30 261.61,342.04 C263.64,329.37 278.32,322.64 290.00,329.04 C302.17,335.70 301.70,353.56 289.19,359.89 ZM 206.63 228.97 C208.91,231.68 209.81,232.06 213.38,231.80 L 217.50 231.50 L 217.50 152.50 L 213.89 152.20 C211.16,151.97 209.51,152.54 207.14,154.54 L 204.00 157.18 L 204.00 225.85 ZM 327.00 107.13 C327.00,107.61 339.83,108.00 355.50,108.00 C357.34,108.00 359.07,108.00 360.70,108.00 C377.66,108.02 383.12,108.02 383.94,106.08 C384.32,105.16 383.67,103.80 382.71,101.80 C382.52,101.39 382.31,100.96 382.10,100.50 C379.64,95.22 373.68,89.64 367.50,86.83 C356.44,81.80 340.17,85.23 333.05,94.09 C330.29,97.52 327.00,104.62 327.00,107.13 ZM 495.23 405.96 C496.48,406.46 498.40,406.90 499.50,406.93 C502.55,407.02 507.89,403.34 508.41,400.78 C509.58,395.04 511.19,369.84 510.59,366.63 C509.32,359.88 502.59,354.46 496.36,355.17 L 493.50 355.50 L 493.23 380.28 L 492.96 405.05 ZM 208.38 405.91 C212.66,407.16 213.83,407.16 216.07,405.96 C217.90,404.98 218.00,403.62 218.00,379.96 L 218.00 355.00 L 213.58 355.00 C208.14,355.00 203.95,358.16 201.60,364.04 C200.10,367.78 200.10,369.43 201.62,385.30 C202.52,394.76 203.71,403.06 204.25,403.75 C204.80,404.44 206.66,405.42 208.38,405.91 ZM 298.85 503.52 C299.12,503.78 300.34,504.00 301.58,504.00 C303.47,504.00 304.17,502.94 305.98,497.32 C307.17,493.65 309.03,488.91 310.11,486.79 C311.19,484.67 311.81,482.50 311.48,481.97 C311.13,481.40 303.02,481.00 291.89,481.00 L 272.89 481.00 L 270.44 486.53 C269.10,489.57 268.00,492.67 268.00,493.42 C268.00,495.16 268.77,495.44 284.94,499.59 C292.32,501.49 298.59,503.25 298.85,503.52 ZM 560.25 402.90 C564.74,405.12 576.12,405.84 578.90,404.08 C580.80,402.88 576.61,395.73 569.40,387.89 C566.46,384.70 563.79,380.83 563.46,379.29 C563.13,377.76 562.40,375.38 561.84,374.00 C560.41,370.51 554.81,362.00 553.95,362.00 C553.04,362.00 549.89,366.62 548.25,370.36 C546.37,374.66 546.71,385.77 548.87,390.50 C551.49,396.25 555.38,400.48 560.25,402.90 ZM 133.78 403.94 C136.31,405.41 145.56,405.21 149.42,403.60 C154.71,401.39 160.56,395.45 162.98,389.82 C166.16,382.43 165.61,372.03 161.72,366.16 C160.21,363.87 158.58,362.00 158.10,362.00 C156.73,362.00 149.00,375.38 149.00,377.76 C149.00,378.93 146.83,382.51 144.18,385.70 C141.53,388.89 137.72,394.07 135.71,397.22 C132.41,402.40 132.23,403.03 133.78,403.94 ZM 520.25 402.88 C527.06,404.85 540.59,404.03 544.82,401.40 C544.99,401.29 543.77,398.50 542.10,395.21 C540.15,391.34 538.84,386.90 538.41,382.73 L 537.75 376.25 L 530.62 375.67 C526.71,375.36 522.60,374.96 521.50,374.80 C519.68,374.53 519.40,375.38 518.34,384.50 C516.40,401.15 516.46,401.79 520.25,402.88 ZM 568.76 369.75 C573.00,376.95 574.70,379.00 576.41,379.00 C579.11,379.00 581.00,377.23 581.00,374.70 C581.00,372.08 526.06,290.39 523.04,288.53 C522.55,288.22 521.85,288.43 521.50,289.00 C521.15,289.57 524.42,295.77 528.78,302.77 C535.65,313.80 545.25,329.89 568.76,369.75 ZM 347.76 39.43 C353.76,42.69 362.64,40.81 366.91,35.39 C370.13,31.29 369.83,23.14 366.30,18.94 C361.48,13.21 354.72,11.61 348.28,14.67 C341.34,17.97 339.07,26.29 343.01,34.01 C344.11,36.17 346.25,38.61 347.76,39.43 ZM 133.22 377.44 C136.46,379.71 137.88,379.38 139.80,375.92 C140.73,374.22 145.04,366.91 149.37,359.67 C153.70,352.43 158.69,344.02 160.46,341.00 C165.04,333.13 184.84,300.33 188.18,295.05 C189.73,292.61 191.00,290.02 191.00,289.30 C191.00,286.39 188.29,288.35 184.84,293.76 C182.82,296.92 177.45,304.90 172.90,311.50 C168.35,318.10 157.68,333.85 149.19,346.50 C140.70,359.15 133.14,370.21 132.38,371.08 C130.38,373.37 130.68,375.66 133.22,377.44 ZM 344.64 244.01 C351.11,246.54 361.15,246.57 366.64,244.08 C373.71,240.86 383.79,230.22 381.24,228.65 C380.83,228.39 378.02,228.64 374.99,229.19 C371.97,229.75 360.61,230.03 349.75,229.82 C338.89,229.62 330.00,229.73 330.00,230.07 C330.00,231.06 335.48,238.30 337.74,240.30 C338.86,241.30 341.97,242.96 344.64,244.01 ZM 170.25 402.88 C175.25,404.32 187.65,404.17 191.36,402.62 L 194.65 401.25 L 193.35 387.99 C192.64,380.69 191.84,374.51 191.58,374.25 C191.32,373.98 189.66,374.27 187.90,374.88 C186.14,375.50 182.36,376.00 179.49,376.00 L 174.28 376.00 L 173.73 382.00 C173.40,385.65 171.98,390.58 170.09,394.61 C168.39,398.25 167.00,401.39 167.00,401.58 C167.00,401.78 168.46,402.37 170.25,402.88 ZM 292.50 527.35 C299.81,530.11 300.77,529.72 301.53,523.63 C302.54,515.53 302.15,514.71 296.35,512.85 C288.64,510.38 268.43,506.62 266.60,507.32 C265.33,507.81 265.00,509.47 265.00,515.35 C265.00,520.08 265.45,523.11 266.25,523.75 C266.94,524.29 272.23,524.99 278.00,525.29 C283.77,525.59 290.30,526.52 292.50,527.35 ZM 410.67 528.33 C410.85,528.52 410.99,528.67 411.15,528.77 C411.75,529.13 412.72,528.86 417.75,527.50 L 418.36 527.34 C422.04,526.34 428.59,525.64 434.70,525.59 C440.49,525.54 445.36,525.04 445.97,524.43 C447.37,523.03 448.37,510.88 447.22,509.20 C446.50,508.16 442.89,508.61 429.05,511.46 C419.55,513.42 411.38,515.27 410.89,515.57 C409.86,516.20 409.67,527.33 410.67,528.33 ZM 280.28 185.64 C276.27,187.34 273.39,187.31 269.33,185.54 C260.08,181.52 259.80,167.69 268.88,163.06 C273.78,160.56 276.12,160.49 280.72,162.67 C285.82,165.09 288.21,169.40 287.70,175.26 C287.24,180.62 285.11,183.59 280.28,185.64 ZM 442.82 185.09 C438.20,187.45 434.51,187.46 430.12,185.11 C425.74,182.78 424.08,179.65 424.04,173.65 C424.00,169.46 424.46,168.34 427.34,165.46 C431.39,161.41 434.97,160.38 439.88,161.85 C445.58,163.55 449.29,168.02 449.40,173.31 C449.53,179.02 447.46,182.73 442.82,185.09 ZM 596.00 383.38 C599.03,386.96 601.78,389.91 602.13,389.94 C602.99,390.02 604.79,385.25 605.55,380.83 C606.91,373.02 600.96,360.61 593.71,356.13 C589.44,353.49 579.32,351.28 577.92,352.68 C577.28,353.32 578.28,355.37 580.79,358.58 C585.98,365.21 589.17,370.63 589.90,374.04 C590.23,375.60 592.97,379.80 596.00,383.38 ZM 108.84 386.68 L 110.18 389.86 L 116.06 383.68 C120.04,379.49 121.94,376.67 121.97,374.92 C121.99,373.43 124.73,368.40 128.50,362.92 C132.07,357.74 135.00,353.16 135.00,352.75 C135.00,351.42 127.05,351.95 123.27,353.53 C113.27,357.71 107.63,366.13 107.55,377.00 C107.52,380.58 108.10,384.93 108.84,386.68 ZM 106.35 415.41 C108.74,419.07 112.29,418.81 115.35,414.75 C116.70,412.96 119.54,408.64 121.65,405.15 C123.77,401.65 127.02,396.30 128.88,393.25 L 132.26 387.71 L 129.88 385.88 C128.57,384.87 127.05,384.18 126.50,384.34 C124.81,384.84 109.65,403.55 107.07,408.32 C104.74,412.63 104.71,412.92 106.35,415.41 ZM 597.79 416.25 C599.53,418.26 604.03,418.57 605.80,416.80 C609.01,413.59 605.34,406.65 592.58,391.75 L 585.93 383.99 L 583.04 386.13 L 580.16 388.26 L 585.36 396.38 C588.23,400.85 591.86,406.75 593.43,409.50 C594.99,412.25 596.96,415.29 597.79,416.25 ZM 509.26 281.51 C513.45,283.33 514.47,283.32 518.13,281.43 C522.31,279.27 524.47,273.94 522.98,269.43 C519.67,259.40 505.30,259.56 503.41,269.65 C502.49,274.51 505.05,279.68 509.26,281.51 ZM 190.56 211.25 C191.92,213.31 193.47,215.00 194.01,215.00 C194.63,215.00 195.00,206.45 195.00,192.00 C195.00,177.00 194.64,169.00 193.98,169.00 C193.42,169.00 191.64,171.07 190.04,173.60 C186.97,178.44 185.00,185.57 185.00,191.84 C185.00,197.39 187.75,206.98 190.56,211.25 ZM 192.03 280.03 C193.42,281.42 195.35,282.00 198.58,282.00 C204.87,282.00 209.00,278.04 209.00,272.00 C209.00,263.58 199.28,258.84 192.67,264.04 C188.22,267.54 187.88,275.88 192.03,280.03 ZM 274.30 352.50 C275.48,353.32 278.18,354.00 280.30,354.00 C285.51,354.00 290.00,349.67 290.00,344.66 C290.00,339.78 289.19,338.15 285.93,336.46 C279.72,333.25 272.01,335.82 270.57,341.58 C269.70,345.03 271.61,350.61 274.30,352.50 ZM 517.06 192.00 L 517.08 215.50 L 520.08 212.00 C524.41,206.95 526.33,199.40 525.79,189.59 C525.34,181.39 523.64,176.70 519.06,171.00 L 517.04 168.50 ZM 402.01 488.52 C405.04,493.82 405.46,494.16 408.24,493.60 C414.98,492.25 438.05,483.64 437.70,482.61 C437.23,481.20 401.08,480.52 399.70,481.90 C399.11,482.49 399.98,484.96 402.01,488.52 ZM 407.60 505.41 C408.44,507.59 410.45,507.45 427.00,504.00 C434.92,502.35 442.47,501.00 443.77,501.00 C445.74,501.00 446.03,500.63 445.50,498.75 C444.34,494.65 442.77,491.00 442.15,491.00 C441.82,491.00 438.61,492.10 435.02,493.43 C431.43,494.77 423.91,497.26 418.29,498.97 C412.67,500.67 407.84,502.46 407.54,502.94 C407.24,503.42 407.27,504.54 407.60,505.41 Z" fill="rgb(11,11,11)"/>
+<path d="M 0.00 295.50 L 0.00 0.00 L 359.00 0.00 L 718.00 0.00 L 718.00 295.50 L 718.00 591.00 L 359.00 591.00 L 0.00 591.00 L 0.00 295.50 ZM 326.09 577.14 C328.43,574.25 328.54,568.91 326.44,560.01 C324.55,551.97 321.19,546.13 314.33,538.92 L 309.02 533.34 L 310.02 522.73 C311.23,510.03 314.82,497.05 319.69,487.77 L 323.26 480.97 L 355.88 481.24 L 388.50 481.50 L 392.75 490.00 C398.23,500.94 399.99,507.82 400.96,522.00 L 401.75 533.50 L 396.45 539.23 C388.91,547.37 384.82,556.15 384.22,565.46 C383.63,574.72 384.28,577.35 387.52,578.83 C389.38,579.67 403.89,580.00 439.59,580.00 L 489.09 580.00 L 491.55 577.55 C494.35,574.75 494.71,570.44 492.88,561.80 C489.64,546.57 478.80,534.60 462.78,528.57 L 456.50 526.21 L 456.41 514.35 C456.33,504.35 455.90,501.22 453.63,494.29 C452.15,489.77 450.50,485.81 449.97,485.48 C449.44,485.15 449.00,484.05 449.00,483.04 C449.00,481.38 450.17,481.17 461.25,480.82 C475.10,480.38 478.66,479.12 485.20,472.33 C492.39,464.87 492.95,462.34 492.98,437.25 L 493.00 415.00 L 497.85 415.00 C503.25,415.00 508.61,413.49 511.23,411.22 C512.73,409.92 513.57,409.91 517.73,411.11 C524.96,413.21 539.34,412.84 546.00,410.39 L 551.50 408.35 L 557.00 410.90 C561.32,412.90 564.11,413.45 570.00,413.47 C574.12,413.49 579.09,413.16 581.04,412.74 C584.47,412.01 584.68,412.15 588.10,417.24 C590.05,420.14 593.18,423.55 595.07,424.84 C603.36,430.49 616.00,423.11 616.00,412.62 C616.00,411.27 614.44,407.22 612.52,403.61 L 609.05 397.06 L 611.24 392.28 C612.97,388.49 613.42,385.64 613.42,378.50 C613.42,370.75 613.04,368.72 610.69,363.87 C607.65,357.59 600.54,350.38 593.89,346.85 C590.27,344.93 587.97,344.52 580.82,344.51 L 572.15 344.50 L 567.82 338.07 C565.45,334.53 555.96,320.63 546.74,307.18 L 529.98 282.72 L 531.12 277.11 C533.12,267.24 529.08,258.76 520.54,254.88 C510.39,250.27 499.03,255.38 495.45,266.16 C492.13,276.14 497.91,287.09 508.10,290.15 C511.40,291.14 512.59,292.41 516.80,299.40 C519.48,303.85 528.07,318.01 535.88,330.86 L 550.09 354.21 L 546.79 357.42 C544.98,359.18 542.61,362.28 541.52,364.31 C539.67,367.76 539.25,367.99 535.02,367.90 C532.54,367.85 528.03,367.29 525.01,366.65 C519.75,365.55 519.41,365.28 517.17,360.50 C515.88,357.75 513.85,354.44 512.66,353.15 C510.07,350.34 503.83,347.00 501.16,347.00 C500.11,347.00 498.81,346.44 498.28,345.75 C497.24,344.39 494.19,327.57 493.02,316.76 C492.11,308.28 488.29,301.75 481.65,297.28 C473.60,291.87 472.08,291.66 437.25,291.25 L 405.01 290.87 L 404.44 288.63 C404.13,287.40 404.02,283.94 404.19,280.95 L 404.50 275.50 L 438.50 275.00 C471.52,274.51 472.64,274.43 477.21,272.18 C485.82,267.94 492.19,258.03 493.54,246.75 L 494.23 241.00 L 498.15 241.00 C505.73,241.00 512.28,236.36 515.48,228.71 C516.48,226.32 518.06,224.55 519.78,223.90 C524.38,222.16 527.81,218.01 531.17,210.09 C534.12,203.13 534.39,201.58 534.44,191.50 C534.49,181.64 534.23,179.92 531.86,174.88 C528.76,168.25 523.13,161.71 519.11,160.05 C517.31,159.30 515.57,157.37 514.45,154.88 C512.42,150.39 507.09,145.26 503.73,144.57 C502.50,144.32 499.70,143.73 497.50,143.27 L 493.50 142.43 L 492.87 134.67 C492.12,125.49 488.96,119.48 482.18,114.31 C474.33,108.32 471.72,108.00 430.32,108.00 C393.85,108.00 393.00,107.96 393.00,106.03 C393.00,102.21 388.08,93.00 383.33,87.93 C378.65,82.92 370.54,78.02 364.51,76.56 C362.87,76.17 361.18,75.31 360.78,74.67 C360.37,74.03 360.02,68.22 360.02,61.77 L 360.00 50.03 L 364.75 47.61 C373.42,43.19 378.00,36.24 378.00,27.50 C378.00,19.02 372.83,11.06 364.56,6.79 C361.31,5.12 359.31,4.85 353.24,5.23 C344.07,5.82 338.89,9.03 335.05,16.48 C328.62,28.98 334.54,43.83 347.77,48.41 L 351.50 49.70 L 351.79 60.60 C352.19,75.50 352.14,75.62 345.51,77.00 C333.01,79.59 320.80,91.91 318.48,104.25 L 317.79 107.91 L 278.65 108.25 C251.62,108.48 238.40,108.96 235.93,109.79 C231.09,111.42 224.55,117.21 221.32,122.72 C219.24,126.27 218.56,128.96 218.21,135.01 L 217.76 142.75 L 212.81 143.34 C205.55,144.20 200.15,147.61 197.08,153.27 C195.66,155.90 193.12,158.88 191.44,159.89 C186.33,162.98 181.21,169.86 178.93,176.72 C177.13,182.11 176.85,184.89 177.17,193.83 C177.51,202.88 177.99,205.41 180.34,210.50 C183.54,217.44 188.11,222.64 192.75,224.63 C194.54,225.40 196.00,226.76 196.00,227.65 C196.00,230.69 200.20,236.06 204.17,238.09 C206.35,239.20 210.30,240.37 212.94,240.68 L 217.75 241.25 L 218.24 247.39 C219.09,258.04 225.06,267.19 234.50,272.32 C238.35,274.42 239.76,274.51 272.74,274.80 L 306.99 275.10 L 307.55 277.35 C307.86,278.59 307.98,282.06 307.81,285.05 L 307.50 290.50 L 274.00 291.00 L 240.50 291.50 L 233.89 294.63 C223.99,299.32 219.42,306.26 217.95,318.85 C217.45,323.06 216.25,330.69 215.28,335.81 L 213.50 345.12 L 207.61 347.50 C200.21,350.50 196.39,354.13 194.22,360.24 C192.27,365.72 190.40,366.63 178.89,367.67 L 172.29 368.27 L 171.19 365.10 C170.58,363.36 168.46,359.95 166.47,357.53 L 162.85 353.12 L 181.70 321.87 C199.12,292.98 200.80,290.55 203.90,289.75 C211.84,287.69 217.00,280.79 217.00,272.23 C217.00,263.62 214.06,258.63 206.79,254.90 C199.75,251.29 190.15,253.46 184.75,259.89 C181.49,263.76 180.55,268.29 181.32,276.49 L 181.90 282.73 L 171.61 298.12 C165.95,306.58 156.72,320.25 151.11,328.50 L 140.91 343.50 L 131.21 344.07 C119.83,344.74 115.73,346.47 108.25,353.76 C99.22,362.56 96.38,377.30 101.06,391.18 L 103.12 397.30 L 100.06 403.04 C94.40,413.66 96.67,423.09 105.60,426.03 C112.76,428.40 119.23,425.14 124.67,416.43 C127.39,412.07 127.63,411.93 131.00,412.70 C137.89,414.27 148.50,413.37 154.29,410.73 C158.07,408.99 160.19,408.53 161.34,409.17 C162.25,409.68 166.48,410.78 170.75,411.62 C178.79,413.20 188.10,412.91 193.89,410.89 C196.53,409.97 197.75,410.19 202.19,412.41 C205.80,414.20 209.00,415.00 212.63,415.00 L 217.86 415.00 L 218.18 437.75 L 218.50 460.50 L 221.48 465.88 C227.33,476.44 236.72,481.00 252.62,481.00 C257.72,481.00 262.15,481.43 262.48,481.97 C262.81,482.50 262.20,484.66 261.12,486.77 C257.87,493.13 255.81,505.42 256.17,516.29 C256.52,526.72 256.01,527.95 251.41,527.98 C247.95,528.01 237.43,533.81 232.02,538.67 C226.23,543.87 222.88,549.12 220.00,557.49 C218.02,563.26 217.30,574.41 218.77,576.59 C220.96,579.83 223.48,579.97 273.84,579.73 L 324.18 579.50 L 326.09 577.14 ZM 83.16 294.47 C96.56,291.65 114.54,282.30 124.50,272.99 C128.50,269.25 128.51,269.25 139.50,268.62 C155.91,267.68 161.00,265.96 161.00,261.33 C161.00,260.62 157.82,256.55 153.92,252.28 C146.07,243.66 146.17,244.14 149.98,233.50 C152.72,225.86 154.08,212.12 152.97,203.32 C151.39,190.89 147.22,182.26 138.18,172.77 C131.41,165.65 125.43,161.76 115.90,158.28 C109.12,155.81 107.25,155.58 93.50,155.54 C77.21,155.50 68.42,157.26 57.50,162.75 C34.63,174.24 13.21,197.62 6.93,217.96 C-2.42,248.23 8.09,274.94 34.81,288.84 C39.21,291.13 45.44,293.64 48.66,294.42 C56.57,296.33 74.16,296.36 83.16,294.47 ZM 667.00 293.51 C678.24,289.35 687.00,283.79 693.62,276.65 C704.23,265.19 708.19,255.04 708.33,239.00 C708.42,227.30 707.00,221.09 701.54,209.50 C686.28,177.05 653.09,155.00 619.53,155.00 C600.41,155.00 586.35,160.42 574.41,172.39 C563.51,183.32 559.00,194.53 559.00,210.72 C559.00,220.39 560.60,229.60 563.62,237.31 C566.37,244.32 566.54,243.86 557.61,253.66 C548.75,263.38 550.15,266.06 565.00,267.89 C570.22,268.54 576.75,269.33 579.49,269.66 C583.63,270.15 585.60,271.18 590.99,275.66 C600.96,283.94 618.29,292.29 631.08,294.97 C638.05,296.44 661.69,295.47 667.00,293.51 ZM 227.28 565.53 C228.02,558.43 233.03,549.02 238.78,543.96 C251.38,532.87 280.51,530.55 299.16,539.14 C310.54,544.39 318.00,555.23 318.00,566.54 L 318.00 571.00 L 272.36 571.00 L 226.72 571.00 L 227.28 565.53 ZM 393.29 565.50 C394.41,554.65 400.84,544.58 409.77,539.72 C423.46,532.27 451.47,532.08 465.65,539.35 C475.72,544.51 483.42,555.28 484.69,566.00 L 485.28 571.00 L 439.00 571.00 L 392.72 571.00 L 393.29 565.50 ZM 292.50 527.35 C290.30,526.52 283.77,525.59 278.00,525.29 C272.23,524.99 266.94,524.29 266.25,523.75 C265.45,523.11 265.00,520.08 265.00,515.35 C265.00,509.47 265.33,507.81 266.60,507.32 C268.43,506.62 288.64,510.38 296.35,512.85 C302.15,514.71 302.54,515.53 301.53,523.63 C300.77,529.72 299.81,530.11 292.50,527.35 ZM 410.67 528.33 C409.67,527.33 409.86,516.20 410.89,515.57 C411.38,515.27 419.55,513.42 429.05,511.46 C442.89,508.61 446.50,508.16 447.22,509.20 C448.37,510.88 447.37,523.03 445.97,524.43 C445.36,525.04 440.49,525.54 434.70,525.59 C428.59,525.64 422.04,526.34 418.36,527.34 C411.31,529.24 411.55,529.21 410.67,528.33 ZM 407.60 505.41 C407.27,504.54 407.24,503.42 407.54,502.94 C407.84,502.46 412.67,500.67 418.29,498.97 C423.91,497.26 431.43,494.77 435.02,493.43 C438.61,492.10 441.82,491.00 442.15,491.00 C442.77,491.00 444.34,494.65 445.50,498.75 C446.03,500.63 445.74,501.00 443.77,501.00 C442.47,501.00 434.92,502.35 427.00,504.00 C410.45,507.45 408.44,507.59 407.60,505.41 ZM 298.85 503.52 C298.59,503.25 292.32,501.49 284.94,499.59 C268.77,495.44 268.00,495.16 268.00,493.42 C268.00,492.67 269.10,489.57 270.44,486.53 L 272.89 481.00 L 291.89 481.00 C303.02,481.00 311.13,481.40 311.48,481.97 C311.81,482.50 311.19,484.67 310.11,486.79 C309.03,488.91 307.17,493.65 305.98,497.32 C304.17,502.94 303.47,504.00 301.58,504.00 C300.34,504.00 299.12,503.78 298.85,503.52 ZM 402.01 488.52 C399.98,484.96 399.11,482.49 399.70,481.90 C401.08,480.52 437.23,481.20 437.70,482.61 C438.05,483.64 414.98,492.25 408.24,493.60 C405.46,494.16 405.04,493.82 402.01,488.52 ZM 242.31 471.92 C235.16,470.44 229.87,465.71 227.95,459.11 C227.25,456.70 227.00,431.64 227.20,383.34 L 227.50 311.18 L 230.60 307.34 C236.82,299.65 228.94,300.11 354.50,300.06 C426.62,300.03 467.79,300.37 470.12,301.02 C475.26,302.45 480.06,305.95 482.43,309.99 C484.43,313.42 484.46,314.67 484.24,385.44 C484.10,431.45 483.65,458.54 482.99,460.53 C481.77,464.22 476.70,469.36 472.50,471.16 C470.12,472.18 446.41,472.45 357.31,472.47 C295.61,472.49 243.86,472.24 242.31,471.92 ZM 315.93 463.25 L 317.36 460.00 L 389.53 460.00 L 461.70 460.00 L 465.05 457.75 C472.39,452.80 472.02,456.42 472.12,387.18 L 472.20 325.09 L 469.85 320.89 C468.56,318.57 466.23,315.74 464.68,314.59 C461.86,312.50 461.79,312.50 355.49,312.50 L 249.13 312.50 L 245.94 315.50 C239.82,321.26 240.00,319.14 240.00,386.72 C240.00,455.59 239.75,452.95 246.90,457.73 C250.23,459.96 250.84,460.00 278.68,460.00 C304.81,460.00 307.11,460.14 307.68,461.75 C308.71,464.63 311.27,467.09 312.94,466.79 C313.80,466.63 315.14,465.04 315.93,463.25 ZM 106.35 415.41 C104.71,412.92 104.74,412.63 107.07,408.32 C109.65,403.55 124.81,384.84 126.50,384.34 C127.05,384.18 128.57,384.87 129.88,385.88 L 132.26 387.71 L 128.88 393.25 C127.02,396.30 123.77,401.65 121.65,405.15 C119.54,408.64 116.70,412.96 115.35,414.75 C112.29,418.81 108.74,419.07 106.35,415.41 ZM 597.79 416.25 C596.96,415.29 594.99,412.25 593.43,409.50 C591.86,406.75 588.23,400.85 585.36,396.38 L 580.16 388.26 L 583.04 386.13 L 585.93 383.99 L 592.58 391.75 C605.34,406.65 609.01,413.59 605.80,416.80 C604.03,418.57 599.53,418.26 597.79,416.25 ZM 208.38 405.91 C206.66,405.42 204.80,404.44 204.25,403.75 C203.71,403.06 202.52,394.76 201.62,385.30 C200.10,369.43 200.10,367.78 201.60,364.04 C203.95,358.16 208.14,355.00 213.58,355.00 L 218.00 355.00 L 218.00 379.96 C218.00,403.62 217.90,404.98 216.07,405.96 C213.83,407.16 212.66,407.16 208.38,405.91 ZM 495.23 405.96 L 492.96 405.05 L 493.23 380.28 L 493.50 355.50 L 496.36 355.17 C502.59,354.46 509.32,359.88 510.59,366.63 C511.19,369.84 509.58,395.04 508.41,400.78 C507.89,403.34 502.55,407.02 499.50,406.93 C498.40,406.90 496.48,406.46 495.23,405.96 ZM 133.78 403.94 C132.23,403.03 132.41,402.40 135.71,397.22 C137.72,394.07 141.53,388.89 144.18,385.70 C146.83,382.51 149.00,378.93 149.00,377.76 C149.00,375.38 156.73,362.00 158.10,362.00 C158.58,362.00 160.21,363.87 161.72,366.16 C165.61,372.03 166.16,382.43 162.98,389.82 C160.56,395.45 154.71,401.39 149.42,403.60 C145.56,405.21 136.31,405.41 133.78,403.94 ZM 560.25 402.90 C555.38,400.48 551.49,396.25 548.87,390.50 C546.71,385.77 546.37,374.66 548.25,370.36 C549.89,366.62 553.04,362.00 553.95,362.00 C554.81,362.00 560.41,370.51 561.84,374.00 C562.40,375.38 563.13,377.76 563.46,379.29 C563.79,380.83 566.46,384.70 569.40,387.89 C576.61,395.73 580.80,402.88 578.90,404.08 C576.12,405.84 564.74,405.12 560.25,402.90 ZM 170.25 402.88 C168.46,402.37 167.00,401.78 167.00,401.58 C167.00,401.39 168.39,398.25 170.09,394.61 C171.98,390.58 173.40,385.65 173.73,382.00 L 174.28 376.00 L 179.49 376.00 C182.36,376.00 186.14,375.50 187.90,374.88 C189.66,374.27 191.32,373.98 191.58,374.25 C191.84,374.51 192.64,380.69 193.35,387.99 L 194.65 401.25 L 191.36 402.62 C187.65,404.17 175.25,404.32 170.25,402.88 ZM 520.25 402.88 C516.46,401.79 516.40,401.15 518.34,384.50 C519.40,375.38 519.68,374.53 521.50,374.80 C522.60,374.96 526.71,375.36 530.62,375.67 L 537.75 376.25 L 538.41 382.73 C538.84,386.90 540.15,391.34 542.10,395.21 C543.77,398.50 544.99,401.29 544.82,401.40 C540.59,404.03 527.06,404.85 520.25,402.88 ZM 108.84 386.68 C108.10,384.93 107.52,380.58 107.55,377.00 C107.63,366.13 113.27,357.71 123.27,353.53 C127.05,351.95 135.00,351.42 135.00,352.75 C135.00,353.16 132.07,357.74 128.50,362.92 C124.73,368.40 121.99,373.43 121.97,374.92 C121.94,376.67 120.04,379.49 116.06,383.68 L 110.18 389.86 L 108.84 386.68 ZM 596.00 383.38 C592.97,379.80 590.23,375.60 589.90,374.04 C589.17,370.63 585.98,365.21 580.79,358.58 C578.28,355.37 577.28,353.32 577.92,352.68 C579.32,351.28 589.44,353.49 593.71,356.13 C600.96,360.61 606.91,373.02 605.55,380.83 C604.79,385.25 602.99,390.02 602.13,389.94 C601.78,389.91 599.03,386.96 596.00,383.38 ZM 133.22 377.44 C130.68,375.66 130.38,373.37 132.38,371.08 C133.14,370.21 140.70,359.15 149.19,346.50 C157.68,333.85 168.35,318.10 172.90,311.50 C177.45,304.90 182.82,296.92 184.84,293.76 C188.29,288.35 191.00,286.39 191.00,289.30 C191.00,290.02 189.73,292.61 188.18,295.05 C184.84,300.33 165.04,333.13 160.46,341.00 C158.69,344.02 153.70,352.43 149.37,359.67 C145.04,366.91 140.73,374.22 139.80,375.92 C137.88,379.38 136.46,379.71 133.22,377.44 ZM 568.76 369.75 C545.25,329.89 535.65,313.80 528.78,302.77 C524.42,295.77 521.15,289.57 521.50,289.00 C521.85,288.43 522.55,288.22 523.04,288.53 C526.06,290.39 581.00,372.08 581.00,374.70 C581.00,377.23 579.11,379.00 576.41,379.00 C574.70,379.00 573.00,376.95 568.76,369.75 ZM 317.00 283.00 L 317.00 275.00 L 355.90 275.00 L 394.80 275.00 L 395.49 280.93 C396.77,291.98 400.61,291.00 355.93,291.00 L 317.00 291.00 L 317.00 283.00 ZM 509.26 281.51 C505.05,279.68 502.49,274.51 503.41,269.65 C505.30,259.56 519.67,259.40 522.98,269.43 C524.47,273.94 522.31,279.27 518.13,281.43 C514.47,283.32 513.45,283.33 509.26,281.51 ZM 192.03 280.03 C187.88,275.88 188.22,267.54 192.67,264.04 C199.28,258.84 209.00,263.58 209.00,272.00 C209.00,278.04 204.87,282.00 198.58,282.00 C195.35,282.00 193.42,281.42 192.03,280.03 ZM 258.00 266.00 C236.96,265.43 234.90,264.82 230.25,257.80 L 227.50 253.65 L 227.21 193.57 C227.05,160.53 227.18,132.05 227.50,130.28 C228.25,126.13 232.23,121.44 237.09,118.96 C240.83,117.05 243.72,117.00 355.21,117.02 L 469.50 117.05 L 474.42 119.77 C477.12,121.27 480.27,123.77 481.42,125.32 C483.47,128.10 483.51,129.16 483.80,188.82 C484.01,230.13 483.76,250.68 483.03,253.20 C482.43,255.24 480.82,258.25 479.44,259.88 C474.11,266.22 478.13,265.98 372.50,266.25 C319.70,266.39 268.17,266.27 258.00,266.00 ZM 369.06 252.07 C371.92,250.98 375.98,248.90 378.09,247.44 C386.83,241.38 395.68,224.98 393.17,219.48 C391.79,216.45 390.55,216.42 379.33,219.15 C366.35,222.32 346.36,222.28 331.59,219.05 L 320.68 216.67 L 318.85 218.94 C316.72,221.56 317.04,223.83 320.66,232.00 C325.14,242.11 337.14,251.64 348.36,254.02 C354.11,255.24 362.89,254.41 369.06,252.07 ZM 286.38 201.87 C298.64,197.18 305.44,187.26 305.46,174.03 C305.48,161.43 299.59,152.37 287.54,146.48 C272.82,139.27 254.40,145.51 247.06,160.20 C239.72,174.89 245.62,192.98 260.26,200.66 C267.44,204.42 278.39,204.93 286.38,201.87 ZM 449.50 201.12 C465.67,193.97 471.94,176.01 463.90,159.89 C461.26,154.60 452.80,147.43 446.72,145.35 C430.78,139.88 414.34,146.93 407.50,162.17 C405.05,167.64 404.80,169.15 405.28,175.54 C406.30,189.00 413.67,198.48 426.32,202.62 C432.25,204.56 443.33,203.84 449.50,201.12 ZM 494.74 231.81 C493.10,230.59 492.99,227.77 493.24,191.50 L 493.50 152.50 L 495.84 152.17 C499.09,151.71 503.69,153.79 506.03,156.77 C507.90,159.14 508.00,160.98 508.00,192.95 L 508.00 226.63 L 505.21 229.30 C501.85,232.52 497.19,233.64 494.74,231.81 ZM 206.63 228.97 L 204.00 225.85 L 204.00 191.51 L 204.00 157.18 L 207.14 154.54 C209.51,152.54 211.16,151.97 213.89,152.20 L 217.50 152.50 L 217.50 192.00 L 217.50 231.50 L 213.38 231.80 C209.81,232.06 208.91,231.68 206.63,228.97 ZM 190.56 211.25 C187.75,206.98 185.00,197.39 185.00,191.84 C185.00,185.57 186.97,178.44 190.04,173.60 C191.64,171.07 193.42,169.00 193.98,169.00 C194.64,169.00 195.00,177.00 195.00,192.00 C195.00,206.45 194.63,215.00 194.01,215.00 C193.47,215.00 191.92,213.31 190.56,211.25 ZM 517.06 192.00 L 517.04 168.50 L 519.06 171.00 C523.64,176.70 525.34,181.39 525.79,189.59 C526.33,199.40 524.41,206.95 520.08,212.00 L 517.08 215.50 L 517.06 192.00 ZM 327.00 107.13 C327.00,104.62 330.29,97.52 333.05,94.09 C340.17,85.23 356.44,81.80 367.50,86.83 C373.68,89.64 379.64,95.22 382.10,100.50 C385.81,108.49 387.53,108.00 355.50,108.00 C339.83,108.00 327.00,107.61 327.00,107.13 ZM 347.76 39.43 C346.25,38.61 344.11,36.17 343.01,34.01 C339.07,26.29 341.34,17.97 348.28,14.67 C354.72,11.61 361.48,13.21 366.30,18.94 C369.83,23.14 370.13,31.29 366.91,35.39 C362.64,40.81 353.76,42.69 347.76,39.43 ZM 55.76 286.97 C43.01,284.82 32.02,279.08 24.15,270.47 C9.03,253.93 8.07,229.70 21.62,206.50 C27.92,195.70 42.70,180.92 53.50,174.62 C71.39,164.18 93.85,160.53 110.09,165.42 C140.99,174.74 152.87,204.07 139.50,238.08 C137.16,244.02 137.83,246.28 143.96,253.16 C146.73,256.27 149.00,259.09 149.00,259.41 C149.00,259.73 146.64,260.00 143.75,260.01 C140.86,260.01 135.46,260.30 131.74,260.65 C125.42,261.25 124.60,261.62 119.24,266.32 C100.20,283.01 77.02,290.55 55.76,286.97 ZM 66.95 264.91 C71.72,262.23 74.00,258.33 74.00,252.85 C74.01,250.46 72.39,240.46 70.42,230.63 C68.45,220.80 67.21,212.42 67.67,212.01 C68.13,211.59 73.00,209.78 78.50,207.99 C84.00,206.19 90.17,203.89 92.21,202.86 C94.25,201.84 96.33,201.00 96.84,201.00 C98.20,201.00 99.66,205.35 101.95,216.23 C104.58,228.74 104.57,230.00 101.82,230.00 C98.19,230.00 91.57,233.77 89.73,236.88 C87.59,240.51 87.49,246.83 89.54,249.75 C91.42,252.44 97.60,254.23 101.98,253.35 C103.76,253.00 107.04,250.98 109.26,248.87 L 113.30 245.03 L 112.74 235.76 C112.03,223.94 104.43,188.99 102.18,187.23 C101.29,186.53 99.87,186.25 99.03,186.61 C93.41,189.03 63.09,198.97 61.29,198.98 C58.10,199.01 57.01,201.74 58.08,207.02 C61.78,225.18 64.00,237.82 64.00,240.66 C64.00,243.72 63.74,244.00 60.95,244.00 C50.02,244.00 42.87,257.02 49.92,264.08 C52.40,266.56 53.63,267.00 58.04,267.00 C61.45,267.00 64.50,266.28 66.95,264.91 ZM 635.50 287.02 C620.60,284.91 604.37,276.99 592.75,266.15 C588.02,261.74 587.96,261.72 578.25,260.87 C562.70,259.50 563.14,259.79 568.04,254.22 C575.57,245.68 575.59,245.53 571.35,233.24 C568.04,223.64 567.65,221.43 567.65,212.50 C567.64,196.85 571.42,186.71 580.64,177.62 C591.86,166.56 611.45,161.05 629.07,164.00 C647.95,167.17 663.54,175.32 677.03,189.08 C695.74,208.16 703.33,230.40 698.14,250.91 C693.73,268.36 681.15,280.66 662.66,285.61 C655.90,287.42 643.02,288.09 635.50,287.02 ZM 619.65 255.49 C621.00,254.61 623.01,252.45 624.13,250.70 C626.04,247.69 626.13,246.45 625.56,229.78 C625.23,220.04 624.73,210.81 624.45,209.28 C623.51,204.11 624.51,203.89 637.53,206.52 C644.11,207.85 650.68,208.95 652.13,208.97 C653.57,208.99 655.21,209.56 655.76,210.25 C656.32,210.94 656.94,216.23 657.14,222.00 L 657.50 232.50 L 652.44 233.01 C646.19,233.64 642.27,236.10 640.40,240.58 C639.16,243.55 639.16,244.45 640.40,247.42 C643.17,254.05 650.32,256.48 657.22,253.14 C664.36,249.68 665.52,246.66 665.37,232.00 C665.22,217.90 663.34,200.13 661.79,198.25 C661.22,197.56 659.39,197.00 657.73,197.00 C656.07,197.00 646.85,195.41 637.25,193.46 C622.95,190.57 619.52,190.16 618.26,191.20 C616.94,192.30 616.83,195.27 617.45,213.62 L 618.16 234.77 L 613.76 234.28 C608.56,233.69 602.00,236.55 599.39,240.53 C597.13,243.98 598.08,250.53 601.30,253.75 C605.60,258.05 614.46,258.89 619.65,255.49 ZM 250.75 449.75 C249.79,448.79 248.97,447.66 248.94,447.25 C248.90,446.84 248.78,431.74 248.67,413.71 C248.43,375.83 247.06,379.71 260.50,380.20 L 268.50 380.50 L 268.77 398.60 C269.04,416.40 269.08,416.73 271.52,419.02 C273.68,421.05 274.00,422.21 274.00,428.02 C274.00,433.21 274.41,435.06 275.83,436.35 C278.28,438.56 279.59,438.43 281.44,435.78 C282.45,434.35 283.00,431.35 283.00,427.36 C283.00,421.76 283.26,420.98 285.75,419.17 L 288.50 417.16 L 289.00 398.84 C289.55,378.84 289.52,378.91 295.58,380.43 L 298.00 381.04 L 298.00 398.60 L 298.00 416.17 L 301.50 419.27 C304.78,422.17 305.00,422.75 305.00,428.48 C305.00,435.02 306.07,437.00 309.59,437.00 C312.39,437.00 313.00,435.31 313.00,427.53 C313.00,421.91 313.27,421.05 315.50,419.59 L 318.00 417.95 L 318.00 399.58 C318.00,378.71 317.61,379.58 326.46,380.62 L 331.75 381.25 L 332.37 386.37 C332.71,389.19 332.99,397.45 332.99,404.73 C333.00,417.73 333.04,417.98 335.50,419.59 C337.72,421.05 338.00,421.92 338.00,427.39 C338.00,436.28 341.42,440.44 345.43,436.43 C346.54,435.32 347.00,432.92 347.00,428.23 C347.00,422.37 347.32,421.28 349.75,418.74 C352.49,415.88 352.50,415.82 353.00,398.19 L 353.50 380.50 L 356.82 380.18 C362.75,379.61 363.00,380.38 363.00,399.44 L 363.00 416.63 L 366.00 419.50 C368.72,422.11 369.00,422.97 369.00,428.75 C369.00,436.28 370.18,439.00 373.46,439.00 C376.53,439.00 378.20,434.32 377.88,426.55 C377.70,421.93 378.03,420.62 379.83,418.95 C382.35,416.60 382.39,416.19 382.04,396.97 C381.73,379.85 381.79,379.74 390.67,380.20 L 396.50 380.50 L 397.00 399.10 C397.37,412.82 397.86,418.13 398.88,419.35 C399.69,420.33 400.30,423.61 400.38,427.35 C400.51,434.32 401.94,437.00 405.52,437.00 C408.38,437.00 409.00,435.35 409.00,427.67 C409.00,421.82 409.18,421.36 412.50,418.71 L 416.00 415.91 L 416.00 399.16 C416.00,381.20 416.31,380.00 421.00,380.00 C425.70,380.00 426.00,381.17 426.00,399.67 L 426.00 416.94 L 429.00 419.16 C431.85,421.26 432.00,421.74 432.00,428.57 C432.00,436.41 433.27,438.68 437.01,437.50 C439.91,436.58 441.03,433.02 440.31,427.00 C439.77,422.44 439.98,421.63 442.33,419.18 C444.94,416.46 444.95,416.33 445.23,398.47 L 445.50 380.50 L 454.50 380.50 L 463.50 380.50 L 463.76 414.08 C464.01,445.48 463.91,447.77 462.21,449.31 C460.55,450.82 451.31,450.98 356.44,451.23 C258.57,451.48 252.40,451.40 250.75,449.75 ZM 249.00 348.45 L 249.00 324.91 L 251.45 322.45 L 253.91 320.00 L 356.03 320.00 L 458.15 320.00 L 461.08 322.92 L 464.00 325.85 L 464.00 348.92 L 464.00 372.00 L 356.50 372.00 L 249.00 372.00 L 249.00 348.45 ZM 289.19 359.89 C301.70,353.56 302.17,335.70 290.00,329.04 C278.32,322.64 263.64,329.37 261.61,342.04 C261.09,345.30 261.47,347.35 263.38,351.51 C266.01,357.27 268.59,359.45 275.22,361.54 C280.04,363.06 283.80,362.61 289.19,359.89 ZM 447.00 359.00 C448.77,357.23 449.00,355.67 449.00,345.19 C449.00,337.23 448.59,332.82 447.73,331.65 C446.55,330.03 442.10,329.92 382.76,329.98 C347.72,330.01 318.41,330.29 317.62,330.59 C314.70,331.71 313.69,336.74 314.28,347.28 C314.77,356.16 315.11,357.67 317.03,359.22 C319.08,360.88 323.36,361.00 382.11,361.00 C443.67,361.00 445.04,360.96 447.00,359.00 ZM 344.64 244.01 C341.97,242.96 338.86,241.30 337.74,240.30 C335.48,238.30 330.00,231.06 330.00,230.07 C330.00,229.73 338.89,229.62 349.75,229.82 C360.61,230.03 371.97,229.75 374.99,229.19 C378.02,228.64 380.83,228.39 381.24,228.65 C383.79,230.22 373.71,240.86 366.64,244.08 C361.15,246.57 351.11,246.54 344.64,244.01 ZM 267.71 194.43 C257.16,191.10 250.49,179.45 253.05,168.80 C254.51,162.72 259.68,156.52 265.50,153.87 C274.84,149.61 287.38,153.20 293.48,161.88 C296.22,165.77 296.50,166.91 296.50,174.00 C296.50,181.07 296.21,182.25 293.49,186.16 C288.17,193.84 277.10,197.39 267.71,194.43 ZM 280.28 185.64 C285.11,183.59 287.24,180.62 287.70,175.26 C288.21,169.40 285.82,165.09 280.72,162.67 C276.12,160.49 273.78,160.56 268.88,163.06 C259.80,167.69 260.08,181.52 269.33,185.54 C273.39,187.31 276.27,187.34 280.28,185.64 ZM 428.59 194.43 C419.22,190.99 413.98,183.62 414.02,173.93 C414.12,150.14 445.61,143.52 456.56,165.00 C458.69,169.17 458.97,179.32 457.06,183.00 C451.70,193.34 439.25,198.33 428.59,194.43 ZM 442.82 185.09 C447.46,182.73 449.53,179.02 449.40,173.31 C449.29,168.02 445.58,163.55 439.88,161.85 C434.97,160.38 431.39,161.41 427.34,165.46 C424.46,168.34 424.00,169.46 424.04,173.65 C424.08,179.65 425.74,182.78 430.12,185.11 C434.51,187.46 438.20,187.45 442.82,185.09 ZM 274.30 352.50 C271.61,350.61 269.70,345.03 270.57,341.58 C272.01,335.82 279.72,333.25 285.93,336.46 C289.19,338.15 290.00,339.78 290.00,344.66 C290.00,349.67 285.51,354.00 280.30,354.00 C278.18,354.00 275.48,353.32 274.30,352.50 ZM 323.00 344.99 L 323.00 337.98 L 381.75 338.24 L 440.50 338.50 L 440.80 345.25 L 441.09 352.00 L 382.05 352.00 L 323.00 352.00 L 323.00 344.99 Z" fill="rgb(252,252,252)"/>
+</g>
+</svg>
+        </div>
+      </div>
+    </div>
+
+    <div id="contentWrap">
+      <div id="controls">
+        
+        <button class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
+  <path d="M7 9h10l-1 12H8L7 9z" fill="currentColor"/>
+  <rect x="9.5" y="11" width="1.8" height="8" fill="#ffffff" opacity="0.6"/>
+  <rect x="12.3" y="11" width="1.8" height="8" fill="#ffffff" opacity="0.6"/>
+</svg></span></button>
+        <button class="bigBtn iconBtn" onclick="undo()" title="Undo" aria-label="Undo"><span class="icon undoIcon"><svg viewBox="-2 -2 28 28" aria-hidden="true">
+  <path d="M9 7H5V3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M5 7c2-3 5-5 9-5 6 0 9 4 9 10 0 5-3 9-9 9-3 0-6-1-8-3" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg></span></button>
+        <button class="bigBtn iconBtn" id="cameraBtn" onclick="openCameraModal()" title="Scan" aria-label="Scan"><span class="icon cameraIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M7 7l1.2-2h7.6L17 7h2.5c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H4.5c-1.1 0-2-.9-2-2V9c0-1.1.9-2 2-2H7z" fill="currentColor"/>
+  <circle cx="12" cy="14" r="4" fill="#ffffff" opacity="0.9"/>
+  <circle cx="12" cy="14" r="2.2" fill="currentColor" opacity="0.75"/>
+</svg></span></button>
+      </div>
+
+      <div id="mainLayout">
+        <div id="tools">
+          <div id="toolsList"></div>
+          <div id="toolsLoginArea">
+            <div id="loginCtaWrap" aria-label="Login to unlock">
+<a id="toolLoginBtn" class="loginBtn loginLink" href="login.html">Login</a>
+            </div>
+          </div>
+        </div>
+
+        <div id="sequencerShell">
+          <div id="sequencerWrapper">
+            <div id="playhead" style="display:none;"></div>
+            <div id="sequencer"></div>
+          </div>
+          <div id="drumPanel" aria-label="Drum controls">
+            <div id="drumControls">
+              <button id="drumMuteBtn" class="drumMiniBtn muted" aria-pressed="false" title="Unmute drums">🔇</button>
+              <div class="drumStyleGroup" role="group" aria-label="Drum style">
+                <button id="drumStyleTech" class="drumStyleBtn selected" aria-pressed="true" title="Techno" aria-label="Techno">
+                  <img class="drumIcon" src="techno_logo.svg" alt="Techno" />
+                </button>
+                <button id="drumStyleDnB" class="drumStyleBtn" aria-pressed="false" title="Drum n Bass" aria-label="Drum n Bass">
+                  <img class="drumIcon" src="breakbeat_logo.svg" alt="Drum n Bass" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="rightCol">
+          <div id="tempoControls" class="locked">
+            <button id="tempoUpBtn" onclick="tempoUp()" aria-disabled="true">▲</button>
+            <div id="tempoBox" aria-disabled="true">120</div>
+            <button id="tempoDownBtn" onclick="tempoDown()" aria-disabled="true">▼</button>
+</div>
+
+          <div id="instButtons">
+            <div class="instBtn" id="btnPiano"   title="Piano / Organ">🎹</div>
+            <div class="instBtn" id="btnTrumpet" title="Trumpet">🎺</div>
+            <div class="instBtn" id="btnStrings" title="Space">🌌</div>
+            <div class="instBtn" id="btnSynth" title="Synth">
+              <svg class="waveIcon" viewBox="0 0 120 70" aria-hidden="true">
+                <polyline
+                  points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40"
+                  fill="none"
+                  stroke="#1f6bff"
+                  stroke-width="7"
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+
+          <div class="seqFaderRow" id="masterVolUI">
+            <div class="seqFaderPanel" aria-label="Master volume fader (UI)">
+              <div class="seqTrackArea" id="seqTrackArea">
+                <div class="seqTrack"></div>
+
+                
+                <input id="seqVolRange" class="seqVolRange" type="range" min="0" max="10" step="0.01" value="10" aria-label="Master volume" />
+<div class="seqIncTicks" aria-hidden="true">
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                </div>
+
+                <div class="seqCaps" aria-hidden="true">
+                  <div class="seqCap"></div>
+                  <div class="seqCap"></div>
+                </div>
+
+                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8" tabindex="-1">
+                  <div class="seqKnobStripe"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="seqReadout" aria-label="Volume display">
+              <div class="small">VOL</div>
+              <div class="num" id="seqVolNum">10</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
+
+  <div id="rotatePrompt">
+    <div class="emoji">📱↔️</div>
+    <div class="text">
+      Turn your device sideways for the best view!
+      <span class="sub">Landscape mode makes the grid easier to use.</span>
+    </div>
+  </div>
+
+
+  <!-- Camera Scan Modal (required for the Scan button) -->
+  <div id="camModal" aria-hidden="true">
+    <div class="modalCard" role="dialog" aria-modal="true" aria-label="Camera Scan">
+      <div class="modalHeader">
+        <div class="modalTitle">Scan</div>
+        <button class="modalClose" onclick="closeCameraModal()" aria-label="Close">×</button>
+      </div>
+
+      <div class="camStage">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <img id="camPreview" alt="Capture preview" />
+        <canvas id="camCanvas" style="display:none;"></canvas>
+        <div class="camOverlay"></div>
+      </div>
+
+      <div class="modalBtns">
+        <button class="bigBtn" onclick="camCapture()">Capture</button>
+        <button class="bigBtn" onclick="camImport()">Use</button>
+        <button class="bigBtn" onclick="closeCameraModal()">Close</button>
+      </div>
+      <div class="modalHint">Tip: line the grid up inside the dashed box.</div>
+    </div>
+  </div>
+
+<script>
+/* OPTION A ORGANISATION START */
+// This file is intentionally single-file, but the JS is grouped into logical modules.
+// Layout + behavior are unchanged; we only add structure + a small public API.
+(() => {
+/* Option A: single-file organisation (no layout/behaviour changes) */
+
+
+/* -------------------- CONFIG -------------------- */
+const rows = 8;
+const cols = 16;
+
+let CELL = 46;
+const GAP  = 4;
+
+const freqs = [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
+const rowColors = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+
+const toolSteps = [
+  { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
+  { steps: 2,  label: "8th",   symbol: "♪", divs: 8,  symClass:"eighth" },
+  { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
+  { steps: 8,  label: "1/2",   symbol: "𝅗𝅥", divs: 2,  symClass:"normal" },
+  { steps: 16, label: "Whole", symbol: "𝅝", divs: 1,  symClass:"normal" }
+];
+
+let selectedSteps = 1;
+
+let isLoggedIn = false;
+try{ isLoggedIn = localStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+const LOCKED_STEPS = new Set([4,8,16]);
+
+/* -------------------- STATE -------------------- */
+let notesByRow = Array.from({length: rows}, () => []);
+let occ = Array.from({length: rows}, () => Array(cols).fill(null));
+
+let audioCtx = null;
+let tempo = 120;
+let pendingTempo = null;
+let step = 0;
+let timer = null;
+
+let masterGain = null;
+let masterComp = null;
+
+let startTimeout = null;
+let audioPrimed = false;
+let hasEverStartedPlayback = false;
+let lastStopAt = null;
+
+/* track when audio last actually made a sound */
+let lastAudioActivityAt = null;
+
+const liveNodes = new Set();
+let bus = null;
+
+let instrument = "piano";
+
+/* -------------------- DRUMS -------------------- */
+let drumsMuted = true;            // start muted
+let drumStyle = "techhouse";      // techhouse | dnb
+let drumBus = null;               // GainNode
+let drumNoise = null;             // AudioBuffer
+
+const DRUM_PATTERNS = {
+  techhouse: {
+    // 4-on-the-floor + claps on 2 & 4 + driving hats
+    kick: [1,0,0,0,  1,0,0,0,  1,0,0,0,  1,0,0,0],
+    clap: [0,0,0,0,  1,0,0,0,  0,0,0,0,  1,0,0,0],
+    // closed hat: 16ths with gentle accents
+    hatC: [0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14],
+    // open hat: offbeats (the "and")
+    hatO: [0,0,0.24,0,  0,0,0.24,0,  0,0,0.24,0,  0,0,0.24,0],
+  },
+  dnb: {
+    // classic DnB feel: snare on 2 & 4, syncopated kicks, fast hats
+    kick:  [1,0,0,0,  0,0,0,0,  0,0,1,0,  0,0,0,0],
+    snare: [0,0,0,0,  1,0,0,0,     0,0,0,0,     1,0,0,0],
+    hatC:  [0.20,0.14,0.20,0.14,  0.22,0.14,0.20,0.14,  0.20,0.14,0.24,0.14,  0.20,0.14,0.20,0.14],
+    // occasional open hat stabs
+    hatO:  [0,0,0,0,   0,0,0,0.18,  0,0,0,0,   0,0.18,0,0]
+  }
+};
+
+const LEVEL = {
+  piano:   0.60,
+  trumpet: 1.18,
+  strings: 1.30,
+  synth:   0.55
+};
+
+/* Undo history (max 10 user actions) */
+const undoStack = [];
+const UNDO_MAX = 10;
+
+function cloneState(){
+  return {
+    notesByRow: notesByRow.map(row => row.map(n => ({ id:n.id, start:n.start, len:n.len }))),
+    occ: occ.map(row => row.slice()),
+    nextId
+  };
+}
+function pushUndo(){
+  undoStack.push(cloneState());
+  while(undoStack.length > UNDO_MAX) undoStack.shift();
+}
+function undo(){
+  if(!undoStack.length) return;
+  const snap = undoStack.pop();
+  notesByRow = snap.notesByRow.map(row => row.map(n => ({...n})));
+  occ = snap.occ.map(row => row.slice());
+  nextId = snap.nextId;
+  redrawAllNotes();
+}
+
+/* DOM */
+const tempoBox = document.getElementById("tempoBox");
+const sequencerEl = document.getElementById("sequencer");
+const toolsEl = document.getElementById("tools");
+const toolsListEl = document.getElementById("toolsList");
+const toolLoginBtnEl = document.getElementById("toolLoginBtn");
+const logoutBtnEl = document.getElementById("logoutBtn");
+
+
+const tempoControlsEl = document.getElementById("tempoControls");
+const tempoUpBtnEl = document.getElementById("tempoUpBtn");
+const tempoDownBtnEl = document.getElementById("tempoDownBtn");
+const instButtonsEl = document.getElementById("instButtons");
+const playheadEl = document.getElementById("playhead");
+const rotatePromptEl = document.getElementById("rotatePrompt");
+const controlsEl = document.getElementById("controls");
+const mainLayoutEl = document.getElementById("mainLayout");
+const titleBoxEl = document.getElementById("titleBox");
+
+const cameraBtnEl = document.getElementById("cameraBtn");
+
+const btnPiano   = document.getElementById("btnPiano");
+const btnTrumpet = document.getElementById("btnTrumpet");
+const btnStrings = document.getElementById("btnStrings");
+const btnSynth   = document.getElementById("btnSynth");
+
+/* Drums UI */
+const drumMuteBtnEl = document.getElementById("drumMuteBtn");
+const drumStatusEl  = document.getElementById("drumStatus");
+const drumStyleTechEl = document.getElementById("drumStyleTech");
+const drumStyleDnBEl  = document.getElementById("drumStyleDnB");
+
+btnPiano.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("piano"); };
+btnTrumpet.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("trumpet"); };
+btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
+
+
+/* -------------------- DRUMS UI -------------------- */
+function setDrumsMuted(m){
+  drumsMuted = !!m;
+
+  if(drumMuteBtnEl){
+    drumMuteBtnEl.classList.toggle("muted", drumsMuted);
+    drumMuteBtnEl.textContent = drumsMuted ? "🔇" : "🔊";
+    drumMuteBtnEl.setAttribute("aria-pressed", String(!drumsMuted));
+    drumMuteBtnEl.title = drumsMuted ? "Unmute drums" : "Mute drums";
+  }
+
+  // If audio is running, fade the drum bus smoothly
+  if(audioCtx && drumBus){
+    const now = audioCtx.currentTime;
+    const target = drumsMuted ? 0.0001 : 0.92;
+    try{
+      drumBus.gain.cancelScheduledValues(now);
+      drumBus.gain.setValueAtTime(drumBus.gain.value, now);
+      drumBus.gain.linearRampToValueAtTime(target, now + 0.03);
+    }catch(e){}
+  }
+}
+
+function setDrumStyle(style){
+  drumStyle = (style === "dnb") ? "dnb" : "techhouse";
+  if(drumStyleTechEl && drumStyleDnBEl){
+    const isTech = drumStyle === "techhouse";
+    drumStyleTechEl.classList.toggle("selected", isTech);
+    drumStyleDnBEl.classList.toggle("selected", !isTech);
+    drumStyleTechEl.setAttribute("aria-pressed", String(isTech));
+    drumStyleDnBEl.setAttribute("aria-pressed", String(!isTech));
+  }
+}
+
+if(drumMuteBtnEl){
+  drumMuteBtnEl.onclick = () => {
+    // Ensure audio exists if the user unmutes while playing.
+    getAudio();
+    ensureAudioRunning();
+    setDrumsMuted(!drumsMuted);
+  };
+}
+if(drumStyleTechEl) drumStyleTechEl.onclick = () => setDrumStyle("techhouse");
+if(drumStyleDnBEl)  drumStyleDnBEl.onclick  = () => setDrumStyle("dnb");
+
+// Init (starts muted)
+setDrumStyle(drumStyle);
+setDrumsMuted(true);
+
+/* -------------------- LOCKED UI (Login nudges) -------------------- */
+const loginCtaWrapEl = document.getElementById("loginCtaWrap");
+
+let lockNudgeHideT = null;
+function showLockNudge(){
+  if(!loginCtaWrapEl) return;
+  clearTimeout(lockNudgeHideT);
+  loginCtaWrapEl.classList.add("pulsing");
+}
+function hideLockNudgeSoon(ms=0){
+  if(!loginCtaWrapEl) return;
+  clearTimeout(lockNudgeHideT);
+  lockNudgeHideT = setTimeout(() => {
+    loginCtaWrapEl.classList.remove("pulsing");
+  }, ms);
+}
+function bindLockedNudge(el){
+  if(!el) return;
+  el.addEventListener("mouseenter", () => { if(!isLoggedIn) showLockNudge(); });
+  el.addEventListener("mouseleave", () => { if(!isLoggedIn) hideLockNudgeSoon(0); });
+  el.addEventListener("pointerdown", () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); } }, { passive:true });
+}
+
+/* Make login links return to this page */
+function updateLoginLinks(){
+  const current = (location.pathname.split("/").pop() || "index.html");
+  document.querySelectorAll("a.loginLink").forEach(a => {
+    a.href = "login.html?return=" + encodeURIComponent(current);
+  });
+}
+updateLoginLinks();
+
+function applyLockState(){
+  const locked = !isLoggedIn;
+  const robotLogoEl = document.getElementById("robotLogo");
+  if(robotLogoEl) robotLogoEl.style.display = "flex";
+
+  // If we just moved into Guest/locked mode and a locked note-length was selected,
+  // bump back to a free length (16th).
+  if(locked && typeof LOCKED_STEPS !== "undefined" && LOCKED_STEPS.has(selectedSteps)){
+    selectedSteps = 1;
+  }
+
+  // Rebuild tool buttons so their locked state updates on login/logout.
+  try{ buildTools(); }catch(e){}
+
+  if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
+  if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
+  if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
+  document.body.classList.toggle("loggedIn", isLoggedIn);
+
+  try{ positionRobotLogo(); }catch(e){}
+}
+applyLockState();
+
+// Ensure the correct state when the browser restores the page from cache
+window.addEventListener('pageshow', () => {
+  try{ isLoggedIn = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
+  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
+  applyLockState();
+});
+
+function logout(){
+  try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
+  try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
+  isLoggedIn = false;
+  try{ stop(); }catch(e){}
+
+  // Restore the locked/landing UI immediately
+  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
+  applyLockState();
+  updateLoginLinks();
+
+  requestAnimationFrame(() => {
+    try{ fitToViewport(); }catch(e){}
+    try{ positionRobotLogo(); }catch(e){}
+  });
+}
+
+
+/* Bind hover nudges for locked groups */
+bindLockedNudge(cameraBtnEl);
+bindLockedNudge(tempoUpBtnEl);
+bindLockedNudge(tempoDownBtnEl);
+bindLockedNudge(tempoBox);
+
+[btnPiano, btnTrumpet, btnStrings, btnSynth].forEach(bindLockedNudge);
+
+/* Prime audio */
+function primeAudioOnce(){
+  if (audioPrimed) return;
+  audioPrimed = true;
+  getAudio();
+}
+window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
+window.addEventListener("keydown", primeAudioOnce, { once: true });
+
+/* Prevent focus caret */
+window.addEventListener("pointerdown", () => {
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}, { passive: true });
+
+/* Spacebar start/stop */
+window.addEventListener("keydown", (e) => {
+  if (e.code !== "Space") return;
+  e.preventDefault();
+  if (timer || startTimeout) stop();
+  else play();
+});
+
+/* -------------------- PLAYHEAD WOBBLE SCALING -------------------- */
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+function setPlayheadWobbleFromTempo(t){
+  const ratio = (t >= 90) ? 1 : clamp01((t - 40) / (90 - 40));
+  document.documentElement.style.setProperty("--wiggleDeg",   (1.2 * ratio).toFixed(3) + "deg");
+  document.documentElement.style.setProperty("--wiggleScale", (0.01 * ratio).toFixed(4));
+}
+
+/* -------------------- RESPONSIVE FIT -------------------- */
+function fitToViewport(){
+  const vw = Math.max(320, window.innerWidth);
+  const vh = Math.max(480, window.innerHeight);
+
+  const headerH = 92;
+  const controlsH = 70;
+  const vMargins = 26;
+  const gridExtra = 26;
+
+  let toolW = Math.min(220, Math.max(160, Math.floor(vw * 0.30)));
+  let rightW = Math.min(120, Math.max(100, Math.floor(vw * 0.18)));
+
+  const outerPadding = 28;
+  const gaps = 14 * 2;
+  const maxCellByWidth = Math.floor(
+    (vw - toolW - rightW - outerPadding - gaps - (cols - 1) * GAP - gridExtra) / cols
+  );
+
+  const availableH = vh - headerH - controlsH - vMargins - gridExtra;
+  const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / rows);
+
+  let cell = Math.min(maxCellByWidth, maxCellByHeight);
+  cell = Math.max(26, Math.min(56, cell));
+
+  if(cell <= 34){
+    toolW = Math.max(150, Math.floor(vw * 0.28));
+    rightW = Math.max(96, Math.floor(vw * 0.16));
+  }
+
+  document.documentElement.style.setProperty("--toolW", toolW + "px");
+  document.documentElement.style.setProperty("--rightW", rightW + "px");
+  document.documentElement.style.setProperty("--cell", cell + "px");
+  CELL = cell;
+
+  const toolsRect = toolsEl.getBoundingClientRect();
+  const pageLeft = 14;
+  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
+
+  const controlsRect = controlsEl.getBoundingClientRect();
+  const mainRect = mainLayoutEl.getBoundingClientRect();
+  document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
+
+  const playBtn = controlsEl.querySelector(".bigBtn");
+  if (playBtn) {
+    const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
+
+    const playRect  = playBtn.getBoundingClientRect();
+    const titleRect = titleBoxEl.getBoundingClientRect();
+
+    const playCenter  = playRect.top  + playRect.height / 2;
+    const titleCenter = titleRect.top + titleRect.height / 2;
+
+    const delta = Math.round(playCenter - titleCenter);
+    let newLift = Math.round(currentLift + delta);
+    newLift = Math.max(0, Math.min(260, newLift));
+    document.documentElement.style.setProperty("--contentLift", newLift + "px");
+  }
+
+  const portrait = vh > vw * 1.05;
+  const phoneish = vw < 820;
+  rotatePromptEl.style.display = (portrait && phoneish) ? "flex" : "none";
+}
+
+function positionRobotLogo(){
+  const logo = document.getElementById('robotLogo');
+  const toolsList = document.getElementById('toolsList');
+  const loginWrap = document.getElementById('loginCtaWrap');
+  const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
+  if(!logo || !toolsList || !seqWrap) return;
+
+  const toolsListRect = toolsList.getBoundingClientRect();
+  const gridRect = seqWrap.getBoundingClientRect();
+
+  // Desired size (px) from CSS variable
+  const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
+
+  // Anchor: always keep it below the note-length buttons.
+  let topMin = toolsListRect.bottom + 18;
+
+  // If the Login button exists and is visible, keep it below that too.
+  if(loginWrap){
+    const r = loginWrap.getBoundingClientRect();
+    if(r.width > 0 && r.height > 0){
+      topMin = Math.max(topMin, r.bottom + 28);
+    }
+  }
+
+  // Align the badge to the bottom of the grid (but never above topMin)
+  const bottom = gridRect.bottom;
+  const nudgeY = 6;
+
+  const avail = Math.floor(bottom - topMin);
+  if (avail < 40) return;
+
+  const size = Math.max(40, Math.min(desired, avail));
+
+  // Apply size (and scale padding so it stays "button-like")
+  logo.style.width  = size + 'px';
+  logo.style.height = size + 'px';
+  logo.style.padding = Math.round(size * 0.12) + 'px';
+
+  // Center horizontally to the note-length tool column
+  const xCenter = toolsListRect.left + toolsListRect.width / 2;
+
+  // Prefer aligning bottom to the grid; clamp to topMin
+  const top = Math.round(bottom - size + nudgeY);
+  logo.style.left = Math.round(xCenter - size/2) + 'px';
+  logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
+}
+
+
+window.addEventListener("resize", () => {
+  requestAnimationFrame(() => {
+    fitToViewport();
+    buildGrid();
+    positionRobotLogo();
+  });
+});
+
+/* -------------------- AUDIO -------------------- */
+function ensureAudioRunning(){
+  if (!audioCtx) return;
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(()=>{});
+}
+
+function trackNode(node){
+  liveNodes.add(node);
+  node.onended = () => liveNodes.delete(node);
+}
+
+function makeHallImpulse(ctx, seconds, decay){
+  const rate = ctx.sampleRate;
+  const length = Math.floor(rate * seconds);
+  const impulse = ctx.createBuffer(2, length, rate);
+  for(let ch=0; ch<2; ch++){
+    const data = impulse.getChannelData(ch);
+    for(let i=0;i<length;i++){
+      const t = i / length;
+      const env = Math.pow(1 - t, decay);
+      data[i] = (Math.random()*2 - 1) * env * (ch === 0 ? 1 : 0.96);
+    }
+  }
+  return impulse;
+}
+
+function makeNoiseBuffer(ctx){
+  const len = Math.max(1, Math.floor(ctx.sampleRate * 1.0));
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for(let i=0;i<len;i++) data[i] = (Math.random() * 2 - 1);
+  return buf;
+}
+
+function playKick(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+
+  // Main body
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+
+  osc.type = "sine";
+  // Faster, deeper sweep = more punch
+  osc.frequency.setValueAtTime(190, at);
+  osc.frequency.exponentialRampToValueAtTime(62, at + 0.065);
+  osc.frequency.exponentialRampToValueAtTime(48, at + 0.135);
+
+  // Envelope
+  const peak = 1.10 * vel;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
+
+  // Short tonal transient (no noise "click")
+  const tosc = ctx.createOscillator();
+  const tg = ctx.createGain();
+  tosc.type = "triangle";
+  tosc.frequency.setValueAtTime(320, at);
+  tosc.frequency.exponentialRampToValueAtTime(140, at + 0.030);
+
+  tg.gain.setValueAtTime(0.0001, at);
+  tg.gain.exponentialRampToValueAtTime(0.22 * vel, at + 0.0015);
+  tg.gain.exponentialRampToValueAtTime(0.0001, at + 0.030);
+
+  // Mild saturation to make it feel punchier
+  const shaper = ctx.createWaveShaper();
+  shaper.oversample = "4x";
+  const N = 256;
+  const curve = new Float32Array(N);
+  const amt = 2.0;
+  for(let i=0;i<N;i++){
+    const x = (i / (N - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amt * x);
+  }
+  shaper.curve = curve;
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(9000, at);
+  lp.Q.setValueAtTime(0.7, at);
+
+  osc.connect(g);
+  g.connect(shaper);
+
+  tosc.connect(tg);
+  tg.connect(shaper);
+
+  shaper.connect(lp);
+  lp.connect(drumBus);
+
+  trackNode(osc);
+  trackNode(tosc);
+
+  osc.start(at);
+  osc.stop(at + 0.22);
+
+  tosc.start(at);
+  tosc.stop(at + 0.06);
+}
+
+function playPerc(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(320, at);
+  osc.frequency.exponentialRampToValueAtTime(170, at + 0.06);
+
+  const peak = 0.22 * vel;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.10);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(520, at);
+  bp.Q.setValueAtTime(2.2, at);
+
+  osc.connect(bp);
+  bp.connect(g);
+  g.connect(drumBus);
+
+  trackNode(osc);
+  osc.start(at);
+  osc.stop(at + 0.14);
+}
+
+function playSnare(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+
+  const src = ctx.createBufferSource();
+  src.buffer = drumNoise || makeNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(700, at);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(1800, at);
+  bp.Q.setValueAtTime(0.9, at);
+
+  const g = ctx.createGain();
+  const peak = 0.42 * vel;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.003);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.13);
+
+  src.connect(hp);
+  hp.connect(bp);
+  bp.connect(g);
+  g.connect(drumBus);
+
+  // Small tonal body
+  const body = ctx.createOscillator();
+  body.type = "triangle";
+  body.frequency.setValueAtTime(210, at);
+  body.frequency.exponentialRampToValueAtTime(150, at + 0.09);
+
+  const bg = ctx.createGain();
+  bg.gain.setValueAtTime(0.0001, at);
+  bg.gain.exponentialRampToValueAtTime(0.10 * vel, at + 0.004);
+  bg.gain.exponentialRampToValueAtTime(0.0001, at + 0.10);
+
+  body.connect(bg);
+  bg.connect(drumBus);
+
+  trackNode(src);
+  trackNode(body);
+
+  src.start(at);
+  src.stop(at + 0.18);
+
+  body.start(at);
+  body.stop(at + 0.14);
+}
+
+function playClap(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+  const bursts = [0.0, 0.014, 0.028];
+
+  for(let i=0;i<bursts.length;i++){
+    const t = at + bursts[i];
+
+    const src = ctx.createBufferSource();
+    src.buffer = drumNoise || makeNoiseBuffer(ctx);
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.setValueAtTime(950, t);
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(2100, t);
+    bp.Q.setValueAtTime(0.8, t);
+
+    const g = ctx.createGain();
+    const peak = (i == 0 ? 0.32 : 0.22) * vel;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+
+    src.connect(hp);
+    hp.connect(bp);
+    bp.connect(g);
+    g.connect(drumBus);
+
+    trackNode(src);
+    src.start(t);
+    src.stop(t + 0.10);
+  }
+}
+
+function playHatClosed(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+
+  const src = ctx.createBufferSource();
+  src.buffer = drumNoise || makeNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(7200, at);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(9400, at);
+  bp.Q.setValueAtTime(0.7, at);
+
+  const g = ctx.createGain();
+  const peak = 0.18 * vel;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.045);
+
+  src.connect(hp);
+  hp.connect(bp);
+  bp.connect(g);
+  g.connect(drumBus);
+
+  trackNode(src);
+  src.start(at);
+  src.stop(at + 0.08);
+}
+
+function playHatOpen(at, vel=1){
+  if(!audioCtx || !drumBus) return;
+  lastAudioActivityAt = performance.now();
+
+  const ctx = audioCtx;
+
+  const src = ctx.createBufferSource();
+  src.buffer = drumNoise || makeNoiseBuffer(ctx);
+
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(6000, at);
+
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(8600, at);
+  bp.Q.setValueAtTime(0.6, at);
+
+  const g = ctx.createGain();
+  const peak = 0.16 * vel;
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.exponentialRampToValueAtTime(peak, at + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + 0.20);
+
+  src.connect(hp);
+  hp.connect(bp);
+  bp.connect(g);
+  g.connect(drumBus);
+
+  trackNode(src);
+  src.start(at);
+  src.stop(at + 0.26);
+}
+
+function playDrumsAtStep(s){
+  if(drumsMuted) return;
+  if(!audioCtx || !drumBus) return;
+
+  const pat = DRUM_PATTERNS[drumStyle] || DRUM_PATTERNS.techhouse;
+  const stepDur = stepDurationSec();
+
+  // Subtle shuffle for Tech-House hats only (keeps the playhead/grid exact)
+  const swing = (drumStyle === "techhouse") ? 0.08 : 0.0;
+  const offs = ((drumStyle === "techhouse") && (s % 2 === 1)) ? (stepDur * swing) : 0;
+
+  const t = audioCtx.currentTime + 0.002 + offs;
+
+  const k = (pat.kick && pat.kick[s]) ? pat.kick[s] : 0;
+  if(k > 0) playKick(t, k);
+
+  if(drumStyle === "techhouse"){
+    const c = (pat.clap && pat.clap[s]) ? pat.clap[s] : 0;
+    if(c > 0) playClap(t, c);
+  }else{
+    const sn = (pat.snare && pat.snare[s]) ? pat.snare[s] : 0;
+    if(sn > 0) playSnare(t, sn);
+  }
+
+  const hc = (pat.hatC && pat.hatC[s]) ? pat.hatC[s] : 0;
+  if(hc > 0) playHatClosed(t, hc);
+
+  const ho = (pat.hatO && pat.hatO[s]) ? pat.hatO[s] : 0;
+  if(ho > 0) playHatOpen(t, ho);
+}
+
+function makeInstrumentBuses(ctx, masterOut){
+  const pianoIR   = makeHallImpulse(ctx, 1.60, 2.4);
+  const trumpetIR = makeHallImpulse(ctx, 0.70, 2.0);
+  const stringsIR = makeHallImpulse(ctx, 1.30, 2.5);
+  const synthIR   = makeHallImpulse(ctx, 0.45, 2.0);
+
+  function buildBus(ir, dryAmt, wetAmt){
+    const input = ctx.createGain();
+
+    const dry = ctx.createGain();
+    dry.gain.value = dryAmt;
+
+    const wet = ctx.createGain();
+    wet.gain.value = wetAmt;
+
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+
+    input.connect(dry);
+    input.connect(conv);
+    conv.connect(wet);
+
+    dry.connect(masterOut);
+    wet.connect(masterOut);
+
+    return { input };
+  }
+
+  return {
+    piano:   buildBus(pianoIR,   0.72, 0.46),
+    trumpet: buildBus(trumpetIR, 0.90, 0.12),
+    strings: buildBus(stringsIR, 0.76, 0.32),
+    synth:   buildBus(synthIR,   0.92, 0.12)
+  };
+}
+
+function getAudio(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    
+    window.audioCtx = audioCtx;
+masterGain = audioCtx.createGain();
+    
+    window.masterGain = masterGain;
+masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
+
+    masterComp = audioCtx.createDynamicsCompressor();
+    masterComp.threshold.setValueAtTime(-18, audioCtx.currentTime);
+    masterComp.knee.setValueAtTime(18, audioCtx.currentTime);
+    masterComp.ratio.setValueAtTime(3.4, audioCtx.currentTime);
+    masterComp.attack.setValueAtTime(0.004, audioCtx.currentTime);
+    masterComp.release.setValueAtTime(0.12, audioCtx.currentTime);
+
+    masterGain.connect(masterComp);
+    masterComp.connect(audioCtx.destination);
+
+    bus = makeInstrumentBuses(audioCtx, masterGain);
+
+    // Drums: dedicated bus (starts muted)
+    drumBus = audioCtx.createGain();
+    drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.92, audioCtx.currentTime);
+    drumBus.connect(masterGain);
+
+    // Shared noise buffer for hats/snare/claps
+    drumNoise = makeNoiseBuffer(audioCtx);
+
+    warmUpAudio(2);
+  }
+  ensureAudioRunning();
+}
+
+function warmUpAudio(pulses = 2){
+  if(!audioCtx || !masterGain) return;
+  const now = audioCtx.currentTime;
+
+  for(let i=0;i<pulses;i++){
+    const t0 = now + i * 0.03;
+
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+
+    g.gain.setValueAtTime(0.0004, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(220, t0);
+
+    osc.connect(g);
+    g.connect(masterGain);
+
+    trackNode(osc);
+    osc.start(t0);
+    osc.stop(t0 + 0.03);
+  }
+}
+
+function hardResetAudioEngine(){
+  try{
+    if(audioCtx){
+      try { audioCtx.close(); } catch(e){}
+    }
+  }catch(e){}
+
+  audioCtx = null;
+  masterGain = null;
+  masterComp = null;
+  bus = null;
+  drumBus = null;
+  drumNoise = null;
+
+  for(const n of Array.from(liveNodes)){
+    try { n.stop(0); } catch(e){}
+    liveNodes.delete(n);
+  }
+
+  getAudio();
+  warmUpAudio(4);
+}
+
+function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
+
+async function ensureAudioReady(){
+  getAudio();
+
+  const nowMs = performance.now();
+  const audioIdleMs = (lastAudioActivityAt == null) ? Infinity : (nowMs - lastAudioActivityAt);
+
+  if(audioIdleMs > 25000){
+    hardResetAudioEngine();
+  }
+
+  if(!audioCtx) return;
+
+  try{
+    if(audioCtx.state !== "running"){
+      const p = audioCtx.resume();
+      await p;
+    }
+  }catch(e){}
+
+  const t1 = audioCtx.currentTime;
+  await sleep(40);
+  const t2 = audioCtx.currentTime;
+
+  if(!(t2 > t1 + 0.0005)){
+    hardResetAudioEngine();
+    if(audioCtx){
+      try{
+        if(audioCtx.state !== "running") await audioCtx.resume();
+      }catch(e){}
+      warmUpAudio(4);
+    }
+  }else{
+    warmUpAudio(2);
+  }
+}
+
+function stopAllAudioNow(){
+  if(!audioCtx || !masterGain) return;
+
+  for (const n of Array.from(liveNodes)){
+    try { n.stop(0); } catch(e) {}
+    liveNodes.delete(n);
+  }
+
+  const now = audioCtx.currentTime;
+  masterGain.gain.cancelScheduledValues(now);
+  masterGain.gain.setValueAtTime(masterGain.gain.value, now);
+  masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
+  masterGain.gain.setValueAtTime(1, now + 0.03);
+}
+
+function stepDurationSec(){
+  return (60 / tempo) / 4;
+}
+
+/* -------------------- INSTRUMENT UI -------------------- */
+function setInstrument(name){
+  instrument = name;
+
+  const all = [btnPiano, btnTrumpet, btnStrings, btnSynth];
+  all.forEach(b => { b.classList.remove("selected","notSelected"); });
+
+  const map = { piano: btnPiano, trumpet: btnTrumpet, strings: btnStrings, synth: btnSynth };
+  const selected = map[name];
+  selected.classList.add("selected");
+  all.forEach(b => { if(b !== selected) b.classList.add("notSelected"); });
+}
+
+/* -------------------- TOOLS UI -------------------- */
+function buildTools(){
+  if(!toolsListEl) return;
+  toolsListEl.innerHTML = "";
+
+  toolSteps.forEach((t) => {
+    const tool = document.createElement("div");
+    tool.className = "tool";
+
+    const isLocked = (!isLoggedIn) && LOCKED_STEPS.has(t.steps);
+    if(isLocked){
+      tool.classList.add("locked");
+      tool.setAttribute("aria-disabled","true");
+    }
+
+    const sym = document.createElement("div");
+    sym.className = "toolSymbol " + (t.symClass || "");
+    sym.textContent = t.symbol;
+
+    const barWrap = document.createElement("div");
+    barWrap.className = "toolBarWrap";
+
+    const bar = document.createElement("div");
+    bar.className = "toolBar";
+    bar.style.setProperty("--fill", (t.steps / 16).toFixed(4));
+    bar.style.setProperty("--divs", String(t.divs));
+
+    const fill = document.createElement("div");
+    fill.className = "toolBarFill";
+
+    const divs = document.createElement("div");
+    divs.className = "toolBarDivs";
+    if(t.steps === 16) divs.style.display = "none";
+
+    bar.appendChild(fill);
+    bar.appendChild(divs);
+
+    const lab = document.createElement("div");
+    lab.className = "toolLabel";
+    lab.textContent = t.label;
+    if(t.steps === 16) lab.classList.add("comicWhole");
+
+    barWrap.appendChild(bar);
+    barWrap.appendChild(lab);
+
+    tool.appendChild(sym);
+    tool.appendChild(barWrap);
+
+        if(isLocked){
+      bindLockedNudge(tool);
+    }
+    tool.onclick = () => {
+      if(isLocked){
+        showLockNudge();
+        hideLockNudgeSoon(900);
+        return;
+      }
+      selectedSteps = t.steps;
+      toolsListEl.querySelectorAll(".tool").forEach(x => x.classList.remove("selected"));
+      tool.classList.add("selected");
+    };
+
+    if(t.steps === selectedSteps) tool.classList.add("selected");
+    toolsListEl.appendChild(tool);
+  });
+}
+
+/* -------------------- GRID -------------------- */
+let noteLayerEls = [];
+let nextId = 1;
+
+function buildGrid(){
+  sequencerEl.innerHTML = "";
+  noteLayerEls = [];
+
+  for(let r=0;r<rows;r++){
+    const wrap = document.createElement("div");
+    wrap.className = "rowWrap";
+    wrap.style.width = `${cols * CELL + (cols-1) * GAP}px`;
+
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+
+    const layer = document.createElement("div");
+    layer.className = "noteLayer";
+
+    for(let c=0;c<cols;c++){
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.onmousedown = (e) => e.preventDefault();
+      cell.onclick = () => onCellClick(r, c);
+      grid.appendChild(cell);
+    }
+
+    wrap.appendChild(grid);
+    wrap.appendChild(layer);
+    sequencerEl.appendChild(wrap);
+
+    noteLayerEls.push(layer);
+  }
+
+  redrawAllNotes();
+}
+
+function canPlace(r, start, len){
+  if(start < 0) return false;
+  if(start + len > cols) return false;
+  for(let c=start; c<start+len; c++){
+    if(occ[r][c] !== null) return false;
+  }
+  return true;
+}
+
+function placeNote(r, start, len){
+  const id = nextId++;
+  notesByRow[r].push({ id, start, len });
+  for(let c=start; c<start+len; c++) occ[r][c] = id;
+}
+
+function deleteNoteById(r, id){
+  const idx = notesByRow[r].findIndex(n => n.id === id);
+  if(idx === -1) return;
+  const { start, len } = notesByRow[r][idx];
+  for(let c=start; c<start+len; c++) occ[r][c] = null;
+  notesByRow[r].splice(idx, 1);
+}
+
+function overlappingNoteIds(r, start, len){
+  const set = new Set();
+  for(let c=start; c<start+len; c++){
+    const id = occ[r][c];
+    if(id !== null) set.add(id);
+  }
+  return set;
+}
+
+function smartPlaceNote(r, clickCol, len){
+  let baseStart = Math.min(clickCol, cols - len);
+  baseStart = Math.max(0, baseStart);
+
+  for(let start = baseStart; start >= 0; start--){
+    if(start + len > cols) continue;
+    if(canPlace(r, start, len)){
+      placeNote(r, start, len);
+      return;
+    }
+  }
+
+  const overlaps = overlappingNoteIds(r, baseStart, len);
+  overlaps.forEach(id => deleteNoteById(r, id));
+  placeNote(r, baseStart, len);
+}
+
+function onCellClick(r, c){
+  const existing = occ[r][c];
+  if(existing !== null){
+    pushUndo();
+    deleteNoteById(r, existing);
+    redrawRowNotes(r);
+    return;
+  }
+
+  pushUndo();
+  smartPlaceNote(r, c, selectedSteps);
+  redrawRowNotes(r);
+}
+
+function redrawAllNotes(){
+  for(let r=0;r<rows;r++) redrawRowNotes(r);
+}
+
+function redrawRowNotes(r){
+  const layer = noteLayerEls[r];
+  layer.innerHTML = "";
+
+  for(const note of notesByRow[r]){
+    const block = document.createElement("div");
+    block.className = "noteBlock";
+    block.dataset.id = String(note.id);
+
+    const left = note.start * (CELL + GAP);
+    const width = note.len * CELL + (note.len - 1) * GAP;
+
+    block.style.left = `${left}px`;
+    block.style.top = `0px`;
+    block.style.width = `${width}px`;
+    block.style.background = rowColors[r];
+
+    block.onmousedown = (e) => e.preventDefault();
+
+    block.onclick = (e) => {
+      e.stopPropagation();
+      pushUndo();
+      deleteNoteById(r, note.id);
+      redrawRowNotes(r);
+    };
+
+    layer.appendChild(block);
+  }
+}
+
+/* -------------------- PLAYHEAD -------------------- */
+function setPlayheadVisible(on){ playheadEl.style.display = on ? "block" : "none"; }
+function setPlayheadPlaying(isPlaying){ playheadEl.classList.toggle("playing", isPlaying); }
+function movePlayheadToStep(s){ playheadEl.style.left = `${s * (CELL + GAP)}px`; }
+function resetPlayheadInstant(){
+  playheadEl.style.transition = "none";
+  movePlayheadToStep(0);
+  void playheadEl.offsetWidth;
+  playheadEl.style.transition = "left 70ms linear";
+}
+
+/* -------------------- ENVELOPE -------------------- */
+function scheduleEnvelope(g, now, hold, attack, peak, sustain, release, decay1){
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + attack);
+  if(decay1 > 0){
+    g.gain.exponentialRampToValueAtTime(sustain, now + attack + decay1);
+  }else{
+    g.gain.setValueAtTime(sustain, now + attack);
+  }
+  g.gain.setValueAtTime(sustain, now + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + hold + release);
+}
+
+/* -------------------- INSTRUMENTS -------------------- */
+function playPiano(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+
+  const release = Math.min(0.32, Math.max(0.16, hold * 0.12));
+  const stopAt = now + hold + release + 0.20;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.012, 0.70, 0.62, release, 0.03);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.piano, now);
+  env.connect(level);
+
+  const partials = [
+    { mult: 1, amp: 0.34 },
+    { mult: 2, amp: 0.24 },
+    { mult: 3, amp: 0.18 },
+    { mult: 4, amp: 0.13 },
+    { mult: 5, amp: 0.09 },
+    { mult: 6, amp: 0.06 },
+    { mult: 8, amp: 0.04 }
+  ];
+
+  const mix = audioCtx.createGain();
+  mix.gain.setValueAtTime(1.0, now);
+
+  const oscs = [];
+  for(const p of partials){
+    const o = audioCtx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(freq * p.mult, now);
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(p.amp, now);
+
+    o.connect(g);
+    g.connect(mix);
+
+    oscs.push(o);
+  }
+
+  const chiffBuf = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.04), audioCtx.sampleRate);
+  const data = chiffBuf.getChannelData(0);
+  for(let i=0;i<data.length;i++){
+    const t = i / data.length;
+    data[i] = (Math.random()*2-1) * Math.pow(1 - t, 5);
+  }
+  const chiff = audioCtx.createBufferSource();
+  chiff.buffer = chiffBuf;
+
+  const chiffBP = audioCtx.createBiquadFilter();
+  chiffBP.type = "bandpass";
+  chiffBP.frequency.setValueAtTime(2400, now);
+  chiffBP.Q.setValueAtTime(0.9, now);
+
+  const chiffG = audioCtx.createGain();
+  chiffG.gain.setValueAtTime(0.0001, now);
+  chiffG.gain.exponentialRampToValueAtTime(0.10, now + 0.005);
+  chiffG.gain.exponentialRampToValueAtTime(0.0001, now + 0.04);
+
+  chiff.connect(chiffBP);
+  chiffBP.connect(chiffG);
+  chiffG.connect(env);
+
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(80, now);
+  hp.Q.setValueAtTime(0.7, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(4200, now);
+  lp.Q.setValueAtTime(0.6, now);
+
+  mix.connect(hp);
+  hp.connect(lp);
+  lp.connect(env);
+
+  level.connect(bus.piano.input);
+
+  for(const o of oscs) trackNode(o);
+  trackNode(chiff);
+
+  for(const o of oscs) o.start(now);
+  chiff.start(now);
+
+  for(const o of oscs) o.stop(stopAt);
+  chiff.stop(now + 0.05);
+}
+
+function playTrumpet(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  const release = Math.min(0.16, Math.max(0.09, hold * 0.08));
+  const stopAt = now + hold + release + 0.10;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.016, 0.36, 0.24, release, 0.07);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.trumpet, now);
+  env.connect(level);
+
+  const o1 = audioCtx.createOscillator();
+  const o2 = audioCtx.createOscillator();
+  o1.type = "sawtooth";
+  o2.type = "sawtooth";
+  o1.frequency.setValueAtTime(freq, now);
+  o2.frequency.setValueAtTime(freq, now);
+  o2.detune.setValueAtTime(+8, now);
+
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(freq * 2.5, now);
+  bp.Q.setValueAtTime(0.95, now);
+
+  const lfo = audioCtx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(5.4, now);
+  const lfoG = audioCtx.createGain();
+  lfoG.gain.setValueAtTime(9, now);
+  lfo.connect(lfoG);
+  lfoG.connect(o1.detune);
+  lfoG.connect(o2.detune);
+
+  const g1 = audioCtx.createGain();
+  const g2 = audioCtx.createGain();
+  g1.gain.setValueAtTime(0.60, now);
+  g2.gain.setValueAtTime(0.55, now);
+
+  o1.connect(g1); o2.connect(g2);
+  g1.connect(bp); g2.connect(bp);
+  bp.connect(env);
+
+  level.connect(bus.trumpet.input);
+
+  trackNode(o1); trackNode(o2); trackNode(lfo);
+
+  o1.start(now); o2.start(now); lfo.start(now);
+  o1.stop(stopAt); o2.stop(stopAt); lfo.stop(stopAt);
+}
+
+function playStrings(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+
+  const padHold = Math.max(hold, 0.22);
+  const release = Math.min(0.55, Math.max(0.22, padHold * 0.35));
+  const stopAt = now + padHold + release + 0.18;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, padHold, 0.045, 0.38, 0.26, release, 0.18);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.strings, now);
+  env.connect(level);
+
+  const s1 = audioCtx.createOscillator();
+  const s2 = audioCtx.createOscillator();
+  const s3 = audioCtx.createOscillator();
+  const sub = audioCtx.createOscillator();
+
+  s1.type = "sawtooth";
+  s2.type = "sawtooth";
+  s3.type = "sawtooth";
+  sub.type = "triangle";
+
+  s1.frequency.setValueAtTime(freq, now);
+  s2.frequency.setValueAtTime(freq, now);
+  s3.frequency.setValueAtTime(freq, now);
+  sub.frequency.setValueAtTime(freq * 0.5, now);
+
+  s2.detune.setValueAtTime(+9, now);
+  s3.detune.setValueAtTime(-11, now);
+
+  const lfo = audioCtx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(0.35, now);
+  const lfoG = audioCtx.createGain();
+  lfoG.gain.setValueAtTime(10, now);
+  lfo.connect(lfoG);
+  lfoG.connect(s1.detune);
+  lfoG.connect(s2.detune);
+  lfoG.connect(s3.detune);
+
+  const mix = audioCtx.createGain();
+  const g1 = audioCtx.createGain();
+  const g2 = audioCtx.createGain();
+  const g3 = audioCtx.createGain();
+  const gs = audioCtx.createGain();
+  g1.gain.setValueAtTime(0.30, now);
+  g2.gain.setValueAtTime(0.28, now);
+  g3.gain.setValueAtTime(0.28, now);
+  gs.gain.setValueAtTime(0.20, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(1900, now);
+  lp.frequency.exponentialRampToValueAtTime(980, now + 0.40);
+  lp.Q.setValueAtTime(0.85, now);
+
+  const shelf = audioCtx.createBiquadFilter();
+  shelf.type = "highshelf";
+  shelf.frequency.setValueAtTime(3400, now);
+  shelf.gain.setValueAtTime(2.0, now);
+
+  s1.connect(g1); s2.connect(g2); s3.connect(g3); sub.connect(gs);
+  g1.connect(mix); g2.connect(mix); g3.connect(mix); gs.connect(mix);
+
+  mix.connect(lp);
+  lp.connect(shelf);
+  shelf.connect(env);
+
+  level.connect(bus.strings.input);
+
+  trackNode(s1); trackNode(s2); trackNode(s3); trackNode(sub); trackNode(lfo);
+
+  s1.start(now); s2.start(now); s3.start(now); sub.start(now); lfo.start(now);
+  s1.stop(stopAt); s2.stop(stopAt); s3.stop(stopAt); sub.stop(stopAt); lfo.stop(stopAt);
+}
+
+function playSynth(freq, steps){
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  const release = Math.min(0.18, Math.max(0.10, hold * 0.08));
+  const stopAt = now + hold + release + 0.12;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.0025, 0.62, 0.22, release, 0.055);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.synth, now);
+  env.connect(level);
+
+  const osc = audioCtx.createOscillator();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(freq, now);
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(2600, now);
+  lp.frequency.exponentialRampToValueAtTime(1800, now + 0.10);
+  lp.Q.setValueAtTime(0.9, now);
+
+  osc.connect(lp);
+  lp.connect(env);
+  level.connect(bus.synth.input);
+
+  trackNode(osc);
+  osc.start(now);
+  osc.stop(stopAt);
+}
+
+function playInstrument(freq, steps){
+  lastAudioActivityAt = performance.now();
+
+  if(instrument === "piano")   return playPiano(freq, steps);
+  if(instrument === "trumpet") return playTrumpet(freq, steps);
+  if(instrument === "strings") return playStrings(freq, steps);
+  return playSynth(freq, steps);
+}
+
+/* -------------------- PLAYBACK -------------------- */
+async function play(){
+  await ensureAudioReady();
+
+  stop();
+
+  step = 0;
+  setPlayheadVisible(true);
+  setPlayheadPlaying(false);
+  resetPlayheadInstant();
+
+  const nowMs = performance.now();
+  const idleMs = (lastStopAt === null) ? Infinity : (nowMs - lastStopAt);
+  const audioIdleMs = (lastAudioActivityAt == null) ? Infinity : (nowMs - lastAudioActivityAt);
+
+  let delayMs = 80;
+  if(!hasEverStartedPlayback) delayMs = 500;
+  else if(Math.max(idleMs, audioIdleMs) > 25000) delayMs = 750;
+  else if(Math.max(idleMs, audioIdleMs) > 5000) delayMs = 500;
+
+  startTimeout = setTimeout(() => {
+    startTimeout = null;
+    startSequencer();
+    hasEverStartedPlayback = true;
+  }, delayMs);
+}
+
+
+
+function setBlockPulseVars(el){
+  // Make the "swell" feel like a consistent number of pixels for every block,
+  // instead of a constant scale factor (which exaggerates long blocks).
+  try{
+    const r = el.getBoundingClientRect();
+    const w = Math.max(1, r.width);
+    const h = Math.max(1, r.height);
+    const delta = 4; // px added per side
+    let sx = (w + delta*2) / w;
+    let sy = (h + delta*2) / h;
+    // Clamp so tiny blocks don't blow up
+    sx = Math.min(1.12, Math.max(1.0, sx));
+    sy = Math.min(1.18, Math.max(1.0, sy));
+    const sx2 = 1 + (sx - 1) * 0.35;
+    const sy2 = 1 + (sy - 1) * 0.35;
+    el.style.setProperty('--sx', sx.toFixed(4));
+    el.style.setProperty('--sy', sy.toFixed(4));
+    el.style.setProperty('--sx2', sx2.toFixed(4));
+    el.style.setProperty('--sy2', sy2.toFixed(4));
+  }catch(e){
+    // ignore
+  }
+}
+
+function startSequencer(){
+  let firstTick = true;
+
+  function tick(){
+    movePlayheadToStep(step);
+
+    if(firstTick){
+      setPlayheadPlaying(true);
+      firstTick = false;
+    }
+
+    for(let r=0;r<rows;r++){
+      const note = notesByRow[r].find(n => n.start === step);
+      if(note){
+        playInstrument(freqs[r], note.len);
+
+        const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
+        if(block){
+          setBlockPulseVars(block);
+          block.classList.remove("playing");
+          void block.offsetWidth;
+          block.classList.add("playing");
+        }
+      }
+    }
+
+    // Drums (runs in time with the sequencer)
+    playDrumsAtStep(step);
+
+    step = (step + 1) % cols;
+
+    if(step === 0 && pendingTempo !== null){
+      tempo = pendingTempo;
+      pendingTempo = null;
+      updateTempoBox();
+      setPlayheadWobbleFromTempo(tempo);
+      restartInterval(stepDurationSec() * 1000);
+    }
+  }
+
+  function restartInterval(intervalMs){
+    if(timer){
+      clearInterval(timer);
+      timer = null;
+    }
+    timer = setInterval(tick, intervalMs);
+  }
+
+  tick();
+  restartInterval(stepDurationSec() * 1000);
+}
+
+function stop(){
+  if(timer){
+    clearInterval(timer);
+    timer = null;
+  }
+  if(startTimeout){
+    clearTimeout(startTimeout);
+    startTimeout = null;
+  }
+  setPlayheadPlaying(false);
+  setPlayheadVisible(false);
+  stopAllAudioNow();
+  lastStopAt = performance.now();
+}
+
+/* -------------------- TEMPO -------------------- */
+function updateTempoBox(){
+  tempoBox.textContent = (pendingTempo !== null) ? pendingTempo : tempo;
+}
+function requestTempo(newTempo){
+  newTempo = Math.max(40, Math.min(200, newTempo));
+  if(timer){
+    pendingTempo = newTempo;
+    updateTempoBox();
+    setPlayheadWobbleFromTempo(pendingTempo);
+    return;
+  }
+  tempo = newTempo;
+  pendingTempo = null;
+  updateTempoBox();
+  setPlayheadWobbleFromTempo(tempo);
+}
+function tempoUp(){
+  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  requestTempo(base + 5);
+}
+function tempoDown(){
+  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  requestTempo(base - 5);
+}
+
+/* -------------------- CLEAR -------------------- */
+function clearGrid(){
+  pushUndo();
+  notesByRow = Array.from({length: rows}, () => []);
+  occ = Array.from({length: rows}, () => Array(cols).fill(null));
+  redrawAllNotes();
+}
+
+
+
+/* -------------------- CAMERA SCAN (simple heuristic) -------------------- */
+let camStream = null;
+let camCapturedDataUrl = null;
+
+const camModalEl = document.getElementById("camModal");
+const camVideoEl = document.getElementById("camVideo");
+const camCanvasEl = document.getElementById("camCanvas");
+const camPreviewEl = document.getElementById("camPreview");
+
+async function openCameraModal(){
+  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+  try{
+    if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
+      alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
+      return;
+    }
+
+    if(!window.isSecureContext){
+      alert("Camera access needs a secure context.\nOpen this page via https:// or http://localhost (not file://).\n\nCurrent URL:\n" + location.href);
+      return;
+    }
+
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      alert("Camera API not available in this browser.");
+      return;
+    }
+
+    camCapturedDataUrl = null;
+    camPreviewEl.style.display = "none";
+    camVideoEl.style.display = "block";
+
+    camModalEl.classList.add("show");
+    camModalEl.setAttribute("aria-hidden", "false");
+
+    const primaryConstraints = { video: { facingMode: { ideal: "environment" } }, audio: false };
+    const fallbackConstraints = { video: true, audio: false };
+
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia(primaryConstraints);
+    }catch(err){
+      // Some devices/browsers don't like facingMode constraints.
+      if(err && (err.name === "OverconstrainedError" || err.name === "NotFoundError")){
+        camStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      }else{
+        throw err;
+      }
+    }
+
+    camVideoEl.srcObject = camStream;
+    await camVideoEl.play().catch(()=>{});
+  }catch(e){
+    console.error("Camera open failed:", e);
+    const name = (e && e.name) ? e.name : "Error";
+    const msg  = (e && e.message) ? e.message : "";
+
+    if(name === "NotAllowedError" || name === "SecurityError"){
+      alert("Camera permission was blocked.\n\nFix:\n1) Click the padlock icon in the address bar\n2) Site settings -> Camera -> Allow\n3) Reload the page\n\n(" + name + (msg ? ": " + msg : "") + ")");
+      return;
+    }
+
+    if(name === "NotReadableError"){
+      alert("The camera may be in use by another app/tab (Zoom/Meet/etc).\nClose other apps using the camera, then try again.\n\n(" + name + (msg ? ": " + msg : "") + ")");
+      return;
+    }
+
+    alert("Could not open the camera.\n\n(" + name + (msg ? ": " + msg : "") + ")");
+  }
+}
+
+function closeCameraModal(){
+  camModalEl.classList.remove("show");
+  camModalEl.setAttribute("aria-hidden", "true");
+  try{
+    if(camStream){
+      camStream.getTracks().forEach(t => { try{ t.stop(); }catch(e){} });
+    }
+  }catch(e){}
+  camStream = null;
+}
+
+function camCapture(){
+  if(!camVideoEl || !camVideoEl.videoWidth) return;
+  const w = camVideoEl.videoWidth;
+  const h = camVideoEl.videoHeight;
+  camCanvasEl.width = w;
+  camCanvasEl.height = h;
+  const ctx = camCanvasEl.getContext("2d");
+  ctx.drawImage(camVideoEl, 0, 0, w, h);
+  camCapturedDataUrl = camCanvasEl.toDataURL("image/png");
+  camPreviewEl.src = camCapturedDataUrl;
+  camPreviewEl.style.display = "block";
+  camVideoEl.style.display = "none";
+}
+
+function camImport(){
+  if(!camCapturedDataUrl){
+    camCapture();
+    if(!camCapturedDataUrl) return;
+  }
+  importGridFromDataUrl(camCapturedDataUrl);
+  closeCameraModal();
+}
+
+function importGridFromDataUrl(dataUrl){
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    camCanvasEl.width = w;
+    camCanvasEl.height = h;
+    const ctx = camCanvasEl.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const { data } = ctx.getImageData(0, 0, w, h);
+
+    // centered crop to reduce background impact
+    const cropX = Math.floor(w * 0.10);
+    const cropY = Math.floor(h * 0.12);
+    const cropW = Math.floor(w * 0.80);
+    const cropH = Math.floor(h * 0.76);
+
+    function idx(px, py){ return (py * w + px) * 4; }
+
+    function sampleCell(r, c){
+      // sample a few points inside the cell
+      const x0 = cropX + Math.floor((c + 0.15) * cropW / cols);
+      const x1 = cropX + Math.floor((c + 0.85) * cropW / cols);
+      const y0 = cropY + Math.floor((r + 0.20) * cropH / rows);
+      const y1 = cropY + Math.floor((r + 0.80) * cropH / rows);
+
+      const pts = [
+        [x0, y0],
+        [x1, y0],
+        [Math.floor((x0+x1)/2), Math.floor((y0+y1)/2)],
+        [x0, y1],
+        [x1, y1]
+      ];
+
+      let satSum = 0;
+      let lumSum = 0;
+      for(const [x,y] of pts){
+        const i = idx(Math.max(0, Math.min(w-1, x)), Math.max(0, Math.min(h-1, y)));
+        const R = data[i]/255, G = data[i+1]/255, B = data[i+2]/255;
+        const maxv = Math.max(R,G,B);
+        const minv = Math.min(R,G,B);
+        const lum = (maxv + minv) * 0.5;
+        const sat = (maxv === 0) ? 0 : (maxv - minv) / maxv; // simple saturation proxy
+        satSum += sat;
+        lumSum += lum;
+      }
+      const sat = satSum / pts.length;
+      const lum = lumSum / pts.length;
+
+      // heuristic: colored if reasonably saturated and not near-white
+      return (sat > 0.18) && (lum < 0.92);
+    }
+
+    pushUndo();
+    notesByRow = Array.from({length: rows}, () => []);
+    occ = Array.from({length: rows}, () => Array(cols).fill(null));
+    nextId = 1;
+
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++){
+        if(sampleCell(r,c)){
+          if(canPlace(r, c, 1)) placeNote(r, c, 1);
+        }
+      }
+    }
+
+    redrawAllNotes();
+  };
+  img.src = dataUrl;
+}
+
+
+/* -------------------- INIT -------------------- */
+function init(){
+  fitToViewport();
+  buildGrid();
+  positionRobotLogo();
+  setInstrument("piano");
+  updateTempoBox();
+  setPlayheadWobbleFromTempo(tempo);
+
+  requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); });
+}
+init();
+
+
+/* -------------------- OPTION A EXPORTS --------------------
+   Keep inline onclick handlers working (play/stop/tempo/etc) while still providing
+   a structured, manager-friendly namespace at window.KidSequencer.
+   This is intentionally additive: UI + behaviour remain exactly the same.
+*/
+
+// Inline-handler globals (used by existing HTML attributes)
+window.play = play;
+window.stop = stop;
+window.clearGrid = clearGrid;
+window.undo = undo;
+window.openCameraModal = openCameraModal;
+window.closeCameraModal = closeCameraModal;
+window.camCapture = camCapture;
+window.camImport = camImport;
+window.tempoUp = tempoUp;
+window.tempoDown = tempoDown;
+window.logout = logout;
+
+// Organised namespace for maintenance/debugging (optional)
+window.KidSequencer = {
+  State: {
+    get tempo(){ return tempo; },
+    set tempo(v){ tempo = v; updateTempoBox(); setPlayheadWobbleFromTempo(tempo); },
+    get instrument(){ return instrument; },
+    set instrument(v){ setInstrument(v); },
+    get isLoggedIn(){ return isLoggedIn; }
+  },
+  UI: {
+    fitToViewport,
+    positionRobotLogo,
+    updateTempoBox,
+    updateLoginLinks,
+    applyLockState,
+    showLockNudge,
+    hideLockNudgeSoon,
+    setPlayheadWobbleFromTempo
+  },
+  Audio: {
+    ensureAudioRunning,
+    stopAllAudioNow,
+    primeAudioOnce,
+    setInstrument,
+    playInstrument
+  },
+  Sequencer: {
+    play,
+    stop,
+    clearGrid,
+    undo,
+    buildGrid,
+    buildTools,
+    redrawAllNotes
+  },
+  Camera: {
+    openCameraModal,
+    closeCameraModal,
+    camCapture,
+    camImport
+  },
+  Auth: { logout }
+};
+
+})();
+/* OPTION A ORGANISATION END */
+</script>
+<script type="module">
+  import { auth } from "./js/firebase-init.js";
+  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+  onAuthStateChanged(auth, (user) => {
+    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
+    console.log("Auth user:", user ? user.email : "none");
+  });
+</script>
+
+
+
+
+<script>
+(function(){
+  function initSeqVolumeFader(){
+    const area = document.getElementById('seqTrackArea');
+    const range = document.getElementById('seqVolRange');
+    const knob = document.getElementById('seqKnob');
+    const num  = document.getElementById('seqVolNum');
+    if(!area || !range || !knob || !num) return;
+
+    // --- Audio master volume hookup ---
+    function ensureAudio(){
+      // Your app lazily creates the AudioContext in getAudio()
+      if(typeof window.getAudio === 'function'){
+        const a = window.getAudio();
+        // Some browsers start suspended until user gesture
+        try{ if(a && a.state === 'suspended') a.resume(); }catch(_){}
+      }else{
+        // fallback: try the local getAudio if in same scope
+        try{ if(typeof getAudio === 'function') { const a = getAudio(); if(a && a.state === 'suspended') a.resume(); } }catch(_){}
+      }
+    }
+
+    function setMasterGainSmooth(g, snap){
+      // g: 0..1
+      // snap: boolean -> slightly faster settle
+      const target = Math.max(0, Math.min(1, g));
+      try{
+        // masterGain exists after getAudio()
+        const mg = (typeof window.masterGain !== 'undefined' ? window.masterGain : (typeof masterGain !== 'undefined' ? masterGain : null));
+        const ac = (typeof window.audioCtx !== 'undefined' ? window.audioCtx : (typeof audioCtx !== 'undefined' ? audioCtx : null));
+        if(mg && mg.gain && (ac && ac.currentTime != null)){
+          const t = ac.currentTime;
+          mg.gain.cancelScheduledValues(t);
+          // small glide so it feels smooth
+          const glide = snap ? 0.05 : 0.03;
+          mg.gain.setValueAtTime(mg.gain.value, t);
+          mg.gain.linearRampToValueAtTime(target, t + glide);
+        }
+      }catch(_){}
+    }
+
+    // Startup at 10
+    range.value = 10;
+    num.textContent = '10';
+    knob.setAttribute('aria-valuenow','10');
+
+    // Set audio volume at startup once audio exists
+    // (won't create audio until user interacts, but keeps state)
+    setMasterGainSmooth(1, true);
+
+    let capSize = 9;
+    let knobH = 16;
+    let topLimit = 0;
+    let bottomLimit = 0;
+
+    function recalcGeometry(){
+      const areaRect = area.getBoundingClientRect();
+      const cap = area.querySelector('.seqCap');
+      capSize = cap ? cap.getBoundingClientRect().height : 9;
+      knobH = knob.getBoundingClientRect().height || 16;
+
+      topLimit = capSize;
+      bottomLimit = areaRect.height - capSize;
+
+      if(bottomLimit < topLimit + knobH) bottomLimit = topLimit + knobH;
+    }
+
+    function valueToCenterY(v){
+      const travel = (bottomLimit - topLimit) - knobH;
+      const t = (10 - v) / 10;
+      return topLimit + (travel * t) + (knobH/2);
+    }
+
+    function centerYToValue(centerY){
+      const travel = (bottomLimit - topLimit) - knobH;
+      const yTop = centerY - knobH/2;
+      const t = (yTop - topLimit) / (travel || 1);
+      const v = 10 - (t * 10);
+      return Math.max(0, Math.min(10, v));
+    }
+
+    function setKnobCenterY(centerY){
+      knob.style.top = centerY + 'px';
+    }
+
+    function updateDisplayFromValue(v){
+      const vi = Math.round(v);
+      num.textContent = String(vi);
+      knob.setAttribute('aria-valuenow', String(vi));
+    }
+
+    function applyValue(v, snap){
+      const vSnap = snap ? Math.round(v) : v; // fader snaps only on release
+      range.value = String(vSnap);
+      updateDisplayFromValue(v);
+      setKnobCenterY(valueToCenterY(vSnap));
+
+      // Smooth master gain follows the (continuous) fader while dragging,
+      // but snaps to the same increment on release.
+      const vn = (snap ? Math.round(v) : v) / 10; // 0..1
+      // DJ-style fader taper: feels more natural near the bottom (log-ish curve)
+      // 0 -> hard mute, 1 -> unity gain
+      const gain = (vn <= 0) ? 0 : Math.pow(10, ((vn * 0) + (-60 * (1 - vn))) / 20);
+      setMasterGainSmooth(gain, snap);
+    }
+
+    function layoutFromRange(){
+      recalcGeometry();
+      const v = Number(range.value);
+      updateDisplayFromValue(v);
+      setKnobCenterY(valueToCenterY(v));
+    }
+
+    let dragging = false;
+
+    function pointerToCenterY(e){
+      const areaRect = area.getBoundingClientRect();
+      const y = e.clientY - areaRect.top;
+
+      const minCenter = topLimit + (knobH/2);
+      const maxCenter = (bottomLimit - knobH) + (knobH/2);
+
+      return Math.max(minCenter, Math.min(maxCenter, y));
+    }
+
+    function onPointerDown(e){
+      ensureAudio();
+      recalcGeometry();
+      dragging = true;
+      try{ area.setPointerCapture(e.pointerId); }catch(_){}
+
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, false);
+      e.preventDefault();
+    }
+
+    function onPointerMove(e){
+      if(!dragging) return;
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, false);
+      e.preventDefault();
+    }
+
+    function onPointerUp(e){
+      if(!dragging) return;
+      dragging = false;
+
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, true);
+
+      try{ area.releasePointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault();
+    }
+
+    area.addEventListener('pointerdown', onPointerDown);
+    area.addEventListener('pointermove', onPointerMove);
+    area.addEventListener('pointerup', onPointerUp);
+    area.addEventListener('pointercancel', onPointerUp);
+
+    window.addEventListener('resize', layoutFromRange);
+
+    requestAnimationFrame(layoutFromRange);
+    setTimeout(layoutFromRange, 50);
+  }
+
+  document.addEventListener('DOMContentLoaded', initSeqVolumeFader);
+})();
+</script>
+
+
+
+</body>
+</html>
+
