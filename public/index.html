@@ -1213,6 +1213,47 @@ body.loggedIn #toolsLoginArea{ display:none; }
         pointer-events:none;
       }
     }
+
+    /* Mobile landscape: keep 3-column layout, but slim note-length buttons */
+    @media (max-width: 920px) and (orientation: landscape){
+      :root{
+        --toolW: 128px;
+      }
+
+      #tools{ gap: 6px; }
+      #toolsList{ gap: 6px; }
+
+      .tool{
+        height: 44px;
+        padding: 4px 6px;
+        border-width: 3px;
+        border-radius: 12px;
+        box-shadow: 0 6px 0 rgba(0,0,0,0.06);
+      }
+
+      .toolSymbol{
+        width: 28px;
+        margin-right: 4px;
+        font-size: 22px;
+      }
+      .toolSymbol.big{ font-size: 26px; }
+      .toolSymbol.normal{ font-size: 24px; }
+      .toolSymbol.sixteenth{ font-size: 26px; }
+      .toolSymbol.eighth{ font-size: 22px; }
+
+      .toolBarWrap{ height: 22px; gap: 4px; }
+      .toolBar{
+        height: 16px;
+        border-width: 3px;
+        border-radius: 8px;
+      }
+
+      .toolLabel{
+        width: 40px;
+        font-size: 11px;
+        line-height: 1;
+      }
+    }
     /* ---------------------------------------------------------------------- */
 </style>
 </head>
