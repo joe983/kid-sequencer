@@ -1217,40 +1217,42 @@ body.loggedIn #toolsLoginArea{ display:none; }
     /* Mobile landscape: keep 3-column layout, but slim note-length buttons */
     @media (max-width: 920px) and (orientation: landscape){
       :root{
-        --toolW: 128px;
+        /* Mobile landscape: make the note-length buttons much narrower */
+        --toolW: 74px;
       }
 
       #tools{ gap: 6px; }
-      #toolsList{ gap: 6px; }
+      #toolsList{ gap: 5px; }
 
       .tool{
         height: 44px;
-        padding: 4px 6px;
+        padding: 3px 4px;
         border-width: 3px;
         border-radius: 12px;
         box-shadow: 0 6px 0 rgba(0,0,0,0.06);
       }
 
       .toolSymbol{
-        width: 28px;
-        margin-right: 4px;
-        font-size: 22px;
+        width: 18px;
+        margin-right: 2px;
+        font-size: 18px;
+        line-height: 1;
       }
-      .toolSymbol.big{ font-size: 26px; }
-      .toolSymbol.normal{ font-size: 24px; }
-      .toolSymbol.sixteenth{ font-size: 26px; }
-      .toolSymbol.eighth{ font-size: 22px; }
+      .toolSymbol.big{ font-size: 20px; }
+      .toolSymbol.normal{ font-size: 19px; }
+      .toolSymbol.sixteenth{ font-size: 20px; }
+      .toolSymbol.eighth{ font-size: 18px; }
 
-      .toolBarWrap{ height: 22px; gap: 4px; }
+      .toolBarWrap{ height: 20px; gap: 3px; }
       .toolBar{
-        height: 16px;
+        height: 14px;
         border-width: 3px;
         border-radius: 8px;
       }
 
       .toolLabel{
-        width: 40px;
-        font-size: 11px;
+        width: 26px;
+        font-size: 10px;
         line-height: 1;
       }
     }
@@ -1454,8 +1456,10 @@ const toolSteps = [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
   { steps: 2,  label: "8th",   symbol: "♪", divs: 8,  symClass:"eighth" },
   { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
-  { steps: 8,  label: "1/2",   symbol: "𝅗𝅥", divs: 2,  symClass:"normal" },
-  { steps: 16, label: "Whole", symbol: "𝅝", divs: 1,  symClass:"normal" }
+  /* NOTE: Some devices/fonts don't support the SMP musical note glyphs (𝅗𝅥, 𝅝),
+     which show as white squares. Use widely-supported BMP note glyphs instead. */
+  { steps: 8,  label: "1/2",   symbol: "♩", divs: 2,  symClass:"normal" },
+  { steps: 16, label: "Whole", symbol: "♩", divs: 1,  symClass:"normal" }
 ];
 
 let selectedSteps = 1;
