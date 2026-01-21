@@ -118,17 +118,18 @@
       pointer-events:none;
       z-index: 0;
       opacity: 1;
+      overflow: hidden;
     }
     #robotLogo .robotClip{
       width: 100%;
       height: 100%;
-      border-radius: 18px;
-      overflow: hidden;
+      border-radius: 50%;
       display:flex;
       align-items:center;
       justify-content:center;
     }
-    #robotLogo svg{ width:100%; height:100%; display:block; }
+    #robotLogo svg,
+    #robotLogo img{ width:100%; height:100%; display:block; object-fit: contain; }
 
 
     /* Everything except the title gets lifted together */
@@ -213,7 +214,9 @@
       display:flex;
       flex-direction:column;
       gap: 10px;
-      flex: 0 0 auto;
+      flex: 0 0 var(--toolW);
+      min-width: var(--toolW);
+      max-width: var(--toolW);
     }
 
     .tool{
@@ -775,56 +778,6 @@
       pointer-events: auto;
     }
 
-    /* -------------------- MOBILE LANDSCAPE TUNING -------------------- */
-    /* Goal: make note-length buttons MUCH narrower without losing legibility */
-    @media (max-width: 1000px) and (orientation: landscape){
-      /* Tools column (note-length buttons) */
-      #tools{ width: var(--toolW); }
-
-      /* Title box also shrinks with the tool column */
-      #titleBox{ height: 38px; border-width: 3px; border-radius: 14px; }
-      #titleBox .titleText{ font-size: 18px; }
-
-      /* Each note-length button */
-      .tool{
-        height: 40px;
-        padding: 4px 4px;
-        border-width: 3px;
-        border-radius: 14px;
-        min-width: 0;
-        overflow: hidden;
-      }
-
-      /* Note symbol (left) - keep visible, but tighter */
-      .toolSymbol{
-        width: 18px;
-        margin-right: 2px;
-        font-size: 24px;
-      }
-
-      /* Middle bar: make it MUCH shorter (about 60% shorter than before) */
-      .toolBarWrap{
-        flex: 0 0 20px;
-        height: 22px;
-        gap: 2px;
-      }
-      .toolBar{
-        flex: 0 0 20px;
-        width: 20px;
-        height: 18px;
-        border-width: 3px;
-        border-radius: 8px;
-      }
-
-      /* Fraction label (right) - smaller and tighter */
-      .toolLabel{
-        width: 16px;
-        font-size: 10px;
-        line-height: 1;
-        text-align: right;
-      }
-    }
-
     .loginBtn{
       width: 120px;
       height: 54px;
@@ -1134,6 +1087,43 @@ body.loggedIn #toolsLoginArea{ display:none; }
       letter-spacing: 0.3px;
       user-select:none;
       z-index: 50;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Mobile LANDSCAPE: make the note-length buttons ~50% thinner.
+       (We shrink the tools column AND the internal pieces so content doesn't
+       force the button to stay wide.)
+    */
+    @media (max-width: 920px) and (orientation: landscape){
+      :root{
+        --toolW: 80px; /* half-ish of the desktop min (160px) */
+      }
+
+      #titleBox{ width: calc(var(--toolW) * 0.7); }
+
+      #tools{ gap: 6px; }
+      #toolsList{ gap: 6px; }
+
+      .tool{
+        height: 44px;
+        padding: 4px 6px;
+        border-width: 3px;
+        border-radius: 12px;
+        box-shadow: 0 6px 0 rgba(0,0,0,0.06);
+        min-width: 0;
+      }
+
+      .toolSymbol{
+        width: 20px;
+        margin-right: 3px;
+        font-size: 22px;
+      }
+
+      /* The middle “note length bar”: keep it SHORT (not stretchy) */
+      .toolBarWrap{ flex: 0 0 26px; height: 22px; gap: 4px; }
+      .toolBar{ flex: 0 0 22px; width: 22px; height: 16px; border-width: 3px; border-radius: 8px; }
+
+      .toolLabel{ width: 22px; font-size: 10px; line-height: 1; }
     }
 </style>
 </head>
@@ -1633,6 +1623,8 @@ function fitToViewport(){
   const vw = Math.max(320, window.innerWidth);
   const vh = Math.max(480, window.innerHeight);
 
+  const isMobileLandscape = window.matchMedia("(max-width: 920px) and (orientation: landscape)").matches;
+
   const headerH = 92;
   const controlsH = 70;
   const vMargins = 26;
@@ -1641,13 +1633,10 @@ function fitToViewport(){
   let toolW = Math.min(220, Math.max(160, Math.floor(vw * 0.30)));
   let rightW = Math.min(120, Math.max(100, Math.floor(vw * 0.18)));
 
-  // Mobile-landscape: make the note-length column MUCH narrower.
-  // (Important: this must happen in JS because JS sets --toolW dynamically.)
-  const isLandscape = vw > vh * 1.05;
-  const mobileLandscape = isLandscape && vw < 1000;
-  if(mobileLandscape){
-    toolW = 70;                 // narrow tools column
-    rightW = Math.min(rightW, 104);
+  // In mobile landscape, keep the 3-column layout but make the left note-length
+  // column genuinely thinner (about 50% of the usual minimum).
+  if(isMobileLandscape){
+    toolW = 80;
   }
 
   const outerPadding = 28;
@@ -1662,7 +1651,7 @@ function fitToViewport(){
   let cell = Math.min(maxCellByWidth, maxCellByHeight);
   cell = Math.max(26, Math.min(56, cell));
 
-  if(cell <= 34){
+  if(cell <= 34 && !isMobileLandscape){
     toolW = Math.max(150, Math.floor(vw * 0.28));
     rightW = Math.max(96, Math.floor(vw * 0.16));
   }
