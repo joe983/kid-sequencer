@@ -1085,68 +1085,58 @@ body.loggedIn #toolsLoginArea{ display:none; }
       user-select:none;
       z-index: 50;
     }
-</style>
 
-<!-- Mobile landscape overrides to keep note-length button contents inside the (now narrow) buttons -->
-<style>
-  @media (max-width: 920px) and (orientation: landscape){
-    /* Slightly tighter vertical spacing between buttons */
-    #toolsList{ gap: 6px !important; }
-    #tools{ gap: 6px !important; }
+    /* Mobile landscape tweaks: tighter vertical spacing for the note-length buttons list */
+    @media (max-width: 980px) and (orientation: landscape){
+      #tools{ gap: 6px; }
+      #toolsList{ gap: 6px; }
+      /* The tool column gets narrower in landscape; shrink + tighten the 3 items so they STAY INSIDE the button */
+      .tool{
+        padding: 6px 6px;
+        height: 50px;
+        min-width: 0;
+        overflow: hidden;
+      }
 
-    /* Keep the button width as-is; make the inside items smaller + closer so they fit */
-    .tool{
-      padding: 6px 6px !important;
-      height: 50px !important;
-      overflow: hidden;
+      /* 1) Music symbol (left) */
+      .toolSymbol{
+        flex: 0 0 24px;
+        width: 24px;
+        margin-right: 4px;
+        font-size: 18px;
+        min-width: 0;
+      }
+      .toolSymbol.big{ font-size: 22px; }
+      .toolSymbol.normal{ font-size: 19px; }
+      .toolSymbol.sixteenth{ font-size: 21px; }
+      .toolSymbol.eighth{ font-size: 18px; }
+
+      /* 2) Note-length bar (middle) */
+      .toolBarWrap{
+        flex: 1 1 auto;
+        height: 22px;
+        gap: 4px;
+        min-width: 0;
+      }
+      .toolBar{
+        height: 18px;
+        border-width: 3px;
+        border-radius: 8px;
+        min-width: 0;
+      }
+      .toolBarDivs{ opacity: 0.20; }
+
+      /* 3) Fraction/label (right) */
+      .toolLabel{
+        flex: 0 0 28px;
+        width: 28px;
+        font-size: 11px;
+        line-height: 1;
+        min-width: 0;
+        white-space: nowrap;
+      }
+      .toolLabel.comicWhole{ font-size: 10px; }
     }
-
-    .toolSymbol{
-      width: 22px !important;
-      margin-right: 4px !important;
-      font-size: 16px !important;
-      flex: 0 0 auto;
-    }
-
-    .toolBarWrap{
-      gap: 4px !important;
-      min-width: 0;
-      flex: 1 1 auto;
-      align-items: center;
-    }
-
-    .toolBar{
-      flex: 1 1 auto;
-      min-width: 0;
-      height: 18px !important;
-      border-width: 3px !important;
-      border-radius: 8px !important;
-    }
-
-    .toolBarDivs{
-      opacity: 0.34 !important;
-      background-image: repeating-linear-gradient(
-        to right,
-        rgba(0,0,0,0) 0,
-        rgba(0,0,0,0) calc((100% / var(--divs)) - 1px),
-        rgba(0,0,0,0.95) calc((100% / var(--divs)) - 1px),
-        rgba(0,0,0,0.95) calc(100% / var(--divs))
-      ) !important;
-    }
-
-    .toolLabel{
-      width: 28px !important;
-      min-width: 0;
-      font-size: 11px !important;
-      line-height: 1 !important;
-      text-align: right;
-      flex: 0 0 auto;
-    }
-
-    .toolLabel.comicWhole{
-      font-size: 10px !important;
-    }
-  }
 </style>
 </head>
 
@@ -1653,6 +1643,14 @@ function fitToViewport(){
   let toolW = Math.min(220, Math.max(160, Math.floor(vw * 0.30)));
   let rightW = Math.min(120, Math.max(100, Math.floor(vw * 0.18)));
 
+  // Mobile landscape: make the left note-length buttons column MUCH thinner.
+  // (CSS alone can't win here because toolW is set by JS.)
+  const isMobileLandscape = (vw > vh) && (vw <= 980);
+  if(isMobileLandscape){
+    toolW = Math.max(80, Math.round(toolW * 0.50));
+    rightW = Math.max(92, Math.round(rightW * 0.95));
+  }
+
   const outerPadding = 28;
   const gaps = 14 * 2;
   const maxCellByWidth = Math.floor(
@@ -1666,8 +1664,11 @@ function fitToViewport(){
   cell = Math.max(26, Math.min(56, cell));
 
   if(cell <= 34){
-    toolW = Math.max(150, Math.floor(vw * 0.28));
-    rightW = Math.max(96, Math.floor(vw * 0.16));
+    // If we're in mobile-landscape "thin tools" mode, don't expand the tools column again.
+    if(!isMobileLandscape){
+      toolW = Math.max(150, Math.floor(vw * 0.28));
+      rightW = Math.max(96, Math.floor(vw * 0.16));
+    }
   }
 
   document.documentElement.style.setProperty("--toolW", toolW + "px");
