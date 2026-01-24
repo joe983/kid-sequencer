@@ -1328,7 +1328,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
   }
 
   /* --- Requested mobile-landscape layout tweaks (Jan 2026) --- */
-  :root{ --topH: 29px; }
+  :root{ --topH: 29px; --rightW: 110px; --cell: 34px; --gap: clamp(3px, calc((100vw - var(--rightW) - 50px - (16 * var(--cell))) / 15), 14px); }
 
   /* Squash-wiggle for locked/greyed controls (mobile) */
   @keyframes squashWiggle{
@@ -1366,6 +1366,15 @@ body.loggedIn #toolsLoginArea{ display:none; }
     box-sizing: border-box !important; /* include border in square */
     min-width: 0 !important;
   }
+
+  /* Force the 5 top control buttons to be true squares (border included) */
+  #controls button.bigBtn.iconBtn{
+    width: var(--topH) !important;
+    height: var(--topH) !important;
+    padding: 0 !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
   .icon svg{
     width: calc(var(--topH) * 0.70) !important;
     height: calc(var(--topH) * 0.70) !important;
@@ -1373,7 +1382,10 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
   /* Mobile auth group sizing: login aligns with button centers; pill slightly smaller */
   #mobileAuthGroup{ gap: 0 !important; }
-  #mobileAuthGroup #topAuthBtn{ margin-left: 8px !important; }
+  /* Top-right placement on mobile landscape */
+  #mobileAuthGroup{ left:auto !important; right: 10px !important; top: 8px !important; }
+
+  #mobileAuthGroup #topAuthBtn{ margin-left: 10px !important; }
   #mobileAuthGroup .topAuthBtn{
     height: var(--topH) !important;
     padding: 0 10px !important;
@@ -1398,6 +1410,8 @@ body.loggedIn #toolsLoginArea{ display:none; }
     gap: 10px !important;
   }
   #rightCol{
+    flex: 0 0 var(--rightW) !important;
+    width: var(--rightW) !important;
     display:flex !important;
     flex-direction: column !important;
     align-items: flex-end !important;
@@ -1447,6 +1461,8 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
   /* Beat selector: remove its box and move it closer to the grid; shrink the outer shell */
   #sequencerShell{
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
     padding: 6px !important;
     border-radius: 16px !important;
   }
@@ -1919,11 +1935,18 @@ const loginCtaWrapEl = document.getElementById("loginCtaWrap");
 
 let lockNudgeHideT = null;
 function showLockNudge(){
-  if(!loginCtaWrapEl) return;
+  // Desktop: pulse the CTA. Mobile-landscape: wiggle the top-right Login button.
   clearTimeout(lockNudgeHideT);
+  if(inMobile){
+    var authBtn = document.getElementById('topAuthBtn');
+    if(authBtn) nudge(authBtn);
+    return;
+  }
+  if(!loginCtaWrapEl) return;
   loginCtaWrapEl.classList.add("pulsing");
 }
 function hideLockNudgeSoon(ms=0){
+  if(inMobile) return;
   if(!loginCtaWrapEl) return;
   clearTimeout(lockNudgeHideT);
   lockNudgeHideT = setTimeout(() => {
@@ -3872,14 +3895,25 @@ window.KidSequencer = {
 
   function lockedClick(e){
     if(!inMobile) return;
-    // animate any greyed/locked control instead of doing nothing
+
+    // Catch taps on locked/greyed controls and give feedback + nudge login.
     var locked = e.target && (e.target.closest ? e.target.closest('.locked') : null);
     if(!locked) return;
+
     // If it's the login/logout button, let it work normally
     if(locked.id === 'topAuthBtn') return;
+
     e.preventDefault();
     e.stopPropagation();
+
+    // Wiggle the tapped control
     nudge(locked);
+
+    // Also wiggle the Login button to guide the user
+    if(!isLoggedIn){
+      var authBtn = document.getElementById('topAuthBtn');
+      if(authBtn) nudge(authBtn);
+    }
   }
 
 
@@ -3950,12 +3984,10 @@ window.KidSequencer = {
   function layoutAuthGroup(){
     if(!inMobile) return;
 
-    var wrap = document.getElementById('contentWrap');
     var group = document.getElementById('mobileAuthGroup');
-    var pill = document.getElementById('memberPill');
-    var camera = document.getElementById('cameraBtn');
-    var gridShell = document.getElementById('sequencerShell');
-    if(!wrap || !group || !pill || !camera || !gridShell) return;
+    var pill  = document.getElementById('memberPill');
+    var topBar = document.getElementById('topBar');
+    if(!group || !pill || !topBar) return;
 
     // Ensure pill lives in the mobile group (pill first, then login/logout)
     if(pill.parentNode !== group){
@@ -3963,31 +3995,22 @@ window.KidSequencer = {
     }
     syncTopAuth();
 
-    var wrapRect = wrap.getBoundingClientRect();
-    var camRect  = camera.getBoundingClientRect();
-    var gridRect = gridShell.getBoundingClientRect();
+    // Ensure the auth group is anchored in the top bar on mobile
+    if(group.parentNode !== topBar){
+      topBar.appendChild(group);
+    }
 
     group.style.display = 'flex';
-
-    var groupRect = group.getBoundingClientRect();
-    var groupW = groupRect.width;
-
-    // Right edge aligns with grid shell's right edge
-    var desiredLeft = (gridRect.right - wrapRect.left) - groupW;
-
-    // Keep it to the right of the camera button with a small gap
-    var minLeft = (camRect.right - wrapRect.left) + 8;
-    if(desiredLeft < minLeft) desiredLeft = minLeft;
-
-    // Vertically center with camera button
-    var top = (camRect.top - wrapRect.top) + (camRect.height - groupRect.height)/2;
-
-    group.style.left = Math.max(0, desiredLeft) + 'px';
-    group.style.top  = Math.max(0, top) + 'px';
+    group.style.position = 'absolute';
+    group.style.left = 'auto';
+    group.style.right = '10px';
+    group.style.top = '8px';
   }
 
+
   function sizeGridToAvailable(){
-    if(!inMobile) return;
+    // Mobile request: do NOT dynamically scale the grid via JS.
+    return;
 
     var root = document.documentElement;
     var main = document.getElementById('mainLayout');
