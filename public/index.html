@@ -1166,7 +1166,175 @@ body.loggedIn #toolsLoginArea{ display:none; }
       body[data-mobile-tab="sounds"] #sequencerShell,
       body[data-mobile-tab="sounds"] #tools{ display:none; }
     }
-</style>
+
+/* ================= MOBILE PHONE (LANDSCAPE) OVERRIDES ONLY =================
+   NOTE: These rules only apply on touch phones in landscape (coarse pointer),
+   so desktop/tablet layouts remain unchanged.
+*/
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 980px) and (max-height: 520px){
+  /* Hide the left tools column on mobile-landscape (moved into left drawer) */
+  #tools{ display:none !important; }
+
+  /* Hide tempo + master volume where they normally live (moved into right drawer) */
+  #rightCol #tempoControls,
+  #rightCol #masterVolUI{ display:none !important; }
+
+  /* Hide the tools login CTA area on mobile-landscape (login lives in top controls beside camera) */
+  #toolsLoginArea{ display:none !important; }
+
+  /* Don't show the fixed logout button on mobile-landscape (logout lives beside camera) */
+  #logoutBtn{ display:none !important; }
+
+  /* The pill is moved next to the camera button in mobile-landscape */
+  #topBar #memberPill{ display:none !important; }
+
+  /* Drawer overlay */
+  #drawerOverlay{
+    display:none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.25);
+    z-index: 9996;
+  }
+  #drawerOverlay.open{ display:block; }
+
+  /* Drawer handles (edge tabs) */
+  .drawerHandle{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 38px;
+    height: 52px;
+    border-radius: 0 16px 16px 0;
+    border: 4px solid #1d1d1d;
+    background:#ffffff;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+    font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+    font-weight: 900;
+    cursor:pointer;
+    z-index: 9997;
+    user-select:none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .drawerHandle.right{
+    right: 0;
+    left: auto;
+    border-radius: 16px 0 0 16px;
+  }
+  .drawerHandle.left{
+    left: 0;
+    right: auto;
+  }
+
+  /* Drawers */
+  .drawer{
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: min(78vw, 340px);
+    background:#f6fbff;
+    border: 4px solid #1d1d1d;
+    box-shadow: 0 12px 0 rgba(0,0,0,0.10);
+    z-index: 9998;
+    display:flex;
+    flex-direction:column;
+    padding: 10px;
+    box-sizing:border-box;
+    transform: translateX(-110%);
+    transition: transform 180ms ease;
+  }
+  .drawer.right{
+    right: 0;
+    left: auto;
+    transform: translateX(110%);
+  }
+  .drawer.open.left{ transform: translateX(0); }
+  .drawer.open.right{ transform: translateX(0); }
+
+  .drawerTop{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    padding: 4px 2px 10px;
+  }
+  .drawerTitle{
+    font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    color:#1f2a44;
+    white-space:nowrap;
+  }
+  .drawerClose{
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    border: 4px solid #1d1d1d;
+    background:#ffffff;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+    font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+    font-weight: 900;
+    font-size: 22px;
+    cursor:pointer;
+    line-height: 1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .drawerContent{
+    flex: 1;
+    overflow:auto;
+    padding-right: 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Mobile auth group (pill + login/logout) */
+  #mobileAuthGroup{
+    position: absolute; /* positioned by JS relative to #contentWrap */
+    display:none;
+    align-items:center;
+    gap: 8px;
+    z-index: 9995;
+    pointer-events:auto;
+  }
+  #mobileAuthGroup .topAuthBtn{
+    height: 40px;
+    padding: 0 12px;
+    border-radius: 14px;
+    border: 4px solid #1d1d1d;
+    background:#ffffff;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+    font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+    font-weight: 900;
+    font-size: 14px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    white-space:nowrap;
+  }
+  /* Ensure the member pill looks good inline */
+  #mobileAuthGroup #memberPill{
+    position: static !important;
+    top:auto !important;
+    left:auto !important;
+    height: 40px;
+    border-width: 4px;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+    pointer-events:auto;
+  }
+}
+
+/* Default: these are mobile-only UI; keep hidden elsewhere */
+#drawerOverlay,
+.drawerHandle,
+.drawer,
+#mobileAuthGroup{ display:none; }
+
+  </style>
 </head>
 
 <body>
@@ -1298,6 +1466,32 @@ body.loggedIn #toolsLoginArea{ display:none; }
       </div>
     </div>
   </div>
+
+  
+  <!-- Mobile landscape drawers + handles (mobile-only; hidden on desktop) -->
+  <div id="drawerOverlay" aria-hidden="true"></div>
+  <button id="leftDrawerHandle" class="drawerHandle left" type="button" aria-label="Open note lengths">≡</button>
+  <button id="rightDrawerHandle" class="drawerHandle right" type="button" aria-label="Open tempo and volume">≡</button>
+
+  <aside id="leftDrawer" class="drawer left" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">Note Length</div>
+      <button class="drawerClose" type="button" data-close="left" aria-label="Close note length drawer">×</button>
+    </div>
+    <div id="leftDrawerContent" class="drawerContent"></div>
+  </aside>
+
+  <aside id="rightDrawer" class="drawer right" aria-hidden="true">
+    <div class="drawerTop">
+      <div class="drawerTitle">Tempo / Volume</div>
+      <button class="drawerClose" type="button" data-close="right" aria-label="Close tempo and volume drawer">×</button>
+    </div>
+    <div id="rightDrawerContent" class="drawerContent"></div>
+  </aside>
+
+  <!-- Mobile auth group (pill + login/logout), positioned beside camera in mobile-landscape -->
+  <div id="mobileAuthGroup" aria-live="polite"></div>
+
 
   <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
 
@@ -3461,6 +3655,250 @@ window.KidSequencer = {
 </script>
 
 
+
+
+
+<script>
+(function(){
+  // Mobile landscape condition: touch phone in landscape with limited height.
+  var mq = window.matchMedia('(hover: none) and (pointer: coarse) and (orientation: landscape) and (max-width: 980px) and (max-height: 520px)');
+  var moved = new Map();
+  var inMobile = false;
+
+  function remember(el){
+    if(!el || moved.has(el)) return;
+    moved.set(el, { parent: el.parentNode, next: el.nextSibling });
+  }
+  function move(el, newParent){
+    if(!el || !newParent) return;
+    remember(el);
+    newParent.appendChild(el);
+  }
+  function restore(el){
+    if(!el) return;
+    var info = moved.get(el);
+    if(!info || !info.parent) return;
+    if(info.next && info.next.parentNode === info.parent){
+      info.parent.insertBefore(el, info.next);
+    }else{
+      info.parent.appendChild(el);
+    }
+  }
+
+  function openDrawer(side){
+    var overlay = document.getElementById('drawerOverlay');
+    var left = document.getElementById('leftDrawer');
+    var right = document.getElementById('rightDrawer');
+    if(!overlay || !left || !right) return;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden','false');
+
+    if(side === 'left'){
+      left.classList.add('open','left');
+      left.setAttribute('aria-hidden','false');
+    }else{
+      right.classList.add('open','right');
+      right.setAttribute('aria-hidden','false');
+    }
+  }
+  function closeDrawers(){
+    var overlay = document.getElementById('drawerOverlay');
+    var left = document.getElementById('leftDrawer');
+    var right = document.getElementById('rightDrawer');
+    if(overlay){
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden','true');
+    }
+    if(left){
+      left.classList.remove('open');
+      left.setAttribute('aria-hidden','true');
+    }
+    if(right){
+      right.classList.remove('open');
+      right.setAttribute('aria-hidden','true');
+    }
+  }
+
+  function syncTopAuth(){
+    var group = document.getElementById('mobileAuthGroup');
+    var btn = document.getElementById('topAuthBtn');
+    if(!group) return;
+
+    var logged = false;
+    try{ logged = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ logged = false; }
+
+    if(!btn){
+      btn = document.createElement('button');
+      btn.id = 'topAuthBtn';
+      btn.type = 'button';
+      btn.className = 'topAuthBtn';
+      group.appendChild(btn);
+    }
+
+    if(logged){
+      btn.textContent = 'Logout';
+      btn.onclick = function(){ if(typeof window.logout === 'function') window.logout(); };
+    }else{
+      btn.textContent = 'Login';
+      btn.onclick = function(){ window.location.href = 'login.html'; };
+    }
+  }
+
+  function layoutAuthGroup(){
+    if(!inMobile) return;
+
+    var wrap = document.getElementById('contentWrap');
+    var group = document.getElementById('mobileAuthGroup');
+    var pill = document.getElementById('memberPill');
+    var camera = document.getElementById('cameraBtn');
+    var gridShell = document.getElementById('sequencerShell');
+    if(!wrap || !group || !pill || !camera || !gridShell) return;
+
+    // Make sure the group contains the pill, then button.
+    if(pill.parentNode !== group){
+      move(pill, group);
+    }
+    syncTopAuth();
+
+    // Position the group so that the RIGHT EDGE of the auth button aligns with the grid (sequencerShell) right edge,
+    // while staying on the same line as the camera button.
+    var wrapRect = wrap.getBoundingClientRect();
+    var camRect  = camera.getBoundingClientRect();
+    var gridRect = gridShell.getBoundingClientRect();
+
+    // Temporarily show group for measuring
+    group.style.display = 'flex';
+
+    var groupRect = group.getBoundingClientRect();
+    var groupW = groupRect.width;
+
+    var top = (camRect.top - wrapRect.top) + (camRect.height - groupRect.height)/2;
+    var desiredLeft = (gridRect.right - wrapRect.left) - groupW;
+
+    // Keep it to the right of the camera button if possible.
+    var minLeft = (camRect.right - wrapRect.left) + 8;
+    if(desiredLeft < minLeft) desiredLeft = minLeft;
+
+    group.style.top = Math.max(0, top) + 'px';
+    group.style.left = Math.max(0, desiredLeft) + 'px';
+  }
+
+  function enterMobile(){
+    if(inMobile) return;
+    inMobile = true;
+
+    var overlay = document.getElementById('drawerOverlay');
+    var leftHandle = document.getElementById('leftDrawerHandle');
+    var rightHandle = document.getElementById('rightDrawerHandle');
+    var leftDrawer = document.getElementById('leftDrawer');
+    var rightDrawer = document.getElementById('rightDrawer');
+
+    var leftContent = document.getElementById('leftDrawerContent');
+    var rightContent = document.getElementById('rightDrawerContent');
+
+    var toolsList = document.getElementById('toolsList');          // Note lengths live here
+    var tempo = document.getElementById('tempoControls');          // Tempo control box
+    var volUI = document.getElementById('masterVolUI');            // Master volume fader UI
+
+    // Move note length buttons into left drawer
+    if(toolsList && leftContent) move(toolsList, leftContent);
+
+    // Move tempo + volume into right drawer
+    if(tempo && rightContent) move(tempo, rightContent);
+    if(volUI && rightContent) move(volUI, rightContent);
+
+    // Show mobile-only UI
+    if(overlay) overlay.style.display = '';
+    if(leftHandle) leftHandle.style.display = 'flex';
+    if(rightHandle) rightHandle.style.display = 'flex';
+    if(leftDrawer) leftDrawer.style.display = 'flex';
+    if(rightDrawer) rightDrawer.style.display = 'flex';
+
+    // Wire up interactions
+    if(leftHandle) leftHandle.onclick = function(){ openDrawer('left'); };
+    if(rightHandle) rightHandle.onclick = function(){ openDrawer('right'); };
+    if(overlay) overlay.onclick = closeDrawers;
+
+    var closes = document.querySelectorAll('.drawerClose');
+    closes.forEach(function(btn){
+      btn.onclick = closeDrawers;
+    });
+
+    // Keep auth positioned beside camera
+    syncTopAuth();
+    layoutAuthGroup();
+
+    window.addEventListener('resize', layoutAuthGroup);
+    window.addEventListener('orientationchange', layoutAuthGroup);
+  }
+
+  function exitMobile(){
+    if(!inMobile) return;
+    inMobile = false;
+
+    closeDrawers();
+
+    // Restore moved nodes
+    restore(document.getElementById('toolsList'));
+    restore(document.getElementById('tempoControls'));
+    restore(document.getElementById('masterVolUI'));
+    restore(document.getElementById('memberPill'));
+
+    // Hide mobile-only UI (falls back to default CSS)
+    var leftHandle = document.getElementById('leftDrawerHandle');
+    var rightHandle = document.getElementById('rightDrawerHandle');
+    var leftDrawer = document.getElementById('leftDrawer');
+    var rightDrawer = document.getElementById('rightDrawer');
+    var overlay = document.getElementById('drawerOverlay');
+    var group = document.getElementById('mobileAuthGroup');
+
+    if(leftHandle) leftHandle.style.display = 'none';
+    if(rightHandle) rightHandle.style.display = 'none';
+    if(leftDrawer) leftDrawer.style.display = 'none';
+    if(rightDrawer) rightDrawer.style.display = 'none';
+    if(overlay) overlay.style.display = 'none';
+    if(group){
+      group.style.display = 'none';
+      group.style.left = '';
+      group.style.top = '';
+    }
+
+    window.removeEventListener('resize', layoutAuthGroup);
+    window.removeEventListener('orientationchange', layoutAuthGroup);
+  }
+
+  function onChange(){
+    if(mq.matches) enterMobile();
+    else exitMobile();
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){
+    onChange();
+    // keep auth state synced
+    window.addEventListener('storage', function(e){
+      if(e && e.key === 'kidseq_logged_in'){
+        syncTopAuth();
+        layoutAuthGroup();
+      }
+    });
+    // If applyLockState is present, hook it so auth updates whenever state changes
+    try{
+      if(typeof window.applyLockState === 'function'){
+        var _als = window.applyLockState;
+        window.applyLockState = function(){
+          _als.apply(this, arguments);
+          syncTopAuth();
+          layoutAuthGroup();
+        };
+      }
+    }catch(_){}
+  });
+
+  if(mq.addEventListener) mq.addEventListener('change', onChange);
+  else mq.addListener(onChange);
+})();
+</script>
 
 
 <script>
