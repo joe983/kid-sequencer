@@ -1326,6 +1326,110 @@ body.loggedIn #toolsLoginArea{ display:none; }
     box-shadow: 0 8px 0 rgba(0,0,0,0.06);
     pointer-events:auto;
   }
+
+  /* --- Requested mobile-landscape layout tweaks (Jan 2026) --- */
+  :root{ --topH: 29px; }
+
+  /* Lift drawer tabs upward (~25% above center) */
+  .drawerHandle{ top: 35%; }
+
+  /* Title box sizing (position/width is set by mobile JS so it lines up with the grid) */
+  #titleBox{
+    height: var(--topH) !important;
+    border-radius: 12px !important;
+    top: 8px !important;
+  }
+  .titleText{
+    font-size: 14px !important;
+    letter-spacing: 0.2px !important;
+    transform: none !important;
+  }
+
+  /* Make transport/camera buttons square and same height as the header box */
+  .bigBtn.iconBtn{
+    width: var(--topH) !important;
+    height: var(--topH) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+  }
+  .icon svg{
+    width: calc(var(--topH) * 0.70) !important;
+    height: calc(var(--topH) * 0.70) !important;
+  }
+
+  /* Mobile auth group sizing: login aligns with button centers; pill slightly smaller */
+  #mobileAuthGroup{ gap: 0 !important; }
+  #mobileAuthGroup .topAuthBtn{
+    height: var(--topH) !important;
+    padding: 0 10px !important;
+    border-radius: 12px !important;
+    font-size: 13px !important;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+  }
+  #mobileAuthGroup #memberPill{
+    height: calc(var(--topH) - 6px) !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    border-radius: 999px !important;
+    margin-right: 6px !important;
+  }
+
+  /* Sound selection buttons 50% smaller */
+  #instButtons{ gap: 6px !important; }
+  .instBtn{
+    width: calc(var(--topH)) !important;
+    height: calc(var(--topH)) !important;
+    border-radius: 10px !important;
+    border-width: 3px !important;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+    font-size: 18px !important;
+  }
+  .instBtn .waveIcon{ width: 22px !important; height: 16px !important; }
+
+  /* Robot: 75% smaller, centered below sound buttons (moved into right column by JS on mobile) */
+  body{ --robotSize: 55px; }
+  body.loggedIn{ --robotSize: 55px; }
+  #robotLogo{
+    position: static !important;
+    left: auto !important;
+    top: auto !important;
+    transform: none !important;
+    margin: 10px auto 0 !important;
+    width: var(--robotSize) !important;
+    height: var(--robotSize) !important;
+    padding: 6px !important;
+    box-shadow: 0 6px 0 rgba(0,0,0,0.07) !important;
+  }
+
+  /* Beat selector: remove its box and move it closer to the grid; shrink the outer shell */
+  #sequencerShell{
+    padding: 8px !important;
+    border-radius: 16px !important;
+  }
+  #drumPanel{
+    margin-top: 6px !important;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  /* Right drawer: tempo + volume side-by-side; tempo elements ~40% smaller */
+  #rightDrawerRow{
+    display:flex !important;
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+  }
+  #rightDrawerRow #tempoControls{
+    transform: scale(0.6) !important;
+    transform-origin: top left !important;
+  }
+  #rightDrawerRow #masterVolUI{
+    margin-left: 10px !important;
+  }
+
 }
 
 /* Default: these are mobile-only UI; keep hidden elsewhere */
@@ -3782,7 +3886,31 @@ window.KidSequencer = {
 
     group.style.top = Math.max(0, top) + 'px';
     group.style.left = Math.max(0, desiredLeft) + 'px';
+  
+
+  function layoutTitleBoxToGrid(){
+    if(!inMobile) return;
+    var topBar = document.getElementById('topBar');
+    var title = document.getElementById('titleBox');
+    var gridShell = document.getElementById('sequencerShell');
+    var sequencer = document.getElementById('sequencer');
+    if(!topBar || !title || !gridShell || !sequencer) return;
+
+    var barRect = topBar.getBoundingClientRect();
+    var shellRect = gridShell.getBoundingClientRect();
+
+    var firstRow = sequencer.querySelector('.rowWrap');
+    var cell5 = firstRow && firstRow.querySelector('.grid .cell:nth-child(5)');
+    var targetRight = cell5 ? cell5.getBoundingClientRect().right : (shellRect.left + (shellRect.width * 0.35));
+
+    // Left edge aligns with the shell; right edge aligns with the 5th grid cell's right edge.
+    var leftPx = (shellRect.left - barRect.left);
+    var widthPx = Math.max(80, (targetRight - shellRect.left));
+
+    title.style.left = leftPx + 'px';
+    title.style.width = widthPx + 'px';
   }
+}
 
   function enterMobile(){
     if(inMobile) return;
@@ -3801,12 +3929,34 @@ window.KidSequencer = {
     var tempo = document.getElementById('tempoControls');          // Tempo control box
     var volUI = document.getElementById('masterVolUI');            // Master volume fader UI
 
+    var robot = document.getElementById('robotLogo');
+    var rightCol = document.getElementById('rightCol');
+    var instButtons = document.getElementById('instButtons');
+
+
     // Move note length buttons into left drawer
     if(toolsList && leftContent) move(toolsList, leftContent);
 
-    // Move tempo + volume into right drawer
-    if(tempo && rightContent) move(tempo, rightContent);
-    if(volUI && rightContent) move(volUI, rightContent);
+    // Move tempo + volume into right drawer (side-by-side row)
+    var rightRow = document.getElementById('rightDrawerRow');
+    if(!rightRow && rightContent){
+      rightRow = document.createElement('div');
+      rightRow.id = 'rightDrawerRow';
+      rightContent.appendChild(rightRow);
+    }
+    if(tempo && rightRow) move(tempo, rightRow);
+    if(volUI && rightRow) move(volUI, rightRow);
+
+    // Move robot below sound buttons in the right column
+    if(robot && rightCol){
+      // Place after instrument buttons if present
+      remember(robot);
+      if(instButtons && instButtons.parentNode === rightCol && instButtons.nextSibling){
+        rightCol.insertBefore(robot, instButtons.nextSibling);
+      }else{
+        rightCol.appendChild(robot);
+      }
+    }
 
     // Show mobile-only UI
     if(overlay) overlay.style.display = '';
@@ -3828,9 +3978,12 @@ window.KidSequencer = {
     // Keep auth positioned beside camera
     syncTopAuth();
     layoutAuthGroup();
+    layoutTitleBoxToGrid();
 
     window.addEventListener('resize', layoutAuthGroup);
     window.addEventListener('orientationchange', layoutAuthGroup);
+    window.addEventListener('resize', layoutTitleBoxToGrid);
+    window.addEventListener('orientationchange', layoutTitleBoxToGrid);
   }
 
   function exitMobile(){
@@ -3844,6 +3997,10 @@ window.KidSequencer = {
     restore(document.getElementById('tempoControls'));
     restore(document.getElementById('masterVolUI'));
     restore(document.getElementById('memberPill'));
+    restore(document.getElementById('robotLogo'));
+
+    var title = document.getElementById('titleBox');
+    if(title){ title.style.left=''; title.style.width=''; }
 
     // Hide mobile-only UI (falls back to default CSS)
     var leftHandle = document.getElementById('leftDrawerHandle');
@@ -3866,6 +4023,8 @@ window.KidSequencer = {
 
     window.removeEventListener('resize', layoutAuthGroup);
     window.removeEventListener('orientationchange', layoutAuthGroup);
+    window.removeEventListener('resize', layoutTitleBoxToGrid);
+    window.removeEventListener('orientationchange', layoutTitleBoxToGrid);
   }
 
   function onChange(){
@@ -3880,6 +4039,8 @@ window.KidSequencer = {
       if(e && e.key === 'kidseq_logged_in'){
         syncTopAuth();
         layoutAuthGroup();
+        layoutTitleBoxToGrid();
+    layoutTitleBoxToGrid();
       }
     });
     // If applyLockState is present, hook it so auth updates whenever state changes
@@ -3890,6 +4051,9 @@ window.KidSequencer = {
           _als.apply(this, arguments);
           syncTopAuth();
           layoutAuthGroup();
+          layoutTitleBoxToGrid();
+        layoutTitleBoxToGrid();
+    layoutTitleBoxToGrid();
         };
       }
     }catch(_){}
