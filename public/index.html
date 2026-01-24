@@ -1330,6 +1330,18 @@ body.loggedIn #toolsLoginArea{ display:none; }
   /* --- Requested mobile-landscape layout tweaks (Jan 2026) --- */
   :root{ --topH: 29px; }
 
+  /* Squash-wiggle for locked/greyed controls (mobile) */
+  @keyframes squashWiggle{
+    0%   { transform: scale(1); }
+    25%  { transform: scale(0.94); }
+    55%  { transform: scale(1.02) rotate(-1deg); }
+    80%  { transform: scale(0.99) rotate(1deg); }
+    100% { transform: scale(1); }
+  }
+  .squashWiggle{
+    animation: squashWiggle 260ms ease;
+  }
+
   /* Lift drawer tabs upward (~25% above center) */
   .drawerHandle{ top: 30%; }
 
@@ -1351,6 +1363,8 @@ body.loggedIn #toolsLoginArea{ display:none; }
     height: var(--topH) !important;
     border-radius: 10px !important;
     box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+    box-sizing: border-box !important; /* include border in square */
+    min-width: 0 !important;
   }
   .icon svg{
     width: calc(var(--topH) * 0.70) !important;
@@ -1359,6 +1373,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
   /* Mobile auth group sizing: login aligns with button centers; pill slightly smaller */
   #mobileAuthGroup{ gap: 0 !important; }
+  #mobileAuthGroup #topAuthBtn{ margin-left: 8px !important; }
   #mobileAuthGroup .topAuthBtn{
     height: var(--topH) !important;
     padding: 0 10px !important;
@@ -1371,7 +1386,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
     padding: 0 8px !important;
     font-size: 12px !important;
     border-radius: 999px !important;
-    margin-right: 10px !important;
+    margin-right: 0 !important;
   }
 
 
@@ -3847,6 +3862,27 @@ window.KidSequencer = {
     }
   }
 
+  function nudge(el){
+    if(!el) return;
+    el.classList.remove('squashWiggle');
+    // force reflow
+    void el.offsetWidth;
+    el.classList.add('squashWiggle');
+  }
+
+  function lockedClick(e){
+    if(!inMobile) return;
+    // animate any greyed/locked control instead of doing nothing
+    var locked = e.target && (e.target.closest ? e.target.closest('.locked') : null);
+    if(!locked) return;
+    // If it's the login/logout button, let it work normally
+    if(locked.id === 'topAuthBtn') return;
+    e.preventDefault();
+    e.stopPropagation();
+    nudge(locked);
+  }
+
+
   function openDrawer(side){
     var overlay = document.getElementById('drawerOverlay');
     var left = document.getElementById('leftDrawer');
@@ -3956,7 +3992,8 @@ window.KidSequencer = {
     var root = document.documentElement;
     var main = document.getElementById('mainLayout');
     var rightCol = document.getElementById('rightCol');
-    if(!main || !rightCol) return;
+    var grid = document.getElementById('sequencer');
+    if(!main || !rightCol || !grid) return;
 
     var cs = getComputedStyle(root);
     var gap = parseFloat(cs.getPropertyValue('--gap')) || 4;
@@ -3964,15 +4001,24 @@ window.KidSequencer = {
     var mainRect = main.getBoundingClientRect();
     var rightRect = rightCol.getBoundingClientRect();
 
-    // Available width for the 16-step grid area (inside the sequencer shell)
-    // mainRect includes padding; we just approximate by taking viewport width minus right column minus a safety margin.
-    var safety = 26; // breathing room for borders/padding/gap
-    var avail = Math.max(240, window.innerWidth - rightRect.width - safety);
+    // Determine rows from the built grid (fallback 8).
+    var rows = grid.querySelectorAll('.rowWrap').length || 8;
+    var cols = 16;
 
-    var cell = Math.floor((avail - (gap * 15)) / 16);
+    // Available width for the 16-step grid area.
+    var safetyW = 24; // breathing room for borders/padding/gap
+    var availW = Math.max(240, window.innerWidth - rightRect.width - safetyW);
+    var cellW = Math.floor((availW - (gap * (cols - 1))) / cols);
 
-    // Clamp so it stays usable and doesn't blow up.
-    cell = Math.max(28, Math.min(60, cell));
+    // Available height for the grid area (everything below the top controls).
+    var safetyH = 18;
+    var availH = Math.max(180, window.innerHeight - mainRect.top - safetyH);
+    var cellH = Math.floor((availH - (gap * (rows - 1))) / rows);
+
+    var cell = Math.min(cellW, cellH);
+
+    // Clamp so it stays usable and always fits on-screen.
+    cell = Math.max(26, Math.min(56, cell));
 
     root.style.setProperty('--cell', cell + 'px');
   }
@@ -4007,6 +4053,7 @@ window.KidSequencer = {
     var rightCol = document.getElementById('rightCol');
     var gridShell = document.getElementById('sequencerShell');
     var grid = document.getElementById('sequencer');
+    var instButtons = document.getElementById('instButtons');
     if(!rightCol || !gridShell || !grid) return;
 
     var shellRect = gridShell.getBoundingClientRect();
@@ -4015,12 +4062,23 @@ window.KidSequencer = {
     // Make the right column match the shell height so we can bottom-align the beat buttons.
     rightCol.style.height = shellRect.height + 'px';
 
-    // Pad so the sound buttons start level with the grid top, and the beat buttons can end level with the grid bottom.
+    // Initial padding based on shell vs grid bounds.
     var padTop = Math.max(0, gridRect.top - shellRect.top);
     var padBot = Math.max(0, shellRect.bottom - gridRect.bottom);
 
     rightCol.style.paddingTop = padTop + 'px';
     rightCol.style.paddingBottom = padBot + 'px';
+
+    // Robust correction: ensure first sound button block's top matches grid top.
+    // (Some browsers/layouts round differently; this snaps it.)
+    if(instButtons){
+      var instRect = instButtons.getBoundingClientRect();
+      var delta = Math.round(gridRect.top - instRect.top);
+      if(Math.abs(delta) >= 1){
+        var current = parseFloat(rightCol.style.paddingTop) || padTop;
+        rightCol.style.paddingTop = Math.max(0, current + delta) + 'px';
+      }
+    }
   }
 
   function relayout(){
@@ -4111,6 +4169,9 @@ window.KidSequencer = {
     window.addEventListener('orientationchange', relayout);
     window.addEventListener('scroll', relayout, { passive: true });
 
+    // Restore squash-wiggle feedback for locked/greyed controls
+    document.addEventListener('click', lockedClick, true);
+
     // Give the grid time to build (if it is created after DOMContentLoaded)
     setTimeout(relayout, 60);
     setTimeout(relayout, 200);
@@ -4166,6 +4227,8 @@ window.KidSequencer = {
     window.removeEventListener('resize', relayout);
     window.removeEventListener('orientationchange', relayout);
     window.removeEventListener('scroll', relayout, { passive: true });
+
+    document.removeEventListener('click', lockedClick, true);
   }
 
   function onChange(){
