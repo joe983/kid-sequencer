@@ -1331,7 +1331,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
   :root{ --topH: 29px; }
 
   /* Lift drawer tabs upward (~25% above center) */
-  .drawerHandle{ top: 35%; }
+  .drawerHandle{ top: 30%; }
 
   /* Title box sizing (position/width is set by mobile JS so it lines up with the grid) */
   #titleBox{
@@ -1371,9 +1371,38 @@ body.loggedIn #toolsLoginArea{ display:none; }
     padding: 0 8px !important;
     font-size: 12px !important;
     border-radius: 999px !important;
-    margin-right: 6px !important;
+    margin-right: 10px !important;
   }
 
+
+  /* Main page: remove left column space, push right column to screen edge, let grid use remaining width */
+  #mainLayout{
+    justify-content: space-between !important;
+    width: 100% !important;
+    padding: 0 10px 10px !important;
+    gap: 10px !important;
+  }
+  #rightCol{
+    display:flex !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: flex-start !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Transport/camera icons: force-fit inside square buttons */
+  .bigBtn.iconBtn .icon svg{
+    width: calc(var(--topH) * 0.66) !important;
+    height: calc(var(--topH) * 0.66) !important;
+  }
+  .bigBtn .clearIcon svg,
+  .bigBtn .undoIcon svg,
+  .bigBtn .cameraIcon svg{
+    width: calc(var(--topH) * 0.66) !important;
+    height: calc(var(--topH) * 0.66) !important;
+    transform: none !important;
+  }
   /* Sound selection buttons 50% smaller */
   #instButtons{ gap: 6px !important; }
   .instBtn{
@@ -1382,9 +1411,9 @@ body.loggedIn #toolsLoginArea{ display:none; }
     border-radius: 10px !important;
     border-width: 3px !important;
     box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
-    font-size: 18px !important;
+    font-size: 14px !important;
   }
-  .instBtn .waveIcon{ width: 22px !important; height: 16px !important; }
+  .instBtn .waveIcon{ width: 18px !important; height: 13px !important; }
 
   /* Robot: 75% smaller, centered below sound buttons (moved into right column by JS on mobile) */
   body{ --robotSize: 55px; }
@@ -1394,7 +1423,7 @@ body.loggedIn #toolsLoginArea{ display:none; }
     left: auto !important;
     top: auto !important;
     transform: none !important;
-    margin: 10px auto 0 !important;
+    margin: 10px 0 0 auto !important;
     width: var(--robotSize) !important;
     height: var(--robotSize) !important;
     padding: 6px !important;
@@ -1403,15 +1432,44 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
   /* Beat selector: remove its box and move it closer to the grid; shrink the outer shell */
   #sequencerShell{
-    padding: 8px !important;
+    padding: 6px !important;
     border-radius: 16px !important;
   }
   #drumPanel{
-    margin-top: 6px !important;
+    margin-top: auto !important;
     border: none !important;
     background: transparent !important;
     box-shadow: none !important;
     padding: 0 !important;
+    align-self: flex-end !important;
+  }
+  #drumControls{
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+  .drumStyleGroup{
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 6px !important;
+  }
+  .drumMiniBtn,
+  .drumStyleBtn{
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 12px !important;
+  }
+  .drumMiniBtn{
+    font-size: 18px !important;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+  }
+  .drumStyleBtn{
+    box-shadow: 0 5px 0 rgba(0,0,0,0.07) !important;
+  }
+  .drumIcon{
+    width: 78% !important;
+    height: 78% !important;
   }
 
   /* Right drawer: tempo + volume side-by-side; tempo elements ~40% smaller */
@@ -3815,23 +3873,17 @@ window.KidSequencer = {
       overlay.setAttribute('aria-hidden','true');
     }
     if(left){
-      left.classList.remove('open');
+      left.classList.remove('open','left');
       left.setAttribute('aria-hidden','true');
     }
     if(right){
-      right.classList.remove('open');
+      right.classList.remove('open','right');
       right.setAttribute('aria-hidden','true');
     }
   }
 
-  function syncTopAuth(){
-    var group = document.getElementById('mobileAuthGroup');
+  function ensureTopAuthButton(group){
     var btn = document.getElementById('topAuthBtn');
-    if(!group) return;
-
-    var logged = false;
-    try{ logged = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ logged = false; }
-
     if(!btn){
       btn = document.createElement('button');
       btn.id = 'topAuthBtn';
@@ -3839,7 +3891,17 @@ window.KidSequencer = {
       btn.className = 'topAuthBtn';
       group.appendChild(btn);
     }
+    return btn;
+  }
 
+  function syncTopAuth(){
+    var group = document.getElementById('mobileAuthGroup');
+    if(!group) return;
+
+    var logged = false;
+    try{ logged = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ logged = false; }
+
+    var btn = ensureTopAuthButton(group);
     if(logged){
       btn.textContent = 'Logout';
       btn.onclick = function(){ if(typeof window.logout === 'function') window.logout(); };
@@ -3859,37 +3921,65 @@ window.KidSequencer = {
     var gridShell = document.getElementById('sequencerShell');
     if(!wrap || !group || !pill || !camera || !gridShell) return;
 
-    // Make sure the group contains the pill, then button.
+    // Ensure pill lives in the mobile group (pill first, then login/logout)
     if(pill.parentNode !== group){
       move(pill, group);
     }
     syncTopAuth();
 
-    // Position the group so that the RIGHT EDGE of the auth button aligns with the grid (sequencerShell) right edge,
-    // while staying on the same line as the camera button.
     var wrapRect = wrap.getBoundingClientRect();
     var camRect  = camera.getBoundingClientRect();
     var gridRect = gridShell.getBoundingClientRect();
 
-    // Temporarily show group for measuring
     group.style.display = 'flex';
 
     var groupRect = group.getBoundingClientRect();
     var groupW = groupRect.width;
 
-    var top = (camRect.top - wrapRect.top) + (camRect.height - groupRect.height)/2;
+    // Right edge aligns with grid shell's right edge
     var desiredLeft = (gridRect.right - wrapRect.left) - groupW;
 
-    // Keep it to the right of the camera button if possible.
+    // Keep it to the right of the camera button with a small gap
     var minLeft = (camRect.right - wrapRect.left) + 8;
     if(desiredLeft < minLeft) desiredLeft = minLeft;
 
-    group.style.top = Math.max(0, top) + 'px';
+    // Vertically center with camera button
+    var top = (camRect.top - wrapRect.top) + (camRect.height - groupRect.height)/2;
+
     group.style.left = Math.max(0, desiredLeft) + 'px';
-  
+    group.style.top  = Math.max(0, top) + 'px';
+  }
+
+  function sizeGridToAvailable(){
+    if(!inMobile) return;
+
+    var root = document.documentElement;
+    var main = document.getElementById('mainLayout');
+    var rightCol = document.getElementById('rightCol');
+    if(!main || !rightCol) return;
+
+    var cs = getComputedStyle(root);
+    var gap = parseFloat(cs.getPropertyValue('--gap')) || 4;
+
+    var mainRect = main.getBoundingClientRect();
+    var rightRect = rightCol.getBoundingClientRect();
+
+    // Available width for the 16-step grid area (inside the sequencer shell)
+    // mainRect includes padding; we just approximate by taking viewport width minus right column minus a safety margin.
+    var safety = 26; // breathing room for borders/padding/gap
+    var avail = Math.max(240, window.innerWidth - rightRect.width - safety);
+
+    var cell = Math.floor((avail - (gap * 15)) / 16);
+
+    // Clamp so it stays usable and doesn't blow up.
+    cell = Math.max(28, Math.min(60, cell));
+
+    root.style.setProperty('--cell', cell + 'px');
+  }
 
   function layoutTitleBoxToGrid(){
     if(!inMobile) return;
+
     var topBar = document.getElementById('topBar');
     var title = document.getElementById('titleBox');
     var gridShell = document.getElementById('sequencerShell');
@@ -3899,18 +3989,53 @@ window.KidSequencer = {
     var barRect = topBar.getBoundingClientRect();
     var shellRect = gridShell.getBoundingClientRect();
 
+    // Find the right edge of the 5th grid cell in the first row (if it exists)
     var firstRow = sequencer.querySelector('.rowWrap');
     var cell5 = firstRow && firstRow.querySelector('.grid .cell:nth-child(5)');
     var targetRight = cell5 ? cell5.getBoundingClientRect().right : (shellRect.left + (shellRect.width * 0.35));
 
-    // Left edge aligns with the shell; right edge aligns with the 5th grid cell's right edge.
     var leftPx = (shellRect.left - barRect.left);
     var widthPx = Math.max(80, (targetRight - shellRect.left));
 
     title.style.left = leftPx + 'px';
     title.style.width = widthPx + 'px';
   }
-}
+
+  function layoutRightColToGrid(){
+    if(!inMobile) return;
+
+    var rightCol = document.getElementById('rightCol');
+    var gridShell = document.getElementById('sequencerShell');
+    var grid = document.getElementById('sequencer');
+    if(!rightCol || !gridShell || !grid) return;
+
+    var shellRect = gridShell.getBoundingClientRect();
+    var gridRect  = grid.getBoundingClientRect();
+
+    // Make the right column match the shell height so we can bottom-align the beat buttons.
+    rightCol.style.height = shellRect.height + 'px';
+
+    // Pad so the sound buttons start level with the grid top, and the beat buttons can end level with the grid bottom.
+    var padTop = Math.max(0, gridRect.top - shellRect.top);
+    var padBot = Math.max(0, shellRect.bottom - gridRect.bottom);
+
+    rightCol.style.paddingTop = padTop + 'px';
+    rightCol.style.paddingBottom = padBot + 'px';
+  }
+
+  function relayout(){
+    if(!inMobile) return;
+
+    // 1) size grid based on available width
+    sizeGridToAvailable();
+
+    // 2) after the browser reflows, align the title, auth, and right column to the grid
+    requestAnimationFrame(function(){
+      layoutTitleBoxToGrid();
+      layoutAuthGroup();
+      layoutRightColToGrid();
+    });
+  }
 
   function enterMobile(){
     if(inMobile) return;
@@ -3932,7 +4057,7 @@ window.KidSequencer = {
     var robot = document.getElementById('robotLogo');
     var rightCol = document.getElementById('rightCol');
     var instButtons = document.getElementById('instButtons');
-
+    var drumPanel = document.getElementById('drumPanel');
 
     // Move note length buttons into left drawer
     if(toolsList && leftContent) move(toolsList, leftContent);
@@ -3947,23 +4072,28 @@ window.KidSequencer = {
     if(tempo && rightRow) move(tempo, rightRow);
     if(volUI && rightRow) move(volUI, rightRow);
 
-    // Move robot below sound buttons in the right column
+    // Robot: under sound buttons
     if(robot && rightCol){
-      // Place after instrument buttons if present
       remember(robot);
-      if(instButtons && instButtons.parentNode === rightCol && instButtons.nextSibling){
+      if(instButtons && instButtons.parentNode === rightCol){
         rightCol.insertBefore(robot, instButtons.nextSibling);
       }else{
         rightCol.appendChild(robot);
       }
     }
 
+    // Beat selector: into right column under robot, bottom-aligned with the grid
+    if(drumPanel && rightCol){
+      remember(drumPanel);
+      rightCol.appendChild(drumPanel);
+    }
+
     // Show mobile-only UI
-    if(overlay) overlay.style.display = '';
     if(leftHandle) leftHandle.style.display = 'flex';
     if(rightHandle) rightHandle.style.display = 'flex';
     if(leftDrawer) leftDrawer.style.display = 'flex';
     if(rightDrawer) rightDrawer.style.display = 'flex';
+    if(overlay) overlay.style.display = '';
 
     // Wire up interactions
     if(leftHandle) leftHandle.onclick = function(){ openDrawer('left'); };
@@ -3971,19 +4101,19 @@ window.KidSequencer = {
     if(overlay) overlay.onclick = closeDrawers;
 
     var closes = document.querySelectorAll('.drawerClose');
-    closes.forEach(function(btn){
-      btn.onclick = closeDrawers;
-    });
+    closes.forEach(function(btn){ btn.onclick = closeDrawers; });
 
-    // Keep auth positioned beside camera
+    // Layout & keep synced
     syncTopAuth();
-    layoutAuthGroup();
-    layoutTitleBoxToGrid();
+    relayout();
 
-    window.addEventListener('resize', layoutAuthGroup);
-    window.addEventListener('orientationchange', layoutAuthGroup);
-    window.addEventListener('resize', layoutTitleBoxToGrid);
-    window.addEventListener('orientationchange', layoutTitleBoxToGrid);
+    window.addEventListener('resize', relayout);
+    window.addEventListener('orientationchange', relayout);
+    window.addEventListener('scroll', relayout, { passive: true });
+
+    // Give the grid time to build (if it is created after DOMContentLoaded)
+    setTimeout(relayout, 60);
+    setTimeout(relayout, 200);
   }
 
   function exitMobile(){
@@ -3998,9 +4128,18 @@ window.KidSequencer = {
     restore(document.getElementById('masterVolUI'));
     restore(document.getElementById('memberPill'));
     restore(document.getElementById('robotLogo'));
+    restore(document.getElementById('drumPanel'));
 
+    // Clear inline styles added for mobile
     var title = document.getElementById('titleBox');
     if(title){ title.style.left=''; title.style.width=''; }
+
+    var rightCol = document.getElementById('rightCol');
+    if(rightCol){
+      rightCol.style.height = '';
+      rightCol.style.paddingTop = '';
+      rightCol.style.paddingBottom = '';
+    }
 
     // Hide mobile-only UI (falls back to default CSS)
     var leftHandle = document.getElementById('leftDrawerHandle');
@@ -4021,10 +4160,12 @@ window.KidSequencer = {
       group.style.top = '';
     }
 
-    window.removeEventListener('resize', layoutAuthGroup);
-    window.removeEventListener('orientationchange', layoutAuthGroup);
-    window.removeEventListener('resize', layoutTitleBoxToGrid);
-    window.removeEventListener('orientationchange', layoutTitleBoxToGrid);
+    // Clear dynamic sizing
+    document.documentElement.style.removeProperty('--cell');
+
+    window.removeEventListener('resize', relayout);
+    window.removeEventListener('orientationchange', relayout);
+    window.removeEventListener('scroll', relayout, { passive: true });
   }
 
   function onChange(){
@@ -4034,15 +4175,15 @@ window.KidSequencer = {
 
   document.addEventListener('DOMContentLoaded', function(){
     onChange();
+
     // keep auth state synced
     window.addEventListener('storage', function(e){
       if(e && e.key === 'kidseq_logged_in'){
         syncTopAuth();
-        layoutAuthGroup();
-        layoutTitleBoxToGrid();
-    layoutTitleBoxToGrid();
+        relayout();
       }
     });
+
     // If applyLockState is present, hook it so auth updates whenever state changes
     try{
       if(typeof window.applyLockState === 'function'){
@@ -4050,10 +4191,7 @@ window.KidSequencer = {
         window.applyLockState = function(){
           _als.apply(this, arguments);
           syncTopAuth();
-          layoutAuthGroup();
-          layoutTitleBoxToGrid();
-        layoutTitleBoxToGrid();
-    layoutTitleBoxToGrid();
+          relayout();
         };
       }
     }catch(_){}
