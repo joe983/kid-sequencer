@@ -6,24 +6,6 @@
   <title>Kid Sequencer</title>
 
   <style>
-
-/* === Fixed-stage viewport (desktop) === */
-:root{ --stageW: 1600px; --stageH: 900px; }
-
-html, body {
-  height: 100%;
-  overflow: hidden; /* scrolling happens in #viewport so horizontal bar is always reachable */
-}
-#viewport{
-  position: fixed;
-  inset: 0;
-  overflow: auto;
-  /* allow trackpad horizontal scroll */
-  overscroll-behavior: none;
-}
-/* Keep page rendering identical; we only lock a minimum stage size in JS */
-#page{ position: relative; }
-
     @import url("https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800;900&display=swap");
     :root{
       --cell: 46px;
@@ -32,7 +14,7 @@ html, body {
       --rightW: 110px;
       --rightLift: 0px;
       --titleInset: 0px;
-      --contentLift: 92px;
+      --contentLift: 0px;
 
       --wiggleDeg: 1.2deg;
       --wiggleScale: 0.01;
@@ -64,18 +46,14 @@ html, body {
     *{ caret-color: transparent; }
     :focus{ outline: none; }
     #page{
-      min-height: var(--stageH);
-  width: var(--stageW);
-  min-width: var(--stageW);
-  min-height: var(--stageH);
+      min-height: 100vh;
       display:flex;
       flex-direction:column;
-      padding-top: 0px;
-      padding-bottom: 0px;
+      padding-top: 10px;
+      padding-bottom: env(safe-area-inset-bottom);
       user-select:none;
       position: relative;
       z-index: 2;
-          box-sizing: border-box;
     }
 
     #topBar{
@@ -123,7 +101,7 @@ html, body {
     }
 
     #robotLogo{
-      position: absolute;
+      position: fixed;
       left: 0;
       top: 0;
       width: var(--robotSize);
@@ -688,7 +666,7 @@ html, body {
       display:none;
       align-items:center;
       gap: 10px;
-      max-width: min(520px, calc(var(--stageW) - 24px));
+      max-width: min(520px, calc(100vw - 24px));
       box-sizing:border-box;
     }
     #rotatePrompt .emoji{ font-size: 26px; }
@@ -710,7 +688,7 @@ html, body {
     /* Camera scan modal */
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
-    .modalCard{ width: min(620px, var(--stageW)); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 9px 0 rgba(0,0,0,0.12); overflow:hidden; }
+    .modalCard{ width: min(620px, 96vw); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 9px 0 rgba(0,0,0,0.12); overflow:hidden; }
     .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
     .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }
     .modalClose{ width:46px; height:46px; border-radius: 14px; border: 4px solid #1d1d1d; background:#fff; cursor:pointer; font-weight: 900; font-size: 18px; box-shadow: 0 8px 0 rgba(0,0,0,0.07); }
@@ -864,12 +842,227 @@ body.loggedIn #toolsLoginArea{ display:none; }
 
     /* Guest mode stamp */
     body.loggedIn /* Logout button */
+    #logoutBtn{
+      position: fixed;
+      right: 12px;
+      bottom: calc(12px + env(safe-area-inset-bottom));
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 4px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      cursor:pointer;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      transition: transform 120ms ease;
+      z-index: 9999;
+    }
+    body.loggedIn #logoutBtn{ display:flex; }
+    #logoutBtn:hover{ transform: translateY(-1px); }
+    #logoutBtn:active{ transform: translateY(0); }
 
 
-    /* --- MASTER VOLUME FADER (moved to Shadow DOM component) --- */
+  
+
+    /* -------------------- MASTER VOLUME FADER (UI ONLY) -------------------- */
+    :root{ --instBtnSize: 58px; --instGap: 10px; }
+
+    /* Give the right column enough width for fader + VOL box */
     :root{ --rightW: 150px; }
 
-LAYOUT DEBUG MODE -------------------- */
+    .seqFaderRow{
+      width: 100%;
+      position: relative;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center; /* center the fader itself */
+      margin-top: 6px;
+      padding-bottom: 2px;
+    }
+
+    .seqFaderPanel{
+      width: var(--instBtnSize);
+      border-radius: 18px;
+      border: 3px solid #1d1d1d; /* thinner */
+      background:#ffffff;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 6px 4px;
+    }
+
+    .seqTrackArea{
+      position: relative;
+      /* Much shorter, while still ending at grid bottom */
+      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 70px);
+      width: var(--instBtnSize);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    .seqTrack{
+      position: relative;
+      width: 3px;      /* just enough to host the line */
+      height: 100%;
+      border: none;    /* remove surrounding shape */
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
+    }
+
+    
+    .seqTrack:before{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:0;
+      transform: translateX(-50%);
+      width: 3px; /* thin central line */
+      height: 100%;
+      border-radius: 999px;
+      background:#0f0f0f;
+      opacity: 1;
+      pointer-events:none;
+    }
+.seqIncTicks{
+      position:absolute;
+      left: 50%;          /* left edge sits on the track center line */
+      margin-left: 0;
+      top: 10px;          /* inset to match the visible track between caps */
+      bottom: 10px;
+      height: auto;
+      width: 6px;         /* small container */
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between; /* evenly space 8 ticks */
+      pointer-events:none;
+      opacity: 0.95;
+    }
+    .seqIncTicks .t{
+      width: 4px;   /* one third as long */
+      height: 2px;
+      background:#0f0f0f;
+      border-radius: 2px;
+    }
+    
+    .seqIncTicks .t:first-of-type,
+    .seqIncTicks .t:last-of-type{ visibility:hidden; }
+
+    .seqCaps{
+      position:absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      height: 100%;
+      width: 9px;
+      display:flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center; /* ensure caps are centered on the track line */
+      pointer-events:none;
+    }
+    .seqCap{
+      display:block;
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      border: 2px solid #1d1d1d;
+      background:#fff;
+      box-shadow: 0 2px 0 rgba(0,0,0,0.05);
+    }
+
+    .seqKnob{
+      position:absolute;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: calc(var(--instBtnSize) - 10px); /* slightly narrower than sound buttons */
+      height: 16px;              /* thinner */
+      border-radius: 11px;
+      border: 3px solid #1d1d1d; /* thin outline */
+      background:#ffffff;
+      box-shadow:
+        0 5px 0 rgba(0,0,0,0.05),
+        inset 0 2px 0 rgba(255,255,255,0.85);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      pointer-events:none;
+    }
+
+    .seqKnobStripe{
+      width: 70%;
+      height: 7px;
+      border-radius: 999px;
+      border: 3px solid rgba(29,29,29,0.70);
+      background: rgba(216,240,255,0.75);
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.55);
+    }
+
+    .seqReadout{
+      position:absolute;
+      left: 50%;
+      transform: translateX(calc(var(--instBtnSize) / 2 + 10px)); /* sits to the right without shifting fader */
+      bottom: 2px;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      border: 3px solid #1d1d1d;
+      background:#ffffff;
+      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px;
+      flex: 0 0 auto;
+    }
+    .seqReadout .small{
+      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
+      font-weight: 800;
+      font-size: 9px;
+      color: rgba(31,42,68,0.70);
+      letter-spacing: 0.4px;
+      line-height: 1;
+    }
+    .seqReadout .num{
+      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 16px;
+      color:#1f2a44;
+      line-height: 1;
+      text-shadow:
+        0 2px 0 rgba(255,255,255,0.9),
+        0 4px 0 rgba(0,0,0,0.08);
+    }
+    /* ---------------------------------------------------------------------- */
+
+  
+    /* --- Master volume fader interaction --- */
+    .seqTrackArea{ position: relative; }
+    .seqVolRange{
+      position:absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%) rotate(-90deg);
+      transform-origin: center;
+      width: calc(100% - 6px); /* matches track height after rotation */
+      height: 28px;
+      opacity: 0; /* invisible but interactive */
+      cursor: pointer;
+      z-index: 20;
+    }
+    /* prevent default focus ring from shifting layout */
+    .seqVolRange:focus{ outline: none; }
+
+
+    /* -------------------- LAYOUT DEBUG MODE -------------------- */
     /* Enable by adding ?debug=1 to the URL (e.g., /?debug=1) */
     .debug *{
       outline: 1px dashed rgba(255, 0, 0, 0.35);
@@ -914,13 +1107,11 @@ LAYOUT DEBUG MODE -------------------- */
 <body>
   <div id="debug-info" aria-hidden="true"></div>
 
-  <div id="viewport">
+</div>
   <div id="page">
     <div id="topBar">
       <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
-      
-    </div>
-<div id="robotLogo" aria-hidden="true">
+      <div id="robotLogo" aria-hidden="true">
         <div class="robotClip">
 <svg xmlns="http://www.w3.org/2000/svg" width="718" height="591" viewBox="0 0 718 591">
 <g>
@@ -930,6 +1121,7 @@ LAYOUT DEBUG MODE -------------------- */
 </svg>
         </div>
       </div>
+    </div>
 
     <div id="contentWrap">
       <div id="controls">
@@ -1008,13 +1200,49 @@ LAYOUT DEBUG MODE -------------------- */
             </div>
           </div>
 
-          <seq-volume-fader id="masterVolUI"></seq-volume-fader>
+          <div class="seqFaderRow" id="masterVolUI">
+            <div class="seqFaderPanel" aria-label="Master volume fader (UI)">
+              <div class="seqTrackArea" id="seqTrackArea">
+                <div class="seqTrack"></div>
+
+                
+                <input id="seqVolRange" class="seqVolRange" type="range" min="0" max="10" step="0.01" value="10" aria-label="Master volume" />
+<div class="seqIncTicks" aria-hidden="true">
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                  <div class="t"></div>
+                </div>
+
+                <div class="seqCaps" aria-hidden="true">
+                  <div class="seqCap"></div>
+                  <div class="seqCap"></div>
+                </div>
+
+                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8" tabindex="-1">
+                  <div class="seqKnobStripe"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="seqReadout" aria-label="Volume display">
+              <div class="small">VOL</div>
+              <div class="num" id="seqVolNum">10</div>
+            </div>
+          </div>
 
         </div>
       </div>
     </div>
   </div>
-<div id="rotatePrompt">
+
+  <button id="logoutBtn" onclick="logout()" aria-label="Logout">Logout</button>
+
+  <div id="rotatePrompt">
     <div class="emoji">📱↔️</div>
     <div class="text">
       Turn your device sideways for the best view!
@@ -1168,6 +1396,8 @@ const sequencerEl = document.getElementById("sequencer");
 const toolsEl = document.getElementById("tools");
 const toolsListEl = document.getElementById("toolsList");
 const toolLoginBtnEl = document.getElementById("toolLoginBtn");
+const logoutBtnEl = document.getElementById("logoutBtn");
+
 
 const tempoControlsEl = document.getElementById("tempoControls");
 const tempoUpBtnEl = document.getElementById("tempoUpBtn");
@@ -1366,20 +1596,9 @@ function setPlayheadWobbleFromTempo(t){
 }
 
 /* -------------------- RESPONSIVE FIT -------------------- */
-/* Lock the design stage to the *initial* window size.
-   When the window shrinks, nothing in the layout reflows/scales—users pan/scroll instead. */
-const STAGE_W = Math.max(320, (screen && screen.availWidth) ? screen.availWidth : window.innerWidth);
-const STAGE_H = Math.max(480, (screen && screen.availHeight) ? screen.availHeight : window.innerHeight);
-document.documentElement.style.setProperty("--stageW", STAGE_W + "px");
-document.documentElement.style.setProperty("--stageH", STAGE_H + "px");
-
-// Layout lock: once initial desktop layout is computed, prevent resize-driven nudges
-window.__KS_LAYOUT_LOCKED = false;
-
 function fitToViewport(){
-  if (window.__KS_LAYOUT_LOCKED) return;
-  const vw = STAGE_W;
-  const vh = STAGE_H;
+  const vw = Math.max(320, window.innerWidth);
+  const vh = Math.max(480, window.innerHeight);
 
   const headerH = 92;
   const controlsH = 70;
@@ -1489,7 +1708,6 @@ function positionRobotLogo(){
 
 
 window.addEventListener("resize", () => {
-  if (window.__KS_LAYOUT_LOCKED) return;
   requestAnimationFrame(() => {
     fitToViewport();
     buildGrid();
@@ -2845,11 +3063,7 @@ function init(){
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
 
-  // Two-pass layout: compute once, then again after paint/fonts to avoid misalignment when opened in a small window.
-  requestAnimationFrame(() => {
-    fitToViewport(); positionRobotLogo();
-    requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); window.__KS_LAYOUT_LOCKED = true; });
-  });
+  requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); });
 }
 init();
 
@@ -2935,6 +3149,173 @@ window.KidSequencer = {
 
 <script>
 (function(){
+  function initSeqVolumeFader(){
+    const area = document.getElementById('seqTrackArea');
+    const range = document.getElementById('seqVolRange');
+    const knob = document.getElementById('seqKnob');
+    const num  = document.getElementById('seqVolNum');
+    if(!area || !range || !knob || !num) return;
+
+    // --- Audio master volume hookup ---
+    function ensureAudio(){
+      // Your app lazily creates the AudioContext in getAudio()
+      if(typeof window.getAudio === 'function'){
+        const a = window.getAudio();
+        // Some browsers start suspended until user gesture
+        try{ if(a && a.state === 'suspended') a.resume(); }catch(_){}
+      }else{
+        // fallback: try the local getAudio if in same scope
+        try{ if(typeof getAudio === 'function') { const a = getAudio(); if(a && a.state === 'suspended') a.resume(); } }catch(_){}
+      }
+    }
+
+    function setMasterGainSmooth(g, snap){
+      // g: 0..1
+      // snap: boolean -> slightly faster settle
+      const target = Math.max(0, Math.min(1, g));
+      try{
+        // masterGain exists after getAudio()
+        const mg = (typeof window.masterGain !== 'undefined' ? window.masterGain : (typeof masterGain !== 'undefined' ? masterGain : null));
+        const ac = (typeof window.audioCtx !== 'undefined' ? window.audioCtx : (typeof audioCtx !== 'undefined' ? audioCtx : null));
+        if(mg && mg.gain && (ac && ac.currentTime != null)){
+          const t = ac.currentTime;
+          mg.gain.cancelScheduledValues(t);
+          // small glide so it feels smooth
+          const glide = snap ? 0.05 : 0.03;
+          mg.gain.setValueAtTime(mg.gain.value, t);
+          mg.gain.linearRampToValueAtTime(target, t + glide);
+        }
+      }catch(_){}
+    }
+
+    // Startup at 10
+    range.value = 10;
+    num.textContent = '10';
+    knob.setAttribute('aria-valuenow','10');
+
+    // Set audio volume at startup once audio exists
+    // (won't create audio until user interacts, but keeps state)
+    setMasterGainSmooth(1, true);
+
+    let capSize = 9;
+    let knobH = 16;
+    let topLimit = 0;
+    let bottomLimit = 0;
+
+    function recalcGeometry(){
+      const areaRect = area.getBoundingClientRect();
+      const cap = area.querySelector('.seqCap');
+      capSize = cap ? cap.getBoundingClientRect().height : 9;
+      knobH = knob.getBoundingClientRect().height || 16;
+
+      topLimit = capSize;
+      bottomLimit = areaRect.height - capSize;
+
+      if(bottomLimit < topLimit + knobH) bottomLimit = topLimit + knobH;
+    }
+
+    function valueToCenterY(v){
+      const travel = (bottomLimit - topLimit) - knobH;
+      const t = (10 - v) / 10;
+      return topLimit + (travel * t) + (knobH/2);
+    }
+
+    function centerYToValue(centerY){
+      const travel = (bottomLimit - topLimit) - knobH;
+      const yTop = centerY - knobH/2;
+      const t = (yTop - topLimit) / (travel || 1);
+      const v = 10 - (t * 10);
+      return Math.max(0, Math.min(10, v));
+    }
+
+    function setKnobCenterY(centerY){
+      knob.style.top = centerY + 'px';
+    }
+
+    function updateDisplayFromValue(v){
+      const vi = Math.round(v);
+      num.textContent = String(vi);
+      knob.setAttribute('aria-valuenow', String(vi));
+    }
+
+    function applyValue(v, snap){
+      const vSnap = snap ? Math.round(v) : v; // fader snaps only on release
+      range.value = String(vSnap);
+      updateDisplayFromValue(v);
+      setKnobCenterY(valueToCenterY(vSnap));
+
+      // Smooth master gain follows the (continuous) fader while dragging,
+      // but snaps to the same increment on release.
+      const vn = (snap ? Math.round(v) : v) / 10; // 0..1
+      // DJ-style fader taper: feels more natural near the bottom (log-ish curve)
+      // 0 -> hard mute, 1 -> unity gain
+      const gain = (vn <= 0) ? 0 : Math.pow(10, ((vn * 0) + (-60 * (1 - vn))) / 20);
+      setMasterGainSmooth(gain, snap);
+    }
+
+    function layoutFromRange(){
+      recalcGeometry();
+      const v = Number(range.value);
+      updateDisplayFromValue(v);
+      setKnobCenterY(valueToCenterY(v));
+    }
+
+    let dragging = false;
+
+    function pointerToCenterY(e){
+      const areaRect = area.getBoundingClientRect();
+      const y = e.clientY - areaRect.top;
+
+      const minCenter = topLimit + (knobH/2);
+      const maxCenter = (bottomLimit - knobH) + (knobH/2);
+
+      return Math.max(minCenter, Math.min(maxCenter, y));
+    }
+
+    function onPointerDown(e){
+      ensureAudio();
+      recalcGeometry();
+      dragging = true;
+      try{ area.setPointerCapture(e.pointerId); }catch(_){}
+
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, false);
+      e.preventDefault();
+    }
+
+    function onPointerMove(e){
+      if(!dragging) return;
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, false);
+      e.preventDefault();
+    }
+
+    function onPointerUp(e){
+      if(!dragging) return;
+      dragging = false;
+
+      const centerY = pointerToCenterY(e);
+      const v = centerYToValue(centerY);
+      applyValue(v, true);
+
+      try{ area.releasePointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault();
+    }
+
+    area.addEventListener('pointerdown', onPointerDown);
+    area.addEventListener('pointermove', onPointerMove);
+    area.addEventListener('pointerup', onPointerUp);
+    area.addEventListener('pointercancel', onPointerUp);
+
+    window.addEventListener('resize', layoutFromRange);
+
+    requestAnimationFrame(layoutFromRange);
+    setTimeout(layoutFromRange, 50);
+  }
+
+  document.addEventListener('DOMContentLoaded', initSeqVolumeFader);
 })();
 </script>
 
@@ -2985,428 +3366,6 @@ window.KidSequencer = {
     requestAnimationFrame(markOverflow);
     setTimeout(markOverflow, 60);
   });
-})();
-</script>
-
-</div>
-
-
-<script>
-/* === Drag-to-pan viewport === */
-(function(){
-  const viewport = document.getElementById('viewport');
-  const page = document.getElementById('page');
-  if(!viewport || !page) return;
-
-  // Lock "stage" size once (the first time the page loads at a good size)
-  function lockStageOnce(){
-    if(page.dataset.stageLocked === "1") return;
-
-    // Use scrollWidth/scrollHeight for intrinsic content size.
-    // This preserves your full-screen layout as the baseline.
-    const w = Math.ceil(page.scrollWidth);
-    const h = Math.ceil(page.scrollHeight);
-
-    if(w > 0) page.style.minWidth = w + "px";
-    if(h > 0) page.style.minHeight = h + "px";
-
-    page.dataset.stageLocked = "1";
-  }
-
-  // Run after layout settles
-  window.addEventListener('load', () => {
-    requestAnimationFrame(lockStageOnce);
-    setTimeout(lockStageOnce, 50);
-  });
-
-  // Cursor hints
-  document.body.classList.add('can-pan');
-
-  // Drag to pan (mouse / pointer)
-  let dragging = false;
-  let startX = 0, startY = 0;
-  let startLeft = 0, startTop = 0;
-  let pointerId = null;
-
-  // Disable drag-to-pan while interacting with the volume fader (Shadow DOM)
-  let panBlockedByFader = false;
-  const faderHost = document.getElementById('masterVolUI');
-  if(faderHost){
-    faderHost.addEventListener('pointerenter', () => { panBlockedByFader = true; });
-    faderHost.addEventListener('pointerleave', () => { panBlockedByFader = false; });
-  }
-  function eventHitsFader(ev){
-    const path = ev.composedPath ? ev.composedPath() : [];
-    return path.some(n => n && n.tagName && String(n.tagName).toLowerCase() === 'seq-volume-fader');
-  }
-
-  function isInteractive(el){
-    return !!el.closest('button, a, input, select, textarea, label, [role="button"], .cell, .drawer, .knob, .handle, .slider');
-  }
-
-  function onDown(e){
-    // Left mouse / primary touch only
-    if(e.button !== undefined && e.button !== 0) return;
-    if(panBlockedByFader || eventHitsFader(e)) return;
-    if(isInteractive(e.target)) return;
-
-    dragging = true;
-    pointerId = e.pointerId ?? null;
-    startX = e.clientX;
-    startY = e.clientY;
-    startLeft = viewport.scrollLeft;
-    startTop = viewport.scrollTop;
-
-    document.body.classList.add('dragging-pan');
-    try{ if(pointerId !== null) viewport.setPointerCapture(pointerId); }catch(_){}
-    e.preventDefault();
-  }
-
-  function onMove(e){
-    if(!dragging) return;
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    viewport.scrollLeft = startLeft - dx;
-    viewport.scrollTop  = startTop  - dy;
-    e.preventDefault();
-  }
-
-  function onUp(){
-    if(!dragging) return;
-    dragging = false;
-    document.body.classList.remove('dragging-pan');
-    pointerId = null;
-  }
-
-  viewport.addEventListener('pointerdown', onDown, {passive:false});
-  viewport.addEventListener('pointermove', onMove, {passive:false});
-  window.addEventListener('pointerup', onUp);
-  window.addEventListener('pointercancel', onUp);
-})();
-</script>
-
-<style>
-  body.can-pan{ cursor: grab; }
-  body.dragging-pan{ cursor: grabbing; }
-</style>
-
-
-<script>
-/* Shadow-DOM encapsulated master volume fader */
-(function(){
-  class SeqVolumeFader extends HTMLElement{
-    connectedCallback(){
-      if(this.shadowRoot) return;
-      const sr = this.attachShadow({mode:'open'});
-      sr.innerHTML = `
-<style>
-:host{ display:block; width:100%; }
-/* -------------------- MASTER VOLUME FADER (UI ONLY) -------------------- */
-    :host{ --instBtnSize: 58px; --instGap: 10px; }
-
-    /* Give the right column enough width for fader + VOL box */
-    :host{ --rightW: 150px; }
-
-    .seqFaderRow{
-      width: 100%;
-      position: relative;
-      display:flex;
-      align-items:flex-end;
-      justify-content:center; /* center the fader itself */
-      margin-top: 6px;
-      padding-bottom: 2px;
-    }
-
-    .seqFaderPanel{
-      width: var(--instBtnSize);
-      border-radius: 18px;
-      border: 3px solid #1d1d1d; /* thinner */
-      background:#ffffff;
-      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding: 6px 4px;
-    }
-
-    .seqTrackArea{
-      position: relative;
-      /* Much shorter, while still ending at grid bottom */
-      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 70px);
-      width: var(--instBtnSize);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-
-    .seqTrack{
-      position: relative;
-      width: 3px;      /* just enough to host the line */
-      height: 100%;
-      border: none;    /* remove surrounding shape */
-      background: transparent;
-      box-shadow: none;
-      overflow: visible;
-    }
-
-    
-    .seqTrack:before{
-      content:"";
-      position:absolute;
-      left:50%;
-      top:0;
-      transform: translateX(-50%);
-      width: 3px; /* thin central line */
-      height: 100%;
-      border-radius: 999px;
-      background:#0f0f0f;
-      opacity: 1;
-      pointer-events:none;
-    }
-.seqIncTicks{
-      position:absolute;
-      left: 50%;          /* left edge sits on the track center line */
-      margin-left: 0;
-      top: 10px;          /* inset to match the visible track between caps */
-      bottom: 10px;
-      height: auto;
-      width: 6px;         /* small container */
-      display:flex;
-      flex-direction: column;
-      justify-content: space-between; /* evenly space 8 ticks */
-      pointer-events:none;
-      opacity: 0.95;
-    }
-    .seqIncTicks .t{
-      width: 4px;   /* one third as long */
-      height: 2px;
-      background:#0f0f0f;
-      border-radius: 2px;
-    }
-    
-    .seqIncTicks .t:first-of-type,
-    .seqIncTicks .t:last-of-type{ visibility:hidden; }
-
-    .seqCaps{
-      position:absolute;
-      left: 50%;
-      transform: translateX(-50%);
-      height: 100%;
-      width: 9px;
-      display:flex;
-      flex-direction: column;
-      justify-content: space-between;
-      align-items: center; /* ensure caps are centered on the track line */
-      pointer-events:none;
-    }
-    .seqCap{
-      display:block;
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      border: 2px solid #1d1d1d;
-      background:#fff;
-      box-shadow: 0 2px 0 rgba(0,0,0,0.05);
-    }
-
-    .seqKnob{
-      position:absolute;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: calc(var(--instBtnSize) - 10px); /* slightly narrower than sound buttons */
-      height: 16px;              /* thinner */
-      border-radius: 11px;
-      border: 3px solid #1d1d1d; /* thin outline */
-      background:#ffffff;
-      box-shadow:
-        0 5px 0 rgba(0,0,0,0.05),
-        inset 0 2px 0 rgba(255,255,255,0.85);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      pointer-events:none;
-    }
-
-    .seqKnobStripe{
-      width: 70%;
-      height: 7px;
-      border-radius: 999px;
-      border: 3px solid rgba(29,29,29,0.70);
-      background: rgba(216,240,255,0.75);
-      box-shadow: inset 0 2px 0 rgba(255,255,255,0.55);
-    }
-
-    .seqReadout{
-      position:absolute;
-      left: 50%;
-      transform: translateX(calc(var(--instBtnSize) / 2 + 10px)); /* sits to the right without shifting fader */
-      bottom: 2px;
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      border: 3px solid #1d1d1d;
-      background:#ffffff;
-      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex-direction: column;
-      gap: 2px;
-      padding: 4px;
-      flex: 0 0 auto;
-    }
-    .seqReadout .small{
-      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
-      font-weight: 800;
-      font-size: 9px;
-      color: rgba(31,42,68,0.70);
-      letter-spacing: 0.4px;
-      line-height: 1;
-    }
-    .seqReadout .num{
-      font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
-      font-weight: 900;
-      font-size: 16px;
-      color:#1f2a44;
-      line-height: 1;
-      text-shadow:
-        0 2px 0 rgba(255,255,255,0.9),
-        0 4px 0 rgba(0,0,0,0.08);
-    }
-    /* ---------------------------------------------------------------------- */
-
-  
-    /* --- Master volume fader interaction --- */
-    .seqTrackArea{ position: relative; }
-    .seqVolRange{
-      position:absolute;
-      left: 50%;
-      top: 0;
-      transform: translateX(-50%) rotate(-90deg);
-      transform-origin: center;
-      width: calc(100% - 6px); /* matches track height after rotation */
-      height: 28px;
-      opacity: 0; /* invisible but interactive */
-      cursor: pointer;
-      z-index: 20;
-    }
-    /* prevent default focus ring from shifting layout */
-    .seqVolRange:focus{ outline: none; }
-
-
-    /* --------------------
-</style>
-<div class="seqFaderRow" >
-            <div class="seqFaderPanel" aria-label="Master volume fader (UI)">
-              <div class="seqTrackArea" id="seqTrackArea">
-                <div class="seqTrack"></div>
-
-                
-                <input id="seqVolRange" class="seqVolRange" type="range" min="0" max="10" step="0.01" value="10" aria-label="Master volume" />
-<div class="seqIncTicks" aria-hidden="true">
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                  <div class="t"></div>
-                </div>
-
-                <div class="seqCaps" aria-hidden="true">
-                  <div class="seqCap"></div>
-                  <div class="seqCap"></div>
-                </div>
-
-                <div class="seqKnob" id="seqKnob" role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="8" tabindex="-1">
-                  <div class="seqKnobStripe"></div>
-                </div>
-              </div>
-            </div>
-
-            <div class="seqReadout" aria-label="Volume display">
-              <div class="small">VOL</div>
-              <div class="num" id="seqVolNum">10</div>
-            </div>
-          </div>
-`;
-      const area = sr.getElementById('seqTrackArea');
-      const range = sr.getElementById('seqVolRange');
-      const knob = sr.getElementById('seqKnob');
-      const num  = sr.getElementById('seqVolNum');
-      if(!area || !range || !knob || !num) return;
-
-      function ensureAudio(){
-        try{
-          if(typeof window.getAudio === 'function'){
-            const a = window.getAudio();
-            try{ if(a && a.state === 'suspended') a.resume(); }catch(_){}
-          }
-        }catch(_){}
-      }
-      function setMasterGain(v){
-        // Prefer global masterGain exposed on window; fall back to any globally accessible masterGain
-        const mg = (typeof window.masterGain !== 'undefined' ? window.masterGain :
-                   (typeof masterGain !== 'undefined' ? masterGain : null));
-        if(mg && mg.gain && typeof mg.gain.value === 'number'){
-          mg.gain.value = v;
-        }
-      }
-      function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
-
-      function layoutFromRange(){
-        const r = range.getBoundingClientRect();
-        const a = area.getBoundingClientRect();
-        // track is centered in area; knob uses translateY
-        const minY = 10;                // matches CSS endstop spacing
-        const maxY = a.height - 10;     // bottom endstop
-        const t = parseFloat(range.value) / 10; // 0..1 (0 bottom, 1 top in UI)
-        const y = maxY - (maxY-minY)*t;
-        knob.style.top = y + 'px';
-        num.textContent = String(Math.round(t*10));
-      }
-
-      // Ensure audio on first interaction
-      range.addEventListener('pointerdown', ensureAudio, {passive:true});
-      range.addEventListener('input', ()=>{
-        const v = parseFloat(range.value)/10;
-        setMasterGain(v);
-        layoutFromRange();
-      });
-
-      // pointer dragging (keep same feel as original)
-      let dragging=false;
-      const onPointerDown=(e)=>{
-        dragging=true;
-        area.setPointerCapture(e.pointerId);
-        ensureAudio();
-      };
-      const onPointerMove=(e)=>{
-        if(!dragging) return;
-        const a=area.getBoundingClientRect();
-        const y=e.clientY - a.top;
-        const minY=10, maxY=a.height-10;
-        const yy=clamp(y,minY,maxY);
-        const t=(maxY-yy)/(maxY-minY);
-        range.value = String(t*10);
-        setMasterGain(t);
-        layoutFromRange();
-      };
-      const onPointerUp=()=>{
-        dragging=false;
-      };
-      area.addEventListener('pointerdown', onPointerDown);
-      area.addEventListener('pointermove', onPointerMove);
-      area.addEventListener('pointerup', onPointerUp);
-      area.addEventListener('pointercancel', onPointerUp);
-
-      // initial layout
-      requestAnimationFrame(layoutFromRange);
-      setTimeout(layoutFromRange, 50);
-    }
-  }
-  customElements.define('seq-volume-fader', SeqVolumeFader);
 })();
 </script>
 
