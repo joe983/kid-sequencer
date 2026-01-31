@@ -809,8 +809,6 @@ body{
     }
     .loginBtn:hover{ transform: translateY(-1px); }
 
-    body.loggedIn .loginBtn{ color:#ff0000; }
-
     #tempoControls{ position:relative; }
     #tempoLoginHint{
       position:absolute;
@@ -1285,8 +1283,10 @@ function updateLoginLinks(){
       a.href = "login.html?return=" + encodeURIComponent(current);
       a.dataset.mode = "login";
       a.onclick = null;
+      try{ a.style.color = ""; }catch(e){}
     }else{
       a.textContent = "Logout";
+      try{ a.style.color = "#ff0000"; }catch(e){}
       a.href = "#";
       a.dataset.mode = "logout";
       a.onclick = (ev) => {
@@ -1333,51 +1333,51 @@ window.addEventListener('pageshow', () => {
 });
 
 function logout(){
-  // Clear session flags (tab/window-close behaviour stays intact)
+  // Clear session-based login flags (tab/window close should also clear these)
   try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+  // Legacy / extra flags used by login page
   try{ sessionStorage.removeItem('ks_auth'); }catch(e){}
   try{ sessionStorage.removeItem('ks_uid'); }catch(e){}
   try{ sessionStorage.removeItem('ks_email'); }catch(e){}
+
   isLoggedIn = false;
   window.isLoggedIn = false;
 
   // Stop playback safely
   try{ stop(); }catch(e){}
 
-  // Restore landing UI immediately
+  // Restore the locked/landing UI immediately
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
   updateLoginLinks();
 
-  // Hard reset to the landing page state (prevents any odd cached UI state)
-  try{ location.href = "index.html?ts=" + Date.now(); }catch(e){}
+  requestAnimationFrame(() => {
+    try{ fitToViewport(); }catch(e){}
+    try{ positionRobotLogo(); }catch(e){}
+  });
 }
 
 /* Called by Firebase auth listener (module script) to keep UI in sync */
 function setLoggedInFromFirebase(user){
-  // Keep BOTH the local `isLoggedIn` variable and `window.isLoggedIn` in sync.
-  // Use sessionStorage so closing the tab/window logs the user out.
   if(user){
     try{ sessionStorage.setItem('kidseq_logged_in','1'); }catch(e){}
     try{ sessionStorage.setItem('kidseq_user_email', user.email || ''); }catch(e){}
     try{ sessionStorage.setItem('kidseq_user_uid', user.uid || ''); }catch(e){}
-    try{ sessionStorage.setItem('ks_auth','user'); }catch(e){}
-    try{ sessionStorage.setItem('ks_uid', user.uid || ''); }catch(e){}
-    try{ sessionStorage.setItem('ks_email', user.email || ''); }catch(e){}
     isLoggedIn = true;
-    window.isLoggedIn = true;
   }else{
     try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
     try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
     try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+    // Also clear extra keys used by login page
     try{ sessionStorage.removeItem('ks_auth'); }catch(e){}
     try{ sessionStorage.removeItem('ks_uid'); }catch(e){}
     try{ sessionStorage.removeItem('ks_email'); }catch(e){}
     isLoggedIn = false;
-    window.isLoggedIn = false;
   }
+
+  window.isLoggedIn = isLoggedIn;
 
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
@@ -3569,18 +3569,13 @@ window.KidSequencer = {
       loginLink.setAttribute("href","#");
       loginLink.onclick = async (ev)=>{
         ev.preventDefault();
-        ev.stopPropagation();
         try{ await signOut(auth); }catch(e){}
         setSessionLoggedOut();
-        // Return to the landing view on the same page
-        try{ location.href = "index.html?ts=" + Date.now(); }catch(e){}
       };
     }
   }
 
   onAuthStateChanged(auth, (user)=>{
-    // Keep the non-module script in sync (tempo/camera guards use `isLoggedIn`).
-    try{ window.setLoggedInFromFirebase && window.setLoggedInFromFirebase(user); }catch(e){}
     if(user) setSessionLoggedIn(user);
     else setSessionLoggedOut();
   });
