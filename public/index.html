@@ -2930,11 +2930,32 @@ window.KidSequencer = {
 /* OPTION A ORGANISATION END */
 </script>
 <script type="module">
-  import { auth } from "./js/firebase-init.js";
+  import { auth, db } from "./js/firebase-init.js";
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
-  onAuthStateChanged(auth, (user) => {
-    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
+  onAuthStateChanged(auth, async (user) => {
+    // Keep the old localStorage flags in sync (so existing "locked/unlocked" logic still works)
+    try{
+      if(user){
+        localStorage.setItem('kidseq_logged_in','1');
+        localStorage.setItem('kidseq_user_email', user.email || '');
+      }else{
+        localStorage.removeItem('kidseq_logged_in');
+        localStorage.removeItem('kidseq_user_email');
+      }
+    }catch(e){}
+
+    // Touch the user profile doc (optional)
+    if(user){
+      try{
+        await setDoc(doc(db, 'users', user.uid), {
+          email: user.email || '',
+          lastSeenAt: serverTimestamp()
+        }, { merge: true });
+      }catch(e){}
+    }
+
     console.log("Auth user:", user ? user.email : "none");
   });
 </script>

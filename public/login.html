@@ -345,12 +345,13 @@
   </div>
 
   <script type="module">
-    import { auth } from './js/firebase-init.js';
+    import { auth, db } from './js/firebase-init.js';
     import {
       createUserWithEmailAndPassword,
       signInWithEmailAndPassword,
       signOut
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    import { doc, setDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 
     const params = new URLSearchParams(location.search);
     const returnTo = params.get('return') || 'index.html';
@@ -362,6 +363,14 @@
     const errBox = document.getElementById('errBox');
     const infoMsg = document.getElementById('infoMsg');
     const guestBtn = document.getElementById('guestBtn');
+    // If firebase-init.js still has placeholder config, show a helpful message.
+    try{
+      const cfg = auth?.app?.options || {};
+      if(String(cfg.apiKey || '').startsWith('PASTE_') || String(cfg.projectId || '').startsWith('PASTE_')){
+        showError('Firebase is not configured yet. Open /js/firebase-init.js and paste your Firebase web config values.');
+      }
+    }catch(e){}
+
     function showError(msg){
       if (!errBox) return;
       errBox.textContent = msg;
@@ -424,6 +433,16 @@ signInForm?.addEventListener('submit', async (e) => {
       }
       try {
         await signInWithEmailAndPassword(auth, email, password);
+        // Store/update user profile in Firestore (users/{uid})
+        try{
+          const u = auth.currentUser;
+          if(u){
+            await setDoc(doc(db, 'users', u.uid), {
+              email: u.email || email || '',
+              lastLoginAt: serverTimestamp()
+            }, { merge: true });
+          }
+        }catch(e){ /* ignore */ }
         try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
         try{ localStorage.setItem('kidseq_user_email', email || ''); }catch(e){}
 
@@ -457,6 +476,17 @@ signInForm?.addEventListener('submit', async (e) => {
       }
       try {
         await createUserWithEmailAndPassword(auth, email, pass1);
+        // Create user profile in Firestore (users/{uid})
+        try{
+          const u = auth.currentUser;
+          if(u){
+            await setDoc(doc(db, 'users', u.uid), {
+              email: u.email || email || '',
+              createdAt: serverTimestamp(),
+              lastLoginAt: serverTimestamp()
+            }, { merge: true });
+          }
+        }catch(e){ /* ignore */ }
         try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
         try{ localStorage.setItem('kidseq_user_email', email || ''); }catch(e){}
 
