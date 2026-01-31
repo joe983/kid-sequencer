@@ -1077,7 +1077,8 @@ const toolSteps = [
 let selectedSteps = 1;
 
 let isLoggedIn = false;
-try{ isLoggedIn = localStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+window.isLoggedIn = isLoggedIn;
 const LOCKED_STEPS = new Set([4,8,16]);
 
 /* -------------------- STATE -------------------- */
@@ -1300,7 +1301,7 @@ function updateLoginLinks(){
 updateLoginLinks();
 
 function applyLockState(){
-  const locked = !isLoggedIn;
+  const locked = !(typeof window.isLoggedIn === 'boolean' ? window.isLoggedIn : isLoggedIn);
   const robotLogoEl = document.getElementById("robotLogo");
   if(robotLogoEl) robotLogoEl.style.display = "flex";
 
@@ -1316,7 +1317,7 @@ function applyLockState(){
   if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
   if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
   if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
-  document.body.classList.toggle("loggedIn", isLoggedIn);
+  document.body.classList.toggle("loggedIn", (typeof window.isLoggedIn === "boolean" ? window.isLoggedIn : isLoggedIn));
 
   try{ positionRobotLogo(); }catch(e){}
 }
@@ -1324,7 +1325,7 @@ applyLockState();
 
 // Ensure the correct state when the browser restores the page from cache
 window.addEventListener('pageshow', () => {
-  try{ isLoggedIn = localStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
+  try{ isLoggedIn = sessionStorage.getItem('kidseq_logged_in') === '1'; window.isLoggedIn = isLoggedIn; }catch(e){ isLoggedIn = false; }
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
 });
@@ -3493,6 +3494,77 @@ window.KidSequencer = {
   }
   customElements.define('seq-volume-fader', SeqVolumeFader);
 })();
+</script>
+
+
+<script type="module">
+  // Firebase Auth wiring for session-only login:
+  // - Uses SESSION persistence so closing the browser/window logs out.
+  // - Keeps sessionStorage keys in sync so the landing/locked UI is always correct.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+  import { getAuth, onAuthStateChanged, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+  // Firebase config (same project as your login page)
+  const firebaseConfig = {
+    apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
+    authDomain: "kid-sequencer.firebaseapp.com",
+    projectId: "kid-sequencer",
+    storageBucket: "kid-sequencer.firebasestorage.app",
+    messagingSenderId: "715996068165",
+    appId: "1:715996068165:web:84e127454cb9bb0c35a62c",
+    measurementId: "G-3JRQKLK31R"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  await setPersistence(auth, browserSessionPersistence);
+
+  const loginLink = document.getElementById("toolLoginBtn");
+
+  function setSessionLoggedOut(){
+    try{
+      sessionStorage.removeItem("kidseq_logged_in");
+      sessionStorage.removeItem("kidseq_user_email");
+      sessionStorage.removeItem("kidseq_user_uid");
+      sessionStorage.removeItem("ks_auth");
+      sessionStorage.removeItem("ks_uid");
+      sessionStorage.removeItem("ks_email");
+    }catch(e){}
+    window.isLoggedIn = false;
+    try{ applyLockState(); }catch(e){}
+    if(loginLink){
+      loginLink.textContent = "Login";
+      loginLink.setAttribute("href","login.html");
+      loginLink.onclick = null;
+    }
+  }
+
+  function setSessionLoggedIn(user){
+    try{
+      sessionStorage.setItem("kidseq_logged_in","1");
+      sessionStorage.setItem("kidseq_user_email", user.email || "");
+      sessionStorage.setItem("kidseq_user_uid", user.uid || "");
+      sessionStorage.setItem("ks_auth","user");
+      sessionStorage.setItem("ks_uid", user.uid || "");
+      sessionStorage.setItem("ks_email", user.email || "");
+    }catch(e){}
+    window.isLoggedIn = true;
+    try{ applyLockState(); }catch(e){}
+    if(loginLink){
+      loginLink.textContent = "Logout";
+      loginLink.setAttribute("href","#");
+      loginLink.onclick = async (ev)=>{
+        ev.preventDefault();
+        try{ await signOut(auth); }catch(e){}
+        setSessionLoggedOut();
+      };
+    }
+  }
+
+  onAuthStateChanged(auth, (user)=>{
+    if(user) setSessionLoggedIn(user);
+    else setSessionLoggedOut();
+  });
 </script>
 
 </body>

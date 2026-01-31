@@ -306,7 +306,9 @@
       getAuth,
       onAuthStateChanged,
       signInWithEmailAndPassword,
-      createUserWithEmailAndPassword
+      createUserWithEmailAndPassword,
+      setPersistence,
+      browserSessionPersistence
     } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     import {
       getFirestore,
@@ -365,13 +367,13 @@
     if ((params.get("mode") || "").toLowerCase() === "register") setTab("register");
 
     guestBtn.addEventListener("click", ()=>{
-      localStorage.setItem("ks_auth", "guest");
+      sessionStorage.setItem("ks_auth", "guest");
       // Keep index.html lock-state keys in sync
-      localStorage.removeItem("kidseq_logged_in");
-      localStorage.removeItem("ks_uid");
-      localStorage.removeItem("kidseq_user_uid");
-      localStorage.removeItem("ks_email");
-      localStorage.removeItem("kidseq_user_email");
+      sessionStorage.removeItem("kidseq_logged_in");
+      sessionStorage.removeItem("ks_uid");
+      sessionStorage.removeItem("kidseq_user_uid");
+      sessionStorage.removeItem("ks_email");
+      sessionStorage.removeItem("kidseq_user_email");
       navTo(returnTo);
     });
 
@@ -380,18 +382,20 @@
     // -----------------------------
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
+    // Use SESSION persistence so closing the browser/window logs the user out automatically.
+    await setPersistence(auth, browserSessionPersistence);
     const db = getFirestore(app);
 
     // If already logged in, skip login page
     onAuthStateChanged(auth, (user)=>{
       if (!user) return;
-      localStorage.setItem("ks_auth", "user");
+      sessionStorage.setItem("ks_auth", "user");
         // Keep index.html lock-state keys in sync
-        localStorage.setItem("kidseq_logged_in","1");
-      localStorage.setItem("ks_uid", user.uid);
-        localStorage.setItem("kidseq_user_uid", user.uid);
-      localStorage.setItem("ks_email", user.email || "");
-        localStorage.setItem("kidseq_user_email", user.email || "");
+        sessionStorage.setItem("kidseq_logged_in","1");
+      sessionStorage.setItem("ks_uid", user.uid);
+        sessionStorage.setItem("kidseq_user_uid", user.uid);
+      sessionStorage.setItem("ks_email", user.email || "");
+        sessionStorage.setItem("kidseq_user_email", user.email || "");
       navTo(returnTo);
     });
 
@@ -422,13 +426,13 @@
         setBusy(true);
         const cred = await signInWithEmailAndPassword(auth, email, pass);
         await upsertUserDoc(cred.user); // merge keeps existing
-        localStorage.setItem("ks_auth", "user");
+        sessionStorage.setItem("ks_auth", "user");
         // Keep index.html lock-state keys in sync
-        localStorage.setItem("kidseq_logged_in","1");
-        localStorage.setItem("ks_uid", cred.user.uid);
-        localStorage.setItem("kidseq_user_uid", cred.user.uid);
-        localStorage.setItem("ks_email", cred.user.email || "");
-        localStorage.setItem("kidseq_user_email", cred.user.email || "");
+        sessionStorage.setItem("kidseq_logged_in","1");
+        sessionStorage.setItem("ks_uid", cred.user.uid);
+        sessionStorage.setItem("kidseq_user_uid", cred.user.uid);
+        sessionStorage.setItem("ks_email", cred.user.email || "");
+        sessionStorage.setItem("kidseq_user_email", cred.user.email || "");
         navTo(returnTo);
       }catch(err){
         console.error(err);
@@ -462,13 +466,13 @@
         setBusy(true);
         const cred = await createUserWithEmailAndPassword(auth, email, pass);
         await upsertUserDoc(cred.user, { createdAt: serverTimestamp() });
-        localStorage.setItem("ks_auth", "user");
+        sessionStorage.setItem("ks_auth", "user");
         // Keep index.html lock-state keys in sync
-        localStorage.setItem("kidseq_logged_in","1");
-        localStorage.setItem("ks_uid", cred.user.uid);
-        localStorage.setItem("kidseq_user_uid", cred.user.uid);
-        localStorage.setItem("ks_email", cred.user.email || "");
-        localStorage.setItem("kidseq_user_email", cred.user.email || "");
+        sessionStorage.setItem("kidseq_logged_in","1");
+        sessionStorage.setItem("ks_uid", cred.user.uid);
+        sessionStorage.setItem("kidseq_user_uid", cred.user.uid);
+        sessionStorage.setItem("ks_email", cred.user.email || "");
+        sessionStorage.setItem("kidseq_user_email", cred.user.email || "");
         navTo(returnTo);
       }catch(err){
         console.error(err);
