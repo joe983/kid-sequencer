@@ -855,6 +855,15 @@ body.loggedIn #toolsLoginArea{ display:none; }
   filter: grayscale(1);
   cursor: not-allowed;
 }
+
+/* Allow Piano to look enabled on landing page, even in locked (guest) mode */
+#instButtons.locked #btnPiano{
+  opacity: 1;
+  filter: none;
+  cursor: pointer;
+}
+#instButtons.locked #btnPiano:hover{ transform: translateY(-1px); }
+
 #instButtons.locked .instBtn:hover{ transform: none; }
 
 
@@ -3286,7 +3295,8 @@ window.KidSequencer = {
       transform-origin: center;
       width: calc(100% - 6px); /* matches track height after rotation */
       height: 28px;
-      opacity: 0; /* invisible but interactive */
+      opacity: 0; /* invisible */
+      pointer-events: none; /* prevent range click-jump; we handle clicks/drags ourselves */
       cursor: pointer;
       z-index: 20;
     }
@@ -3375,27 +3385,64 @@ window.KidSequencer = {
         layoutFromRange();
       });
 
-      // pointer dragging (keep same feel as original)
+      // pointer dragging (no-jump: keep value until user actually drags)
       let dragging=false;
-      const onPointerDown=(e)=>{
-        dragging=true;
-        area.setPointerCapture(e.pointerId);
-        ensureAudio();
-      };
-      const onPointerMove=(e)=>{
-        if(!dragging) return;
-        const a=area.getBoundingClientRect();
-        const y=e.clientY - a.top;
+      let moved=false;
+      let startX=0, startY=0;
+      let pointerOffset=0;
+      let clickOnKnob=false;
+
+      const setFromClientY=(clientY, a)=>{
         const minY=10, maxY=a.height-10;
-        const yy=clamp(y,minY,maxY);
+        // apply offset only when we grabbed the knob so the knob doesn't jump under the pointer
+        const yRaw=(clientY - a.top) - (clickOnKnob ? pointerOffset : 0);
+        const yy=clamp(yRaw, minY, maxY);
         const t=(maxY-yy)/(maxY-minY);
         range.value = String(t*10);
         setMasterGain(t);
         layoutFromRange();
       };
+
+      const onPointerDown=(e)=>{
+        dragging=true;
+        moved=false;
+        startX=e.clientX; startY=e.clientY;
+        clickOnKnob=!!(e.target && e.target.closest && e.target.closest('.seqKnob'));
+        const a=area.getBoundingClientRect();
+        // compute where the knob center currently is (in area coords) to preserve relative grab point
+        const t0=(parseFloat(range.value)||10)/10; // 0..10 scale -> 0..1
+        const minY=10, maxY=a.height-10;
+        const knobY = maxY - (t0 * (maxY-minY));
+        pointerOffset = (e.clientY - a.top) - knobY;
+
+        area.setPointerCapture(e.pointerId);
+        ensureAudio();
+
+        // If user clicks the *track* (not the knob), allow an immediate jump to that position.
+        if(!clickOnKnob){
+          setFromClientY(e.clientY, a);
+        }
+      };
+
+      const onPointerMove=(e)=>{
+        if(!dragging) return;
+
+        // Don't change value until the user actually drags a few pixels (prevents first-click jump)
+        if(!moved){
+          const dx=Math.abs(e.clientX-startX);
+          const dy=Math.abs(e.clientY-startY);
+          if(dx<3 && dy<3) return;
+          moved=true;
+        }
+        const a=area.getBoundingClientRect();
+        setFromClientY(e.clientY, a);
+      };
+
       const onPointerUp=()=>{
         dragging=false;
+        moved=false;
       };
+
       area.addEventListener('pointerdown', onPointerDown);
       area.addEventListener('pointermove', onPointerMove);
       area.addEventListener('pointerup', onPointerUp);
