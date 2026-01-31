@@ -1282,8 +1282,27 @@ function bindLockedNudge(el){
 /* Make login links return to this page */
 function updateLoginLinks(){
   const current = (location.pathname.split("/").pop() || "index.html");
+  const logged = !!isLoggedIn;
+
   document.querySelectorAll("a.loginLink").forEach(a => {
-    a.href = "login.html?return=" + encodeURIComponent(current);
+    if(!logged){
+      a.textContent = "Login";
+      a.href = "login.html?return=" + encodeURIComponent(current);
+      a.dataset.mode = "login";
+      a.onclick = null;
+    }else{
+      a.textContent = "Logout";
+      a.href = "#";
+      a.dataset.mode = "logout";
+      a.onclick = (ev) => {
+        ev.preventDefault();
+        // Sign out of Firebase (if available) then reset UI + state
+        try{ if(typeof window.kidseqFirebaseSignOut === "function"){ window.kidseqFirebaseSignOut(); } }catch(e){}
+        try{ logout(); }catch(e){}
+        // Hard-navigate back to landing state
+        try{ window.location.href = "index.html?ts=" + Date.now(); }catch(e){}
+      };
+    }
   });
 }
 updateLoginLinks();
@@ -1319,9 +1338,13 @@ window.addEventListener('pageshow', () => {
 });
 
 function logout(){
+  // Local state
   try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
   try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
+  try{ localStorage.removeItem('kidseq_user_uid'); }catch(e){}
   isLoggedIn = false;
+
+  // Stop playback safely
   try{ stop(); }catch(e){}
 
   // Restore the locked/landing UI immediately
@@ -1334,6 +1357,26 @@ function logout(){
     try{ positionRobotLogo(); }catch(e){}
   });
 }
+
+/* Called by Firebase auth listener (module script) to keep UI in sync */
+function setLoggedInFromFirebase(user){
+  if(user){
+    try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+    try{ localStorage.setItem('kidseq_user_email', user.email || ''); }catch(e){}
+    try{ localStorage.setItem('kidseq_user_uid', user.uid || ''); }catch(e){}
+    isLoggedIn = true;
+  }else{
+    try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
+    try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
+    try{ localStorage.removeItem('kidseq_user_uid'); }catch(e){}
+    isLoggedIn = false;
+  }
+
+  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
+  applyLockState();
+  updateLoginLinks();
+}
+
 
 
 /* Bind hover nudges for locked groups */
@@ -2923,46 +2966,28 @@ window.KidSequencer = {
     camCapture,
     camImport
   },
-  Auth: { logout }
+  Auth: { logout, setLoggedInFromFirebase }
 };
 
 })();
 /* OPTION A ORGANISATION END */
 </script>
 <script type="module">
-  import { auth, db } from "./js/firebase-init.js";
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-  import { doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  import { auth } from "./js/firebase-init.js";
+  import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
-  onAuthStateChanged(auth, async (user) => {
-    // Keep the old localStorage flags in sync (so existing "locked/unlocked" logic still works)
+  // Expose a sign-out helper that the non-module code can call
+  window.kidseqFirebaseSignOut = () => signOut(auth);
+
+  onAuthStateChanged(auth, (user) => {
+    console.log("Auth user:", user ? (user.email || user.uid) : "none");
     try{
-      if(user){
-        localStorage.setItem('kidseq_logged_in','1');
-        localStorage.setItem('kidseq_user_email', user.email || '');
-      }else{
-        localStorage.removeItem('kidseq_logged_in');
-        localStorage.removeItem('kidseq_user_email');
+      if(window.KidSequencer && window.KidSequencer.Auth && typeof window.KidSequencer.Auth.setLoggedInFromFirebase === "function"){
+        window.KidSequencer.Auth.setLoggedInFromFirebase(user);
       }
     }catch(e){}
-
-    // Touch the user profile doc (optional)
-    if(user){
-      try{
-        await setDoc(doc(db, 'users', user.uid), {
-          email: user.email || '',
-          lastSeenAt: serverTimestamp()
-        }, { merge: true });
-      }catch(e){}
-    }
-
-    console.log("Auth user:", user ? user.email : "none");
   });
 </script>
-
-
-
-
 <script>
 (function(){
 })();
