@@ -42,17 +42,9 @@ html, body {
       --robotSize: var(--robotSizeLanding);
     }
 
-    /* Logged-in: robot is 50% bigger than the landing page */
-    body.loggedIn{
-      --robotSize: calc(var(--robotSizeLanding) * 1.5);
-    }
+    /* Logged-in: keep robot size/location identical to landing */
 
-    body.loggedIn #robotLogo{
-      opacity: 1;
-      filter: none;
-    }
-
-    body{
+body{
       font-family: "Trebuchet MS", Arial, sans-serif;
       background: #f6fbff;
       margin: 0;
