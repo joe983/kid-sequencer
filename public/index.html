@@ -1087,6 +1087,8 @@ let selectedSteps = 1;
 
 let isLoggedIn = false;
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+window.__setLoggedIn = (v) => { isLoggedIn = !!v; };
+window.__getLoggedIn = () => isLoggedIn;
 const LOCKED_STEPS = new Set([4,8,16]);
 
 /* -------------------- STATE -------------------- */
@@ -2962,11 +2964,29 @@ window.KidSequencer = {
 </script>
 <script type="module">
   import { auth } from "./js/firebase-init.js";
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+  // Ensure Firebase auth does NOT survive closing the tab/window,
+  // but DOES survive refreshes within the same tab.
+  try{ await setPersistence(auth, browserSessionPersistence); }catch(e){ /* ignore */ }
 
   onAuthStateChanged(auth, (user) => {
-    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
-    console.log("Auth user:", user ? user.email : "none");
+    try{
+      if(user){
+        sessionStorage.setItem("kidseq_logged_in", "1");
+        sessionStorage.setItem("kidseq_user_email", user.email || "");
+        sessionStorage.setItem("kidseq_user_uid", user.uid || "");
+        if(window.__setLoggedIn) window.__setLoggedIn(true);
+      }else{
+        sessionStorage.removeItem("kidseq_logged_in");
+        sessionStorage.removeItem("kidseq_user_email");
+        sessionStorage.removeItem("kidseq_user_uid");
+        if(window.__setLoggedIn) window.__setLoggedIn(false);
+      }
+    }catch(e){}
+
+    // Re-apply lock/unlock visuals + click gating (instrument buttons, tempo, camera, etc.)
+    try{ if(window.applyLockState) window.applyLockState(); }catch(e){}
   });
 </script>
 
