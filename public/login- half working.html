@@ -345,35 +345,14 @@
   </div>
 
   <script type="module">
-    // Firebase auth bootstrap:
-    // 1) If ./js/firebase-init.js exists, we use it (keeps your project config in one place).
-    // 2) Otherwise, we fall back to an inline config. Paste your Firebase web config into FIREBASE_CONFIG below.
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-    import { getAuth } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+    import { auth } from './js/firebase-init.js';
     import {
       createUserWithEmailAndPassword,
       signInWithEmailAndPassword,
       signOut
     } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
-    const FIREBASE_CONFIG = window.FIREBASE_CONFIG || null; // optional global override
-
-    async function getAuthInstance(){
-      try{
-        const mod = await import('./js/firebase-init.js');
-        if(mod?.auth) return mod.auth;
-      }catch(e){
-        // ignore; we'll try inline config
-      }
-      if(!FIREBASE_CONFIG){
-        throw new Error('Firebase config missing. Add ./js/firebase-init.js or set window.FIREBASE_CONFIG in login.html.');
-      }
-      const app = initializeApp(FIREBASE_CONFIG);
-      return getAuth(app);
-    }
-
-    const auth = await getAuthInstance();
-const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(location.search);
     const returnTo = params.get('return') || 'index.html';
 
     const tabSignIn = document.getElementById('tabSignIn');
