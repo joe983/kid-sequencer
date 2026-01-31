@@ -809,6 +809,8 @@ body{
     }
     .loginBtn:hover{ transform: translateY(-1px); }
 
+    body.loggedIn .loginBtn{ color:#ff0000; }
+
     #tempoControls{ position:relative; }
     #tempoLoginHint{
       position:absolute;
@@ -1331,38 +1333,50 @@ window.addEventListener('pageshow', () => {
 });
 
 function logout(){
-  // Local state
-  try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
-  try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
-  try{ localStorage.removeItem('kidseq_user_uid'); }catch(e){}
+  // Clear session flags (tab/window-close behaviour stays intact)
+  try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
+  try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
+  try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+  try{ sessionStorage.removeItem('ks_auth'); }catch(e){}
+  try{ sessionStorage.removeItem('ks_uid'); }catch(e){}
+  try{ sessionStorage.removeItem('ks_email'); }catch(e){}
   isLoggedIn = false;
+  window.isLoggedIn = false;
 
   // Stop playback safely
   try{ stop(); }catch(e){}
 
-  // Restore the locked/landing UI immediately
+  // Restore landing UI immediately
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
   updateLoginLinks();
 
-  requestAnimationFrame(() => {
-    try{ fitToViewport(); }catch(e){}
-    try{ positionRobotLogo(); }catch(e){}
-  });
+  // Hard reset to the landing page state (prevents any odd cached UI state)
+  try{ location.href = "index.html?ts=" + Date.now(); }catch(e){}
 }
 
 /* Called by Firebase auth listener (module script) to keep UI in sync */
 function setLoggedInFromFirebase(user){
+  // Keep BOTH the local `isLoggedIn` variable and `window.isLoggedIn` in sync.
+  // Use sessionStorage so closing the tab/window logs the user out.
   if(user){
-    try{ localStorage.setItem('kidseq_logged_in','1'); }catch(e){}
-    try{ localStorage.setItem('kidseq_user_email', user.email || ''); }catch(e){}
-    try{ localStorage.setItem('kidseq_user_uid', user.uid || ''); }catch(e){}
+    try{ sessionStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+    try{ sessionStorage.setItem('kidseq_user_email', user.email || ''); }catch(e){}
+    try{ sessionStorage.setItem('kidseq_user_uid', user.uid || ''); }catch(e){}
+    try{ sessionStorage.setItem('ks_auth','user'); }catch(e){}
+    try{ sessionStorage.setItem('ks_uid', user.uid || ''); }catch(e){}
+    try{ sessionStorage.setItem('ks_email', user.email || ''); }catch(e){}
     isLoggedIn = true;
+    window.isLoggedIn = true;
   }else{
-    try{ localStorage.removeItem('kidseq_logged_in'); }catch(e){}
-    try{ localStorage.removeItem('kidseq_user_email'); }catch(e){}
-    try{ localStorage.removeItem('kidseq_user_uid'); }catch(e){}
+    try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
+    try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
+    try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+    try{ sessionStorage.removeItem('ks_auth'); }catch(e){}
+    try{ sessionStorage.removeItem('ks_uid'); }catch(e){}
+    try{ sessionStorage.removeItem('ks_email'); }catch(e){}
     isLoggedIn = false;
+    window.isLoggedIn = false;
   }
 
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
@@ -3555,13 +3569,18 @@ window.KidSequencer = {
       loginLink.setAttribute("href","#");
       loginLink.onclick = async (ev)=>{
         ev.preventDefault();
+        ev.stopPropagation();
         try{ await signOut(auth); }catch(e){}
         setSessionLoggedOut();
+        // Return to the landing view on the same page
+        try{ location.href = "index.html?ts=" + Date.now(); }catch(e){}
       };
     }
   }
 
   onAuthStateChanged(auth, (user)=>{
+    // Keep the non-module script in sync (tempo/camera guards use `isLoggedIn`).
+    try{ window.setLoggedInFromFirebase && window.setLoggedInFromFirebase(user); }catch(e){}
     if(user) setSessionLoggedIn(user);
     else setSessionLoggedOut();
   });
