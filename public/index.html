@@ -2920,7 +2920,8 @@ window.KidSequencer = {
     set tempo(v){ tempo = v; updateTempoBox(); setPlayheadWobbleFromTempo(tempo); },
     get instrument(){ return instrument; },
     set instrument(v){ setInstrument(v); },
-    get isLoggedIn(){ return isLoggedIn; }
+    get isLoggedIn(){ return isLoggedIn; },
+    set isLoggedIn(v){ isLoggedIn = !!v; try{ applyLockState(); }catch(e){} }
   },
   UI: {
     fitToViewport,
@@ -2957,6 +2958,11 @@ window.KidSequencer = {
   Auth: { logout }
 };
 
+// Allow module scripts to update login state safely
+window.__setKSLoggedIn = function(v){
+  try{ window.KidSequencer.State.isLoggedIn = !!v; }catch(e){}
+};
+
 })();
 /* OPTION A ORGANISATION END */
 </script>
@@ -2964,9 +2970,32 @@ window.KidSequencer = {
   import { auth } from "./js/firebase-init.js";
   import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 
+  // Keep UI lock-state in sync with the *real* Firebase auth session.
+  // This fixes cases where the user is authenticated, but sessionStorage flags were lost,
+  // which left the instrument buttons (right column) stuck in "locked" mode.
   onAuthStateChanged(auth, (user) => {
-    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
-    console.log("Auth user:", user ? user.email : "none");
+    try{
+      if(user){
+        sessionStorage.setItem("ks_auth", "user");
+        sessionStorage.setItem("kidseq_logged_in","1");
+        sessionStorage.setItem("ks_uid", user.uid);
+        sessionStorage.setItem("kidseq_user_uid", user.uid);
+        sessionStorage.setItem("ks_email", user.email || "");
+        sessionStorage.setItem("kidseq_user_email", user.email || "");
+        if(window.__setKSLoggedIn) window.__setKSLoggedIn(true);
+      }else{
+        sessionStorage.setItem("ks_auth", "guest");
+        sessionStorage.removeItem("kidseq_logged_in");
+        sessionStorage.removeItem("ks_uid");
+        sessionStorage.removeItem("kidseq_user_uid");
+        sessionStorage.removeItem("ks_email");
+        sessionStorage.removeItem("kidseq_user_email");
+        if(window.__setKSLoggedIn) window.__setKSLoggedIn(false);
+      }
+    }catch(e){
+      // If storage is blocked, still update UI as best as we can.
+      if(window.__setKSLoggedIn) window.__setKSLoggedIn(!!user);
+    }
   });
 </script>
 
