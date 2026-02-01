@@ -8,7 +8,43 @@
   <style>
 
 /* === Fixed-stage viewport (desktop) === */
-:root{ --stageW: 1600px; --stageH: 900px; }
+:root{
+  /* --- Icon sizing: single source of truth --- */
+  --bigIconSize: 38px;
+  --clearIconSize: 28px;
+  --undoIconSize: 30px;
+  --cameraIconSize: 34px;
+
+  --toolSymbolSizeDefault: 32px;
+  --toolSymbolSizeBig: 40px;
+  --toolSymbolSizeNormal: 34px;
+  --toolSymbolSizeSixteenth: 38px;
+
+  /* 8th note uses an SVG */
+  --toolSymbolSizeEighth: 36px;
+  --eighthSvgSize: 36px;
+  --eighthNudgeX: -2px;
+  --eighthNudgeY: -2px;
+
+  /* half note uses an SVG */
+  --halfSvgSize: 33px;
+  --halfNudgeX: 0px;
+  --halfNudgeY: 3px;
+
+  /* whole note uses an SVG */
+  --wholeSvgSize: 36px;
+  --wholeNudgeX: 0px;
+  --wholeNudgeY: -6px;
+
+  --instEmojiSize: 34px;
+
+  /* --- Icon sizing: single source of truth --- */
+  /* 8th note uses an SVG: control it via --eighthSvgSize */
+  /* +1px from the earlier 17.2px */
+  --stageW: 1600px;
+  --stageH: 900px;
+}
+
 
 html, body {
   height: 100%;
@@ -206,8 +242,8 @@ html, body {
     }
     .bigBtn .icon svg{
   display:block;
-  width: 38px;
-  height: 38px;
+  width: var(--bigIconSize);
+  height: var(--bigIconSize);
 }
 .bigBtn .playIcon{ color: #18b118; }
 .bigBtn .stopIcon{ color: #e02b2b; }
@@ -215,9 +251,9 @@ html, body {
 .bigBtn .clearIcon{ color: #111111; }
 .bigBtn .cameraIcon{ color: #111111; }
 
-.bigBtn .clearIcon svg{ width: 28px; height: 28px; }
-.bigBtn .undoIcon svg{ width: 30px; height: 30px; transform: translateX(-1px); }
-.bigBtn .cameraIcon svg{ width: 34px; height: 34px; }
+.bigBtn .clearIcon svg{ width: var(--clearIconSize); height: var(--clearIconSize); }
+.bigBtn .undoIcon svg{ width: var(--undoIconSize); height: var(--undoIconSize); transform: translateX(-1px); }
+.bigBtn .cameraIcon svg{ width: var(--cameraIconSize); height: var(--cameraIconSize); }
 .bigBtn:hover{ transform: translateY(-1px); }
 
     #mainLayout{
@@ -273,13 +309,13 @@ html, body {
       margin-right: 8px;
       color:#1d1d1d;
       text-shadow: 0 1px 0 rgba(255,255,255,0.8);
-      font-size: 32px;
+      font-size: var(--toolSymbolSizeDefault);
       line-height: 1;
     }
-    .toolSymbol.big{ font-size: 40px; }
-    .toolSymbol.normal{ font-size: 34px; }
-    .toolSymbol.sixteenth{ font-size: 38px; }
-    .toolSymbol.eighth{ font-size: 32px; }
+    .toolSymbol.big{ font-size: var(--toolSymbolSizeBig); }
+    .toolSymbol.normal{ font-size: var(--toolSymbolSizeNormal); }
+    .toolSymbol.sixteenth{ font-size: var(--toolSymbolSizeSixteenth); }
+    .toolSymbol.eighth{ font-size: var(--toolSymbolSizeEighth); }
 
     .toolBarWrap{
       flex: 1;
@@ -662,7 +698,7 @@ html, body {
       display:flex;
       align-items:center;
       justify-content:center;
-      font-size: 34px;
+      font-size: var(--instEmojiSize);
       transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease, background 120ms ease;
       touch-action: manipulation;
       box-sizing:border-box;
@@ -922,6 +958,48 @@ LAYOUT DEBUG MODE -------------------- */
     }
     /* ----------------------------------------------------------- */
 
+
+/* --- 8th note icon: single source of truth --- */
+.toolSymbol.eighth{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transform: translate(var(--eighthNudgeX), var(--eighthNudgeY));
+  font-size: var(--toolSymbolSizeEighth); /* only matters if a glyph is used */
+}
+.toolSymbol.eighth svg{
+  width: var(--eighthSvgSize);
+  height: var(--eighthSvgSize);
+}
+
+/* --- half note icon: single source of truth --- */
+.toolSymbol.half{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height: 1;
+  transform: translate(var(--halfNudgeX), var(--halfNudgeY));
+}
+.toolSymbol.half svg{
+  width: var(--halfSvgSize);
+  height: var(--halfSvgSize);
+}
+
+
+/* --- whole note icon: single source of truth --- */
+.toolSymbol.whole{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  line-height: 1;
+  transform: translate(var(--wholeNudgeX), var(--wholeNudgeY));
+}
+.toolSymbol.whole svg{
+  width: var(--wholeSvgSize);
+  height: var(--wholeSvgSize);
+}
+
 </style>
 </head>
 
@@ -949,7 +1027,7 @@ LAYOUT DEBUG MODE -------------------- */
       <div id="controls">
         
         <button class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
-        <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="12" height="12" rx="1.5" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
   <path d="M7 9h10l-1 12H8L7 9z" fill="currentColor"/>
@@ -1079,12 +1157,41 @@ const GAP  = 4;
 const freqs = [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
 
+const EIGHTH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <text x="16" y="22" text-anchor="middle"
+        font-size="24"
+        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
+        fill="#000000">♫</text>
+</svg>`;
+
+
+
+const HALF_NOTE_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <text x="16" y="23"
+        text-anchor="middle"
+        font-size="26"
+        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
+        fill="#000000">𝅗𝅥</text>
+</svg>`;
+
+
+
+const WHOLE_NOTE_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <text x="16" y="23"
+        text-anchor="middle"
+        font-size="26"
+        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
+        fill="#000000">𝅝</text>
+</svg>`;
+
 const toolSteps = [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
-  { steps: 2,  label: "8th",   symbol: "♪", divs: 8,  symClass:"eighth" },
+  { steps: 2,  label: "8th",   svg: EIGHTH_SVG, divs: 8,  symClass:"eighth" },
   { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
-  { steps: 8,  label: "1/2",   symbol: "𝅗𝅥", divs: 2,  symClass:"normal" },
-  { steps: 16, label: "Whole", symbol: "𝅝", divs: 1,  symClass:"normal" }
+  { steps: 8,  label: "1/2",   svg: HALF_NOTE_SVG,  divs: 2,  symClass:"half" },
+  { steps: 16, label: "Whole",  svg: WHOLE_NOTE_SVG,  divs: 1,  symClass:"whole" }
 ];
 
 let selectedSteps = 1;
@@ -2113,7 +2220,11 @@ function buildTools(){
 
     const sym = document.createElement("div");
     sym.className = "toolSymbol " + (t.symClass || "");
-    sym.textContent = t.symbol;
+    if(t.svg){
+      sym.innerHTML = t.svg;
+    }else{
+      sym.textContent = t.symbol;
+    }
 
     const barWrap = document.createElement("div");
     barWrap.className = "toolBarWrap";
