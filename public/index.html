@@ -1089,6 +1089,47 @@ let isLoggedIn = false;
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
 window.__setLoggedIn = (v) => { isLoggedIn = !!v; };
 window.__getLoggedIn = () => isLoggedIn;
+/* ========= AUTH STATE (single source of truth) ========= */
+window.isLoggedIn = isLoggedIn;
+
+/**
+ * Set logged-in state in ONE place.
+ * - Updates internal isLoggedIn + window.isLoggedIn
+ * - Updates sessionStorage flags (kidseq_*)
+ * - Re-applies UI lock/unlock + login/logout button + links
+ */
+function setLoggedInState(loggedIn, user){
+  isLoggedIn = !!loggedIn;
+  window.isLoggedIn = isLoggedIn;
+
+  try{
+    if(isLoggedIn){
+      sessionStorage.setItem("kidseq_logged_in","1");
+      sessionStorage.setItem("kidseq_user_email", (user && user.email) ? user.email : (sessionStorage.getItem("kidseq_user_email") || ""));
+      sessionStorage.setItem("kidseq_user_uid", (user && user.uid) ? user.uid : (sessionStorage.getItem("kidseq_user_uid") || ""));
+    }else{
+      sessionStorage.removeItem("kidseq_logged_in");
+      sessionStorage.removeItem("kidseq_user_email");
+      sessionStorage.removeItem("kidseq_user_uid");
+    }
+  }catch(e){}
+
+  try{ if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing'); }catch(e){}
+
+  try{ applyLockState(); }catch(e){}
+  try{ updateLoginLinks(); }catch(e){}
+}
+window.setLoggedInState = setLoggedInState;
+
+/** Standard gate used everywhere */
+function requireLogin(){
+  if(isLoggedIn) return true;
+  showLockNudge();
+  hideLockNudgeSoon(900);
+  return false;
+}
+/* ================================================ */
+
 const LOCKED_STEPS = new Set([4,8,16]);
 
 /* -------------------- STATE -------------------- */
@@ -1204,10 +1245,10 @@ const drumStatusEl  = document.getElementById("drumStatus");
 const drumStyleTechEl = document.getElementById("drumStyleTech");
 const drumStyleDnBEl  = document.getElementById("drumStyleDnB");
 
-btnPiano.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("piano"); };
-btnTrumpet.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("trumpet"); };
-btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
-btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
+btnPiano.onclick   = () => { if(!requireLogin()) return; ensureAudioRunning(); setInstrument("piano"); };
+btnTrumpet.onclick = () => { if(!requireLogin()) return; ensureAudioRunning(); setInstrument("trumpet"); };
+btnStrings.onclick = () => { if(!requireLogin()) return; ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { if(!requireLogin()) return; ensureAudioRunning(); setInstrument("synth"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -1338,39 +1379,32 @@ function applyLockState(){
 
   try{ positionRobotLogo(); }catch(e){}
 }
-applyLockState();
+setLoggedInState(isLoggedIn);
 
 // Ensure the correct state when the browser restores the page from cache
 window.addEventListener('pageshow', () => {
-  try{ isLoggedIn = sessionStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
-  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
-  applyLockState();
+  let logged = false;
+  try{ logged = sessionStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ logged = false; }
+  setLoggedInState(logged);
 });
 
 function logout(){
+  // Sign out of Firebasfunction logout(){
   // Sign out of Firebase (if the auth module is loaded)
   try{ if(window.__doFirebaseSignOut){ window.__doFirebaseSignOut(); } }catch(e){}
 
-  // Clear session flags (so closing/reopening returns to locked landing)
-  try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
-  try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
-  try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+  // Single source of truth for clearing flags + restoring locked UI
+  setLoggedInState(false);
 
-  isLoggedIn = false;
   try{ stop(); }catch(e){}
-
-  // Restore the locked/landing UI immediately
-  if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
-  applyLockState();
-  updateLoginLinks();
 
   requestAnimationFrame(() => {
     try{ fitToViewport(); }catch(e){}
     try{ positionRobotLogo(); }catch(e){}
   });
 }
-/* Bind hover nudges for locked groups */
-bindLockedNudge(cameraBtnEl);
+
+indLockedNudge(cameraBtnEl);
 bindLockedNudge(tempoUpBtnEl);
 bindLockedNudge(tempoDownBtnEl);
 bindLockedNudge(tempoBox);
@@ -2682,12 +2716,12 @@ function requestTempo(newTempo){
   setPlayheadWobbleFromTempo(tempo);
 }
 function tempoUp(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+  if(!requireLogin()) return;
 const base = (pendingTempo !== null) ? pendingTempo : tempo;
   requestTempo(base + 5);
 }
 function tempoDown(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+  if(!requireLogin()) return;
 const base = (pendingTempo !== null) ? pendingTempo : tempo;
   requestTempo(base - 5);
 }
@@ -2712,7 +2746,7 @@ const camCanvasEl = document.getElementById("camCanvas");
 const camPreviewEl = document.getElementById("camPreview");
 
 async function openCameraModal(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
+  if(!requireLogin()) return;
   try{
     if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
       alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
@@ -2971,22 +3005,8 @@ window.KidSequencer = {
   try{ await setPersistence(auth, browserSessionPersistence); }catch(e){ /* ignore */ }
 
   onAuthStateChanged(auth, (user) => {
-    try{
-      if(user){
-        sessionStorage.setItem("kidseq_logged_in", "1");
-        sessionStorage.setItem("kidseq_user_email", user.email || "");
-        sessionStorage.setItem("kidseq_user_uid", user.uid || "");
-        if(window.__setLoggedIn) window.__setLoggedIn(true);
-      }else{
-        sessionStorage.removeItem("kidseq_logged_in");
-        sessionStorage.removeItem("kidseq_user_email");
-        sessionStorage.removeItem("kidseq_user_uid");
-        if(window.__setLoggedIn) window.__setLoggedIn(false);
-      }
-    }catch(e){}
-
-    // Re-apply lock/unlock visuals + click gating (instrument buttons, tempo, camera, etc.)
-    try{ if(window.applyLockState) window.applyLockState(); }catch(e){}
+    // Drive everything through one function (UI + gating + session flags)
+    try{ if(window.setLoggedInState) window.setLoggedInState(!!user, user); }catch(e){}
   });
 </script>
 
