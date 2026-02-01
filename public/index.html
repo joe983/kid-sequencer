@@ -762,8 +762,8 @@ html, body {
       margin-top: 8px;
       display:flex;
       flex-direction:column;
-      align-items:center;
-      gap: 8px;
+      align-items: stretch;
+      gap: 10px;
     }
     #toolHintSlot{
       height: 36px;
@@ -798,8 +798,8 @@ html, body {
     }
 
     .loginBtn{
-      width: 120px;
-      height: 54px;
+      width: 100%;
+      height: 58px;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -814,7 +814,11 @@ html, body {
       text-decoration:none;
       transition: transform 120ms ease;
       touch-action: manipulation;
-    }
+      box-sizing: border-box;
+      padding: 8px 10px;
+      margin: 0;
+      line-height: 1;
+}
     .loginBtn.logout{ color:#e00000 !important; }
     .loginBtn:hover{ transform: translateY(-1px); }
 
@@ -829,9 +833,9 @@ body.loggedIn #toolsLoginArea{ display:block; }
 
 #loginCtaWrap{
   position: relative;
-  width: 120px;
-  height: 54px;
-  display: inline-block;
+  width: 100%;
+  height: 58px;
+  display: block;
 }
 #loginCtaWrap .loginBtn{
   position: relative;
@@ -1085,8 +1089,40 @@ const toolSteps = [
 
 let selectedSteps = 1;
 
-let isLoggedIn = false;
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+
+/* -------------------- CLOSE TAB/WINDOW LOGOUT (but NOT reload) -------------------- */
+(function(){
+  const PENDING_KEY = "kidseq_logout_pending_v1";
+  // If the previous navigation was a reload, cancel any pending logout.
+  let navType = "";
+  try{
+    const nav = performance.getEntriesByType("navigation")[0];
+    navType = nav && nav.type ? nav.type : "";
+  }catch(e){}
+  const isReload = navType === "reload";
+
+  try{
+    if(isReload){
+      localStorage.removeItem(PENDING_KEY);
+    }else{
+      const pending = localStorage.getItem(PENDING_KEY) === "1";
+      if(pending){
+        localStorage.removeItem(PENDING_KEY);
+        try{ sessionStorage.removeItem("kidseq_user_email"); }catch(e){}
+        try{ sessionStorage.removeItem("kidseq_user_uid"); }catch(e){}
+      }
+    }
+  }catch(e){}
+
+  // Mark pending logout when leaving the page (covers close + navigate away + refresh).
+  // Refresh is handled on next load by clearing PENDING_KEY if navType === "reload".
+  window.addEventListener("pagehide", (ev) => {
+    if(ev && ev.persisted) return; // bfcache
+    try{ localStorage.setItem(PENDING_KEY, "1"); }catch(e){}
+  });
+})();
+
 const LOCKED_STEPS = new Set([4,8,16]);
 
 /* -------------------- STATE -------------------- */
@@ -1349,7 +1385,15 @@ function logout(){
   // Sign out of Firebase (if the auth module is loaded)
   try{ if(window.__doFirebaseSignOut){ window.__doFirebaseSignOut(); } }catch(e){}
 
-  // Clear session flags (so closing/reopening returns to locked landing)
+  
+  // Extra fallback: if Firebase is available on this page, sign out directly.
+  try{
+    if(window.firebase && firebase.auth){
+      const a = firebase.auth();
+      if(a && a.signOut) a.signOut();
+    }
+  }catch(e){}
+// Clear session flags (so closing/reopening returns to locked landing)
   try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
@@ -3081,7 +3125,7 @@ window.KidSequencer = {
   }
 
   function isInteractive(el){
-    return !!el.closest('button, a, input, select, textarea, label, [role="button"], [onclick], .cell, .tool, .instBtn, .drawer, .knob, .handle, .slider');
+    return !!el.closest('button, a, input, select, textarea, label, [role="button"], [onclick], .tool, .instBtn, .cell, .drawer, .knob, .handle, .slider');
   }
 
   function onDown(e){
@@ -3488,6 +3532,39 @@ window.KidSequencer = {
 })();
 </script>
 
+
+<script>
+/* ================= AUTH GUARD (FINAL) ================= */
+let appStarted = false;
+
+firebase.auth().onAuthStateChanged(function(user) {
+  if (!user) {
+    forceLoggedOutUI();
+    appStarted = false;
+    return;
+  }
+
+  if (!appStarted) {
+    forceLoggedInUI();
+    appStarted = true;
+  }
+});
+
+window.addEventListener("pagehide", function () {
+  try {
+    firebase.auth().signOut();
+  } catch (e) {}
+});
+
+function logout() {
+  forceLoggedOutUI();
+  firebase.auth().signOut();
+}
+/* ====================================================== */
+</script>
+
 </body>
 </html>
 
+
+<!-- AUTH HARDENING NOT INSERTED: getAuth(app) not found -->
