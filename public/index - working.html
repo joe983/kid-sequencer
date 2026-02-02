@@ -745,6 +745,37 @@ html.tabletScaled #page{
 
     .waveIcon{ width: 46px; height: 28px; display:block; }
 
+    #rotatePrompt{
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(255,255,255,0.95);
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.10);
+      padding: 10px 14px;
+      display:none;
+      align-items:center;
+      gap: 10px;
+      max-width: min(520px, calc(var(--stageW) - 24px));
+      box-sizing:border-box;
+    }
+    #rotatePrompt .emoji{ font-size: 26px; }
+    #rotatePrompt .text{
+      font-weight: 900;
+      color:#1f2a44;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    #rotatePrompt .sub{
+      display:block;
+      font-weight: 800;
+      opacity: 0.75;
+      margin-top: 2px;
+      font-size: 12px;
+    }
 
 
     /* Camera scan modal */
@@ -1120,6 +1151,13 @@ LAYOUT DEBUG MODE -------------------- */
       </div>
     </div>
   </div>
+<div id="rotatePrompt">
+    <div class="emoji">📱↔️</div>
+    <div class="text">
+      Turn your device sideways for the best view!
+      <span class="sub">Landscape mode makes the grid easier to use.</span>
+    </div>
+  </div>
 
 
   <!-- Camera Scan Modal (required for the Scan button) -->
@@ -1334,6 +1372,7 @@ const tempoUpBtnEl = document.getElementById("tempoUpBtn");
 const tempoDownBtnEl = document.getElementById("tempoDownBtn");
 const instButtonsEl = document.getElementById("instButtons");
 const playheadEl = document.getElementById("playhead");
+const rotatePromptEl = document.getElementById("rotatePrompt");
 const controlsEl = document.getElementById("controls");
 const mainLayoutEl = document.getElementById("mainLayout");
 const titleBoxEl = document.getElementById("titleBox");
@@ -1637,6 +1676,10 @@ function fitToViewport(){
     newLift = Math.max(0, Math.min(260, newLift));
     document.documentElement.style.setProperty("--contentLift", newLift + "px");
   }
+
+  const portrait = vh > vw * 1.05;
+  const phoneish = vw < 820;
+  rotatePromptEl.style.display = (portrait && phoneish) ? "flex" : "none";
 }
 
 function positionRobotLogo(){
