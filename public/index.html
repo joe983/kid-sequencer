@@ -745,6 +745,37 @@ html.tabletScaled #page{
 
     .waveIcon{ width: 46px; height: 28px; display:block; }
 
+    #rotatePrompt{
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(255,255,255,0.95);
+      border: 4px solid #1d1d1d;
+      border-radius: 18px;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.10);
+      padding: 10px 14px;
+      display:none;
+      align-items:center;
+      gap: 10px;
+      max-width: min(520px, calc(var(--stageW) - 24px));
+      box-sizing:border-box;
+    }
+    #rotatePrompt .emoji{ font-size: 26px; }
+    #rotatePrompt .text{
+      font-weight: 900;
+      color:#1f2a44;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+    #rotatePrompt .sub{
+      display:block;
+      font-weight: 800;
+      opacity: 0.75;
+      margin-top: 2px;
+      font-size: 12px;
+    }
 
 
     /* Camera scan modal */
@@ -927,13 +958,13 @@ body.loggedIn #toolsLoginArea{ display:block; }
 
 
     /* Guest mode stamp */
-    /* Logout button */
+    body.loggedIn /* Logout button */
 
 
     /* --- MASTER VOLUME FADER (moved to Shadow DOM component) --- */
     :root{ --rightW: 150px; }
 
-/* LAYOUT DEBUG MODE -------------------- */
+LAYOUT DEBUG MODE -------------------- */
     /* Enable by adding ?debug=1 to the URL (e.g., /?debug=1) */
     .debug *{
       outline: 1px dashed rgba(255, 0, 0, 0.35);
@@ -1118,6 +1149,13 @@ body.loggedIn #toolsLoginArea{ display:block; }
 
         </div>
       </div>
+    </div>
+  </div>
+<div id="rotatePrompt">
+    <div class="emoji">📱↔️</div>
+    <div class="text">
+      Turn your device sideways for the best view!
+      <span class="sub">Landscape mode makes the grid easier to use.</span>
     </div>
   </div>
 
@@ -1334,6 +1372,7 @@ const tempoUpBtnEl = document.getElementById("tempoUpBtn");
 const tempoDownBtnEl = document.getElementById("tempoDownBtn");
 const instButtonsEl = document.getElementById("instButtons");
 const playheadEl = document.getElementById("playhead");
+const rotatePromptEl = document.getElementById("rotatePrompt");
 const controlsEl = document.getElementById("controls");
 const mainLayoutEl = document.getElementById("mainLayout");
 const titleBoxEl = document.getElementById("titleBox");
@@ -1571,23 +1610,18 @@ function setPlayheadWobbleFromTempo(t){
 /* -------------------- RESPONSIVE FIT -------------------- */
 /* Lock the design stage to the *initial* window size.
    When the window shrinks, nothing in the layout reflows/scales—users pan/scroll instead. */
-// Viewport helpers (use visualViewport on iOS so sizing matches the truly visible area)
-function getViewportSize(){
-  const vv = window.visualViewport;
-  return {
-    w: Math.max(320, vv ? vv.width : window.innerWidth),
-    h: Math.max(480, vv ? vv.height : window.innerHeight),
-    offX: vv ? vv.offsetLeft : 0,
-    offY: vv ? vv.offsetTop : 0
-  };
-}
+const STAGE_W = Math.max(320, (screen && screen.availWidth) ? screen.availWidth : window.innerWidth);
+const STAGE_H = Math.max(480, (screen && screen.availHeight) ? screen.availHeight : window.innerHeight);
+document.documentElement.style.setProperty("--stageW", STAGE_W + "px");
+document.documentElement.style.setProperty("--stageH", STAGE_H + "px");
 
 // Layout lock: once initial desktop layout is computed, prevent resize-driven nudges
 window.__KS_LAYOUT_LOCKED = false;
 
 function fitToViewport(){
   if (window.__KS_LAYOUT_LOCKED) return;
-  const { w: vw, h: vh } = getViewportSize();
+  const vw = STAGE_W;
+  const vh = STAGE_H;
 
   const headerH = 92;
   const controlsH = 70;
@@ -1642,6 +1676,10 @@ function fitToViewport(){
     newLift = Math.max(0, Math.min(260, newLift));
     document.documentElement.style.setProperty("--contentLift", newLift + "px");
   }
+
+  const portrait = vh > vw * 1.05;
+  const phoneish = vw < 820;
+  rotatePromptEl.style.display = (portrait && phoneish) ? "flex" : "none";
 }
 
 function positionRobotLogo(){
@@ -3908,18 +3946,31 @@ function clearScale(){
     });
   }
 
-  window.addEventListener('resize', refresh, {passive:true});
-  window.addEventListener('orientationchange', refresh, {passive:true});
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', refresh, {passive:true});
-    window.visualViewport.addEventListener('scroll', refresh, {passive:true});
-  }
-  window.addEventListener('load', refresh, {once:true});
+  // iOS Safari: the visible viewport (and visualViewport offsets) can change in bursts
+  // as the browser chrome settles. Re-run the fit a few times after each trigger.
+  let settleTimers = [];
+  function scheduleRefresh(){
+    for(const t of settleTimers) clearTimeout(t);
+    settleTimers.length = 0;
 
-  refresh();
-  setTimeout(refresh, 120);
-})();
-</script>
+    refresh();
+    // A few spaced reflows catches Safari's late viewport adjustments
+    settleTimers.push(setTimeout(refresh, 60));
+    settleTimers.push(setTimeout(refresh, 180));
+    settleTimers.push(setTimeout(refresh, 360));
+  }
+
+  window.addEventListener('resize', scheduleRefresh, {passive:true});
+  window.addEventListener('orientationchange', scheduleRefresh, {passive:true});
+  window.addEventListener('pageshow', scheduleRefresh, {passive:true}); // bfcache restores can shift viewport
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleRefresh, {passive:true});
+    window.visualViewport.addEventListener('scroll', scheduleRefresh, {passive:true});
+  }
+  window.addEventListener('load', scheduleRefresh, {once:true});
+
+  scheduleRefresh();
+})();</script>
 
 </body>
 </html>
