@@ -927,13 +927,13 @@ body.loggedIn #toolsLoginArea{ display:block; }
 
 
     /* Guest mode stamp */
-    body.loggedIn /* Logout button */
+    /* Logout button */
 
 
     /* --- MASTER VOLUME FADER (moved to Shadow DOM component) --- */
     :root{ --rightW: 150px; }
 
-LAYOUT DEBUG MODE -------------------- */
+/* LAYOUT DEBUG MODE -------------------- */
     /* Enable by adding ?debug=1 to the URL (e.g., /?debug=1) */
     .debug *{
       outline: 1px dashed rgba(255, 0, 0, 0.35);
@@ -1571,18 +1571,23 @@ function setPlayheadWobbleFromTempo(t){
 /* -------------------- RESPONSIVE FIT -------------------- */
 /* Lock the design stage to the *initial* window size.
    When the window shrinks, nothing in the layout reflows/scales—users pan/scroll instead. */
-const STAGE_W = Math.max(320, (screen && screen.availWidth) ? screen.availWidth : window.innerWidth);
-const STAGE_H = Math.max(480, (screen && screen.availHeight) ? screen.availHeight : window.innerHeight);
-document.documentElement.style.setProperty("--stageW", STAGE_W + "px");
-document.documentElement.style.setProperty("--stageH", STAGE_H + "px");
+// Viewport helpers (use visualViewport on iOS so sizing matches the truly visible area)
+function getViewportSize(){
+  const vv = window.visualViewport;
+  return {
+    w: Math.max(320, vv ? vv.width : window.innerWidth),
+    h: Math.max(480, vv ? vv.height : window.innerHeight),
+    offX: vv ? vv.offsetLeft : 0,
+    offY: vv ? vv.offsetTop : 0
+  };
+}
 
 // Layout lock: once initial desktop layout is computed, prevent resize-driven nudges
 window.__KS_LAYOUT_LOCKED = false;
 
 function fitToViewport(){
   if (window.__KS_LAYOUT_LOCKED) return;
-  const vw = STAGE_W;
-  const vh = STAGE_H;
+  const { w: vw, h: vh } = getViewportSize();
 
   const headerH = 92;
   const controlsH = 70;
