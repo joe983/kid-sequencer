@@ -57,6 +57,24 @@ html, body {
   /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
 }
+
+
+/* --- Stage-scale mode (small landscape phones): NO scrolling, stage is positioned + scaled --- */
+html.stageScaled, html.stageScaled body{
+  overflow: hidden !important;
+}
+html.stageScaled #viewport{
+  overflow: hidden !important;
+  touch-action: none; /* prevent swipe scrolling while scaled */
+}
+html.stageScaled #page{
+  position: absolute; /* remove from normal flow so it can't create scrollable size */
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+
 /* Keep page rendering identical; we only lock a minimum stage size in JS */
 #page{ position: relative; }
 
@@ -706,7 +724,7 @@ html, body {
     .instBtn:hover{ transform: translateY(-1px); }
 
     .instBtn.selected{ background:#eaf2ff; opacity: 1; filter: none; }
-    .instBtn.notSelected{ opacity: 0.42; filter: grayscale(0.95); }
+    .instBtn.notSelected{ opacity: 0.80; filter: none; }
 
     .waveIcon{ width: 46px; height: 28px; display:block; }
 
@@ -906,6 +924,16 @@ body.loggedIn #toolsLoginArea{ display:block; }
 #instButtons.locked #btnPiano:hover{ transform: translateY(-1px); }
 
 #instButtons.locked .instBtn:hover{ transform: none; }
+
+
+/* Unlocked visual cue */
+@keyframes unlockGlow{
+  0%{ box-shadow: 0 0 0 rgba(24,177,24,0); }
+  50%{ box-shadow: 0 0 0 10px rgba(24,177,24,0.20); }
+  100%{ box-shadow: 0 0 0 rgba(24,177,24,0); }
+}
+#instButtons.justUnlocked{ animation: unlockGlow 600ms ease-out; }
+
 
 
 
@@ -1458,8 +1486,14 @@ function applyLockState(){
   // Rebuild tool buttons so their locked state updates on login/logout.
   try{ buildTools(); }catch(e){}
 
+  const instWasLocked = !!(instButtonsEl && instButtonsEl.classList.contains("locked"));
+
   if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
   if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
+  if(instButtonsEl && instWasLocked && !locked){
+    instButtonsEl.classList.add("justUnlocked");
+    setTimeout(()=>instButtonsEl.classList.remove("justUnlocked"), 700);
+  }
   if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
   document.body.classList.toggle("loggedIn", isLoggedIn);
 
@@ -3672,6 +3706,165 @@ function logout() {
   firebase.auth().signOut();
 }
 /* ====================================================== */
+</script>
+
+
+
+<script>
+/* ======================================================
+   Stage scaling for small landscape phones (e.g. iPhone SE)
+   - Desktop remains unchanged (scrollable #viewport).
+   - Small landscape phones: measure real content size, scale down to fit,
+     and CENTER everything with NO scrolling.
+   ====================================================== */
+(function(){
+  const root = document.documentElement;
+  const viewport = document.getElementById('viewport');
+  const page = document.getElementById('page');
+  if(!viewport || !page) return;
+
+  function shouldScale(){
+    // iPhone SE landscape is ~667x375 CSS px. Use height threshold to avoid tablets.
+    return window.matchMedia('(orientation: landscape)').matches && window.innerHeight <= 430;
+  }
+
+  function measureBounds(){
+    // Measure the real visual bounds of the UI inside #page (without changing layout).
+    // This avoids treating the whole fixed "stage" size as content when there is empty padding.
+    const prevTransform = page.style.transform;
+
+    // Ensure we measure the unscaled layout
+    page.style.transform = '';
+
+    const pageRect = page.getBoundingClientRect();
+
+    // Choose the major UI blocks that define the visible bounds.
+    const els = [
+      document.getElementById('topBar'),
+      document.getElementById('contentWrap'),
+      document.getElementById('robotLogo')
+    ].filter(Boolean);
+
+    // Fallback: if something is missing, use the whole page box.
+    if(!els.length){
+      page.style.transform = prevTransform;
+      return { w: Math.max(page.scrollWidth, page.offsetWidth, 320),
+               h: Math.max(page.scrollHeight, page.offsetHeight, 480),
+               minX: 0, minY: 0 };
+    }
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+    for(const el of els){
+      // If robot is display:none, skip it
+      const cs = getComputedStyle(el);
+      if(cs.display === 'none' || cs.visibility === 'hidden') continue;
+
+      const r = el.getBoundingClientRect();
+      minX = Math.min(minX, r.left);
+      minY = Math.min(minY, r.top);
+      maxX = Math.max(maxX, r.right);
+      maxY = Math.max(maxY, r.bottom);
+    }
+
+    // Convert to #page local coordinates
+    minX = Math.max(0, minX - pageRect.left);
+    minY = Math.max(0, minY - pageRect.top);
+    const w = Math.max(320, (maxX - pageRect.left) - minX);
+    const h = Math.max(480, (maxY - pageRect.top) - minY);
+
+    // restore
+    page.style.transform = prevTransform;
+
+    return { w, h, minX, minY };
+  }
+
+  function applyScale(){
+    root.classList.add('stageScaled');
+
+    // lock camera to (0,0)
+    try{ viewport.scrollTop = 0; viewport.scrollLeft = 0; }catch(e){}
+
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    const vOffX = vv ? vv.offsetLeft : 0;
+    const vOffY = vv ? vv.offsetTop : 0;
+
+    const { w: boundsW, h: boundsH, minX, minY } = measureBounds();
+
+    // scale DOWN only (never above 1)
+    const fit = Math.min(vw / boundsW, vh / boundsH);
+    let s = Math.min(fit, 1);
+
+    // Try to make it ~20% bigger, but NEVER allow cropping.
+    // If the boost would overflow, we fall back to the tight fit.
+    const boosted = Math.min(1, fit * 1.2);
+    if(boundsW * boosted <= vw && boundsH * boosted <= vh){
+      s = boosted;
+    }
+
+    // Center the *bounds* (not necessarily the full stage) in the viewport,
+    // and compensate for the bounds' top-left offset inside #page.
+    // Use visualViewport offsets on iOS so centering matches the actually-visible area.
+    const slackX = vw - boundsW * s;
+    const slackY = vh - boundsH * s;
+
+    const desiredTx = vOffX + (slackX / 2) - (minX * s);
+
+    // Downward bias (feel free to tweak the 0.08), but clamp so we NEVER crop.
+    const downBias = Math.max(0, slackY) * 0.08;
+    const desiredTy = vOffY + (slackY / 2) - (minY * s) + downBias;
+
+    // Clamp translation so the bounds stay fully visible in the visual viewport.
+    const minTx = vOffX - (minX * s);
+    const maxTx = vOffX + vw - ((minX + boundsW) * s);
+    const minTy = vOffY - (minY * s);
+    const maxTy = vOffY + vh - ((minY + boundsH) * s);
+
+    const tx = Math.min(maxTx, Math.max(minTx, desiredTx));
+    const ty = Math.min(maxTy, Math.max(minTy, desiredTy));
+
+    // Freeze page size so transforms are stable.
+    const contentW = Math.max(page.scrollWidth, page.offsetWidth, 320);
+    const contentH = Math.max(page.scrollHeight, page.offsetHeight, 480);
+    page.style.width = contentW + 'px';
+    page.style.height = contentH + 'px';
+    page.style.minWidth = contentW + 'px';
+    page.style.minHeight = contentH + 'px';
+
+    page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+  }
+
+  function clearScale(){
+    root.classList.remove('stageScaled');
+    page.style.transform = '';
+    page.style.width = '';
+    page.style.height = '';
+    page.style.minWidth = '';
+    page.style.minHeight = '';
+  }
+
+  let raf = 0;
+  function refresh(){
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      if(shouldScale()) applyScale();
+      else clearScale();
+    });
+  }
+
+  window.addEventListener('resize', refresh, {passive:true});
+  window.addEventListener('orientationchange', refresh, {passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', refresh, {passive:true});
+    window.visualViewport.addEventListener('scroll', refresh, {passive:true});
+  }
+  window.addEventListener('load', refresh, {once:true});
+
+  refresh();
+  setTimeout(refresh, 120);
+})();
 </script>
 
 </body>
