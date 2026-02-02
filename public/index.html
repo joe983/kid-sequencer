@@ -75,6 +75,23 @@ html.stageScaled #page{
   will-change: transform;
 }
 
+
+/* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
+html.tabletScaled, html.tabletScaled body{
+  overflow: hidden !important;
+}
+html.tabletScaled #viewport{
+  overflow: hidden !important;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
+}
+html.tabletScaled #page{
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
 /* Keep page rendering identical; we only lock a minimum stage size in JS */
 #page{ position: relative; }
 
@@ -1672,6 +1689,15 @@ function positionRobotLogo(){
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
   if(!logo || !toolsList || !seqWrap) return;
 
+  // If the stage is currently scaled (stageScaled/tabletScaled), our layout is drawn via a transform on #page.
+  // getBoundingClientRect() then returns *scaled* coordinates, but we must write left/top in the unscaled (#page) coordinate system.
+  // So: temporarily clear the transform while measuring + positioning, then restore it.
+  const page = document.getElementById('page');
+  const root = document.documentElement;
+  const needsUnscale = page && (root.classList.contains('stageScaled') || root.classList.contains('tabletScaled'));
+  const prevTransform = needsUnscale ? page.style.transform : null;
+  if(needsUnscale) page.style.transform = '';
+
   const toolsListRect = toolsList.getBoundingClientRect();
   const gridRect = seqWrap.getBoundingClientRect();
 
@@ -1710,6 +1736,8 @@ function positionRobotLogo(){
   const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
+
+  if(needsUnscale) page.style.transform = prevTransform;
 }
 
 
@@ -3723,9 +3751,31 @@ function logout() {
   const page = document.getElementById('page');
   if(!viewport || !page) return;
 
-  function shouldScale(){
+  function shouldScalePhone(){
     // iPhone SE landscape is ~667x375 CSS px. Use height threshold to avoid tablets.
     return window.matchMedia('(orientation: landscape)').matches && window.innerHeight <= 430;
+  }
+
+  function shouldScaleTablet(){
+    // Tablet landscape: keep the same stage ratio, just scale down to fit horizontally (no cropping, no scroll).
+    // Trigger only on larger landscape viewports (avoid phones) and only if the stage would otherwise be wider than the viewport.
+    const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+    if(!isLandscape) return false;
+
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+
+    // Rough tablet band: iPad mini/9.7/10.2 etc in CSS px are typically >= 768 wide in landscape.
+    if(vw < 768 || vh < 420) return false;
+
+    // Read stage size from CSS vars (fallback to 1600x900).
+    const cs = getComputedStyle(document.documentElement);
+    const stageW = parseFloat(cs.getPropertyValue('--stageW')) || 1600;
+    const stageH = parseFloat(cs.getPropertyValue('--stageH')) || 900;
+
+    // Only scale if we'd clip horizontally.
+    return stageW > vw;
   }
 
   function measureBounds(){
@@ -3836,8 +3886,41 @@ function logout() {
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
   }
 
-  function clearScale(){
+  
+  function applyTabletScale(){
+    root.classList.add('tabletScaled');
+
+    // lock camera to (0,0)
+    try{ viewport.scrollTop = 0; viewport.scrollLeft = 0; }catch(e){}
+
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    const vOffX = vv ? vv.offsetLeft : 0;
+    const vOffY = vv ? vv.offsetTop : 0;
+
+    const cs = getComputedStyle(document.documentElement);
+    const stageW = parseFloat(cs.getPropertyValue('--stageW')) || 1600;
+    const stageH = parseFloat(cs.getPropertyValue('--stageH')) || 900;
+
+    // scale DOWN only to fit the full stage without cropping
+    const fit = Math.min(vw / stageW, vh / stageH);
+    const s = Math.min(1, fit);
+
+    const tx = vOffX + (vw - stageW * s) / 2;
+    const ty = vOffY + (vh - stageH * s) / 2;
+
+    // Ensure the element's box matches the stage size (so internal layout stays identical).
+    page.style.width = stageW + 'px';
+    page.style.height = stageH + 'px';
+    page.style.minWidth = stageW + 'px';
+    page.style.minHeight = stageH + 'px';
+
+    page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+  }
+function clearScale(){
     root.classList.remove('stageScaled');
+    root.classList.remove('tabletScaled');
     page.style.transform = '';
     page.style.width = '';
     page.style.height = '';
@@ -3849,8 +3932,17 @@ function logout() {
   function refresh(){
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
-      if(shouldScale()) applyScale();
-      else clearScale();
+      if(shouldScalePhone()){
+        // phone landscape scaling
+        root.classList.remove('tabletScaled');
+        applyScale();
+      }else if(shouldScaleTablet()){
+        // tablet landscape: scale full stage down to fit horizontally, no scroll
+        root.classList.remove('stageScaled');
+        applyTabletScale();
+      }else{
+        clearScale();
+      }
     });
   }
 
