@@ -3128,8 +3128,17 @@ function importGridFromDataUrl(dataUrl){
       padB = parseFloat(cs.paddingBottom)|| 0;
     }
 
-    const usableW = Math.max(0, vw - padL - padR);
-    const usableH = Math.max(0, vh - padT - padB);
+    // Width: use the layout viewport box (more reliable on iPhone landscape)
+    // Height: clamp to visualViewport (URL bar / dynamic viewport changes)
+    let rectW = vw, rectH = vh;
+    if(viewportEl){
+      const r = viewportEl.getBoundingClientRect();
+      rectW = r.width;
+      rectH = r.height;
+    }
+    const usableW = Math.max(0, rectW - padL - padR);
+    const heightBasis = (window.visualViewport ? Math.min(rectH, vh) : rectH);
+    const usableH = Math.max(0, heightBasis - padT - padB);
 
     // Only enter scaled mode if the stage cannot fit at 1:1.
     const shouldScale = (usableW < stageW) || (usableH < stageH);
@@ -3148,8 +3157,8 @@ function importGridFromDataUrl(dataUrl){
     // Scale UP/DOWN to fit (iOS-first)
     const s = Math.min(usableW / stageW, usableH / stageH);
 
-    const tx = padL + (usableW - stageW * s) / 2;
-    const ty = padT + (usableH - stageH * s) / 2;
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - stageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
