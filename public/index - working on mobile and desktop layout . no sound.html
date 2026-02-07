@@ -1,13 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script>
-    // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
-    document.documentElement.classList.add('js-loading');
-    // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
-  </script>
-
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Kid Sequencer</title>
@@ -85,9 +78,6 @@ html.stageScaled #page{
   will-change: transform;
 }
 
-
-html.js-loading #page{ visibility:hidden; }
-html.js-ready #page{ visibility:visible; }
 
 /* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
 html.tabletScaled, html.tabletScaled body{
@@ -3091,18 +3081,6 @@ function importGridFromDataUrl(dataUrl){
   const pageEl = document.getElementById('page');
   if(!pageEl) return;
 
-  let __ready = false;
-  let __stable = 0;
-  let __lastVW = 0, __lastVH = 0;
-  const __reveal = () => {
-    if(__ready) return;
-    __ready = true;
-    root.classList.remove('js-loading');
-    root.classList.add('js-ready');
-  };
-  // Hard fallback in case of unexpected errors.
-  setTimeout(__reveal, 900);
-
   function applyStageFit(){
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
@@ -3145,19 +3123,6 @@ function importGridFromDataUrl(dataUrl){
 
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
-
-    // Reveal only after viewport is stable for 2 consecutive passes (prevents split-second flash on iOS/DevTools).
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
-      __stable++;
-    } else {
-      __stable = 0;
-      __lastVW = vw;
-      __lastVH = vh;
-    }
-    if (__stable >= 2) __reveal();
   }
 
   function scheduleLayout(){
