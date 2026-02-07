@@ -1389,7 +1389,27 @@ const drumStyleDnBEl  = document.getElementById("drumStyleDnB");
 btnPiano.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("piano"); };
 btnTrumpet.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("trumpet"); };
 btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
-btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
+btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); }
+/* iOS Safari: AudioContext must be created/resumed inside a direct user gesture.
+   Per your request: ONLY the Play button unlocks audio. */
+(function(){
+  const playBtnEl = document.querySelector('button[aria-label="Play"]');
+  if(!playBtnEl) return;
+
+  const unlock = () => {
+    try{
+      if(!audioPrimed) audioPrimed = true;
+      // Must be synchronous in this handler (no await)
+      primeAudioFromGestureSync();
+    }catch(e){}
+  };
+
+  // Use the earliest gesture event possible
+  playBtnEl.addEventListener('pointerdown', unlock, { passive:true });
+  playBtnEl.addEventListener('touchstart', unlock, { passive:true });
+  playBtnEl.addEventListener('mousedown', unlock);
+})();
+;
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -1570,17 +1590,6 @@ function primeAudioFromGestureSync(){
   // A tiny warm-up helps on iOS when starting immediately after resume.
   try{ warmUpAudio(1); }catch(e){}
 }
-
-function primeAudioOnce(){
-  if (audioPrimed) return;
-  audioPrimed = true;
-  primeAudioFromGestureSync();
-}
-window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
-
-window.addEventListener("touchstart", primeAudioOnce, { once: true, passive: true });
-window.addEventListener("mousedown", primeAudioOnce, { once: true, passive: true });
-window.addEventListener("keydown", primeAudioOnce, { once: true });
 
 /* Prevent focus caret */
 window.addEventListener("pointerdown", () => {
@@ -3265,7 +3274,6 @@ window.KidSequencer = {
   Audio: {
     ensureAudioRunning,
     stopAllAudioNow,
-    primeAudioOnce,
     setInstrument,
     playInstrument
   },
