@@ -3145,49 +3145,20 @@ function importGridFromDataUrl(dataUrl){
       return;
     }
 
-    // --- Content-aware height (important for iPhone landscape) ---
-    // If the designed stage height includes empty space below the actual UI,
-    // we can safely scale a bit more in short landscape viewports by using the
-    // *measured* content height for fitting.
-    const prevTransform = pageEl.style.transform;
-    pageEl.style.transform = '';
-    const pageRect = pageEl.getBoundingClientRect();
-
-    let contentBottom = 0;
-    const ids = [
-      'titleWrap','toolsList','rightPanel','loginCtaWrap',
-      'sequencerWrapper','sequencer','robotLogo'
-    ];
-    for(const id of ids){
-      const el = document.getElementById(id);
-      if(!el) continue;
-      const r = el.getBoundingClientRect();
-      if(r.width <= 0 || r.height <= 0) continue;
-      contentBottom = Math.max(contentBottom, r.bottom - pageRect.top);
-    }
-    // Fallback if nothing measured (shouldn't happen)
-    if(!(contentBottom > 0)) contentBottom = stageH;
-
-    // Add a tiny safety margin so nothing kisses the edge when fonts shift.
-    const margin = 16;
-    const effectiveH = Math.max(420, Math.min(stageH, Math.ceil(contentBottom + margin)));
-    const effectiveW = stageW;
-
     // Scale UP/DOWN to fit (iOS-first)
-    const s = Math.min(usableW / effectiveW, usableH / effectiveH);
+    const s = Math.min(usableW / stageW, usableH / stageH);
 
-    const tx = offX + (usableW - effectiveW * s) / 2;
-    const ty = offY + (usableH - effectiveH * s) / 2;
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - stageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
 
     // Freeze the element box to stage size so internal layout never reflows.
-    // Use effectiveH so short landscape screens can scale up without wasting blank space.
-    pageEl.style.width = effectiveW + 'px';
-    pageEl.style.height = effectiveH + 'px';
-    pageEl.style.minWidth = effectiveW + 'px';
-    pageEl.style.minHeight = effectiveH + 'px';
+    pageEl.style.width = stageW + 'px';
+    pageEl.style.height = stageH + 'px';
+    pageEl.style.minWidth = stageW + 'px';
+    pageEl.style.minHeight = stageH + 'px';
 
     pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
 
