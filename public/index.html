@@ -1072,7 +1072,7 @@ LAYOUT DEBUG MODE -------------------- */
     <div id="contentWrap">
       <div id="controls">
         
-        <button class="bigBtn iconBtn" id="playBtn" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
+        <button class="bigBtn iconBtn" id="playBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="12" height="12" rx="1.5" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
@@ -1557,13 +1557,60 @@ bindLockedNudge(tempoBox);
 
 [btnPiano, btnTrumpet, btnStrings, btnSynth].forEach(bindLockedNudge);
 
-/* Prime audio */
-function primeAudioOnce(){
-  if (audioPrimed) return;
-  audioPrimed = true;
-  getAudio();
+/* Prime audio (iPhone Safari): unlock ONLY from the Play button.
+   Why: iPhone can ignore async resume/scheduled sound unless audio is started inside the same user gesture.
+   We run this in capture phase before the inline onclick="play()" handler. */
+let __unlockedCtx = null;
+
+function __unlockAudioFromPlayGesture(){
+  // Always ensure the engine exists
+  try{ getAudio(); }catch(e){}
+
+  if(!audioCtx) return;
+
+  // If we recreated AudioContext (idle reset), allow unlocking again.
+  const ctx = audioCtx;
+  if(__unlockedCtx === ctx && ctx.state === "running") return;
+  __unlockedCtx = ctx;
+
+  // Resume synchronously (do not await)
+  try{
+    if(ctx.state !== "running"){
+      ctx.resume().catch(()=>{});
+    }
+  }catch(e){}
+
+  // Immediate "tick" into the output chain to satisfy iOS gesture requirements.
+  try{
+    const src = ctx.createBufferSource();
+    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const dest = (typeof masterGain !== "undefined" && masterGain) ? masterGain : ctx.destination;
+    src.connect(dest);
+    src.start(0);
+    src.stop(ctx.currentTime + 0.01);
+  }catch(e){}
+
+  // Small warmup through your existing chain (kept very quiet)
+  try{ warmUpAudio(2); }catch(e){}
 }
-/* Audio priming is handled by the Play button gesture (see iOS AUDIO UNLOCK block). */
+
+// Bind after DOM is ready so the #playBtn exists.
+(function(){
+  const bind = () => {
+    const playBtn = document.getElementById("playBtn");
+    if(!playBtn) return;
+
+    // Capture phase ensures we run BEFORE inline onclick="play()"
+    playBtn.addEventListener("click", __unlockAudioFromPlayGesture, { capture:true });
+    playBtn.addEventListener("pointerdown", __unlockAudioFromPlayGesture, { capture:true, passive:true });
+    playBtn.addEventListener("touchstart", __unlockAudioFromPlayGesture, { capture:true, passive:true });
+    playBtn.addEventListener("mousedown", __unlockAudioFromPlayGesture, { capture:true, passive:true });
+  };
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind, { once:true });
+  else bind();
+})();
+
 /* Prevent focus caret */
 window.addEventListener("pointerdown", () => {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -1576,72 +1623,6 @@ window.addEventListener("keydown", (e) => {
   if (timer || startTimeout) stop();
   else play();
 });
-
-
-/* -------------------- iOS AUDIO UNLOCK (Play button only) -------------------- */
-/* iPhone Safari is strict: AudioContext must be created/resumed inside a direct user gesture.
-   We bind Play's own touch/pointer gesture to unlock+start, and suppress the follow-up click to avoid double-start. */
-(function(){
-  const btn = document.getElementById("playBtn");
-  if(!btn) return;
-
-  let suppressClick = false;
-
-  function unlockAudioFromGestureSync(){
-    try{ getAudio(); }catch(_){}
-
-    try{
-      if(audioCtx && audioCtx.state !== "running"){
-        // Call resume WITHOUT awaiting; iOS treats this as the unlock gesture.
-        audioCtx.resume().catch(()=>{});
-      }
-    }catch(_){}
-
-    // Tiny silent tick to force the output path live (helps on some iPhones).
-    try{
-      if(!audioCtx) return;
-      const out = (masterGain || audioCtx.destination);
-      const now = audioCtx.currentTime;
-
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(0.00001, now);
-      g.gain.exponentialRampToValueAtTime(0.00001, now + 0.018);
-
-      osc.frequency.setValueAtTime(440, now);
-      osc.connect(g);
-      g.connect(out);
-
-      try{ trackNode(osc); }catch(_){}
-      osc.start(now);
-      osc.stop(now + 0.02);
-    }catch(_){}
-  }
-
-  function startFromGesture(e){
-    if(e){
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    unlockAudioFromGestureSync();
-    try{ window.play(); }catch(err){ console.error(err); }
-  }
-
-  // Prefer touchstart on iOS; also support pointerdown elsewhere.
-  btn.addEventListener("touchstart", (e) => { suppressClick = true; startFromGesture(e); }, { passive: false });
-  btn.addEventListener("pointerdown", (e) => { suppressClick = true; startFromGesture(e); }, { passive: false });
-
-  // Fallback: click (desktop). Suppress the synthetic click after touch.
-  btn.addEventListener("click", (e) => {
-    if(suppressClick){
-      suppressClick = false;
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-    startFromGesture(e);
-  });
-})();
 
 /* -------------------- PLAYHEAD WOBBLE SCALING -------------------- */
 function clamp01(x){ return Math.max(0, Math.min(1, x)); }
