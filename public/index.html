@@ -49,7 +49,10 @@
 html, body {
   height: 100%;
   overflow: hidden; /* scrolling happens in #viewport so horizontal bar is always reachable */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+
 #viewport{
   position: fixed;
   inset: 0;
@@ -1018,7 +1021,27 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 
 <body>
-  <div id="debug-info" aria-hidden="true"></div>
+  
+  <script>
+    // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
+    (function(){
+      try{
+        const el = document.getElementById('rotatePrompt');
+        if(el) el.remove();
+        const legacy = ['turn your device sideways', 'turn your device', 'rotate your device'];
+        const nodes = Array.from(document.querySelectorAll('body *'));
+        for(const n of nodes){
+          const t = (n && n.textContent) ? n.textContent.toLowerCase().trim() : '';
+          if(!t) continue;
+          if(legacy.some(s => t.includes(s))){
+            // Hide rather than remove to avoid layout reflow surprises
+            n.style.display = 'none';
+          }
+        }
+      }catch(e){}
+    })();
+  </script>
+<div id="debug-info" aria-hidden="true"></div>
 
   <div id="viewport">
   <div id="page">
@@ -1507,10 +1530,7 @@ function logout(){
   
   // Extra fallback: if Firebase is available on this page, sign out directly.
   try{
-    if(window.firebase && firebase.auth){
-      const a = firebase.auth();
-      if(a && a.signOut) a.signOut();
-    }
+    if (window.__kidseqSignOut) { try { window.__kidseqSignOut(); } catch(e) {} }
   }catch(e){}
 // Clear session flags (so closing/reopening returns to locked landing)
   try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
@@ -1545,6 +1565,9 @@ function primeAudioOnce(){
   getAudio();
 }
 window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
+
+window.addEventListener("touchstart", primeAudioOnce, { once: true, passive: true });
+window.addEventListener("mousedown", primeAudioOnce, { once: true, passive: true });
 window.addEventListener("keydown", primeAudioOnce, { once: true });
 
 /* Prevent focus caret */
@@ -1644,40 +1667,53 @@ function positionRobotLogo(){
   const toolsList = document.getElementById('toolsList');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  if(!logo || !toolsList || !seqWrap) return;
-
-  // If the stage is currently scaled (stageScaled/tabletScaled), our layout is drawn via a transform on #page.
-  // getBoundingClientRect() then returns *scaled* coordinates, but we must write left/top in the unscaled (#page) coordinate system.
-  // So: temporarily clear the transform while measuring + positioning, then restore it.
   const page = document.getElementById('page');
   const root = document.documentElement;
-  const needsUnscale = page && (root.classList.contains('stageScaled') || root.classList.contains('tabletScaled'));
-  const prevTransform = needsUnscale ? page.style.transform : null;
-  if(needsUnscale) page.style.transform = '';
+  if(!logo || !toolsList || !seqWrap || !page) return;
 
-  const toolsListRect = toolsList.getBoundingClientRect();
-  const gridRect = seqWrap.getBoundingClientRect();
+  // When the stage is scaled we apply a transform on #page. We must compute positions in the *page*
+  // coordinate system (unscaled), not viewport coordinates.
+  const isScaled = root.classList.contains('stageScaled') || root.classList.contains('tabletScaled');
+  const prevTransform = isScaled ? page.style.transform : null;
+  if(isScaled) page.style.transform = '';
+
+  const pageRect = page.getBoundingClientRect();
+  const toolsRect = toolsList.getBoundingClientRect();
+  const gridRect  = seqWrap.getBoundingClientRect();
+
+  // Convert viewport rects -> page-local coords
+  const tools = {
+    left: toolsRect.left - pageRect.left,
+    top: toolsRect.top - pageRect.top,
+    width: toolsRect.width,
+    height: toolsRect.height,
+    bottom: toolsRect.bottom - pageRect.top
+  };
+  const grid = {
+    bottom: gridRect.bottom - pageRect.top
+  };
 
   // Desired size (px) from CSS variable
   const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
 
   // Anchor: always keep it below the note-length buttons.
-  let topMin = toolsListRect.bottom + 18;
+  let topMin = tools.bottom + 18;
 
   // If the Login button exists and is visible, keep it below that too.
   if(loginWrap){
     const r = loginWrap.getBoundingClientRect();
     if(r.width > 0 && r.height > 0){
-      topMin = Math.max(topMin, r.bottom + 28);
+      const rBottom = r.bottom - pageRect.top;
+      topMin = Math.max(topMin, rBottom + 28);
     }
   }
 
   // Align the badge to the bottom of the grid (but never above topMin)
-  const bottom = gridRect.bottom;
+  const bottom = grid.bottom;
   const nudgeY = 6;
 
   const avail = Math.floor(bottom - topMin);
-  if (avail < 40) return;
+  if (avail < 40) { if(isScaled) page.style.transform = prevTransform; return; }
 
   const size = Math.max(40, Math.min(desired, avail));
 
@@ -1686,15 +1722,15 @@ function positionRobotLogo(){
   logo.style.height = size + 'px';
   logo.style.padding = Math.round(size * 0.12) + 'px';
 
-  // Center horizontally to the note-length tool column
-  const xCenter = toolsListRect.left + toolsListRect.width / 2;
+  // Center horizontally to the note-length tool column (page-local)
+  const xCenter = tools.left + tools.width / 2;
 
   // Prefer aligning bottom to the grid; clamp to topMin
   const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
 
-  if(needsUnscale) page.style.transform = prevTransform;
+  if(isScaled) page.style.transform = prevTransform;
 }
 
 
@@ -3136,11 +3172,33 @@ window.KidSequencer = {
 </script>
 <script type="module">
   import { auth } from "./js/firebase-init.js";
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+
+  // Expose small helpers for the non-module scripts on the page.
+  window.__kidseqAuth = auth;
+  window.__kidseqSignOut = () => signOut(auth);
+
+  let appStarted = false;
 
   onAuthStateChanged(auth, (user) => {
-    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
+    // Keep a log for debugging
     console.log("Auth user:", user ? user.email : "none");
+
+    if (!user) {
+      try { window.forceLoggedOutUI && window.forceLoggedOutUI(); } catch (e) {}
+      appStarted = false;
+      return;
+    }
+
+    if (!appStarted) {
+      try { window.forceLoggedInUI && window.forceLoggedInUI(); } catch (e) {}
+      appStarted = true;
+    }
+  });
+
+  // When the tab/app is backgrounded or closed, sign out so landing is locked next time.
+  window.addEventListener("pagehide", () => {
+    try { signOut(auth); } catch (e) {}
   });
 </script>
 
@@ -3663,35 +3721,7 @@ window.KidSequencer = {
 </script>
 
 
-<script>
-/* ================= AUTH GUARD (FINAL) ================= */
-let appStarted = false;
 
-firebase.auth().onAuthStateChanged(function(user) {
-  if (!user) {
-    forceLoggedOutUI();
-    appStarted = false;
-    return;
-  }
-
-  if (!appStarted) {
-    forceLoggedInUI();
-    appStarted = true;
-  }
-});
-
-window.addEventListener("pagehide", function () {
-  try {
-    firebase.auth().signOut();
-  } catch (e) {}
-});
-
-function logout() {
-  forceLoggedOutUI();
-  firebase.auth().signOut();
-}
-/* ====================================================== */
-</script>
 
 
 
