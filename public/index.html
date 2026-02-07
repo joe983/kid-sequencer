@@ -3114,67 +3114,19 @@ function importGridFromDataUrl(dataUrl){
   setTimeout(__reveal, 900);
 
   function applyStageFit(){
+    const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 
-    // Measure the actual available box from the fixed #viewport element.
-    // This is more reliable than window.innerWidth/visualViewport on iOS landscape.
-    let boxW = window.innerWidth;
-    let boxH = window.innerHeight;
-
-    // Read safe-area padding applied to #viewport (stageScaled mode only).
+    // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
+    // Measure its paddings once per pass.
     let padL = 0, padR = 0, padT = 0, padB = 0;
     if(viewportEl){
-      const rect = viewportEl.getBoundingClientRect();
-      boxW = rect.width;
-      boxH = rect.height;
-
       const cs = getComputedStyle(viewportEl);
-      padL = parseFloat(cs.paddingLeft)   || 0;
-      padR = parseFloat(cs.paddingRight)  || 0;
-      padT = parseFloat(cs.paddingTop)    || 0;
-      padB = parseFloat(cs.paddingBottom) || 0;
+      padL = parseFloat(cs.paddingLeft)  || 0;
+      padR = parseFloat(cs.paddingRight) || 0;
+      padT = parseFloat(cs.paddingTop)   || 0;
+      padB = parseFloat(cs.paddingBottom)|| 0;
     }
-
-    const usableW = Math.max(0, boxW - padL - padR);
-    const usableH = Math.max(0, boxH - padT - padB);
-
-    // Only enter scaled mode if the stage cannot fit at 1:1.
-    const shouldScale = (usableW < stageW) || (usableH < stageH);
-
-    if(!shouldScale){
-      // Desktop / large screens: leave layout exactly as-is.
-      root.classList.remove('stageScaled','tabletScaled');
-      pageEl.style.transform = '';
-      pageEl.style.width = '';
-      pageEl.style.height = '';
-      pageEl.style.minWidth = '';
-      pageEl.style.minHeight = '';
-      return;
-    }
-
-    // Scale UP/DOWN to fit
-    const s = Math.min(usableW / stageW, usableH / stageH);
-
-    // Center inside the padded content box of #viewport
-    const tx = (usableW - stageW * s) / 2;
-    const ty = (usableH - stageH * s) / 2;
-
-    root.classList.add('stageScaled');
-    root.classList.remove('tabletScaled');
-
-    // Freeze the element box to stage size so internal layout never reflows.
-    pageEl.style.width = stageW + 'px';
-    pageEl.style.height = stageH + 'px';
-    pageEl.style.minWidth = stageW + 'px';
-    pageEl.style.minHeight = stageH + 'px';
-
-    pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-
-    // Keep the "viewport" scroller pinned (belt & braces)
-    if(viewportEl){
-      try{ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; }catch(e){}
-    }
-  }
 
     const usableW = Math.max(0, vw - padL - padR);
     const usableH = Math.max(0, vh - padT - padB);
@@ -3196,8 +3148,8 @@ function importGridFromDataUrl(dataUrl){
     // Scale UP/DOWN to fit (iOS-first)
     const s = Math.min(usableW / stageW, usableH / stageH);
 
-    const tx = offX + (usableW - stageW * s) / 2;
-    const ty = offY + (usableH - stageH * s) / 2;
+    const tx = padL + (usableW - stageW * s) / 2;
+    const ty = padT + (usableH - stageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
