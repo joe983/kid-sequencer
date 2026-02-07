@@ -1072,7 +1072,7 @@ LAYOUT DEBUG MODE -------------------- */
     <div id="contentWrap">
       <div id="controls">
         
-        <button class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
+        <button id="playBtn" class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="12" height="12" rx="1.5" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
@@ -1557,17 +1557,33 @@ bindLockedNudge(tempoBox);
 
 [btnPiano, btnTrumpet, btnStrings, btnSynth].forEach(bindLockedNudge);
 
-/* Prime audio */
+/* Prime/unlock audio (iPhone Safari requires this to happen *directly* from a user gesture).
+   Unlock source: Play button only. */
 function primeAudioOnce(){
   if (audioPrimed) return;
   audioPrimed = true;
-  getAudio();
-}
-window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
 
-window.addEventListener("touchstart", primeAudioOnce, { once: true, passive: true });
-window.addEventListener("mousedown", primeAudioOnce, { once: true, passive: true });
-window.addEventListener("keydown", primeAudioOnce, { once: true });
+  // Create the AudioContext + graph if needed
+  getAudio();
+
+  // Important: do NOT await here (must stay in the gesture call stack on iOS)
+  try{
+    if(audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
+  }catch(e){}
+
+  // Nudge iOS Safari to actually start producing output
+  try{ warmUpAudio(2); }catch(e){}
+}
+
+// Bind to Play button (the required unlock source)
+(function(){
+  const playBtn = document.getElementById('playBtn');
+  if(!playBtn) return;
+  playBtn.addEventListener('pointerdown', primeAudioOnce, { once:true, passive:true });
+  playBtn.addEventListener('touchstart',  primeAudioOnce, { once:true, passive:true });
+  playBtn.addEventListener('mousedown',   primeAudioOnce, { once:true, passive:true });
+  playBtn.addEventListener('keydown',     primeAudioOnce, { once:true });
+})();
 
 /* Prevent focus caret */
 window.addEventListener("pointerdown", () => {
@@ -2177,6 +2193,9 @@ function hardResetAudioEngine(){
   drumBus = null;
   drumNoise = null;
 
+  // If we had to rebuild the audio engine, allow the Play button to re-prime/unlock it on iPhone.
+  audioPrimed = false;
+
   for(const n of Array.from(liveNodes)){
     try { n.stop(0); } catch(e){}
     liveNodes.delete(n);
@@ -2190,6 +2209,11 @@ function sleep(ms){ return new Promise(res => setTimeout(res, ms)); }
 
 async function ensureAudioReady(){
   getAudio();
+
+  // iPhone Safari: keep the resume call in the same gesture task when possible (do not await here).
+  try{
+    if(audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(()=>{});
+  }catch(e){}
 
   const nowMs = performance.now();
   const audioIdleMs = (lastAudioActivityAt == null) ? Infinity : (nowMs - lastAudioActivityAt);
