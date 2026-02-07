@@ -49,10 +49,7 @@
 html, body {
   height: 100%;
   overflow: hidden; /* scrolling happens in #viewport so horizontal bar is always reachable */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
 }
-
 #viewport{
   position: fixed;
   inset: 0;
@@ -116,12 +113,12 @@ html.tabletScaled #page{
       --robotSize: var(--robotSizeLanding);
     }
 
-    /* Logged-in: keep robot size stable (prevents iPhone resize/jump) */
+    /* Logged-in: robot is 50% bigger than the landing page */
     body.loggedIn{
-      --robotSize: var(--robotSizeLanding);
+      --robotSize: calc(var(--robotSizeLanding) * 1.5);
     }
 
-body.loggedIn #robotLogo{
+    body.loggedIn #robotLogo{
       opacity: 1;
       filter: none;
     }
@@ -1021,27 +1018,7 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 
 <body>
-  
-  <script>
-    // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
-    (function(){
-      try{
-        const el = document.getElementById('rotatePrompt');
-        if(el) el.remove();
-        const legacy = ['turn your device sideways', 'turn your device', 'rotate your device'];
-        const nodes = Array.from(document.querySelectorAll('body *'));
-        for(const n of nodes){
-          const t = (n && n.textContent) ? n.textContent.toLowerCase().trim() : '';
-          if(!t) continue;
-          if(legacy.some(s => t.includes(s))){
-            // Hide rather than remove to avoid layout reflow surprises
-            n.style.display = 'none';
-          }
-        }
-      }catch(e){}
-    })();
-  </script>
-<div id="debug-info" aria-hidden="true"></div>
+  <div id="debug-info" aria-hidden="true"></div>
 
   <div id="viewport">
   <div id="page">
@@ -1568,9 +1545,6 @@ function primeAudioOnce(){
   getAudio();
 }
 window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
-
-window.addEventListener("touchstart", primeAudioOnce, { once: true, passive: true });
-window.addEventListener("mousedown", primeAudioOnce, { once: true, passive: true });
 window.addEventListener("keydown", primeAudioOnce, { once: true });
 
 /* Prevent focus caret */
@@ -1670,103 +1644,69 @@ function positionRobotLogo(){
   const toolsList = document.getElementById('toolsList');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
+  if(!logo || !toolsList || !seqWrap) return;
+
+  // If the stage is currently scaled (stageScaled/tabletScaled), our layout is drawn via a transform on #page.
+  // getBoundingClientRect() then returns *scaled* coordinates, but we must write left/top in the unscaled (#page) coordinate system.
+  // So: temporarily clear the transform while measuring + positioning, then restore it.
   const page = document.getElementById('page');
   const root = document.documentElement;
-  if(!logo || !toolsList || !seqWrap || !page) return;
+  const needsUnscale = page && (root.classList.contains('stageScaled') || root.classList.contains('tabletScaled'));
+  const prevTransform = needsUnscale ? page.style.transform : null;
+  if(needsUnscale) page.style.transform = '';
 
-  // When the stage is scaled we apply a transform on #page. We must compute positions in the *page*
-  // coordinate system (unscaled), not viewport coordinates.
-  const isScaled = root.classList.contains('stageScaled') || root.classList.contains('tabletScaled');
-  const prevTransform = isScaled ? page.style.transform : null;
-  if(isScaled) page.style.transform = '';
-
-  const pageRect = page.getBoundingClientRect();
-  const toolsRect = toolsList.getBoundingClientRect();
-  const gridRect  = seqWrap.getBoundingClientRect();
-
-  // Convert viewport rects -> page-local coords
-  const tools = {
-    left: toolsRect.left - pageRect.left,
-    top: toolsRect.top - pageRect.top,
-    width: toolsRect.width,
-    height: toolsRect.height,
-    bottom: toolsRect.bottom - pageRect.top
-  };
-  const grid = {
-    bottom: gridRect.bottom - pageRect.top
-  };
+  const toolsListRect = toolsList.getBoundingClientRect();
+  const gridRect = seqWrap.getBoundingClientRect();
 
   // Desired size (px) from CSS variable
   const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
 
-  // iPhone Safari fires many resize events as the address bar shows/hides.
-  // Cache a stable robot size per viewport width so it doesn't constantly resize/jump.
-  const vw = Math.round(window.innerWidth);
-  window.__KS_ROBOT_CACHE = window.__KS_ROBOT_CACHE || { vw: vw, size: desired };
-  if (Math.abs(window.__KS_ROBOT_CACHE.vw - vw) > 2) {
-    window.__KS_ROBOT_CACHE.vw = vw;
-    window.__KS_ROBOT_CACHE.size = desired;
-  }
-
-
   // Anchor: always keep it below the note-length buttons.
-  let topMin = tools.bottom + 18;
+  let topMin = toolsListRect.bottom + 18;
 
   // If the Login button exists and is visible, keep it below that too.
   if(loginWrap){
     const r = loginWrap.getBoundingClientRect();
     if(r.width > 0 && r.height > 0){
-      const rBottom = r.bottom - pageRect.top;
-      topMin = Math.max(topMin, rBottom + 28);
+      topMin = Math.max(topMin, r.bottom + 28);
     }
   }
 
   // Align the badge to the bottom of the grid (but never above topMin)
-  const bottom = grid.bottom;
+  const bottom = gridRect.bottom;
   const nudgeY = 6;
 
   const avail = Math.floor(bottom - topMin);
-  if (avail < 40) { if(isScaled) page.style.transform = prevTransform; return; }
+  if (avail < 40) return;
 
-  // Use cached size (stable across iPhone viewport-height jitters), but never exceed available space.
-  const size = Math.max(40, Math.min(window.__KS_ROBOT_CACHE.size, avail));
+  const size = Math.max(40, Math.min(desired, avail));
 
-  // Apply size only if it actually changed (reduces layout churn)
-  const prevW = parseFloat(logo.style.width) || 0;
-  if (Math.abs(prevW - size) > 0.5) {
-    logo.style.width  = size + 'px';
-    logo.style.height = size + 'px';
-    logo.style.padding = Math.round(size * 0.12) + 'px';
-  }
+  // Apply size (and scale padding so it stays "button-like")
+  logo.style.width  = size + 'px';
+  logo.style.height = size + 'px';
+  logo.style.padding = Math.round(size * 0.12) + 'px';
 
-  // Center horizontally to the note-length tool column (page-local)
-  const xCenter = tools.left + tools.width / 2;
+  // Center horizontally to the note-length tool column
+  const xCenter = toolsListRect.left + toolsListRect.width / 2;
 
   // Prefer aligning bottom to the grid; clamp to topMin
   const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
 
-  if(isScaled) page.style.transform = prevTransform;
+  if(needsUnscale) page.style.transform = prevTransform;
 }
 
 
 window.addEventListener("resize", () => {
   if (window.__KS_LAYOUT_LOCKED) return;
-
-  // iOS Safari triggers resize events when only the browser UI changes height.
-  // Re-fit the stage, but only reposition/resize the robot when width changes.
-  const w = Math.round(window.innerWidth);
-  window.__KS_LAST_W = window.__KS_LAST_W || w;
-  const widthChanged = Math.abs(window.__KS_LAST_W - w) > 2;
-  if (widthChanged) window.__KS_LAST_W = w;
-
   requestAnimationFrame(() => {
     fitToViewport();
     buildGrid();
-    if (widthChanged) positionRobotLogo();
+    positionRobotLogo();
   });
 });
+
 /* -------------------- AUDIO -------------------- */
 function ensureAudioRunning(){
   if (!audioCtx) return;
