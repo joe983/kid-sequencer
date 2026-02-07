@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
+    document.documentElement.classList.add('js-loading');
+    // Safety net: never allow a permanent blank screen if something goes wrong.
+    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
+  </script>
+
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Kid Sequencer</title>
@@ -29,12 +36,12 @@
   /* half note uses an SVG */
   --halfSvgSize: 33px;
   --halfNudgeX: 0px;
-  --halfNudgeY: 3px;
+  --halfNudgeY: 0px;
 
   /* whole note uses an SVG */
-  --wholeSvgSize: 36px;
+  --wholeSvgSize: 46px;
   --wholeNudgeX: 0px;
-  --wholeNudgeY: -6px;
+  --wholeNudgeY: -10px;
 
   --instEmojiSize: 34px;
 
@@ -49,7 +56,10 @@
 html, body {
   height: 100%;
   overflow: hidden; /* scrolling happens in #viewport so horizontal bar is always reachable */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+
 #viewport{
   position: fixed;
   inset: 0;
@@ -75,6 +85,9 @@ html.stageScaled #page{
   will-change: transform;
 }
 
+
+html.js-loading #page{ visibility:hidden; }
+html.js-ready #page{ visibility:visible; }
 
 /* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
 html.tabletScaled, html.tabletScaled body{
@@ -113,12 +126,9 @@ html.tabletScaled #page{
       --robotSize: var(--robotSizeLanding);
     }
 
-    /* Logged-in: robot is 50% bigger than the landing page */
-    body.loggedIn{
-      --robotSize: calc(var(--robotSizeLanding) * 1.5);
-    }
-
-    body.loggedIn #robotLogo{
+    /* Logged-in: robot size is fixed (layout must not depend on auth) */
+body.loggedIn{ --robotSize: var(--robotSizeLanding); }
+body.loggedIn #robotLogo{
       opacity: 1;
       filter: none;
     }
@@ -347,6 +357,8 @@ html.tabletScaled #page{
       font-size: var(--toolSymbolSizeDefault);
       line-height: 1;
     }
+
+    .toolSymbol svg{ display:block; }
     .toolSymbol.big{ font-size: var(--toolSymbolSizeBig); }
     .toolSymbol.normal{ font-size: var(--toolSymbolSizeNormal); }
     .toolSymbol.sixteenth{ font-size: var(--toolSymbolSizeSixteenth); }
@@ -1018,7 +1030,27 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 
 <body>
-  <div id="debug-info" aria-hidden="true"></div>
+  
+  <script>
+    // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
+    (function(){
+      try{
+        const el = document.getElementById('rotatePrompt');
+        if(el) el.remove();
+        const legacy = ['turn your device sideways', 'turn your device', 'rotate your device'];
+        const nodes = Array.from(document.querySelectorAll('body *'));
+        for(const n of nodes){
+          const t = (n && n.textContent) ? n.textContent.toLowerCase().trim() : '';
+          if(!t) continue;
+          if(legacy.some(s => t.includes(s))){
+            // Hide rather than remove to avoid layout reflow surprises
+            n.style.display = 'none';
+          }
+        }
+      }catch(e){}
+    })();
+  </script>
+<div id="debug-info" aria-hidden="true"></div>
 
   <div id="viewport">
   <div id="page">
@@ -1174,24 +1206,27 @@ const EIGHTH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" 
 
 
 const HALF_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-  <text x="16" y="23"
-        text-anchor="middle"
-        font-size="26"
-        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
-        fill="#000000">𝅗𝅥</text>
-</svg>`;
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <rect x="78" y="10" width="12" height="150" rx="6" ry="6" fill="#000"/>
+  <path fill="#000" fill-rule="evenodd"
+        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 165)"/>
+</svg>
+`;
+
 
 
 
 const WHOLE_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-  <text x="16" y="23"
-        text-anchor="middle"
-        font-size="26"
-        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
-        fill="#000000">𝅝</text>
-</svg>`;
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <path fill="#000" fill-rule="evenodd"
+        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 165)"/>
+</svg>
+`;
+
 
 const toolSteps = [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
@@ -1488,11 +1523,9 @@ function applyLockState(){
       toolLoginBtnEl.setAttribute("href", "login.html");
     }
   }
-
-  try{ positionRobotLogo(); }catch(e){}
 }
+// Apply lock state without triggering any layout/position functions
 applyLockState();
-
 // Ensure the correct state when the browser restores the page from cache
 window.addEventListener('pageshow', () => {
   try{ isLoggedIn = sessionStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
@@ -1503,15 +1536,6 @@ window.addEventListener('pageshow', () => {
 function logout(){
   // Sign out of Firebase (if the auth module is loaded)
   try{ if(window.__doFirebaseSignOut){ window.__doFirebaseSignOut(); } }catch(e){}
-
-  
-  // Extra fallback: if Firebase is available on this page, sign out directly.
-  try{
-    if(window.firebase && firebase.auth){
-      const a = firebase.auth();
-      if(a && a.signOut) a.signOut();
-    }
-  }catch(e){}
 // Clear session flags (so closing/reopening returns to locked landing)
   try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
@@ -1524,11 +1548,6 @@ function logout(){
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
   updateLoginLinks();
-
-  requestAnimationFrame(() => {
-    try{ fitToViewport(); }catch(e){}
-    try{ positionRobotLogo(); }catch(e){}
-  });
 }
 /* Bind hover nudges for locked groups */
 bindLockedNudge(cameraBtnEl);
@@ -1545,6 +1564,9 @@ function primeAudioOnce(){
   getAudio();
 }
 window.addEventListener("pointerdown", primeAudioOnce, { once: true, passive: true });
+
+window.addEventListener("touchstart", primeAudioOnce, { once: true, passive: true });
+window.addEventListener("mousedown", primeAudioOnce, { once: true, passive: true });
 window.addEventListener("keydown", primeAudioOnce, { once: true });
 
 /* Prevent focus caret */
@@ -1569,20 +1591,27 @@ function setPlayheadWobbleFromTempo(t){
 }
 
 /* -------------------- RESPONSIVE FIT -------------------- */
-/* Lock the design stage to the *initial* window size.
-   When the window shrinks, nothing in the layout reflows/scales—users pan/scroll instead. */
-const STAGE_W = Math.max(320, (screen && screen.availWidth) ? screen.availWidth : window.innerWidth);
-const STAGE_H = Math.max(480, (screen && screen.availHeight) ? screen.availHeight : window.innerHeight);
-document.documentElement.style.setProperty("--stageW", STAGE_W + "px");
-document.documentElement.style.setProperty("--stageH", STAGE_H + "px");
-
-// Layout lock: once initial desktop layout is computed, prevent resize-driven nudges
-window.__KS_LAYOUT_LOCKED = false;
+/* Single source of truth:
+   - The internal "design stage" size is defined by CSS vars --stageW/--stageH (defaults in :root).
+   - We scale the whole stage to fit the *visible* viewport (VisualViewport on iOS) so refresh/devtools cannot flip layout. */
+function __ksStageSize(){
+  const cs = getComputedStyle(document.documentElement);
+  const stageW = parseFloat(cs.getPropertyValue('--stageW')) || 1600;
+  const stageH = parseFloat(cs.getPropertyValue('--stageH')) || 900;
+  return { stageW, stageH };
+}
+function __ksViewport(){
+  const vv = window.visualViewport;
+  return {
+    vw: vv ? vv.width : window.innerWidth,
+    vh: vv ? vv.height : window.innerHeight,
+    offX: vv ? vv.offsetLeft : 0,
+    offY: vv ? vv.offsetTop : 0
+  };
+}
 
 function fitToViewport(){
-  if (window.__KS_LAYOUT_LOCKED) return;
-  const vw = STAGE_W;
-  const vh = STAGE_H;
+  const { stageW: vw, stageH: vh } = __ksStageSize();
 
   const headerH = 92;
   const controlsH = 70;
@@ -1644,40 +1673,53 @@ function positionRobotLogo(){
   const toolsList = document.getElementById('toolsList');
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  if(!logo || !toolsList || !seqWrap) return;
-
-  // If the stage is currently scaled (stageScaled/tabletScaled), our layout is drawn via a transform on #page.
-  // getBoundingClientRect() then returns *scaled* coordinates, but we must write left/top in the unscaled (#page) coordinate system.
-  // So: temporarily clear the transform while measuring + positioning, then restore it.
   const page = document.getElementById('page');
   const root = document.documentElement;
-  const needsUnscale = page && (root.classList.contains('stageScaled') || root.classList.contains('tabletScaled'));
-  const prevTransform = needsUnscale ? page.style.transform : null;
-  if(needsUnscale) page.style.transform = '';
+  if(!logo || !toolsList || !seqWrap || !page) return;
 
-  const toolsListRect = toolsList.getBoundingClientRect();
-  const gridRect = seqWrap.getBoundingClientRect();
+  // When the stage is scaled we apply a transform on #page. We must compute positions in the *page*
+  // coordinate system (unscaled), not viewport coordinates.
+  const isScaled = root.classList.contains('stageScaled') || root.classList.contains('tabletScaled');
+  const prevTransform = isScaled ? page.style.transform : null;
+  if(isScaled) page.style.transform = '';
+
+  const pageRect = page.getBoundingClientRect();
+  const toolsRect = toolsList.getBoundingClientRect();
+  const gridRect  = seqWrap.getBoundingClientRect();
+
+  // Convert viewport rects -> page-local coords
+  const tools = {
+    left: toolsRect.left - pageRect.left,
+    top: toolsRect.top - pageRect.top,
+    width: toolsRect.width,
+    height: toolsRect.height,
+    bottom: toolsRect.bottom - pageRect.top
+  };
+  const grid = {
+    bottom: gridRect.bottom - pageRect.top
+  };
 
   // Desired size (px) from CSS variable
   const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
 
   // Anchor: always keep it below the note-length buttons.
-  let topMin = toolsListRect.bottom + 18;
+  let topMin = tools.bottom + 18;
 
   // If the Login button exists and is visible, keep it below that too.
   if(loginWrap){
     const r = loginWrap.getBoundingClientRect();
     if(r.width > 0 && r.height > 0){
-      topMin = Math.max(topMin, r.bottom + 28);
+      const rBottom = r.bottom - pageRect.top;
+      topMin = Math.max(topMin, rBottom + 28);
     }
   }
 
   // Align the badge to the bottom of the grid (but never above topMin)
-  const bottom = gridRect.bottom;
+  const bottom = grid.bottom;
   const nudgeY = 6;
 
   const avail = Math.floor(bottom - topMin);
-  if (avail < 40) return;
+  if (avail < 40) { if(isScaled) page.style.transform = prevTransform; return; }
 
   const size = Math.max(40, Math.min(desired, avail));
 
@@ -1686,26 +1728,18 @@ function positionRobotLogo(){
   logo.style.height = size + 'px';
   logo.style.padding = Math.round(size * 0.12) + 'px';
 
-  // Center horizontally to the note-length tool column
-  const xCenter = toolsListRect.left + toolsListRect.width / 2;
+  // Center horizontally to the note-length tool column (page-local)
+  const xCenter = tools.left + tools.width / 2;
 
   // Prefer aligning bottom to the grid; clamp to topMin
   const top = Math.round(bottom - size + nudgeY);
   logo.style.left = Math.round(xCenter - size/2) + 'px';
   logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
 
-  if(needsUnscale) page.style.transform = prevTransform;
+  if(isScaled) page.style.transform = prevTransform;
 }
 
 
-window.addEventListener("resize", () => {
-  if (window.__KS_LAYOUT_LOCKED) return;
-  requestAnimationFrame(() => {
-    fitToViewport();
-    buildGrid();
-    positionRobotLogo();
-  });
-});
 
 /* -------------------- AUDIO -------------------- */
 function ensureAudioRunning(){
@@ -3051,23 +3085,130 @@ function importGridFromDataUrl(dataUrl){
 
 
 /* -------------------- INIT -------------------- */
+/* -------------------- LAYOUT MANAGER -------------------- */
+/* One source of truth:
+   - Internal layout is computed in *stage coordinates* (CSS --stageW/--stageH).
+   - The whole stage is then scaled to fit the *visible* viewport (VisualViewport on iOS).
+   - All triggers funnel through scheduleLayout() so DevTools refresh / iOS URL-bar changes can't create competing layouts. */
+(function(){
+  const root = document.documentElement;
+  const viewportEl = document.getElementById('viewport');
+  const pageEl = document.getElementById('page');
+  if(!pageEl) return;
+
+  let __ready = false;
+  let __stable = 0;
+  let __lastVW = 0, __lastVH = 0;
+  const __reveal = () => {
+    if(__ready) return;
+    __ready = true;
+    root.classList.remove('js-loading');
+    root.classList.add('js-ready');
+  };
+  // Hard fallback in case of unexpected errors.
+  setTimeout(__reveal, 900);
+
+  function applyStageFit(){
+    const { vw, vh, offX, offY } = __ksViewport();
+    const { stageW, stageH } = __ksStageSize();
+
+    // Scale DOWN only
+    const s = Math.min(1, Math.min(vw / stageW, vh / stageH));
+    const tx = offX + (vw - stageW * s) / 2;
+    const ty = offY + (vh - stageH * s) / 2;
+
+    root.classList.add('stageScaled');
+    root.classList.remove('tabletScaled');
+
+    // Freeze the element box to stage size so internal layout never reflows.
+    pageEl.style.width = stageW + 'px';
+    pageEl.style.height = stageH + 'px';
+    pageEl.style.minWidth = stageW + 'px';
+    pageEl.style.minHeight = stageH + 'px';
+
+    pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+
+    // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
+    if(viewportEl){
+      try{ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; }catch(e){}
+    }
+  }
+
+  let raf = 0;
+  function layoutPass(){
+    // Compute internal layout in unscaled coordinates
+    const prev = pageEl.style.transform;
+    pageEl.style.transform = '';
+    try{
+      fitToViewport();
+      buildGrid();
+      positionRobotLogo();
+    }catch(e){
+      console.error('layoutPass failed', e);
+    }
+    pageEl.style.transform = prev;
+
+    // Now scale & center the stage
+    try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
+
+    // Reveal only after viewport is stable for 2 consecutive passes (prevents split-second flash on iOS/DevTools).
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
+      __stable++;
+    } else {
+      __stable = 0;
+      __lastVW = vw;
+      __lastVH = vh;
+    }
+    if (__stable >= 2) __reveal();
+  }
+
+  function scheduleLayout(){
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(layoutPass);
+  }
+
+  // Export for other code paths (init, etc.)
+  window.scheduleLayout = scheduleLayout;
+
+  const trigger = () => scheduleLayout();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
+  else scheduleLayout();
+
+  window.addEventListener('resize', trigger, {passive:true});
+  window.addEventListener('orientationchange', () => setTimeout(trigger, 60), {passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', trigger, {passive:true});
+  }
+  window.addEventListener('load', trigger, {once:true});
+
+  // One extra pass after fonts settle
+  setTimeout(trigger, 120);
+})();
+
+
 function init(){
-  fitToViewport();
-  buildGrid();
-  positionRobotLogo();
-  setInstrument("piano");
+  if (window.scheduleLayout) window.scheduleLayout();
+setInstrument("piano");
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
+  if (window.scheduleLayout) { requestAnimationFrame(window.scheduleLayout); setTimeout(window.scheduleLayout, 120); }
 
   // Two-pass layout: compute once, then again after paint/fonts to avoid misalignment when opened in a small window.
   requestAnimationFrame(() => {
     fitToViewport(); positionRobotLogo();
-    requestAnimationFrame(() => { fitToViewport(); positionRobotLogo(); window.__KS_LAYOUT_LOCKED = true; });
+    requestAnimationFrame(() => { fitToViewport(); positionRobotLogo();  });
   });
 }
-init();
 
-
+// Layout init must be independent of auth and run on DOMContentLoaded.
+(function(){
+  const run = () => { try{ init(); }catch(e){ console.error('init failed', e); } };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, {once:true});
+  else run();
+})();
 /* -------------------- OPTION A EXPORTS --------------------
    Keep inline onclick handlers working (play/stop/tempo/etc) while still providing
    a structured, manager-friendly namespace at window.KidSequencer.
@@ -3135,13 +3276,56 @@ window.KidSequencer = {
 /* OPTION A ORGANISATION END */
 </script>
 <script type="module">
-  import { auth } from "./js/firebase-init.js";
-  import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+/*
+  Firebase (modular) is OPTIONAL.
 
-  onAuthStateChanged(auth, (user) => {
-    // For now, just log it. Next step we'll use this to grey/ungrey buttons.
-    console.log("Auth user:", user ? user.email : "none");
-  });
+  Goals:
+  - Never crash or block the rest of the app if Firebase fails to load.
+  - Avoid CORS issues when opening this file directly via file:// (skip Firebase in that case).
+  - No reliance on any global `firebase` namespace.
+*/
+(async () => {
+  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if(!isHttp){
+    console.info('[Auth] Skipping Firebase in file:// mode (open via a local server or deploy to test auth).');
+    return;
+  }
+
+  try{
+    // Try to use your existing firebase-init module (recommended in your project structure).
+    // It should export `auth` (and optionally `app`).
+    let auth = null;
+
+    try{
+      const initMod = await import('./js/firebase-init.js');
+      auth = initMod.auth || null;
+
+      // Provide a safe sign-out hook for the non-module code.
+      if(auth){
+        const { signOut } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+        window.__doFirebaseSignOut = () => signOut(auth);
+      }
+    }catch(e){
+      console.warn('[Auth] Could not import ./js/firebase-init.js. Auth will stay disabled.', e);
+      return;
+    }
+
+    if(!auth){
+      console.warn('[Auth] `auth` export not found in ./js/firebase-init.js. Auth will stay disabled.');
+      return;
+    }
+
+    const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+
+    onAuthStateChanged(auth, (user) => {
+      // Keep this lightweight and non-blocking.
+      // Your existing UI/login flow can read sessionStorage flags as before.
+      console.log('[Auth] User:', user ? user.email : 'none');
+    });
+  }catch(e){
+    console.warn('[Auth] Firebase disabled (non-fatal):', e);
+  }
+})();
 </script>
 
 
@@ -3663,258 +3847,10 @@ window.KidSequencer = {
 </script>
 
 
-<script>
-/* ================= AUTH GUARD (FINAL) ================= */
-let appStarted = false;
-
-firebase.auth().onAuthStateChanged(function(user) {
-  if (!user) {
-    forceLoggedOutUI();
-    appStarted = false;
-    return;
-  }
-
-  if (!appStarted) {
-    forceLoggedInUI();
-    appStarted = true;
-  }
-});
-
-window.addEventListener("pagehide", function () {
-  try {
-    firebase.auth().signOut();
-  } catch (e) {}
-});
-
-function logout() {
-  forceLoggedOutUI();
-  firebase.auth().signOut();
-}
-/* ====================================================== */
-</script>
 
 
 
-<script>
-/* ======================================================
-   Stage scaling for small landscape phones (e.g. iPhone SE)
-   - Desktop remains unchanged (scrollable #viewport).
-   - Small landscape phones: measure real content size, scale down to fit,
-     and CENTER everything with NO scrolling.
-   ====================================================== */
-(function(){
-  const root = document.documentElement;
-  const viewport = document.getElementById('viewport');
-  const page = document.getElementById('page');
-  if(!viewport || !page) return;
 
-  function shouldScalePhone(){
-    // iPhone SE landscape is ~667x375 CSS px. Use height threshold to avoid tablets.
-    return window.matchMedia('(orientation: landscape)').matches && window.innerHeight <= 430;
-  }
-
-  function shouldScaleTablet(){
-    // Tablet landscape: keep the same stage ratio, just scale down to fit horizontally (no cropping, no scroll).
-    // Trigger only on larger landscape viewports (avoid phones) and only if the stage would otherwise be wider than the viewport.
-    const isLandscape = window.matchMedia('(orientation: landscape)').matches;
-    if(!isLandscape) return false;
-
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-
-    // Rough tablet band: iPad mini/9.7/10.2 etc in CSS px are typically >= 768 wide in landscape.
-    if(vw < 768 || vh < 420) return false;
-
-    // Read stage size from CSS vars (fallback to 1600x900).
-    const cs = getComputedStyle(document.documentElement);
-    const stageW = parseFloat(cs.getPropertyValue('--stageW')) || 1600;
-    const stageH = parseFloat(cs.getPropertyValue('--stageH')) || 900;
-
-    // Only scale if we'd clip horizontally.
-    return stageW > vw;
-  }
-
-  function measureBounds(){
-    // Measure the real visual bounds of the UI inside #page (without changing layout).
-    // This avoids treating the whole fixed "stage" size as content when there is empty padding.
-    const prevTransform = page.style.transform;
-
-    // Ensure we measure the unscaled layout
-    page.style.transform = '';
-
-    const pageRect = page.getBoundingClientRect();
-
-    // Choose the major UI blocks that define the visible bounds.
-    const els = [
-      document.getElementById('topBar'),
-      document.getElementById('contentWrap'),
-      document.getElementById('robotLogo')
-    ].filter(Boolean);
-
-    // Fallback: if something is missing, use the whole page box.
-    if(!els.length){
-      page.style.transform = prevTransform;
-      return { w: Math.max(page.scrollWidth, page.offsetWidth, 320),
-               h: Math.max(page.scrollHeight, page.offsetHeight, 480),
-               minX: 0, minY: 0 };
-    }
-
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    for(const el of els){
-      // If robot is display:none, skip it
-      const cs = getComputedStyle(el);
-      if(cs.display === 'none' || cs.visibility === 'hidden') continue;
-
-      const r = el.getBoundingClientRect();
-      minX = Math.min(minX, r.left);
-      minY = Math.min(minY, r.top);
-      maxX = Math.max(maxX, r.right);
-      maxY = Math.max(maxY, r.bottom);
-    }
-
-    // Convert to #page local coordinates
-    minX = Math.max(0, minX - pageRect.left);
-    minY = Math.max(0, minY - pageRect.top);
-    const w = Math.max(320, (maxX - pageRect.left) - minX);
-    const h = Math.max(480, (maxY - pageRect.top) - minY);
-
-    // restore
-    page.style.transform = prevTransform;
-
-    return { w, h, minX, minY };
-  }
-
-  function applyScale(){
-    root.classList.add('stageScaled');
-
-    // lock camera to (0,0)
-    try{ viewport.scrollTop = 0; viewport.scrollLeft = 0; }catch(e){}
-
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-    const vOffX = vv ? vv.offsetLeft : 0;
-    const vOffY = vv ? vv.offsetTop : 0;
-
-    const { w: boundsW, h: boundsH, minX, minY } = measureBounds();
-
-    // scale DOWN only (never above 1)
-    const fit = Math.min(vw / boundsW, vh / boundsH);
-    let s = Math.min(fit, 1);
-
-    // Try to make it ~20% bigger, but NEVER allow cropping.
-    // If the boost would overflow, we fall back to the tight fit.
-    const boosted = Math.min(1, fit * 1.2);
-    if(boundsW * boosted <= vw && boundsH * boosted <= vh){
-      s = boosted;
-    }
-
-    // Center the *bounds* (not necessarily the full stage) in the viewport,
-    // and compensate for the bounds' top-left offset inside #page.
-    // Use visualViewport offsets on iOS so centering matches the actually-visible area.
-    const slackX = vw - boundsW * s;
-    const slackY = vh - boundsH * s;
-
-    const desiredTx = vOffX + (slackX / 2) - (minX * s);
-
-    // Downward bias (feel free to tweak the 0.08), but clamp so we NEVER crop.
-    const downBias = Math.max(0, slackY) * 0.08;
-    const desiredTy = vOffY + (slackY / 2) - (minY * s) + downBias;
-
-    // Clamp translation so the bounds stay fully visible in the visual viewport.
-    const minTx = vOffX - (minX * s);
-    const maxTx = vOffX + vw - ((minX + boundsW) * s);
-    const minTy = vOffY - (minY * s);
-    const maxTy = vOffY + vh - ((minY + boundsH) * s);
-
-    const tx = Math.min(maxTx, Math.max(minTx, desiredTx));
-    const ty = Math.min(maxTy, Math.max(minTy, desiredTy));
-
-    // Freeze page size so transforms are stable.
-    const contentW = Math.max(page.scrollWidth, page.offsetWidth, 320);
-    const contentH = Math.max(page.scrollHeight, page.offsetHeight, 480);
-    page.style.width = contentW + 'px';
-    page.style.height = contentH + 'px';
-    page.style.minWidth = contentW + 'px';
-    page.style.minHeight = contentH + 'px';
-
-    page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-  }
-
-  
-  function applyTabletScale(){
-    root.classList.add('tabletScaled');
-
-    // lock camera to (0,0)
-    try{ viewport.scrollTop = 0; viewport.scrollLeft = 0; }catch(e){}
-
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-    const vOffX = vv ? vv.offsetLeft : 0;
-    const vOffY = vv ? vv.offsetTop : 0;
-
-    const cs = getComputedStyle(document.documentElement);
-    const stageW = parseFloat(cs.getPropertyValue('--stageW')) || 1600;
-    const stageH = parseFloat(cs.getPropertyValue('--stageH')) || 900;
-
-    // scale DOWN only to fit the full stage without cropping
-    const fit = Math.min(vw / stageW, vh / stageH);
-    const s = Math.min(1, fit);
-
-    const tx = vOffX + (vw - stageW * s) / 2;
-    const ty = vOffY + (vh - stageH * s) / 2;
-
-    // Ensure the element's box matches the stage size (so internal layout stays identical).
-    page.style.width = stageW + 'px';
-    page.style.height = stageH + 'px';
-    page.style.minWidth = stageW + 'px';
-    page.style.minHeight = stageH + 'px';
-
-    page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-  }
-function clearScale(){
-    root.classList.remove('stageScaled');
-    root.classList.remove('tabletScaled');
-    page.style.transform = '';
-    page.style.width = '';
-    page.style.height = '';
-    page.style.minWidth = '';
-    page.style.minHeight = '';
-  }
-
-  let raf = 0;
-  function refresh(){
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      if(shouldScalePhone()){
-        // phone landscape scaling
-        root.classList.remove('tabletScaled');
-        applyScale();
-      }else if(shouldScaleTablet()){
-        // tablet landscape: scale full stage down to fit horizontally, no scroll
-        root.classList.remove('stageScaled');
-        applyTabletScale();
-      }else{
-        clearScale();
-      }
-    });
-  }
-
-  window.addEventListener('resize', refresh, {passive:true});
-  window.addEventListener('orientationchange', refresh, {passive:true});
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', refresh, {passive:true});
-    window.visualViewport.addEventListener('scroll', refresh, {passive:true});
-  }
-  window.addEventListener('load', refresh, {once:true});
-
-  refresh();
-  setTimeout(refresh, 120);
-})();
-</script>
 
 </body>
 </html>

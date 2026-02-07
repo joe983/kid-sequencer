@@ -36,12 +36,12 @@
   /* half note uses an SVG */
   --halfSvgSize: 33px;
   --halfNudgeX: 0px;
-  --halfNudgeY: 3px;
+  --halfNudgeY: 0px;
 
   /* whole note uses an SVG */
-  --wholeSvgSize: 36px;
+  --wholeSvgSize: 46px;
   --wholeNudgeX: 0px;
-  --wholeNudgeY: -6px;
+  --wholeNudgeY: -10px;
 
   --instEmojiSize: 34px;
 
@@ -357,6 +357,8 @@ body.loggedIn #robotLogo{
       font-size: var(--toolSymbolSizeDefault);
       line-height: 1;
     }
+
+    .toolSymbol svg{ display:block; }
     .toolSymbol.big{ font-size: var(--toolSymbolSizeBig); }
     .toolSymbol.normal{ font-size: var(--toolSymbolSizeNormal); }
     .toolSymbol.sixteenth{ font-size: var(--toolSymbolSizeSixteenth); }
@@ -1204,24 +1206,27 @@ const EIGHTH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" 
 
 
 const HALF_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-  <text x="16" y="23"
-        text-anchor="middle"
-        font-size="26"
-        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
-        fill="#000000">𝅗𝅥</text>
-</svg>`;
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <rect x="78" y="10" width="12" height="150" rx="6" ry="6" fill="#000"/>
+  <path fill="#000" fill-rule="evenodd"
+        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 165)"/>
+</svg>
+`;
+
 
 
 
 const WHOLE_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-  <text x="16" y="23"
-        text-anchor="middle"
-        font-size="26"
-        font-family="Noto Music, Bravura, Arial Unicode MS, Segoe UI Symbol, sans-serif"
-        fill="#000000">𝅝</text>
-</svg>`;
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <path fill="#000" fill-rule="evenodd"
+        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 165)"/>
+</svg>
+`;
+
 
 const toolSteps = [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
