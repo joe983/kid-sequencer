@@ -3146,17 +3146,10 @@ function importGridFromDataUrl(dataUrl){
     }
 
     // Scale UP/DOWN to fit (iOS-first)
-    // On iPhone in landscape, the stage is often height-limited even though we have spare width.
-    // The current design leaves some "dead" vertical padding, so we can safely treat the stage as a bit shorter
-    // *only for the fit math* to let it scale up and use more width.
-    const phoneish = Math.min(vw, vh) < 520;           // iPhone-ish devices
-    const landscape = vw > vh;
-    const fitStageH = (phoneish && landscape) ? Math.max(1, stageH - 90) : stageH;
-
-    const s = Math.min(usableW / stageW, usableH / fitStageH);
+    const s = Math.min(usableW / stageW, usableH / stageH);
 
     const tx = offX + (usableW - stageW * s) / 2;
-    const ty = offY + (usableH - fitStageH * s) / 2;
+    const ty = offY + (usableH - stageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
