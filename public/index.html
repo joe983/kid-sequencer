@@ -1072,7 +1072,7 @@ LAYOUT DEBUG MODE -------------------- */
     <div id="contentWrap">
       <div id="controls">
         
-        <button id="playBtn" class="bigBtn iconBtn" onclick="play()" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
+        <button id="playBtn" class="bigBtn iconBtn" onclick="play(true)" title="Play" aria-label="Play"><span class="icon playIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="8,5 20,12 8,19" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="stop()" title="Stop" aria-label="Stop"><span class="icon stopIcon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="12" height="12" rx="1.5" fill="currentColor"/></svg></span></button>
         <button class="bigBtn iconBtn" onclick="clearGrid()" title="Clear" aria-label="Clear"><span class="icon clearIcon"><svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M9 3h6l1 2h4v2H4V5h4l1-2z" fill="currentColor"/>
@@ -2775,8 +2775,13 @@ function playInstrument(freq, steps){
 }
 
 /* -------------------- PLAYBACK -------------------- */
-async function play(){
-  await ensureAudioReady();
+async function play(fromGesture=false){
+  if(fromGesture){
+    // On iOS Safari, keep audio-unlock/resume synchronous with the tap.
+    try{ primeAudioOnce(); }catch(e){}
+  }else{
+    await ensureAudioReady();
+  }
 
   stop();
 
