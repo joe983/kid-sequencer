@@ -50,8 +50,6 @@
   /* +1px from the earlier 17.2px */
   --stageW: 1600px;
   --stageH: 900px;
-  --stageScale: 1;
-  --fitPad: 8px;
 }
 
 
@@ -65,15 +63,8 @@ html, body {
 #viewport{
   position: fixed;
   inset: 0;
-  box-sizing: border-box;
-
-  /* Safe-area support (iPhone notch/home bar) + small inner pad */
-  padding-top: calc(env(safe-area-inset-top, 0px) + var(--fitPad, 8px));
-  padding-right: calc(env(safe-area-inset-right, 0px) + var(--fitPad, 8px));
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--fitPad, 8px));
-  padding-left: calc(env(safe-area-inset-left, 0px) + var(--fitPad, 8px));
-
-  overflow: hidden !important;
+  overflow: auto;
+  /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
 }
 
@@ -85,6 +76,11 @@ html.stageScaled, html.stageScaled body{
 html.stageScaled #viewport{
   overflow: hidden !important;
   touch-action: none; /* prevent swipe scrolling while scaled */
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
 }
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
@@ -3118,30 +3114,58 @@ function importGridFromDataUrl(dataUrl){
   setTimeout(__reveal, 900);
 
   function applyStageFit(){
-    // Measure the usable area inside #viewport (safe-area padding is applied in CSS)
-    const cs = getComputedStyle(viewportEl);
-    const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
-    const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-
-    const rect = viewportEl.getBoundingClientRect();
-    const vv = window.visualViewport;
-
-    const rawW = vv ? Math.min(rect.width, vv.width) : rect.width;
-    const rawH = vv ? Math.min(rect.height, vv.height) : rect.height;
-
-    const availW = Math.max(0, rawW - padX);
-    const availH = Math.max(0, rawH - padY);
-
+    const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 
-    // Scale UP or DOWN to fit (stable aspect ratio, no cropping)
-    const s = Math.min(availW / stageW, availH / stageH);
+    // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
+    // Measure its paddings once per pass.
+    let padL = 0, padR = 0, padT = 0, padB = 0;
+    if(viewportEl){
+      const cs = getComputedStyle(viewportEl);
+      padL = parseFloat(cs.paddingLeft)  || 0;
+      padR = parseFloat(cs.paddingRight) || 0;
+      padT = parseFloat(cs.paddingTop)   || 0;
+      padB = parseFloat(cs.paddingBottom)|| 0;
+    }
 
-    // Single source of truth: CSS vars
-    root.style.setProperty('--stageScale', String(s));
-    root.style.setProperty('--stageW', stageW + 'px');
-    root.style.setProperty('--stageH', stageH + 'px');
-  }
+    const usableW = Math.max(0, vw - padL - padR);
+    const usableH = Math.max(0, vh - padT - padB);
+
+    // Only enter scaled mode if the stage cannot fit at 1:1.
+    const shouldScale = (usableW < stageW) || (usableH < stageH);
+
+    if(!shouldScale){
+      // Desktop / large screens: leave layout exactly as-is.
+      root.classList.remove('stageScaled','tabletScaled');
+      pageEl.style.transform = '';
+      pageEl.style.width = '';
+      pageEl.style.height = '';
+      pageEl.style.minWidth = '';
+      pageEl.style.minHeight = '';
+      return;
+    }
+
+    // Scale UP/DOWN to fit (iOS-first)
+    const s = Math.min(usableW / stageW, usableH / stageH);
+
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - stageH * s) / 2;
+
+    root.classList.add('stageScaled');
+    root.classList.remove('tabletScaled');
+
+    // Freeze the element box to stage size so internal layout never reflows.
+    pageEl.style.width = stageW + 'px';
+    pageEl.style.height = stageH + 'px';
+    pageEl.style.minWidth = stageW + 'px';
+    pageEl.style.minHeight = stageH + 'px';
+
+    pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+
+    // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
+    if(viewportEl){
+      try{ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; }catch(e){}
+    }
   }
 
   let raf = 0;
@@ -3704,23 +3728,6 @@ window.KidSequencer = {
 
 
     /* --------------------
-
-
-/* --- Deterministic stage fit (single scale var) --- */
-#page{
-  position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-
-  width: var(--stageW) !important;
-  height: var(--stageH) !important;
-  min-width: var(--stageW) !important;
-  min-height: var(--stageH) !important;
-
-  transform-origin: center center !important;
-  transform: translate(-50%, -50%) scale(var(--stageScale)) !important;
-  will-change: transform;
-}
 </style>
 <div class="seqFaderRow" >
             <div class="seqFaderPanel" aria-label="Master volume fader (UI)">
