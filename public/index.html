@@ -2770,30 +2770,31 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  // iPhone Safari: unlock audio synchronously inside the Play button gesture
+  // iPhone Safari: unlock audio at the very start of the Play gesture
   getAudio();
+
+  // IMPORTANT: On iPhone, waiting for resume() *first* is often required for anything to be audible.
   try{
     if(audioCtx && audioCtx.state !== "running"){
-      audioCtx.resume(); // don't await: keep inside the user gesture
+      await audioCtx.resume();
     }
   }catch(e){}
 
   // Diagnostic: tiny "beep" to prove audio is actually audible on iPhone
-  // (If you hear this beep, audio is unlocked and routing works; any remaining issue is scheduling/logic.)
   try{
     if(audioCtx){
-      const t0 = audioCtx.currentTime;
+      const t0 = audioCtx.currentTime + 0.02; // schedule slightly in the future
       const osc = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
       osc.type = "sine";
       osc.frequency.setValueAtTime(660, t0);
       osc.connect(g);
       g.connect(audioCtx.destination);
       osc.start(t0);
-      osc.stop(t0 + 0.07);
+      osc.stop(t0 + 0.10);
     }
   }catch(e){}
 
