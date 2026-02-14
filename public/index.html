@@ -1034,6 +1034,12 @@ LAYOUT DEBUG MODE -------------------- */
   height: var(--wholeSvgSize);
 }
 
+
+/* iOS Safari URL-bar collapse helper (browser-only; does NOT affect fixed #viewport layout) */
+html.ios-urlbar-nudge body{
+  min-height: 102vh; /* tiny extra scroll range so window.scrollTo(0,1) can collapse bars */
+}
+
 </style>
 </head>
 
@@ -3198,8 +3204,8 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + padL + (usableW - stageW * s) / 2;
-    const ty = offY + padT + (usableH - stageH * s) / 2;
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3955,6 +3961,36 @@ window.KidSequencer = {
          style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
     <source src="silent.mp4" type="video/mp4">
   </video>
+
+
+<script>
+/* iOS Safari address bar: cannot be truly "forced" in all cases in the browser.
+   This nudge reproduces the common "fluke" behavior: create a tiny scroll range,
+   then scroll the window by 1px so Safari collapses its bars. */
+(function(){
+  const ua = navigator.userAgent || "";
+  const isIOS = /iP(hone|ad|od)/.test(ua);
+  // basic Safari-ish check (not Chrome/Firefox iOS)
+  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  if(!isSafari) return;
+
+  document.documentElement.classList.add('ios-urlbar-nudge');
+
+  function nudge(){
+    // If already scrolled, don't fight user.
+    if (window.scrollY > 1) return;
+    // Two-phase nudge is more reliable across iOS versions.
+    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 50);
+    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 250);
+  }
+
+  window.addEventListener('load', nudge, { once: true });
+  window.addEventListener('orientationchange', () => setTimeout(nudge, 350), { passive: true });
+  // First user gesture also helps Safari decide it's "interactive"
+  window.addEventListener('touchstart', nudge, { passive: true, once: true });
+  window.addEventListener('pointerdown', nudge, { passive: true, once: true });
+})();
+</script>
 
 </body>
 </html>
