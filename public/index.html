@@ -2120,7 +2120,59 @@ function makeInstrumentBuses(ctx, masterOut){
   };
 }
 
+
+// iOS Safari quirk: when the hardware mute/silent switch is ON, WebAudio can be inaudible.
+// Workaround: play a tiny silent HTMLMediaElement once (on a user gesture) to put iOS into "media playback" mode,
+// which then allows WebAudio to be heard even while the switch is ON.
+// Sources/known workaround patterns: feross/unmute-ios-audio, CreateJS SoundJS issue #312, etc.
+let _iosMediaKickDone = false;
+let _iosKickAudioEl = null;
+
+function isIOSDevice(){
+  const ua = navigator.userAgent || "";
+  const iOS = /iPad|iPhone|iPod/.test(ua);
+  const iPadOS = (navigator.platform === "MacIntel" && navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+  return iOS || iPadOS;
+}
+
+function iosMediaKick(){
+  if(_iosMediaKickDone) return;
+  if(!isIOSDevice()){ _iosMediaKickDone = true; return; }
+
+  try{
+    // 0.1s silent WAV (base64)
+    const src = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const a = new Audio();
+    _iosKickAudioEl = a;
+    a.src = src;
+    a.preload = "auto";
+    a.loop = false;
+    a.muted = false;
+    a.volume = 0.001;
+    a.setAttribute("playsinline", "");
+    a.setAttribute("webkit-playsinline", "");
+
+    const p = a.play();
+    // Mark done regardless; we only need to *attempt* this once per page load.
+    _iosMediaKickDone = true;
+
+    // Clean up quickly
+    const stop = () => {
+      try{ a.pause(); }catch(e){}
+      try{ a.currentTime = 0; }catch(e){}
+    };
+    if(p && typeof p.then === "function") {
+      p.then(() => setTimeout(stop, 60)).catch(() => {});
+    } else {
+      setTimeout(stop, 60);
+    }
+  }catch(e){
+    _iosMediaKickDone = true;
+  }
+}
+
 function getAudio(){
+  iosMediaKick();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2770,34 +2822,6 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  // iPhone Safari: unlock audio at the very start of the Play gesture
-  getAudio();
-
-  // IMPORTANT: On iPhone, waiting for resume() *first* is often required for anything to be audible.
-  try{
-    if(audioCtx && audioCtx.state !== "running"){
-      await audioCtx.resume();
-    }
-  }catch(e){}
-
-  // Diagnostic: tiny "beep" to prove audio is actually audible on iPhone
-  try{
-    if(audioCtx){
-      const t0 = audioCtx.currentTime + 0.02; // schedule slightly in the future
-      const osc = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(660, t0);
-      osc.connect(g);
-      g.connect(audioCtx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.10);
-    }
-  }catch(e){}
-
   await ensureAudioReady();
 
   stop();
