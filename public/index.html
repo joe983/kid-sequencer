@@ -2122,34 +2122,50 @@ function makeInstrumentBuses(ctx, masterOut){
 
 
 // iOS Safari: With the hardware silent/ringer switch OFF, WebAudio can be muted.
-// Reliable workaround: start a looping *silent* HTMLMediaElement on a user gesture and keep it playing.
-// This keeps iOS in "media playback" mode so AudioContext output is audible even in silent mode.
+// Workaround: start a looping *silent* HTMLMediaElement on a user gesture and keep it playing.
+// We use a tiny silent MP4 (silent.mp4) so iOS treats the tab as "media playback" (ignores the silent switch)
+// without producing any audible looping artifacts.
 let __iosKeepAliveEl = null;
 let __iosKeepAliveStarted = false;
 
 function iosStartMediaKeepAlive(){
+  // iOS + iPadOS Safari detection (includes iPadOS masquerading as Mac)
   const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua);
+  const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   if(!isIOS) return;
-
   if(__iosKeepAliveStarted) return;
 
   try{
     if(!__iosKeepAliveEl){
-      __iosKeepAliveEl = new Audio();
-      __iosKeepAliveEl.preload = "auto";
-      __iosKeepAliveEl.loop = true;
-      __iosKeepAliveEl.muted = false;
-      __iosKeepAliveEl.playsInline = true;
-      // Slightly longer silence (WAV) as data URI
-      __iosKeepAliveEl.src =
-        "data:audio/wav;base64," +
-        "UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw";
-      __iosKeepAliveEl.volume = 1.0; // doesn't matter (audio is silence), but must not be 0 on some iOS builds
+      const v = document.createElement('video');
+      v.setAttribute('playsinline','');
+      v.setAttribute('webkit-playsinline','');
+      v.preload = 'auto';
+      v.loop = true;
+      // IMPORTANT: this file should be served alongside index.html
+      v.src = 'silent.mp4';
+
+      // keep it invisible and non-interactive
+      v.style.position = 'fixed';
+      v.style.left = '-20px';
+      v.style.top = '-20px';
+      v.style.width = '1px';
+      v.style.height = '1px';
+      v.style.opacity = '0';
+      v.style.pointerEvents = 'none';
+      v.style.zIndex = '-1';
+
+      // Do NOT mute: we want the browser to enter "media playback" mode.
+      // The audio track in silent.mp4 is silent anyway.
+      v.muted = false;
+      v.volume = 1.0;
+
+      (document.body || document.documentElement).appendChild(v);
+      __iosKeepAliveEl = v;
     }
 
     const p = __iosKeepAliveEl.play();
-    if(p && typeof p.then === "function"){
+    if(p && typeof p.then === 'function'){
       p.then(() => { __iosKeepAliveStarted = true; })
        .catch(() => { __iosKeepAliveStarted = false; });
     }else{
