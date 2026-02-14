@@ -63,6 +63,9 @@ html, body {
 #viewport{
   position: fixed;
   inset: 0;
+  /* iOS: match the *visible* viewport height to avoid the 1–3px “scroll wiggle” in landscape */
+  height: var(--vvh, 100vh);
+  width: var(--vvw, 100vw);
   overflow: auto;
   /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
@@ -1613,6 +1616,16 @@ function __ksViewport(){
     offX: vv ? vv.offsetLeft : 0,
     offY: vv ? vv.offsetTop : 0
   };
+}
+
+// Keep CSS in sync with the *visible* viewport so the fixed #viewport never ends up a few pixels taller
+// than what the user can actually see on iOS (common source of tiny scroll in landscape).
+function __ksSyncViewportVars(){
+  const vv = window.visualViewport;
+  const vvw = vv ? vv.width  : window.innerWidth;
+  const vvh = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvw', vvw + 'px');
+  document.documentElement.style.setProperty('--vvh', vvh + 'px');
 }
 
 function fitToViewport(){
@@ -3177,6 +3190,8 @@ function importGridFromDataUrl(dataUrl){
 
   let raf = 0;
   function layoutPass(){
+    // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
+    try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
@@ -3227,6 +3242,16 @@ function importGridFromDataUrl(dataUrl){
 
   // One extra pass after fonts settle
   setTimeout(trigger, 120);
+
+  // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
+  // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
+  document.addEventListener('touchmove', (e) => {
+    if(!root.classList.contains('stageScaled')) return;
+    // Allow native interaction on form controls if any.
+    const t = e.target;
+    if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+    e.preventDefault();
+  }, { passive: false });
 })();
 
 
