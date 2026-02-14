@@ -2121,63 +2121,38 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari: With the hardware silent/ringer switch OFF, WebAudio can be muted.
-// Workaround: start a looping *silent* HTMLMediaElement on a user gesture and keep it playing.
-// We use a tiny silent MP4 (silent.mp4) so iOS treats the tab as "media playback" (ignores the silent switch)
-// without producing any audible looping artifacts.
-let __iosKeepAliveEl = null;
-let __iosKeepAliveStarted = false;
-
-function iosStartMediaKeepAlive(){
-  // iOS + iPadOS Safari detection (includes iPadOS masquerading as Mac)
+// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio may be muted.
+// Workaround: start a looping *silent video* from a user gesture and keep it playing.
+// Requires `silent.mp4` deployed next to this HTML.
+let __iosSilentVideoStarted = false;
+function iosStartSilentVideo(){
   const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isIOS = /iP(hone|ad|od)/.test(ua);
   if(!isIOS) return;
-  if(__iosKeepAliveStarted) return;
+  if(__iosSilentVideoStarted) return;
+
+  const v = document.getElementById("iosSilentVideo");
+  if(!v) return;
+
+  // The file must contain silence; keep element unmuted so iOS treats it as a real media session.
+  v.muted = false;
+  v.volume = 1.0;
 
   try{
-    if(!__iosKeepAliveEl){
-      const v = document.createElement('video');
-      v.setAttribute('playsinline','');
-      v.setAttribute('webkit-playsinline','');
-      v.preload = 'auto';
-      v.loop = true;
-      // IMPORTANT: this file should be served alongside index.html
-      v.src = 'silent.mp4';
-
-      // keep it invisible and non-interactive
-      v.style.position = 'fixed';
-      v.style.left = '-20px';
-      v.style.top = '-20px';
-      v.style.width = '1px';
-      v.style.height = '1px';
-      v.style.opacity = '0';
-      v.style.pointerEvents = 'none';
-      v.style.zIndex = '-1';
-
-      // Do NOT mute: we want the browser to enter "media playback" mode.
-      // The audio track in silent.mp4 is silent anyway.
-      v.muted = false;
-      v.volume = 1.0;
-
-      (document.body || document.documentElement).appendChild(v);
-      __iosKeepAliveEl = v;
-    }
-
-    const p = __iosKeepAliveEl.play();
-    if(p && typeof p.then === 'function'){
-      p.then(() => { __iosKeepAliveStarted = true; })
-       .catch(() => { __iosKeepAliveStarted = false; });
+    const p = v.play();
+    if(p && typeof p.then === "function"){
+      p.then(() => { __iosSilentVideoStarted = true; })
+       .catch(() => { __iosSilentVideoStarted = false; });
     }else{
-      __iosKeepAliveStarted = true;
+      __iosSilentVideoStarted = true;
     }
   }catch(e){
-    __iosKeepAliveStarted = false;
+    __iosSilentVideoStarted = false;
   }
 }
 
 function getAudio(){
-  iosStartMediaKeepAlive();
+  iosStartSilentVideo();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2213,29 +2188,26 @@ masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
   ensureAudioRunning();
 }
 
-function warmUpAudio(pulses = 2){
-  if(!audioCtx || !masterGain) return;
-  const now = audioCtx.currentTime;
+function warmUpAudio(iterations=2){
+  // iOS Safari: warm the audio graph WITHOUT producing any audible ticks/clicks.
+  // Use a 1-sample silent buffer through a zero-gain node.
+  try{
+    const ctx = getAudio();
+    if(!ctx) return;
 
-  for(let i=0;i<pulses;i++){
-    const t0 = now + i * 0.03;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.connect(ctx.destination);
 
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-
-    g.gain.setValueAtTime(0.0004, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
-
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(220, t0);
-
-    osc.connect(g);
-    g.connect(masterGain);
-
-    trackNode(osc);
-    osc.start(t0);
-    osc.stop(t0 + 0.03);
-  }
+    for(let i=0;i<iterations;i++){
+      const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const s = ctx.createBufferSource();
+      s.buffer = b; // silence
+      s.connect(g);
+      s.start();
+      s.stop(ctx.currentTime + 0.001);
+    }
+  }catch(e){}
 }
 
 function hardResetAudioEngine(){
@@ -2827,7 +2799,7 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  iosStartMediaKeepAlive();
+  iosStartSilentVideo();
   await ensureAudioReady();
 
   stop();
@@ -3975,6 +3947,14 @@ window.KidSequencer = {
 
 
 
+
+
+  <!-- iOS silent-mode workaround: hidden looping silent video.
+       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
+  <video id="iosSilentVideo" playsinline webkit-playsinline loop preload="auto"
+         style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
+    <source src="silent.mp4" type="video/mp4">
+  </video>
 
 </body>
 </html>
