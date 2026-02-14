@@ -2770,6 +2770,17 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
+  // iPhone Safari: unlock audio synchronously inside the Play button gesture
+  getAudio();
+  try{
+    if(audioCtx && audioCtx.state !== "running"){
+      // Don't await — keep this inside the user gesture
+      audioCtx.resume();
+    }
+  }catch(e){}
+  // Warm-up tick (safe no-op on other platforms)
+  try{ warmUpAudio(2); }catch(e){}
+
   await ensureAudioReady();
 
   stop();
