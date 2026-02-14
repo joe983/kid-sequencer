@@ -3198,8 +3198,8 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + padL + (usableW - stageW * s) / 2;
-    const ty = offY + padT + (usableH - stageH * s) / 2;
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
