@@ -1437,7 +1437,8 @@ function setDrumStyle(style){
 if(drumMuteBtnEl){
   drumMuteBtnEl.onclick = () => {
     // Ensure audio exists if the user unmutes while playing.
-    getAudio();
+    iosMediaKick();
+  getAudio();
     ensureAudioRunning();
     setDrumsMuted(!drumsMuted);
   };
@@ -2121,53 +2122,52 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari quirk: when the hardware mute/silent switch is ON, WebAudio can be inaudible.
-// Workaround: play a tiny silent HTMLMediaElement once (on a user gesture) to put iOS into "media playback" mode,
-// which then allows WebAudio to be heard even while the switch is ON.
-// Sources/known workaround patterns: feross/unmute-ios-audio, CreateJS SoundJS issue #312, etc.
-let _iosMediaKickDone = false;
-let _iosKickAudioEl = null;
-
-function isIOSDevice(){
-  const ua = navigator.userAgent || "";
-  const iOS = /iPad|iPhone|iPod/.test(ua);
-  const iPadOS = (navigator.platform === "MacIntel" && navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
-  return iOS || iPadOS;
-}
+// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio can be muted.
+// Workaround: briefly play a tiny silent HTMLAudioElement on a user gesture.
+// This nudges iOS into "media playback" mode so AudioContext output becomes audible.
+let __iosUnmuteAudioEl = null;
+let __iosUnmuteTried = false;
 
 function iosMediaKick(){
-  if(_iosMediaKickDone) return;
-  if(!isIOSDevice()){ _iosMediaKickDone = true; return; }
+  // Only relevant for iOS Safari
+  const ua = navigator.userAgent || "";
+  const isIOS = /iP(hone|ad|od)/.test(ua);
+  if(!isIOS) return;
+
+  // Try on every first few gestures; safe no-op elsewhere.
+  // If play() succeeds once, keep element around (do not GC) and stop retrying.
+  if(__iosUnmuteTried) return;
+  __iosUnmuteTried = true;
 
   try{
-    // 0.1s silent WAV (base64)
-    const src = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-    const a = new Audio();
-    _iosKickAudioEl = a;
-    a.src = src;
-    a.preload = "auto";
-    a.loop = false;
-    a.muted = false;
-    a.volume = 0.001;
-    a.setAttribute("playsinline", "");
-    a.setAttribute("webkit-playsinline", "");
+    if(!__iosUnmuteAudioEl){
+      __iosUnmuteAudioEl = new Audio();
+      __iosUnmuteAudioEl.preload = "auto";
+      __iosUnmuteAudioEl.loop = false;
+      __iosUnmuteAudioEl.muted = false;
+      __iosUnmuteAudioEl.playsInline = true;
+      // 0.1s of silence (WAV) as data URI
+      __iosUnmuteAudioEl.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+    }
 
-    const p = a.play();
-    // Mark done regardless; we only need to *attempt* this once per page load.
-    _iosMediaKickDone = true;
-
-    // Clean up quickly
-    const stop = () => {
-      try{ a.pause(); }catch(e){}
-      try{ a.currentTime = 0; }catch(e){}
-    };
-    if(p && typeof p.then === "function") {
-      p.then(() => setTimeout(stop, 60)).catch(() => {});
-    } else {
-      setTimeout(stop, 60);
+    const p = __iosUnmuteAudioEl.play();
+    if(p && typeof p.then === "function"){
+      p.then(() => {
+        // pause quickly; the goal is the routing mode flip, not actual playback
+        try{ __iosUnmuteAudioEl.pause(); }catch(e){}
+        // allow future retries only if it didn't actually start
+        __iosUnmuteTried = true;
+      }).catch(() => {
+        // If blocked, allow another gesture to try again
+        __iosUnmuteTried = false;
+      });
+    }else{
+      // Older iOS: play() may be sync
+      try{ __iosUnmuteAudioEl.pause(); }catch(e){}
+      __iosUnmuteTried = true;
     }
   }catch(e){
-    _iosMediaKickDone = true;
+    __iosUnmuteTried = false;
   }
 }
 
