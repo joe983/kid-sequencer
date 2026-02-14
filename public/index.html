@@ -2858,6 +2858,15 @@ function setBlockPulseVars(el){
 }
 
 function startSequencer(){
+  // Smooth gain ramp to avoid a "crunch/click" at playback start (especially on iOS Safari)
+  try{
+    if(audioCtx && masterGain && masterGain.gain){
+      const gTarget = Math.max(0.0001, masterGain.gain.value || 1);
+      masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+      masterGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+      masterGain.gain.exponentialRampToValueAtTime(gTarget, audioCtx.currentTime + 0.03);
+    }
+  }catch(e){}
   let firstTick = true;
 
   function tick(){
@@ -2920,6 +2929,15 @@ function stop(){
   }
   setPlayheadPlaying(false);
   setPlayheadVisible(false);
+
+  // Smooth ramp-down to avoid clicks at stop / restart
+  try{
+    if(audioCtx && masterGain && masterGain.gain){
+      masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+      masterGain.gain.setValueAtTime(Math.max(0.0001, masterGain.gain.value || 1), audioCtx.currentTime);
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.02);
+    }
+  }catch(e){}
   stopAllAudioNow();
   lastStopAt = performance.now();
 }
