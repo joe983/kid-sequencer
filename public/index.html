@@ -63,6 +63,9 @@ html, body {
 #viewport{
   position: fixed;
   inset: 0;
+  /* iOS: match the *visible* viewport height to avoid the 1–3px “scroll wiggle” in landscape */
+  height: var(--vvh, 100vh);
+  width: var(--vvw, 100vw);
   overflow: auto;
   /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
@@ -76,6 +79,11 @@ html.stageScaled, html.stageScaled body{
 html.stageScaled #viewport{
   overflow: hidden !important;
   touch-action: none; /* prevent swipe scrolling while scaled */
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
 }
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
@@ -1610,6 +1618,16 @@ function __ksViewport(){
   };
 }
 
+// Keep CSS in sync with the *visible* viewport so the fixed #viewport never ends up a few pixels taller
+// than what the user can actually see on iOS (common source of tiny scroll in landscape).
+function __ksSyncViewportVars(){
+  const vv = window.visualViewport;
+  const vvw = vv ? vv.width  : window.innerWidth;
+  const vvh = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvw', vvw + 'px');
+  document.documentElement.style.setProperty('--vvh', vvh + 'px');
+}
+
 function fitToViewport(){
   const { stageW: vw, stageH: vh } = __ksStageSize();
 
@@ -3112,10 +3130,46 @@ function importGridFromDataUrl(dataUrl){
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 
-    // Scale DOWN only
-    const s = Math.min(1, Math.min(vw / stageW, vh / stageH));
-    const tx = offX + (vw - stageW * s) / 2;
-    const ty = offY + (vh - stageH * s) / 2;
+    // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
+    // Measure its paddings once per pass.
+    let padL = 0, padR = 0, padT = 0, padB = 0;
+    if(viewportEl){
+      const cs = getComputedStyle(viewportEl);
+      padL = parseFloat(cs.paddingLeft)  || 0;
+      padR = parseFloat(cs.paddingRight) || 0;
+      padT = parseFloat(cs.paddingTop)   || 0;
+      padB = parseFloat(cs.paddingBottom)|| 0;
+    }
+
+    const usableW = Math.max(0, vw - padL - padR);
+    const usableH = Math.max(0, vh - padT - padB);
+
+    // Only enter scaled mode if the stage cannot fit at 1:1.
+    const shouldScale = (usableW < stageW) || (usableH < stageH);
+
+    if(!shouldScale){
+      // Desktop / large screens: leave layout exactly as-is.
+      root.classList.remove('stageScaled','tabletScaled');
+      pageEl.style.transform = '';
+      pageEl.style.width = '';
+      pageEl.style.height = '';
+      pageEl.style.minWidth = '';
+      pageEl.style.minHeight = '';
+      return;
+    }
+
+    // Scale UP/DOWN to fit (iOS-first)
+    // On iPhone in landscape, the stage is often height-limited even though we have spare width.
+    // The current design leaves some "dead" vertical padding, so we can safely treat the stage as a bit shorter
+    // *only for the fit math* to let it scale up and use more width.
+    const phoneish = Math.min(vw, vh) < 520;           // iPhone-ish devices
+    const landscape = vw > vh;
+    const fitStageH = (phoneish && landscape) ? Math.max(1, stageH - 90) : stageH;
+
+    const s = Math.min(usableW / stageW, usableH / fitStageH);
+
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3136,6 +3190,8 @@ function importGridFromDataUrl(dataUrl){
 
   let raf = 0;
   function layoutPass(){
+    // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
+    try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
@@ -3186,6 +3242,16 @@ function importGridFromDataUrl(dataUrl){
 
   // One extra pass after fonts settle
   setTimeout(trigger, 120);
+
+  // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
+  // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
+  document.addEventListener('touchmove', (e) => {
+    if(!root.classList.contains('stageScaled')) return;
+    // Allow native interaction on form controls if any.
+    const t = e.target;
+    if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+    e.preventDefault();
+  }, { passive: false });
 })();
 
 
