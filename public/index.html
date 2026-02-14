@@ -2121,47 +2121,38 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari: With the hardware silent/ringer switch OFF, WebAudio can be muted.
-// Reliable workaround: start a looping *silent* HTMLMediaElement on a user gesture and keep it playing.
-// This keeps iOS in "media playback" mode so AudioContext output is audible even in silent mode.
-let __iosKeepAliveEl = null;
-let __iosKeepAliveStarted = false;
-
-function iosStartMediaKeepAlive(){
+// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio may be muted.
+// Workaround: start a looping *silent video* from a user gesture and keep it playing.
+// Requires `silent.mp4` deployed next to this HTML.
+let __iosSilentVideoStarted = false;
+function iosStartSilentVideo(){
   const ua = navigator.userAgent || "";
   const isIOS = /iP(hone|ad|od)/.test(ua);
   if(!isIOS) return;
+  if(__iosSilentVideoStarted) return;
 
-  if(__iosKeepAliveStarted) return;
+  const v = document.getElementById("iosSilentVideo");
+  if(!v) return;
+
+  // The file must contain silence; keep element unmuted so iOS treats it as a real media session.
+  v.muted = false;
+  v.volume = 1.0;
 
   try{
-    if(!__iosKeepAliveEl){
-      __iosKeepAliveEl = new Audio();
-      __iosKeepAliveEl.preload = "auto";
-      __iosKeepAliveEl.loop = true;
-      __iosKeepAliveEl.muted = false;
-      __iosKeepAliveEl.playsInline = true;
-      // Slightly longer silence (WAV) as data URI
-      __iosKeepAliveEl.src =
-        "data:audio/wav;base64," +
-        "UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw";
-      __iosKeepAliveEl.volume = 1.0; // doesn't matter (audio is silence), but must not be 0 on some iOS builds
-    }
-
-    const p = __iosKeepAliveEl.play();
+    const p = v.play();
     if(p && typeof p.then === "function"){
-      p.then(() => { __iosKeepAliveStarted = true; })
-       .catch(() => { __iosKeepAliveStarted = false; });
+      p.then(() => { __iosSilentVideoStarted = true; })
+       .catch(() => { __iosSilentVideoStarted = false; });
     }else{
-      __iosKeepAliveStarted = true;
+      __iosSilentVideoStarted = true;
     }
   }catch(e){
-    __iosKeepAliveStarted = false;
+    __iosSilentVideoStarted = false;
   }
 }
 
 function getAudio(){
-  iosStartMediaKeepAlive();
+  iosStartSilentVideo();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2197,34 +2188,26 @@ masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
   ensureAudioRunning();
 }
 
-function warmUpAudio(pulses = 2){
-  // Warm the audio graph without producing any audible tone.
-  // (Older iOS Safari sometimes needs a "started" source to fully engage output.)
-  if(!audioCtx || !masterGain) return;
+function warmUpAudio(iterations=2){
+  // iOS Safari: warm the audio graph WITHOUT producing any audible ticks/clicks.
+  // Use a 1-sample silent buffer through a zero-gain node.
+  try{
+    const ctx = getAudio();
+    if(!ctx) return;
 
-  const now = audioCtx.currentTime;
-  const sr = audioCtx.sampleRate || 44100;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.connect(ctx.destination);
 
-  // 1-sample silent buffer
-  const buf = audioCtx.createBuffer(1, 1, sr);
-
-  for(let i=0;i<pulses;i++){
-    const t0 = now + i * 0.03;
-
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-
-    const g = audioCtx.createGain();
-    // Keep gain at absolute zero so this cannot click or "tap"
-    g.gain.setValueAtTime(0.0, t0);
-
-    src.connect(g);
-    g.connect(masterGain);
-
-    trackNode(src);
-    src.start(t0);
-    src.stop(t0 + 0.02);
-  }
+    for(let i=0;i<iterations;i++){
+      const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const s = ctx.createBufferSource();
+      s.buffer = b; // silence
+      s.connect(g);
+      s.start();
+      s.stop(ctx.currentTime + 0.001);
+    }
+  }catch(e){}
 }
 
 function hardResetAudioEngine(){
@@ -2816,7 +2799,7 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  iosStartMediaKeepAlive();
+  iosStartSilentVideo();
   await ensureAudioReady();
 
   stop();
@@ -3215,8 +3198,8 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + (usableW - stageW * s) / 2;
-    const ty = offY + (usableH - fitStageH * s) / 2;
+    const tx = offX + padL + (usableW - stageW * s) / 2;
+    const ty = offY + padT + (usableH - stageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3964,6 +3947,14 @@ window.KidSequencer = {
 
 
 
+
+
+  <!-- iOS silent-mode workaround: hidden looping silent video.
+       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
+  <video id="iosSilentVideo" playsinline webkit-playsinline loop preload="auto"
+         style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
+    <source src="silent.mp4" type="video/mp4">
+  </video>
 
 </body>
 </html>
