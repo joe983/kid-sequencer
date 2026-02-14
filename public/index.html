@@ -5,7 +5,11 @@
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
     // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
+    setTimeout(() => {
+      // Safety net: reveal after 1200ms even if something went wrong
+      document.documentElement.classList.add('js-ready');
+      document.documentElement.classList.remove('js-loading');
+    }, 1200);
   </script>
 
   <meta charset="utf-8" />
@@ -94,7 +98,7 @@ html.stageScaled #page{
 }
 
 
-html.js-loading #page{ visibility:hidden; }
+html:not(.js-ready) #page{ visibility:hidden; }
 html.js-ready #page{ visibility:visible; }
 
 /* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
