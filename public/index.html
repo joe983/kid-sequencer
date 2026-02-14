@@ -1437,8 +1437,7 @@ function setDrumStyle(style){
 if(drumMuteBtnEl){
   drumMuteBtnEl.onclick = () => {
     // Ensure audio exists if the user unmutes while playing.
-    iosMediaKick();
-  getAudio();
+    getAudio();
     ensureAudioRunning();
     setDrumsMuted(!drumsMuted);
   };
@@ -2122,57 +2121,47 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio can be muted.
-// Workaround: briefly play a tiny silent HTMLAudioElement on a user gesture.
-// This nudges iOS into "media playback" mode so AudioContext output becomes audible.
-let __iosUnmuteAudioEl = null;
-let __iosUnmuteTried = false;
+// iOS Safari: With the hardware silent/ringer switch OFF, WebAudio can be muted.
+// Reliable workaround: start a looping *silent* HTMLMediaElement on a user gesture and keep it playing.
+// This keeps iOS in "media playback" mode so AudioContext output is audible even in silent mode.
+let __iosKeepAliveEl = null;
+let __iosKeepAliveStarted = false;
 
-function iosMediaKick(){
-  // Only relevant for iOS Safari
+function iosStartMediaKeepAlive(){
   const ua = navigator.userAgent || "";
   const isIOS = /iP(hone|ad|od)/.test(ua);
   if(!isIOS) return;
 
-  // Try on every first few gestures; safe no-op elsewhere.
-  // If play() succeeds once, keep element around (do not GC) and stop retrying.
-  if(__iosUnmuteTried) return;
-  __iosUnmuteTried = true;
+  if(__iosKeepAliveStarted) return;
 
   try{
-    if(!__iosUnmuteAudioEl){
-      __iosUnmuteAudioEl = new Audio();
-      __iosUnmuteAudioEl.preload = "auto";
-      __iosUnmuteAudioEl.loop = false;
-      __iosUnmuteAudioEl.muted = false;
-      __iosUnmuteAudioEl.playsInline = true;
-      // 0.1s of silence (WAV) as data URI
-      __iosUnmuteAudioEl.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA=";
+    if(!__iosKeepAliveEl){
+      __iosKeepAliveEl = new Audio();
+      __iosKeepAliveEl.preload = "auto";
+      __iosKeepAliveEl.loop = true;
+      __iosKeepAliveEl.muted = false;
+      __iosKeepAliveEl.playsInline = true;
+      // Slightly longer silence (WAV) as data URI
+      __iosKeepAliveEl.src =
+        "data:audio/wav;base64," +
+        "UklGRlQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YTAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAw";
+      __iosKeepAliveEl.volume = 1.0; // doesn't matter (audio is silence), but must not be 0 on some iOS builds
     }
 
-    const p = __iosUnmuteAudioEl.play();
+    const p = __iosKeepAliveEl.play();
     if(p && typeof p.then === "function"){
-      p.then(() => {
-        // pause quickly; the goal is the routing mode flip, not actual playback
-        try{ __iosUnmuteAudioEl.pause(); }catch(e){}
-        // allow future retries only if it didn't actually start
-        __iosUnmuteTried = true;
-      }).catch(() => {
-        // If blocked, allow another gesture to try again
-        __iosUnmuteTried = false;
-      });
+      p.then(() => { __iosKeepAliveStarted = true; })
+       .catch(() => { __iosKeepAliveStarted = false; });
     }else{
-      // Older iOS: play() may be sync
-      try{ __iosUnmuteAudioEl.pause(); }catch(e){}
-      __iosUnmuteTried = true;
+      __iosKeepAliveStarted = true;
     }
   }catch(e){
-    __iosUnmuteTried = false;
+    __iosKeepAliveStarted = false;
   }
 }
 
 function getAudio(){
-  iosMediaKick();
+  iosStartMediaKeepAlive();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2822,6 +2811,7 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
+  iosStartMediaKeepAlive();
   await ensureAudioReady();
 
   stop();
