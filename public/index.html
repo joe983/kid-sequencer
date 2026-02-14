@@ -2774,10 +2774,28 @@ async function play(){
   getAudio();
   try{
     if(audioCtx && audioCtx.state !== "running"){
-      audioCtx.resume();
+      audioCtx.resume(); // don't await: keep inside the user gesture
     }
   }catch(e){}
-  try{ warmUpAudio(2); }catch(e){}
+
+  // Diagnostic: tiny "beep" to prove audio is actually audible on iPhone
+  // (If you hear this beep, audio is unlocked and routing works; any remaining issue is scheduling/logic.)
+  try{
+    if(audioCtx){
+      const t0 = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.005);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(660, t0);
+      osc.connect(g);
+      g.connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.07);
+    }
+  }catch(e){}
 
   await ensureAudioReady();
 
