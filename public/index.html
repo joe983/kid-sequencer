@@ -2121,41 +2121,58 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari: Silent-mode workaround (stronger than silent <audio> keep-alive).
-// Start a looping *silent video* from a user gesture. Keep it playing in the background.
-// Requires a tiny `silent.mp4` file deployed next to this HTML.
-let __iosSilentVideoStarted = false;
+// iOS Safari quirk: when the hardware mute/silent switch is ON, WebAudio can be inaudible.
+// Workaround: play a tiny silent HTMLMediaElement once (on a user gesture) to put iOS into "media playback" mode,
+// which then allows WebAudio to be heard even while the switch is ON.
+// Sources/known workaround patterns: feross/unmute-ios-audio, CreateJS SoundJS issue #312, etc.
+let _iosMediaKickDone = false;
+let _iosKickAudioEl = null;
 
-function iosStartSilentVideo(){
+function isIOSDevice(){
   const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua);
-  if(!isIOS) return;
+  const iOS = /iPad|iPhone|iPod/.test(ua);
+  const iPadOS = (navigator.platform === "MacIntel" && navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+  return iOS || iPadOS;
+}
 
-  if(__iosSilentVideoStarted) return;
-
-  const v = document.getElementById("iosSilentVideo");
-  if(!v) return;
-
-  // Must NOT be muted if you want iOS to treat it as a real media session.
-  // The file itself should contain silence.
-  v.muted = false;
-  v.volume = 1.0;
+function iosMediaKick(){
+  if(_iosMediaKickDone) return;
+  if(!isIOSDevice()){ _iosMediaKickDone = true; return; }
 
   try{
-    const p = v.play();
-    if(p && typeof p.then === "function"){
-      p.then(() => { __iosSilentVideoStarted = true; })
-       .catch(() => { __iosSilentVideoStarted = false; });
-    }else{
-      __iosSilentVideoStarted = true;
+    // 0.1s silent WAV (base64)
+    const src = "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const a = new Audio();
+    _iosKickAudioEl = a;
+    a.src = src;
+    a.preload = "auto";
+    a.loop = false;
+    a.muted = false;
+    a.volume = 0.001;
+    a.setAttribute("playsinline", "");
+    a.setAttribute("webkit-playsinline", "");
+
+    const p = a.play();
+    // Mark done regardless; we only need to *attempt* this once per page load.
+    _iosMediaKickDone = true;
+
+    // Clean up quickly
+    const stop = () => {
+      try{ a.pause(); }catch(e){}
+      try{ a.currentTime = 0; }catch(e){}
+    };
+    if(p && typeof p.then === "function") {
+      p.then(() => setTimeout(stop, 60)).catch(() => {});
+    } else {
+      setTimeout(stop, 60);
     }
   }catch(e){
-    __iosSilentVideoStarted = false;
+    _iosMediaKickDone = true;
   }
 }
 
 function getAudio(){
-  iosStartSilentVideo();
+  iosMediaKick();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2805,7 +2822,6 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  iosStartSilentVideo();
   await ensureAudioReady();
 
   stop();
@@ -2858,15 +2874,6 @@ function setBlockPulseVars(el){
 }
 
 function startSequencer(){
-  // Smooth gain ramp to avoid a "crunch/click" at playback start (especially on iOS Safari)
-  try{
-    if(audioCtx && masterGain && masterGain.gain){
-      const gTarget = Math.max(0.0001, masterGain.gain.value || 1);
-      masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
-      masterGain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-      masterGain.gain.exponentialRampToValueAtTime(gTarget, audioCtx.currentTime + 0.03);
-    }
-  }catch(e){}
   let firstTick = true;
 
   function tick(){
@@ -2929,15 +2936,6 @@ function stop(){
   }
   setPlayheadPlaying(false);
   setPlayheadVisible(false);
-
-  // Smooth ramp-down to avoid clicks at stop / restart
-  try{
-    if(audioCtx && masterGain && masterGain.gain){
-      masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
-      masterGain.gain.setValueAtTime(Math.max(0.0001, masterGain.gain.value || 1), audioCtx.currentTime);
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.02);
-    }
-  }catch(e){}
   stopAllAudioNow();
   lastStopAt = performance.now();
 }
@@ -3971,15 +3969,6 @@ window.KidSequencer = {
 
 
 
-
-
-  <!-- iOS silent-mode workaround: hidden looping *silent video*.
-       Put a tiny silent MP4 named `silent.mp4` next to this HTML file (same folder).
-       iOS treats <video> as "media playback", which can allow audio even when the ringer switch is OFF. -->
-  <video id="iosSilentVideo" playsinline webkit-playsinline loop preload="auto"
-         style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
-    <source src="silent.mp4" type="video/mp4">
-  </video>
 
 </body>
 </html>
