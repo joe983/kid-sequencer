@@ -63,7 +63,8 @@ html, body {
 #viewport{
   position: fixed;
   inset: 0;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden; /* prevent tiny vertical scroll on iPhone */
   /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
 }
