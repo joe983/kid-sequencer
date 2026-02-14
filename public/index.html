@@ -5,11 +5,7 @@
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
     // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => {
-      // Safety net: reveal after 1200ms even if something went wrong
-      document.documentElement.classList.add('js-ready');
-      document.documentElement.classList.remove('js-loading');
-    }, 1200);
+    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 
   <meta charset="utf-8" />
@@ -98,7 +94,7 @@ html.stageScaled #page{
 }
 
 
-html:not(.js-ready) #page{ visibility:hidden; }
+html.js-loading #page{ visibility:hidden; }
 html.js-ready #page{ visibility:visible; }
 
 /* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
@@ -1043,6 +1039,12 @@ LAYOUT DEBUG MODE -------------------- */
 html.ios-urlbar-nudge body{
   min-height: 102vh; /* tiny extra scroll range so window.scrollTo(0,1) can collapse bars */
 }
+
+
+/* Prevent first-paint horizontal "flash" (e.g., title box briefly off-left on iPhone portrait).
+   Keep #page invisible until the layout manager marks the document as ready. */
+html.js-loading #page{ visibility:hidden; }
+html.js-ready #page{ visibility:visible; }
 
 </style>
 </head>
