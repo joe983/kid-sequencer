@@ -1682,13 +1682,13 @@ function fitToViewport(){
 
   const headerH = 92;
   const controlsH = 70;
-  const vMargins = 26;
-  const gridExtra = 26;
+  const vMargins = 24;
+  const gridExtra = 20;
 
-  let toolW = Math.min(220, Math.max(160, Math.floor(vw * 0.30)));
-  let rightW = Math.min(120, Math.max(100, Math.floor(vw * 0.18)));
+  let toolW = Math.min(210, Math.max(150, Math.floor(vw * 0.27)));
+  let rightW = Math.min(115, Math.max(96, Math.floor(vw * 0.16)));
 
-  const outerPadding = 28;
+  const outerPadding = 24;
   const gaps = 14 * 2;
   const maxCellByWidth = Math.floor(
     (vw - toolW - rightW - outerPadding - gaps - (cols - 1) * GAP - gridExtra) / cols
@@ -1698,9 +1698,9 @@ function fitToViewport(){
   const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / rows);
 
   let cell = Math.min(maxCellByWidth, maxCellByHeight);
-  cell = Math.max(26, Math.min(56, cell));
+  cell = Math.max(26, Math.min(64, cell));
 
-  if(cell <= 34){
+  if(cell <= 36){
     toolW = Math.max(150, Math.floor(vw * 0.28));
     rightW = Math.max(96, Math.floor(vw * 0.16));
   }
