@@ -1666,11 +1666,16 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--rightW", rightW + "px");
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
-
-  const toolsRect = toolsEl.getBoundingClientRect();
-  const pageLeft = 14;
-  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
-
+  // Compute --titleInset deterministically from our stage layout math (no DOM rect reads).
+  // This avoids iOS Safari first-open quirks where getBoundingClientRect() can be wrong until refresh.
+  const STAGE_W = 1600;          // matches --stageW
+  const PAD_X = 14 * 2;          // #mainLayout padding left+right
+  const GAP_MAIN = 14 * 2;       // gaps between (tools|grid) and (grid|right)
+  const gridW = (cell * 16) + (4 * 15); // 16 columns, --gap is 4px
+  const inner = STAGE_W - PAD_X;
+  const total = toolW + rightW + gridW + GAP_MAIN;
+  const inset = Math.max(0, Math.round((inner - total) / 2));
+  document.documentElement.style.setProperty("--titleInset", inset + "px");
   const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
   document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
@@ -3150,46 +3155,7 @@ function importGridFromDataUrl(dataUrl){
   const pageEl = document.getElementById('page');
   if(!pageEl) return;
 
-  
-  // Prevent Safari from restoring scroll positions for our custom #viewport scroller.
-  // iOS Safari can restore scrollLeft/scrollTop when reopening a tab (bfcache), which makes the UI appear shifted.
-  try{ if('scrollRestoration' in history) history.scrollRestoration = 'manual'; }catch(e){}
-
-  function __ksHardResetViewportScroll(){
-    if(!viewportEl) return;
-    try{
-      viewportEl.scrollLeft = 0;
-      viewportEl.scrollTop = 0;
-      viewportEl.scrollTo(0,0);
-    }catch(e){}
-    // A second tick helps on iOS when the first assignment is ignored during restore.
-    requestAnimationFrame(() => {
-      try{
-        viewportEl.scrollLeft = 0;
-        viewportEl.scrollTop = 0;
-        viewportEl.scrollTo(0,0);
-      }catch(e){}
-    });
-  }
-
-  // If the page is restored from bfcache (tab reopen), re-run layout + hard reset scroll.
-  window.addEventListener('pageshow', (e) => {
-    if(e && e.persisted){
-      try{ __ksSyncViewportVars(); }catch(_){}
-      __ksHardResetViewportScroll();
-      try{ layoutPass(); }catch(_){}
-    }
-  });
-
-  // Also re-apply when the tab becomes visible again (some iOS restores don't set persisted).
-  document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState === 'visible'){
-      try{ __ksSyncViewportVars(); }catch(_){}
-      __ksHardResetViewportScroll();
-      try{ layoutPass(); }catch(_){}
-    }
-  });
-let __ready = false;
+  let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
   const __reveal = () => {
