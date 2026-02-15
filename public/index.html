@@ -1034,12 +1034,6 @@ LAYOUT DEBUG MODE -------------------- */
   height: var(--wholeSvgSize);
 }
 
-
-/* iOS Safari URL-bar collapse helper (browser-only; does NOT affect fixed #viewport layout) */
-html.ios-urlbar-nudge body{
-  min-height: 102vh; /* tiny extra scroll range so window.scrollTo(0,1) can collapse bars */
-}
-
 </style>
 </head>
 
@@ -1616,19 +1610,11 @@ function __ksStageSize(){
 }
 function __ksViewport(){
   const vv = window.visualViewport;
-
-  // iOS Safari quirk: during initial load / URL-bar settle, VisualViewport.offsetLeft/Top can be
-  // briefly non-zero even when not zoomed, which shifts the whole stage left/right on first paint.
-  // If we're at (approximately) 1x scale, treat offsets as 0 to keep the stage anchored.
-  const scale = vv ? (vv.scale || 1) : 1;
-  const offX = vv ? ((Math.abs(scale - 1) < 0.01) ? 0 : vv.offsetLeft) : 0;
-  const offY = vv ? ((Math.abs(scale - 1) < 0.01) ? 0 : vv.offsetTop)  : 0;
-
   return {
     vw: vv ? vv.width : window.innerWidth,
     vh: vv ? vv.height : window.innerHeight,
-    offX,
-    offY
+    offX: vv ? vv.offsetLeft : 0,
+    offY: vv ? vv.offsetTop : 0
   };
 }
 
@@ -2134,39 +2120,7 @@ function makeInstrumentBuses(ctx, masterOut){
   };
 }
 
-
-// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio may be muted.
-// Workaround: start a looping *silent video* from a user gesture and keep it playing.
-// Requires `silent.mp4` deployed next to this HTML.
-let __iosSilentVideoStarted = false;
-function iosStartSilentVideo(){
-  const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua);
-  if(!isIOS) return;
-  if(__iosSilentVideoStarted) return;
-
-  const v = document.getElementById("iosSilentVideo");
-  if(!v) return;
-
-  // The file must contain silence; keep element unmuted so iOS treats it as a real media session.
-  v.muted = false;
-  v.volume = 1.0;
-
-  try{
-    const p = v.play();
-    if(p && typeof p.then === "function"){
-      p.then(() => { __iosSilentVideoStarted = true; })
-       .catch(() => { __iosSilentVideoStarted = false; });
-    }else{
-      __iosSilentVideoStarted = true;
-    }
-  }catch(e){
-    __iosSilentVideoStarted = false;
-  }
-}
-
 function getAudio(){
-  iosStartSilentVideo();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2202,26 +2156,29 @@ masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
   ensureAudioRunning();
 }
 
-function warmUpAudio(iterations=2){
-  // iOS Safari: warm the audio graph WITHOUT producing any audible ticks/clicks.
-  // Use a 1-sample silent buffer through a zero-gain node.
-  try{
-    const ctx = getAudio();
-    if(!ctx) return;
+function warmUpAudio(pulses = 2){
+  if(!audioCtx || !masterGain) return;
+  const now = audioCtx.currentTime;
 
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, ctx.currentTime);
-    g.connect(ctx.destination);
+  for(let i=0;i<pulses;i++){
+    const t0 = now + i * 0.03;
 
-    for(let i=0;i<iterations;i++){
-      const b = ctx.createBuffer(1, 1, ctx.sampleRate);
-      const s = ctx.createBufferSource();
-      s.buffer = b; // silence
-      s.connect(g);
-      s.start();
-      s.stop(ctx.currentTime + 0.001);
-    }
-  }catch(e){}
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+
+    g.gain.setValueAtTime(0.0004, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(220, t0);
+
+    osc.connect(g);
+    g.connect(masterGain);
+
+    trackNode(osc);
+    osc.start(t0);
+    osc.stop(t0 + 0.03);
+  }
 }
 
 function hardResetAudioEngine(){
@@ -2813,7 +2770,6 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
-  iosStartSilentVideo();
   await ensureAudioReady();
 
   stop();
@@ -3961,44 +3917,6 @@ window.KidSequencer = {
 
 
 
-
-
-  <!-- iOS silent-mode workaround: hidden looping silent video.
-       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
-  <video id="iosSilentVideo" playsinline webkit-playsinline loop preload="auto"
-         style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
-    <source src="silent.mp4" type="video/mp4">
-  </video>
-
-
-<script>
-/* iOS Safari address bar: cannot be truly "forced" in all cases in the browser.
-   This nudge reproduces the common "fluke" behavior: create a tiny scroll range,
-   then scroll the window by 1px so Safari collapses its bars. */
-(function(){
-  const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua);
-  // basic Safari-ish check (not Chrome/Firefox iOS)
-  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
-  if(!isSafari) return;
-
-  document.documentElement.classList.add('ios-urlbar-nudge');
-
-  function nudge(){
-    // If already scrolled, don't fight user.
-    if (window.scrollY > 1) return;
-    // Two-phase nudge is more reliable across iOS versions.
-    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 50);
-    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 250);
-  }
-
-  window.addEventListener('load', nudge, { once: true });
-  window.addEventListener('orientationchange', () => setTimeout(nudge, 350), { passive: true });
-  // First user gesture also helps Safari decide it's "interactive"
-  window.addEventListener('touchstart', nudge, { passive: true, once: true });
-  window.addEventListener('pointerdown', nudge, { passive: true, once: true });
-})();
-</script>
 
 </body>
 </html>
