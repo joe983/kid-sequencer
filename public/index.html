@@ -1666,31 +1666,53 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--rightW", rightW + "px");
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
-
-  const toolsRect = toolsEl.getBoundingClientRect();
-  const pageLeft = 14;
-  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
-
-  const controlsRect = controlsEl.getBoundingClientRect();
-  const mainRect = mainLayoutEl.getBoundingClientRect();
-  document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
-
-  const playBtn = controlsEl.querySelector(".bigBtn");
-  if (playBtn) {
-    const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
-
-    const playRect  = playBtn.getBoundingClientRect();
-    const titleRect = titleBoxEl.getBoundingClientRect();
-
-    const playCenter  = playRect.top  + playRect.height / 2;
-    const titleCenter = titleRect.top + titleRect.height / 2;
-
-    const delta = Math.round(playCenter - titleCenter);
-    let newLift = Math.round(currentLift + delta);
-    newLift = Math.max(0, Math.min(260, newLift));
-    document.documentElement.style.setProperty("--contentLift", newLift + "px");
-  }
 }
+
+// Compute layout-derived CSS vars that depend on DOM sizes/positions.
+// IMPORTANT: call this only after buildGrid() has run for the current --cell/--toolW/--rightW values.
+function syncLayoutDerivedVars(){
+  // Force a synchronous layout flush so rects reflect the latest CSS variables.
+  // (iOS Safari can otherwise give stale rects during the same frame.)
+  try{ void mainLayoutEl.offsetWidth; }catch(e){}
+  try{ void toolsEl.offsetWidth; }catch(e){}
+  try{ void sequencerEl.offsetWidth; }catch(e){}
+  try{ void controlsEl.offsetWidth; }catch(e){}
+  try{ void titleBoxEl.offsetWidth; }catch(e){}
+
+  // Title box should align with the left edge of the tools column within the stage coordinate system.
+  // When #page transform is temporarily cleared (layoutPass does this), rect.left is in stage px.
+  const pageLeft = 14; // matches #topBar padding-left
+  try{
+    const toolsRect = toolsEl.getBoundingClientRect();
+    const inset = Math.max(0, Math.round(toolsRect.left - pageLeft));
+    document.documentElement.style.setProperty("--titleInset", inset + "px");
+  }catch(e){}
+
+  // Lift right column to line up with controls row.
+  try{
+    const controlsRect = controlsEl.getBoundingClientRect();
+    const mainRect = mainLayoutEl.getBoundingClientRect();
+    const lift = Math.max(0, Math.round(mainRect.top - controlsRect.top));
+    document.documentElement.style.setProperty("--rightLift", lift + "px");
+  }catch(e){}
+
+  // Nudge the content so the big play button and the title box feel vertically aligned.
+  try{
+    const playBtn = controlsEl.querySelector(".bigBtn");
+    if (playBtn) {
+      const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
+      const playRect  = playBtn.getBoundingClientRect();
+      const titleRect = titleBoxEl.getBoundingClientRect();
+      const playCenter  = playRect.top  + playRect.height / 2;
+      const titleCenter = titleRect.top + titleRect.height / 2;
+      const delta = Math.round(playCenter - titleCenter);
+      let newLift = Math.round(currentLift + delta);
+      newLift = Math.max(0, Math.min(260, newLift));
+      document.documentElement.style.setProperty("--contentLift", newLift + "px");
+    }
+  }catch(e){}
+}
+
 
 function positionRobotLogo(){
   const logo = document.getElementById('robotLogo');
@@ -3153,6 +3175,8 @@ function importGridFromDataUrl(dataUrl){
   let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
+  let __stableTI = 0;
+  let __lastTI = null;
   const __reveal = () => {
     if(__ready) return;
     __ready = true;
@@ -3228,34 +3252,6 @@ function importGridFromDataUrl(dataUrl){
   function layoutPass(){
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
-    // iOS first-load fix: make #page use stable stage geometry *before* any getBoundingClientRect-based measurements.
-    // On initial navigation Safari can run a layout pass while #page is still flow-sized, which makes computed insets wrong
-    // until a refresh. Pre-applying the stage box keeps internal coordinates consistent.
-    try{
-      const { vw, vh } = __ksViewport();
-      const { stageW, stageH } = __ksStageSize();
-
-      let padL = 0, padR = 0, padT = 0, padB = 0;
-      if(viewportEl){
-        const cs = getComputedStyle(viewportEl);
-        padL = parseFloat(cs.paddingLeft)  || 0;
-        padR = parseFloat(cs.paddingRight) || 0;
-        padT = parseFloat(cs.paddingTop)   || 0;
-        padB = parseFloat(cs.paddingBottom)|| 0;
-      }
-      const usableW = Math.max(0, vw - padL - padR);
-      const usableH = Math.max(0, vh - padT - padB);
-      const shouldScale = (usableW < stageW) || (usableH < stageH);
-
-      if(shouldScale){
-        root.classList.add('stageScaled');
-        root.classList.remove('tabletScaled');
-        pageEl.style.width = stageW + 'px';
-        pageEl.style.height = stageH + 'px';
-        pageEl.style.minWidth = stageW + 'px';
-        pageEl.style.minHeight = stageH + 'px';
-      }
-    }catch(e){}
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
@@ -3263,6 +3259,7 @@ function importGridFromDataUrl(dataUrl){
       fitToViewport();
       buildGrid();
       positionRobotLogo();
+      syncLayoutDerivedVars();
     }catch(e){
       console.error('layoutPass failed', e);
     }
@@ -3282,7 +3279,15 @@ function importGridFromDataUrl(dataUrl){
       __lastVW = vw;
       __lastVH = vh;
     }
-    if (__stable >= 2) __reveal();
+    // Also wait for --titleInset to settle (prevents first-paint titleBox jumping left on iOS Safari).
+    const ti = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--titleInset")) || 0;
+    if (__lastTI !== null && Math.abs(ti - __lastTI) < 0.5) {
+      __stableTI++;
+    } else {
+      __stableTI = 0;
+      __lastTI = ti;
+    }
+    if (__stable >= 2 && __stableTI >= 2) __reveal();
   }
 
   function scheduleLayout(){
