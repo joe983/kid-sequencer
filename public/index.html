@@ -1667,20 +1667,27 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
 
-  // Compute title inset in *stage/layout coordinates* (offsetLeft chain), not viewport coords.
-// getBoundingClientRect() is affected by transforms and iOS Safari can report transient values on first paint.
-const pageLeft = 14;
-function __ksLeftInPage(el){
-  let x = 0;
-  while(el && el !== pageEl){
-    x += (el.offsetLeft || 0);
-    el = el.offsetParent;
-  }
-  return x;
-}
-const toolsLeft = __ksLeftInPage(toolsEl);
-document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsLeft - pageLeft)) + "px");
-const controlsRect = controlsEl.getBoundingClientRect();
+  // Title box should line up with the left edge of the Tools column.
+  // DO NOT use getBoundingClientRect() here: on iOS Safari the first navigation can report
+  // transient/wrong rects during URL-bar / visual viewport settle, which makes the title start
+  // at the far left and only correct after refresh.
+  //
+  // Instead compute the inset deterministically in "stage coordinates":
+  // mainLayout has horizontal padding 14px on both sides and uses justify-content:center.
+  // contentW = toolW + (gap 14) + sequencerShellOuterW + (gap 14) + rightW
+  // toolsLeft = 14 + (stageW - 28 - contentW)/2
+  // titleInset = toolsLeft - 14 = (stageW - 28 - contentW)/2
+  const STAGE_PADDING_X = 14;      // #mainLayout padding-left/right
+  const COL_GAP = 14;              // #mainLayout gap
+  const SHELL_PAD = 12;            // #sequencerShell padding
+  const SHELL_BORDER = 4;          // #sequencerShell border
+  const shellInnerW = cell * cols + GAP * (cols - 1); // grid/drum width
+  const shellOuterW = shellInnerW + 2 * (SHELL_PAD + SHELL_BORDER);
+  const contentW = toolW + rightW + shellOuterW + 2 * COL_GAP;
+  const inset = Math.max(0, Math.round((vw - 2 * STAGE_PADDING_X - contentW) / 2));
+  document.documentElement.style.setProperty("--titleInset", inset + "px");
+
+  const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
   document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
 
