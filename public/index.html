@@ -1616,27 +1616,12 @@ function __ksStageSize(){
 }
 function __ksViewport(){
   const vv = window.visualViewport;
-
-  const vw = vv ? vv.width : window.innerWidth;
-  const vh = vv ? vv.height : window.innerHeight;
-
-  if(!vv){
-    return { vw, vh, offX: 0, offY: 0 };
-  }
-
-  const scale = (typeof vv.scale === 'number' && isFinite(vv.scale)) ? vv.scale : 1;
-
-  // iOS Safari quirk: during initial load / URL-bar settle, VisualViewport.offsetLeft/Top can be
-  // briefly non-zero (or even negative) even when not zoomed. That shifts our translated stage.
-  // Treat offsets as zero unless the user is *actually* pinch-zoomed.
-  const zoomed = scale > 1.02;
-  const rawX = vv.offsetLeft || 0;
-  const rawY = vv.offsetTop  || 0;
-
-  const offX = zoomed ? rawX : 0;
-  const offY = zoomed ? rawY : 0;
-
-  return { vw, vh, offX, offY, scale };
+  return {
+    vw: vv ? vv.width : window.innerWidth,
+    vh: vv ? vv.height : window.innerHeight,
+    offX: vv ? vv.offsetLeft : 0,
+    offY: vv ? vv.offsetTop : 0
+  };
 }
 
 // Keep CSS in sync with the *visible* viewport so the fixed #viewport never ends up a few pixels taller
@@ -3167,8 +3152,7 @@ function importGridFromDataUrl(dataUrl){
 
   let __ready = false;
   let __stable = 0;
-  let __warmFrames = 0;
-  let __lastVW = 0, __lastVH = 0, __lastOX = 0, __lastOY = 0, __lastScale = 1;
+  let __lastVW = 0, __lastVH = 0;
   const __reveal = () => {
     if(__ready) return;
     __ready = true;
@@ -3220,8 +3204,8 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + (usableW - stageW * s) / 2;
-    const ty = offY + (usableH - fitStageH * s) / 2;
+    const tx = padL + (usableW - stageW * s) / 2;
+    const ty = padT + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3259,35 +3243,18 @@ function importGridFromDataUrl(dataUrl){
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
 
-    // Reveal only after the *full* visual viewport metrics are stable for a few consecutive passes.
-    // (On iOS Safari, vw/vh/offX/offY can all change during the first couple of frames.)
-    const v = __ksViewport();
-    const vw = v.vw, vh = v.vh;
-    const ox = v.offX || 0, oy = v.offY || 0;
-    const sc = (typeof v.scale === 'number') ? v.scale : 1;
-
-    const stableNow =
-      Math.abs(vw - __lastVW) < 0.5 &&
-      Math.abs(vh - __lastVH) < 0.5 &&
-      Math.abs(ox - __lastOX) < 0.5 &&
-      Math.abs(oy - __lastOY) < 0.5 &&
-      Math.abs(sc - __lastScale) < 0.01;
-
-    if (stableNow) {
+    // Reveal only after viewport is stable for 2 consecutive passes (prevents split-second flash on iOS/DevTools).
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
       __stable++;
     } else {
       __stable = 0;
-      __lastVW = vw; __lastVH = vh; __lastOX = ox; __lastOY = oy; __lastScale = sc;
+      __lastVW = vw;
+      __lastVH = vh;
     }
-
-    if (__stable >= 3) {
-      __reveal();
-    } else if (!__ready && __warmFrames < 30) {
-      // Keep running layout passes for a short warm-up window even if no resize events fire.
-      __warmFrames++;
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(layoutPass);
-    }
+    if (__stable >= 2) __reveal();
   }
 
   function scheduleLayout(){
