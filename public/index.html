@@ -5,8 +5,11 @@
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
     // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
-  </script>
+    setTimeout(() => {
+      document.documentElement.classList.remove('js-loading');
+      document.documentElement.classList.add('js-ready');
+    }, 1500);
+</script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -91,6 +94,7 @@ html.stageScaled #page{
   top: 0;
   transform-origin: top left;
   will-change: transform;
+  visibility: hidden; /* prevent pre-transform first paint (iOS cold start) */
 }
 
 
@@ -1666,53 +1670,31 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--rightW", rightW + "px");
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
+
+  const toolsRect = toolsEl.getBoundingClientRect();
+  const pageLeft = 14;
+  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
+
+  const controlsRect = controlsEl.getBoundingClientRect();
+  const mainRect = mainLayoutEl.getBoundingClientRect();
+  document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
+
+  const playBtn = controlsEl.querySelector(".bigBtn");
+  if (playBtn) {
+    const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
+
+    const playRect  = playBtn.getBoundingClientRect();
+    const titleRect = titleBoxEl.getBoundingClientRect();
+
+    const playCenter  = playRect.top  + playRect.height / 2;
+    const titleCenter = titleRect.top + titleRect.height / 2;
+
+    const delta = Math.round(playCenter - titleCenter);
+    let newLift = Math.round(currentLift + delta);
+    newLift = Math.max(0, Math.min(260, newLift));
+    document.documentElement.style.setProperty("--contentLift", newLift + "px");
+  }
 }
-
-// Compute layout-derived CSS vars that depend on DOM sizes/positions.
-// IMPORTANT: call this only after buildGrid() has run for the current --cell/--toolW/--rightW values.
-function syncLayoutDerivedVars(){
-  // Force a synchronous layout flush so rects reflect the latest CSS variables.
-  // (iOS Safari can otherwise give stale rects during the same frame.)
-  try{ void mainLayoutEl.offsetWidth; }catch(e){}
-  try{ void toolsEl.offsetWidth; }catch(e){}
-  try{ void sequencerEl.offsetWidth; }catch(e){}
-  try{ void controlsEl.offsetWidth; }catch(e){}
-  try{ void titleBoxEl.offsetWidth; }catch(e){}
-
-  // Title box should align with the left edge of the tools column within the stage coordinate system.
-  // When #page transform is temporarily cleared (layoutPass does this), rect.left is in stage px.
-  const pageLeft = 14; // matches #topBar padding-left
-  try{
-    const toolsRect = toolsEl.getBoundingClientRect();
-    const inset = Math.max(0, Math.round(toolsRect.left - pageLeft));
-    document.documentElement.style.setProperty("--titleInset", inset + "px");
-  }catch(e){}
-
-  // Lift right column to line up with controls row.
-  try{
-    const controlsRect = controlsEl.getBoundingClientRect();
-    const mainRect = mainLayoutEl.getBoundingClientRect();
-    const lift = Math.max(0, Math.round(mainRect.top - controlsRect.top));
-    document.documentElement.style.setProperty("--rightLift", lift + "px");
-  }catch(e){}
-
-  // Nudge the content so the big play button and the title box feel vertically aligned.
-  try{
-    const playBtn = controlsEl.querySelector(".bigBtn");
-    if (playBtn) {
-      const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
-      const playRect  = playBtn.getBoundingClientRect();
-      const titleRect = titleBoxEl.getBoundingClientRect();
-      const playCenter  = playRect.top  + playRect.height / 2;
-      const titleCenter = titleRect.top + titleRect.height / 2;
-      const delta = Math.round(playCenter - titleCenter);
-      let newLift = Math.round(currentLift + delta);
-      newLift = Math.max(0, Math.min(260, newLift));
-      document.documentElement.style.setProperty("--contentLift", newLift + "px");
-    }
-  }catch(e){}
-}
-
 
 function positionRobotLogo(){
   const logo = document.getElementById('robotLogo');
@@ -3173,10 +3155,9 @@ function importGridFromDataUrl(dataUrl){
   if(!pageEl) return;
 
   let __ready = false;
+  let __didFit = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
-  let __stableTI = 0;
-  let __lastTI = null;
   const __reveal = () => {
     if(__ready) return;
     __ready = true;
@@ -3184,7 +3165,14 @@ function importGridFromDataUrl(dataUrl){
     root.classList.add('js-ready');
   };
   // Hard fallback in case of unexpected errors.
-  setTimeout(__reveal, 900);
+  // Only reveal after at least one fit pass; otherwise force one.
+  setTimeout(() => {
+    if(__ready) return;
+    try {
+      if(!__didFit) applyStageFit();
+    } catch(e) {}
+    __reveal();
+  }, 1500);
 
   function applyStageFit(){
     const { vw, vh, offX, offY } = __ksViewport();
@@ -3259,7 +3247,6 @@ function importGridFromDataUrl(dataUrl){
       fitToViewport();
       buildGrid();
       positionRobotLogo();
-      syncLayoutDerivedVars();
     }catch(e){
       console.error('layoutPass failed', e);
     }
@@ -3279,15 +3266,9 @@ function importGridFromDataUrl(dataUrl){
       __lastVW = vw;
       __lastVH = vh;
     }
-    // Also wait for --titleInset to settle (prevents first-paint titleBox jumping left on iOS Safari).
-    const ti = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--titleInset")) || 0;
-    if (__lastTI !== null && Math.abs(ti - __lastTI) < 0.5) {
-      __stableTI++;
-    } else {
-      __stableTI = 0;
-      __lastTI = ti;
-    }
-    if (__stable >= 2 && __stableTI >= 2) __reveal();
+    if (__stable >= 2) __reveal();
+    __didFit = true;
+
   }
 
   function scheduleLayout(){
