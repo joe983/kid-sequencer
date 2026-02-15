@@ -4,8 +4,8 @@
   <script>
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
-    // Safety net: if something goes wrong, reveal after a moment (without showing the pre-fit layout).
-    setTimeout(() => document.documentElement.classList.add('js-ready'), 1500);
+    // Safety net: never allow a permanent blank screen if something goes wrong.
+    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 
   <meta charset="utf-8" />
@@ -3150,7 +3150,46 @@ function importGridFromDataUrl(dataUrl){
   const pageEl = document.getElementById('page');
   if(!pageEl) return;
 
-  let __ready = false;
+  
+  // Prevent Safari from restoring scroll positions for our custom #viewport scroller.
+  // iOS Safari can restore scrollLeft/scrollTop when reopening a tab (bfcache), which makes the UI appear shifted.
+  try{ if('scrollRestoration' in history) history.scrollRestoration = 'manual'; }catch(e){}
+
+  function __ksHardResetViewportScroll(){
+    if(!viewportEl) return;
+    try{
+      viewportEl.scrollLeft = 0;
+      viewportEl.scrollTop = 0;
+      viewportEl.scrollTo(0,0);
+    }catch(e){}
+    // A second tick helps on iOS when the first assignment is ignored during restore.
+    requestAnimationFrame(() => {
+      try{
+        viewportEl.scrollLeft = 0;
+        viewportEl.scrollTop = 0;
+        viewportEl.scrollTo(0,0);
+      }catch(e){}
+    });
+  }
+
+  // If the page is restored from bfcache (tab reopen), re-run layout + hard reset scroll.
+  window.addEventListener('pageshow', (e) => {
+    if(e && e.persisted){
+      try{ __ksSyncViewportVars(); }catch(_){}
+      __ksHardResetViewportScroll();
+      try{ layoutPass(); }catch(_){}
+    }
+  });
+
+  // Also re-apply when the tab becomes visible again (some iOS restores don't set persisted).
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible'){
+      try{ __ksSyncViewportVars(); }catch(_){}
+      __ksHardResetViewportScroll();
+      try{ layoutPass(); }catch(_){}
+    }
+  });
+let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
   const __reveal = () => {
@@ -3232,17 +3271,6 @@ function importGridFromDataUrl(dataUrl){
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
     try{
-    // Freeze #page box to the stage size BEFORE measuring/layout.
-    // On iOS cold loads, leaving the box auto-sized can change flex centering,
-    // which makes the title inset compute as 0px for the first paint.
-    try{
-      const ss = __ksStageSize();
-      pageEl.style.width = ss.stageW + 'px';
-      pageEl.style.height = ss.stageH + 'px';
-      pageEl.style.minWidth = ss.stageW + 'px';
-      pageEl.style.minHeight = ss.stageH + 'px';
-    }catch(e){}
-
       fitToViewport();
       buildGrid();
       positionRobotLogo();
