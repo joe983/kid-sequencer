@@ -3882,18 +3882,43 @@ window.KidSequencer = {
       }
       function clamp(n,min,max){ return Math.max(min, Math.min(max,n)); }
 
-      function layoutFromRange(){
-        const a = area.getBoundingClientRect();
-        const knobRect = knob.getBoundingClientRect();
+      function getMetrics(){
+        // When #page is scaled via CSS transform (iPhone landscape “stageScaled”),
+        // getBoundingClientRect() is in *scaled* pixels, but style.top uses *local* pixels.
+        const rect = area.getBoundingClientRect();           // scaled px
+        const localH = area.clientHeight || area.offsetHeight || rect.height || 1; // unscaled px
+        const scaleY = (rect.height / localH) || 1;
 
-        const travel = Math.max(0, a.height - knobRect.height);
-        const t = parseFloat(range.value) / 10; // 0..1 (0 bottom, 1 top in UI)
-        // knob uses translate(-50%, -50%), so 'top' must be the knob's center Y
-        const y = (1 - t) * travel + knobRect.height / 2;
+        const knobH = knob.offsetHeight || (parseFloat(getComputedStyle(knob).height) || 16);
+        const half = knobH / 2;
 
-        knob.style.top = y + 'px';
-        num.textContent = String(Math.round(t*10));
+        const minC = half;            // knob center at top end-stop
+        const maxC = localH - half;   // knob center at bottom end-stop
+        return { rect, localH, scaleY, minC, maxC };
       }
+
+      function layoutFromRange(){
+        const m = getMetrics();
+        const t = clamp((parseFloat(range.value) || 0) / 10, 0, 1); // 0..1 (0 bottom, 1 top)
+        const y = m.maxC - (m.maxC - m.minC) * t;                  // center position in local px
+        knob.style.top = y + 'px';
+        num.textContent = String(Math.round(t * 10));
+      }
+
+      const setFromClientY=(clientY)=>{
+        const m = getMetrics();
+        // Convert pointer Y from scaled viewport pixels to local (unscaled) element pixels
+        const localY = (clientY - m.rect.top) / m.scaleY;
+
+        const yRaw = localY - (clickOnKnob ? pointerOffset : 0);
+        const yy = clamp(yRaw, m.minC, m.maxC);
+
+        const t = (m.maxC - yy) / (m.maxC - m.minC); // 0..1
+        range.value = String(t * 10);
+
+        setMasterGain(t);
+        layoutFromRange();
+      };
 
 
       // Ensure audio on first interaction
@@ -3911,39 +3936,25 @@ window.KidSequencer = {
       let pointerOffset=0;
       let clickOnKnob=false;
 
-      const setFromClientY=(clientY, a)=>{
-        const knobRect = knob.getBoundingClientRect();
-        const travel = Math.max(0, a.height - knobRect.height);
-
-        // apply offset only when we grabbed the knob so the knob doesn't jump under the pointer
-        const yRaw = (clientY - a.top) - (clickOnKnob ? pointerOffset : knobRect.height/2);
-        const yy = clamp(yRaw, 0, travel);
-
-        const t = 1 - (yy / (travel || 1));
-        range.value = String(t*10);
-        setMasterGain(t);
-        layoutFromRange();
-      };
 
       const onPointerDown=(e)=>{
         dragging=true;
         moved=false;
         startX=e.clientX; startY=e.clientY;
         clickOnKnob=!!(e.target && e.target.closest && e.target.closest('.seqKnob'));
-        const a=area.getBoundingClientRect();
-        // compute where the knob center currently is (in area coords) to preserve relative grab point
-        const t0=(parseFloat(range.value)||10)/10; // 0..10 scale -> 0..1
-        const knobRect = knob.getBoundingClientRect();
-        const travel = Math.max(0, a.height - knobRect.height);
-        const knobCenterY = (1 - t0) * travel + knobRect.height/2;
-        pointerOffset = (e.clientY - a.top) - knobCenterY;
+        const m = getMetrics();
+        // compute where the knob center currently is (in *local* area coords) to preserve relative grab point
+        const t0 = clamp((parseFloat(range.value) || 10) / 10, 0, 1);
+        const knobY = m.maxC - (m.maxC - m.minC) * t0;
+        const localY = (e.clientY - m.rect.top) / m.scaleY;
+        pointerOffset = localY - knobY;
 
         area.setPointerCapture(e.pointerId);
         ensureAudio();
 
         // If user clicks the *track* (not the knob), allow an immediate jump to that position.
         if(!clickOnKnob){
-          setFromClientY(e.clientY, a);
+          setFromClientY(e.clientY);
         }
       };
 
@@ -3957,8 +3968,7 @@ window.KidSequencer = {
           if(dx<3 && dy<3) return;
           moved=true;
         }
-        const a=area.getBoundingClientRect();
-        setFromClientY(e.clientY, a);
+        setFromClientY(e.clientY);
       };
 
       const onPointerUp=()=>{
