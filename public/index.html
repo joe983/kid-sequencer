@@ -63,6 +63,9 @@ html, body {
 #viewport{
   position: fixed;
   inset: 0;
+  /* iOS: match the *visible* viewport height to avoid the 1–3px “scroll wiggle” in landscape */
+  height: var(--vvh, 100vh);
+  width: var(--vvw, 100vw);
   overflow: auto;
   /* allow trackpad horizontal scroll */
   overscroll-behavior: none;
@@ -76,6 +79,11 @@ html.stageScaled, html.stageScaled body{
 html.stageScaled #viewport{
   overflow: hidden !important;
   touch-action: none; /* prevent swipe scrolling while scaled */
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
 }
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
@@ -1026,6 +1034,12 @@ LAYOUT DEBUG MODE -------------------- */
   height: var(--wholeSvgSize);
 }
 
+
+/* iOS Safari URL-bar collapse helper (browser-only; does NOT affect fixed #viewport layout) */
+html.ios-urlbar-nudge body{
+  min-height: 102vh; /* tiny extra scroll range so window.scrollTo(0,1) can collapse bars */
+}
+
 </style>
 </head>
 
@@ -1602,12 +1616,37 @@ function __ksStageSize(){
 }
 function __ksViewport(){
   const vv = window.visualViewport;
-  return {
-    vw: vv ? vv.width : window.innerWidth,
-    vh: vv ? vv.height : window.innerHeight,
-    offX: vv ? vv.offsetLeft : 0,
-    offY: vv ? vv.offsetTop : 0
-  };
+
+  const vw = vv ? vv.width : window.innerWidth;
+  const vh = vv ? vv.height : window.innerHeight;
+
+  if(!vv){
+    return { vw, vh, offX: 0, offY: 0 };
+  }
+
+  const scale = (typeof vv.scale === 'number' && isFinite(vv.scale)) ? vv.scale : 1;
+
+  // iOS Safari quirk: during initial load / URL-bar settle, VisualViewport.offsetLeft/Top can be
+  // briefly non-zero (or even negative) even when not zoomed. That shifts our translated stage.
+  // Treat offsets as zero unless the user is *actually* pinch-zoomed.
+  const zoomed = scale > 1.02;
+  const rawX = vv.offsetLeft || 0;
+  const rawY = vv.offsetTop  || 0;
+
+  const offX = zoomed ? rawX : 0;
+  const offY = zoomed ? rawY : 0;
+
+  return { vw, vh, offX, offY, scale };
+}
+
+// Keep CSS in sync with the *visible* viewport so the fixed #viewport never ends up a few pixels taller
+// than what the user can actually see on iOS (common source of tiny scroll in landscape).
+function __ksSyncViewportVars(){
+  const vv = window.visualViewport;
+  const vvw = vv ? vv.width  : window.innerWidth;
+  const vvh = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--vvw', vvw + 'px');
+  document.documentElement.style.setProperty('--vvh', vvh + 'px');
 }
 
 function fitToViewport(){
@@ -2102,7 +2141,39 @@ function makeInstrumentBuses(ctx, masterOut){
   };
 }
 
+
+// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio may be muted.
+// Workaround: start a looping *silent video* from a user gesture and keep it playing.
+// Requires `silent.mp4` deployed next to this HTML.
+let __iosSilentVideoStarted = false;
+function iosStartSilentVideo(){
+  const ua = navigator.userAgent || "";
+  const isIOS = /iP(hone|ad|od)/.test(ua);
+  if(!isIOS) return;
+  if(__iosSilentVideoStarted) return;
+
+  const v = document.getElementById("iosSilentVideo");
+  if(!v) return;
+
+  // The file must contain silence; keep element unmuted so iOS treats it as a real media session.
+  v.muted = false;
+  v.volume = 1.0;
+
+  try{
+    const p = v.play();
+    if(p && typeof p.then === "function"){
+      p.then(() => { __iosSilentVideoStarted = true; })
+       .catch(() => { __iosSilentVideoStarted = false; });
+    }else{
+      __iosSilentVideoStarted = true;
+    }
+  }catch(e){
+    __iosSilentVideoStarted = false;
+  }
+}
+
 function getAudio(){
+  iosStartSilentVideo();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
@@ -2138,29 +2209,26 @@ masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
   ensureAudioRunning();
 }
 
-function warmUpAudio(pulses = 2){
-  if(!audioCtx || !masterGain) return;
-  const now = audioCtx.currentTime;
+function warmUpAudio(iterations=2){
+  // iOS Safari: warm the audio graph WITHOUT producing any audible ticks/clicks.
+  // Use a 1-sample silent buffer through a zero-gain node.
+  try{
+    const ctx = getAudio();
+    if(!ctx) return;
 
-  for(let i=0;i<pulses;i++){
-    const t0 = now + i * 0.03;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.connect(ctx.destination);
 
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-
-    g.gain.setValueAtTime(0.0004, t0);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
-
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(220, t0);
-
-    osc.connect(g);
-    g.connect(masterGain);
-
-    trackNode(osc);
-    osc.start(t0);
-    osc.stop(t0 + 0.03);
-  }
+    for(let i=0;i<iterations;i++){
+      const b = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const s = ctx.createBufferSource();
+      s.buffer = b; // silence
+      s.connect(g);
+      s.start();
+      s.stop(ctx.currentTime + 0.001);
+    }
+  }catch(e){}
 }
 
 function hardResetAudioEngine(){
@@ -2752,6 +2820,7 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
+  iosStartSilentVideo();
   await ensureAudioReady();
 
   stop();
@@ -3098,7 +3167,8 @@ function importGridFromDataUrl(dataUrl){
 
   let __ready = false;
   let __stable = 0;
-  let __lastVW = 0, __lastVH = 0;
+  let __warmFrames = 0;
+  let __lastVW = 0, __lastVH = 0, __lastOX = 0, __lastOY = 0, __lastScale = 1;
   const __reveal = () => {
     if(__ready) return;
     __ready = true;
@@ -3112,10 +3182,46 @@ function importGridFromDataUrl(dataUrl){
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 
-    // Scale DOWN only
-    const s = Math.min(1, Math.min(vw / stageW, vh / stageH));
-    const tx = offX + (vw - stageW * s) / 2;
-    const ty = offY + (vh - stageH * s) / 2;
+    // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
+    // Measure its paddings once per pass.
+    let padL = 0, padR = 0, padT = 0, padB = 0;
+    if(viewportEl){
+      const cs = getComputedStyle(viewportEl);
+      padL = parseFloat(cs.paddingLeft)  || 0;
+      padR = parseFloat(cs.paddingRight) || 0;
+      padT = parseFloat(cs.paddingTop)   || 0;
+      padB = parseFloat(cs.paddingBottom)|| 0;
+    }
+
+    const usableW = Math.max(0, vw - padL - padR);
+    const usableH = Math.max(0, vh - padT - padB);
+
+    // Only enter scaled mode if the stage cannot fit at 1:1.
+    const shouldScale = (usableW < stageW) || (usableH < stageH);
+
+    if(!shouldScale){
+      // Desktop / large screens: leave layout exactly as-is.
+      root.classList.remove('stageScaled','tabletScaled');
+      pageEl.style.transform = '';
+      pageEl.style.width = '';
+      pageEl.style.height = '';
+      pageEl.style.minWidth = '';
+      pageEl.style.minHeight = '';
+      return;
+    }
+
+    // Scale UP/DOWN to fit (iOS-first)
+    // On iPhone in landscape, the stage is often height-limited even though we have spare width.
+    // The current design leaves some "dead" vertical padding, so we can safely treat the stage as a bit shorter
+    // *only for the fit math* to let it scale up and use more width.
+    const phoneish = Math.min(vw, vh) < 520;           // iPhone-ish devices
+    const landscape = vw > vh;
+    const fitStageH = (phoneish && landscape) ? Math.max(1, stageH - 90) : stageH;
+
+    const s = Math.min(usableW / stageW, usableH / fitStageH);
+
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3136,6 +3242,8 @@ function importGridFromDataUrl(dataUrl){
 
   let raf = 0;
   function layoutPass(){
+    // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
+    try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
@@ -3151,18 +3259,35 @@ function importGridFromDataUrl(dataUrl){
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
 
-    // Reveal only after viewport is stable for 2 consecutive passes (prevents split-second flash on iOS/DevTools).
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
+    // Reveal only after the *full* visual viewport metrics are stable for a few consecutive passes.
+    // (On iOS Safari, vw/vh/offX/offY can all change during the first couple of frames.)
+    const v = __ksViewport();
+    const vw = v.vw, vh = v.vh;
+    const ox = v.offX || 0, oy = v.offY || 0;
+    const sc = (typeof v.scale === 'number') ? v.scale : 1;
+
+    const stableNow =
+      Math.abs(vw - __lastVW) < 0.5 &&
+      Math.abs(vh - __lastVH) < 0.5 &&
+      Math.abs(ox - __lastOX) < 0.5 &&
+      Math.abs(oy - __lastOY) < 0.5 &&
+      Math.abs(sc - __lastScale) < 0.01;
+
+    if (stableNow) {
       __stable++;
     } else {
       __stable = 0;
-      __lastVW = vw;
-      __lastVH = vh;
+      __lastVW = vw; __lastVH = vh; __lastOX = ox; __lastOY = oy; __lastScale = sc;
     }
-    if (__stable >= 2) __reveal();
+
+    if (__stable >= 3) {
+      __reveal();
+    } else if (!__ready && __warmFrames < 30) {
+      // Keep running layout passes for a short warm-up window even if no resize events fire.
+      __warmFrames++;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(layoutPass);
+    }
   }
 
   function scheduleLayout(){
@@ -3186,6 +3311,16 @@ function importGridFromDataUrl(dataUrl){
 
   // One extra pass after fonts settle
   setTimeout(trigger, 120);
+
+  // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
+  // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
+  document.addEventListener('touchmove', (e) => {
+    if(!root.classList.contains('stageScaled')) return;
+    // Allow native interaction on form controls if any.
+    const t = e.target;
+    if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+    e.preventDefault();
+  }, { passive: false });
 })();
 
 
@@ -3851,6 +3986,44 @@ window.KidSequencer = {
 
 
 
+
+
+  <!-- iOS silent-mode workaround: hidden looping silent video.
+       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
+  <video id="iosSilentVideo" playsinline webkit-playsinline loop preload="auto"
+         style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;">
+    <source src="silent.mp4" type="video/mp4">
+  </video>
+
+
+<script>
+/* iOS Safari address bar: cannot be truly "forced" in all cases in the browser.
+   This nudge reproduces the common "fluke" behavior: create a tiny scroll range,
+   then scroll the window by 1px so Safari collapses its bars. */
+(function(){
+  const ua = navigator.userAgent || "";
+  const isIOS = /iP(hone|ad|od)/.test(ua);
+  // basic Safari-ish check (not Chrome/Firefox iOS)
+  const isSafari = isIOS && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  if(!isSafari) return;
+
+  document.documentElement.classList.add('ios-urlbar-nudge');
+
+  function nudge(){
+    // If already scrolled, don't fight user.
+    if (window.scrollY > 1) return;
+    // Two-phase nudge is more reliable across iOS versions.
+    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 50);
+    setTimeout(() => { try{ window.scrollTo(0, 1); }catch(e){} }, 250);
+  }
+
+  window.addEventListener('load', nudge, { once: true });
+  window.addEventListener('orientationchange', () => setTimeout(nudge, 350), { passive: true });
+  // First user gesture also helps Safari decide it's "interactive"
+  window.addEventListener('touchstart', nudge, { passive: true, once: true });
+  window.addEventListener('pointerdown', nudge, { passive: true, once: true });
+})();
+</script>
 
 </body>
 </html>
