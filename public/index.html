@@ -134,6 +134,15 @@ html.tabletScaled #page{
       --robotSize: var(--robotSizeLanding);
     }
 
+    /* portrait-titleinset-default: prevent first-paint left-shift of the title box before JS computes --titleInset */
+    @media (orientation: portrait){
+      :root{
+        /* #titleBox left is: 14px + var(--titleInset) */
+        --titleInset: calc((100vw - var(--toolW))/2 - 14px);
+      }
+    }
+
+
     /* Logged-in: robot size is fixed (layout must not depend on auth) */
 body.loggedIn{ --robotSize: var(--robotSizeLanding); }
 body.loggedIn #robotLogo{
@@ -195,16 +204,6 @@ body.loggedIn #robotLogo{
       overflow:hidden;
       line-height: 1;
     }
-
-    /* Prevent first-paint "titleBox off-left" flash in portrait:
-       Before JS layout stabilizes (.js-ready), center the titleBox in the top bar. */
-    @media (orientation: portrait){
-      html:not(.js-ready) #titleBox{
-        left: 50% !important;
-        transform: translateX(-50%);
-      }
-    }
-
 
     #titleBox .titleText{
       font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
