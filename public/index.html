@@ -510,6 +510,20 @@ body.loggedIn #robotLogo{
     .drumMiniBtn:active{ transform: translateY(0); }
     .drumMiniBtn.muted{ opacity: 0.72; }
 
+    /* Hide the old global drum mute button (collapse its space so the style buttons shift left) */
+    #drumMuteBtn{
+      visibility:hidden;
+      pointer-events:none;
+      width:0;
+      height:0;
+      padding:0;
+      margin:0;
+      border:0;
+      box-shadow:none;
+      overflow:hidden;
+      flex: 0 0 0;
+    }
+
     .drumStyleGroup{ display:flex; gap: 8px; flex-wrap: wrap; justify-content:flex-start; }
 
     .drumStyleBtn{
@@ -1400,13 +1414,25 @@ btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon
 
 
 /* -------------------- DRUMS UI -------------------- */
+
+/*
+  Radio-toggle drum logic:
+  activeDrumStyle: "techno" | "dnb" | null
+  - default: "techno"
+  - click active => null (all muted)
+  - click other  => switch (mutual exclusive)
+*/
+let activeDrumStyle = "techno";
+
 function setDrumsMuted(m){
   drumsMuted = !!m;
 
+  // Keep the legacy button synced (it is hidden via CSS, but leaving it in-place preserves layout).
   if(drumMuteBtnEl){
     drumMuteBtnEl.classList.toggle("muted", drumsMuted);
     drumMuteBtnEl.textContent = drumsMuted ? "🔇" : "🔊";
     drumMuteBtnEl.setAttribute("aria-pressed", String(!drumsMuted));
+    drumMuteBtnEl.setAttribute("aria-hidden", "true");
     drumMuteBtnEl.title = drumsMuted ? "Unmute drums" : "Mute drums";
   }
 
@@ -1422,31 +1448,55 @@ function setDrumsMuted(m){
   }
 }
 
-function setDrumStyle(style){
-  drumStyle = (style === "dnb") ? "dnb" : "techhouse";
+/*
+  The audio engine uses drumStyle = "techhouse" or "dnb".
+  Map activeDrumStyle -> drumStyle, and update button visuals.
+*/
+function syncAudioAndUI(){
+  const isMuted = (activeDrumStyle == null);
+
+  // Audio: mute/unmute the drum bus
+  setDrumsMuted(isMuted);
+
+  // Audio: pick which pattern to play when unmuted
+  if(activeDrumStyle === "dnb"){
+    drumStyle = "dnb";
+  }else{
+    drumStyle = "techhouse"; // "techno" UI maps to the existing techhouse pattern
+  }
+
+  // UI: selected state
   if(drumStyleTechEl && drumStyleDnBEl){
-    const isTech = drumStyle === "techhouse";
-    drumStyleTechEl.classList.toggle("selected", isTech);
-    drumStyleDnBEl.classList.toggle("selected", !isTech);
-    drumStyleTechEl.setAttribute("aria-pressed", String(isTech));
-    drumStyleDnBEl.setAttribute("aria-pressed", String(!isTech));
+    const techOn = (activeDrumStyle === "techno");
+    const dnbOn  = (activeDrumStyle === "dnb");
+
+    drumStyleTechEl.classList.toggle("selected", techOn);
+    drumStyleDnBEl.classList.toggle("selected", dnbOn);
+
+    drumStyleTechEl.setAttribute("aria-pressed", String(techOn));
+    drumStyleDnBEl.setAttribute("aria-pressed", String(dnbOn));
   }
 }
 
-if(drumMuteBtnEl){
-  drumMuteBtnEl.onclick = () => {
-    // Ensure audio exists if the user unmutes while playing.
-    getAudio();
-    ensureAudioRunning();
-    setDrumsMuted(!drumsMuted);
-  };
-}
-if(drumStyleTechEl) drumStyleTechEl.onclick = () => setDrumStyle("techhouse");
-if(drumStyleDnBEl)  drumStyleDnBEl.onclick  = () => setDrumStyle("dnb");
+// Function called when a drum button (style) is clicked
+function handleDrumClick(clickedStyle){
+  // Ensure audio exists if the user is trying to hear drums.
+  getAudio();
+  ensureAudioRunning();
 
-// Init (starts muted)
-setDrumStyle(drumStyle);
-setDrumsMuted(true);
+  if(activeDrumStyle === clickedStyle){
+    activeDrumStyle = null; // toggle off
+  }else{
+    activeDrumStyle = clickedStyle; // switch style
+  }
+  syncAudioAndUI();
+}
+
+if(drumStyleTechEl) drumStyleTechEl.onclick = () => handleDrumClick("techno");
+if(drumStyleDnBEl)  drumStyleDnBEl.onclick  = () => handleDrumClick("dnb");
+
+// Init: Techno selected by default (unmuted state), but actual sound will only start after first user gesture.
+syncAudioAndUI();
 
 /* -------------------- LOCKED UI (Login nudges) -------------------- */
 const loginCtaWrapEl = document.getElementById("loginCtaWrap");
