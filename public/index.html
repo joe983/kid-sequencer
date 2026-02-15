@@ -1667,25 +1667,9 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
 
-  // Title box should line up with the left edge of the Tools column.
-  // DO NOT use getBoundingClientRect() here: on iOS Safari the first navigation can report
-  // transient/wrong rects during URL-bar / visual viewport settle, which makes the title start
-  // at the far left and only correct after refresh.
-  //
-  // Instead compute the inset deterministically in "stage coordinates":
-  // mainLayout has horizontal padding 14px on both sides and uses justify-content:center.
-  // contentW = toolW + (gap 14) + sequencerShellOuterW + (gap 14) + rightW
-  // toolsLeft = 14 + (stageW - 28 - contentW)/2
-  // titleInset = toolsLeft - 14 = (stageW - 28 - contentW)/2
-  const STAGE_PADDING_X = 14;      // #mainLayout padding-left/right
-  const COL_GAP = 14;              // #mainLayout gap
-  const SHELL_PAD = 12;            // #sequencerShell padding
-  const SHELL_BORDER = 4;          // #sequencerShell border
-  const shellInnerW = cell * cols + GAP * (cols - 1); // grid/drum width
-  const shellOuterW = shellInnerW + 2 * (SHELL_PAD + SHELL_BORDER);
-  const contentW = toolW + rightW + shellOuterW + 2 * COL_GAP;
-  const inset = Math.max(0, Math.round((vw - 2 * STAGE_PADDING_X - contentW) / 2));
-  document.documentElement.style.setProperty("--titleInset", inset + "px");
+  const toolsRect = toolsEl.getBoundingClientRect();
+  const pageLeft = 14;
+  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
 
   const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
@@ -3244,6 +3228,34 @@ function importGridFromDataUrl(dataUrl){
   function layoutPass(){
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
+    // iOS first-load fix: make #page use stable stage geometry *before* any getBoundingClientRect-based measurements.
+    // On initial navigation Safari can run a layout pass while #page is still flow-sized, which makes computed insets wrong
+    // until a refresh. Pre-applying the stage box keeps internal coordinates consistent.
+    try{
+      const { vw, vh } = __ksViewport();
+      const { stageW, stageH } = __ksStageSize();
+
+      let padL = 0, padR = 0, padT = 0, padB = 0;
+      if(viewportEl){
+        const cs = getComputedStyle(viewportEl);
+        padL = parseFloat(cs.paddingLeft)  || 0;
+        padR = parseFloat(cs.paddingRight) || 0;
+        padT = parseFloat(cs.paddingTop)   || 0;
+        padB = parseFloat(cs.paddingBottom)|| 0;
+      }
+      const usableW = Math.max(0, vw - padL - padR);
+      const usableH = Math.max(0, vh - padT - padB);
+      const shouldScale = (usableW < stageW) || (usableH < stageH);
+
+      if(shouldScale){
+        root.classList.add('stageScaled');
+        root.classList.remove('tabletScaled');
+        pageEl.style.width = stageW + 'px';
+        pageEl.style.height = stageH + 'px';
+        pageEl.style.minWidth = stageW + 'px';
+        pageEl.style.minHeight = stageH + 'px';
+      }
+    }catch(e){}
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
