@@ -123,7 +123,7 @@ html.tabletScaled #page{
       --toolW: 210px;
       --rightW: 110px;
       --rightLift: 0px;
-      --titleInset: calc((var(--stageW) - var(--toolW))/2 - 14px);
+      --titleInset: 0px;
       --contentLift: 92px;
 
       --wiggleDeg: 1.2deg;
@@ -1616,11 +1616,19 @@ function __ksStageSize(){
 }
 function __ksViewport(){
   const vv = window.visualViewport;
+
+  // iOS Safari quirk: during initial load / URL-bar settle, VisualViewport.offsetLeft/Top can be
+  // briefly non-zero even when not zoomed, which shifts the whole stage left/right on first paint.
+  // If we're at (approximately) 1x scale, treat offsets as 0 to keep the stage anchored.
+  const scale = vv ? (vv.scale || 1) : 1;
+  const offX = vv ? ((Math.abs(scale - 1) < 0.01) ? 0 : vv.offsetLeft) : 0;
+  const offY = vv ? ((Math.abs(scale - 1) < 0.01) ? 0 : vv.offsetTop)  : 0;
+
   return {
     vw: vv ? vv.width : window.innerWidth,
     vh: vv ? vv.height : window.innerHeight,
-    offX: vv ? vv.offsetLeft : 0,
-    offY: vv ? vv.offsetTop : 0
+    offX,
+    offY
   };
 }
 
