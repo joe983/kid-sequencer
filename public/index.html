@@ -1667,11 +1667,20 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
 
-  const toolsRect = toolsEl.getBoundingClientRect();
-  const pageLeft = 14;
-  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
-
-  const controlsRect = controlsEl.getBoundingClientRect();
+  // Compute title inset in *stage/layout coordinates* (offsetLeft chain), not viewport coords.
+// getBoundingClientRect() is affected by transforms and iOS Safari can report transient values on first paint.
+const pageLeft = 14;
+function __ksLeftInPage(el){
+  let x = 0;
+  while(el && el !== pageEl){
+    x += (el.offsetLeft || 0);
+    el = el.offsetParent;
+  }
+  return x;
+}
+const toolsLeft = __ksLeftInPage(toolsEl);
+document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsLeft - pageLeft)) + "px");
+const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
   document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
 
@@ -3204,8 +3213,8 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = padL + (usableW - stageW * s) / 2;
-    const ty = padT + (usableH - fitStageH * s) / 2;
+    const tx = offX + (usableW - stageW * s) / 2;
+    const ty = offY + (usableH - fitStageH * s) / 2;
 
     root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
