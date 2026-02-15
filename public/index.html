@@ -4,12 +4,9 @@
   <script>
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
-    // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => {
-      document.documentElement.classList.remove('js-loading');
-      document.documentElement.classList.add('js-ready');
-    }, 1500);
-</script>
+    // Safety net: if something goes wrong, reveal after a moment (without showing the pre-fit layout).
+    setTimeout(() => document.documentElement.classList.add('js-ready'), 1500);
+  </script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -94,7 +91,6 @@ html.stageScaled #page{
   top: 0;
   transform-origin: top left;
   will-change: transform;
-  visibility: hidden; /* prevent pre-transform first paint (iOS cold start) */
 }
 
 
@@ -3155,7 +3151,6 @@ function importGridFromDataUrl(dataUrl){
   if(!pageEl) return;
 
   let __ready = false;
-  let __didFit = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
   const __reveal = () => {
@@ -3165,14 +3160,7 @@ function importGridFromDataUrl(dataUrl){
     root.classList.add('js-ready');
   };
   // Hard fallback in case of unexpected errors.
-  // Only reveal after at least one fit pass; otherwise force one.
-  setTimeout(() => {
-    if(__ready) return;
-    try {
-      if(!__didFit) applyStageFit();
-    } catch(e) {}
-    __reveal();
-  }, 1500);
+  setTimeout(__reveal, 900);
 
   function applyStageFit(){
     const { vw, vh, offX, offY } = __ksViewport();
@@ -3244,6 +3232,17 @@ function importGridFromDataUrl(dataUrl){
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
     try{
+    // Freeze #page box to the stage size BEFORE measuring/layout.
+    // On iOS cold loads, leaving the box auto-sized can change flex centering,
+    // which makes the title inset compute as 0px for the first paint.
+    try{
+      const ss = __ksStageSize();
+      pageEl.style.width = ss.stageW + 'px';
+      pageEl.style.height = ss.stageH + 'px';
+      pageEl.style.minWidth = ss.stageW + 'px';
+      pageEl.style.minHeight = ss.stageH + 'px';
+    }catch(e){}
+
       fitToViewport();
       buildGrid();
       positionRobotLogo();
@@ -3267,8 +3266,6 @@ function importGridFromDataUrl(dataUrl){
       __lastVH = vh;
     }
     if (__stable >= 2) __reveal();
-    __didFit = true;
-
   }
 
   function scheduleLayout(){
