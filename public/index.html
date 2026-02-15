@@ -4,9 +4,8 @@
   <script>
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
-    // Safety net: if something goes wrong, reveal after a moment (without showing the pre-fit layout).
-    setTimeout(() => document.documentElement.classList.add('js-ready'), 1500);
-  </script>
+    // Safety net: never allow a permanent blank screen if something goes wrong.
+    </script>
 
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -1615,13 +1614,16 @@ function __ksStageSize(){
   return { stageW, stageH };
 }
 function __ksViewport(){
-  const vv = window.visualViewport;
+  // iOS Safari can report transient/incorrect visualViewport metrics on first tab open.
+  // Use the layout viewport (innerWidth/innerHeight) for fit math so the first paint matches refresh.
   return {
-    vw: vv ? vv.width : window.innerWidth,
-    vh: vv ? vv.height : window.innerHeight,
-    offX: vv ? vv.offsetLeft : 0,
-    offY: vv ? vv.offsetTop : 0
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+    offX: 0,
+    offY: 0
   };
+}
+;
 }
 
 // Keep CSS in sync with the *visible* viewport so the fixed #viewport never ends up a few pixels taller
@@ -3160,9 +3162,8 @@ function importGridFromDataUrl(dataUrl){
     root.classList.add('js-ready');
   };
   // Hard fallback in case of unexpected errors.
-  setTimeout(__reveal, 900);
-
-  function applyStageFit(){
+  setTimeout(() => { try{ layoutPass(); }catch(e){} __reveal(); }, 900);
+function applyStageFit(){
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 
@@ -3204,10 +3205,9 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + (usableW - stageW * s) / 2;
-    const ty = offY + (usableH - fitStageH * s) / 2;
-
-    root.classList.add('stageScaled');
+    const tx = padL + (usableW - stageW * s) / 2;
+    const ty = padT + (usableH - fitStageH * s) / 2;
+root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
 
     // Freeze the element box to stage size so internal layout never reflows.
@@ -3232,17 +3232,6 @@ function importGridFromDataUrl(dataUrl){
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
     try{
-    // Freeze #page box to the stage size BEFORE measuring/layout.
-    // On iOS cold loads, leaving the box auto-sized can change flex centering,
-    // which makes the title inset compute as 0px for the first paint.
-    try{
-      const ss = __ksStageSize();
-      pageEl.style.width = ss.stageW + 'px';
-      pageEl.style.height = ss.stageH + 'px';
-      pageEl.style.minWidth = ss.stageW + 'px';
-      pageEl.style.minHeight = ss.stageH + 'px';
-    }catch(e){}
-
       fitToViewport();
       buildGrid();
       positionRobotLogo();
