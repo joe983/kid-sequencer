@@ -196,6 +196,16 @@ body.loggedIn #robotLogo{
       line-height: 1;
     }
 
+    /* Prevent first-paint "titleBox off-left" flash in portrait:
+       Before JS layout stabilizes (.js-ready), center the titleBox in the top bar. */
+    @media (orientation: portrait){
+      html:not(.js-ready) #titleBox{
+        left: 50% !important;
+        transform: translateX(-50%);
+      }
+    }
+
+
     #titleBox .titleText{
       font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
       font-weight: 900;
@@ -1039,12 +1049,6 @@ LAYOUT DEBUG MODE -------------------- */
 html.ios-urlbar-nudge body{
   min-height: 102vh; /* tiny extra scroll range so window.scrollTo(0,1) can collapse bars */
 }
-
-
-/* Prevent first-paint horizontal "flash" (e.g., title box briefly off-left on iPhone portrait).
-   Keep #page invisible until the layout manager marks the document as ready. */
-html.js-loading #page{ visibility:hidden; }
-html.js-ready #page{ visibility:visible; }
 
 </style>
 </head>
