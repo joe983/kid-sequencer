@@ -123,7 +123,7 @@ html.tabletScaled #page{
       --toolW: 210px;
       --rightW: 110px;
       --rightLift: 0px;
-      --titleInset: 0px;
+      --titleInset: calc((var(--stageW) - var(--toolW))/2 - 14px);
       --contentLift: 92px;
 
       --wiggleDeg: 1.2deg;
@@ -133,15 +133,6 @@ html.tabletScaled #page{
       --robotSizeLanding: 220px;
       --robotSize: var(--robotSizeLanding);
     }
-
-    /* portrait-titleinset-default: prevent first-paint left-shift of the title box before JS computes --titleInset */
-    @media (orientation: portrait){
-      :root{
-        /* #titleBox left is: 14px + var(--titleInset) */
-        --titleInset: calc((100vw - var(--toolW))/2 - 14px);
-      }
-    }
-
 
     /* Logged-in: robot size is fixed (layout must not depend on auth) */
 body.loggedIn{ --robotSize: var(--robotSizeLanding); }
