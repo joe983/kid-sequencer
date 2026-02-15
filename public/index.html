@@ -190,7 +190,7 @@ body.loggedIn #robotLogo{
       justify-content:center;
 
       position:absolute;
-      left: calc(14px + var(--titleInset));
+      left: calc(max(14px, env(safe-area-inset-left, 0px)) + var(--titleInset));
       top: 8px;
       overflow:hidden;
       line-height: 1;
@@ -3147,12 +3147,53 @@ function importGridFromDataUrl(dataUrl){
   let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
-  const __reveal = () => {
+  function __reveal(){
     if(__ready) return;
     __ready = true;
+
+    // Ensure we are at top-left to prevent any offX / scroll-restoration offsets (iOS can restore scroll subtly)
+    try{ window.scrollTo(0, 0); }catch(e){}
+    try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
+
+    // First pass with the latest VisualViewport values
+    try{ __ksSyncViewportVars(); }catch(e){}
+    try{ fitToViewport(); }catch(e){}
+
     root.classList.remove('js-loading');
     root.classList.add('js-ready');
-  };
+
+    // Double-pass: re-run after visibility changes are actually painted
+    requestAnimationFrame(() => {
+      try{ fitToViewport(); }catch(e){}
+      try{ scheduleLayout(); }catch(e){}
+      // One last safety pass for slow iOS UI settling
+      setTimeout(() => { try{ scheduleLayout(); }catch(e){} }, 150);
+    });
+  }
+
+  let __stabilityRaf = 0;
+  // Improved stability polling to wait for iOS UI (safe-area / address bar) to settle
+  function __ksPollStability(){
+    if(__ready) return;
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+
+    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
+      __stable++;
+    } else {
+      __stable = 0;
+      __lastVW = vw;
+      __lastVH = vh;
+    }
+
+    // Increased to 5 stable frames (~80-100ms) to ensure iOS safe-area/address bar is settled
+    if(__stable >= 5){
+      __reveal();
+    }else{
+      __stabilityRaf = requestAnimationFrame(__ksPollStability);
+    }
+  }
   // Hard fallback in case of unexpected errors.
   setTimeout(__reveal, 900);
 
@@ -3236,19 +3277,11 @@ function importGridFromDataUrl(dataUrl){
 
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
-
-    // Reveal only after viewport is stable for 2 consecutive passes (prevents split-second flash on iOS/DevTools).
-    const vv = window.visualViewport;
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
-    if (Math.abs(vw - __lastVW) < 0.5 && Math.abs(vh - __lastVH) < 0.5) {
-      __stable++;
-    } else {
-      __stable = 0;
-      __lastVW = vw;
-      __lastVH = vh;
+    // Reveal only after the visible viewport is stable for several frames (iOS address bar / safe-area settling)
+    if(!__ready){
+      try{ if(__stabilityRaf) cancelAnimationFrame(__stabilityRaf); }catch(e){}
+      __stabilityRaf = requestAnimationFrame(__ksPollStability);
     }
-    if (__stable >= 2) __reveal();
   }
 
   function scheduleLayout(){
