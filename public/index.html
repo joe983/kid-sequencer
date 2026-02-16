@@ -69,6 +69,7 @@ html, body {
   overflow: visible;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: manipulation; /* enable zoom and pan on iOS */
 }
 
 
@@ -79,7 +80,7 @@ html.stageScaled, html.stageScaled body{
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
   overflow: auto !important;
-  touch-action: auto; /* allow pinch-zoom + pan */
+  touch-action: manipulation; /* allow pinch-zoom + pan on iOS */
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-right: env(safe-area-inset-right, 0px);
