@@ -3272,8 +3272,30 @@ function importGridFromDataUrl(dataUrl){
     if(__ready) return;
     __ready = true;
 
+    // CRITICAL: Reset any persisted zoom state from Safari
+    // Safari remembers zoom between refreshes, which causes crashes
+    const vv = window.visualViewport;
+    if(vv && typeof vv.scale === "number" && vv.scale !== 1) {
+      console.log('Detected persisted zoom:', vv.scale, '- resetting to 1.0');
+      // Force zoom reset by setting viewport meta tag
+      try {
+        const viewportMeta = document.querySelector('meta[name="viewport"]');
+        if(viewportMeta) {
+          const content = viewportMeta.getAttribute('content');
+          // Temporarily disable zoom
+          viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+          // Restore after a moment
+          setTimeout(() => {
+            viewportMeta.setAttribute('content', content);
+          }, 100);
+        }
+      } catch(e) {
+        console.log('Could not reset zoom:', e);
+      }
+    }
+
     // Ensure we are at top-left to prevent any offX / scroll-restoration offsets (iOS can restore scroll subtly)
-    try{ const vv = window.visualViewport; if(!(vv && vv.scale && vv.scale !== 1)) window.scrollTo(0, 0); }catch(e){}
+    try{ const vv2 = window.visualViewport; if(!(vv2 && vv2.scale && vv2.scale !== 1)) window.scrollTo(0, 0); }catch(e){}
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
     
     // In landscape, trigger a small scroll to hide Safari's browser toolbar
@@ -3331,6 +3353,14 @@ function importGridFromDataUrl(dataUrl){
 
   function applyStageFit(){
     const vv = window.visualViewport;
+    
+    // ENFORCE maximum zoom of 2.0x - if user zooms beyond, reset to 2.0
+    if(vv && typeof vv.scale === "number" && vv.scale > 2.0){
+      console.log('Zoom limit exceeded:', vv.scale, '- preventing crash');
+      // Block layout completely when over limit
+      return;
+    }
+    
     // If the user has zoomed the page, do not apply our own transform scaling.
     if(vv && typeof vv.scale === "number" && vv.scale !== 1){
       root.classList.remove('stageScaled','tabletScaled');
@@ -3495,6 +3525,26 @@ root.classList.add('stageScaled');
     
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     
+    // If zoom is above 1.9x, we're approaching the danger zone
+    // Block everything to prevent crashes
+    if(currentScale > 1.9) {
+      console.log('ZOOM DANGER ZONE - scale:', currentScale);
+      isZooming = true;
+      toolbarTransitioning = true; // Also block toolbar transitions
+      
+      clearTimeout(zoomDebounceTimer);
+      
+      // Keep blocked for longer when at extreme zoom
+      zoomDebounceTimer = setTimeout(() => {
+        isZooming = false;
+        toolbarTransitioning = false;
+        lastScale = currentScale;
+      }, 2000);
+      
+      lastScale = currentScale;
+      return;
+    }
+    
     // If scale changed, user is zooming
     if(Math.abs(currentScale - lastScale) > 0.001) {
       isZooming = true;
@@ -3523,23 +3573,33 @@ root.classList.add('stageScaled');
     const currentHeight = window.innerHeight;
     const heightDiff = Math.abs(currentHeight - lastViewportHeight);
     
-    // If viewport height changed by 40+ pixels, Safari toolbar is probably hiding/showing
-    // Typical Safari toolbar is 44-50px
-    if(heightDiff >= 40) {
-      console.log('Toolbar transition detected - height change:', heightDiff);
+    // Only worry about toolbar transitions if user is zooming or already zoomed
+    // That's the dangerous combination that causes crashes
+    const vv = window.visualViewport;
+    const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    const userIsZoomedOrZooming = (currentScale > 1.05) || isZooming;
+    
+    // If user is zoomed AND viewport height changed by 5+ pixels, toolbar is hiding/showing
+    // This is the dangerous combination that causes crashes
+    if(userIsZoomedOrZooming && heightDiff >= 5) {
+      console.log('CRITICAL: Toolbar transition while zoomed - height change:', heightDiff, 'px, scale:', currentScale);
       toolbarTransitioning = true;
       
-      // Clear any pending debounce
-      clearTimeout(toolbarDebounceTimer);
+      // Also immediately block zooming
+      isZooming = true;
       
-      // Wait 1500ms after toolbar transition before allowing layout
-      // Safari's toolbar animation takes ~300-500ms, give extra buffer
+      // Clear any pending debounces
+      clearTimeout(toolbarDebounceTimer);
+      clearTimeout(zoomDebounceTimer);
+      
+      // Wait 3000ms (3 seconds) after toolbar transition before allowing anything
+      // This is the critical crash window - be VERY conservative
       toolbarDebounceTimer = setTimeout(() => {
         toolbarTransitioning = false;
+        isZooming = false;
         lastViewportHeight = currentHeight;
-        console.log('Toolbar transition complete');
-        // Don't trigger layout - let user interaction do it naturally
-      }, 1500);
+        console.log('Toolbar transition complete - safe to continue');
+      }, 3000);
     }
     
     lastViewportHeight = currentHeight;
