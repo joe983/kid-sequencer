@@ -58,6 +58,8 @@ html, body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-overflow-scrolling: touch; /* momentum scroll on iOS */
+  overscroll-behavior-y: none; /* prevent pull-to-refresh */
+  overscroll-behavior-x: none; /* prevent horizontal overscroll bounce */
 }
 
 #viewport{
@@ -68,7 +70,7 @@ html, body {
   min-height: 100vh;
   overflow: visible;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: none; /* prevent pull-to-refresh and bounce */
   touch-action: manipulation; /* enable zoom and pan on iOS */
 }
 
@@ -77,6 +79,7 @@ html, body {
 html.stageScaled, html.stageScaled body{
   overflow: auto !important; /* allow native pan/zoom */
   position: relative;
+  overscroll-behavior: none; /* prevent pull-to-refresh on iOS */
 }
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
@@ -89,6 +92,7 @@ html.stageScaled #viewport{
   padding-left: env(safe-area-inset-left, 0px);
   min-height: 100vh;
   min-width: 100vw;
+  overscroll-behavior: none; /* prevent pull-to-refresh */
 }
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
@@ -3353,10 +3357,11 @@ function importGridFromDataUrl(dataUrl){
 const freeYTrue = usableH - stageH * s;
 
 // Center in the padded safe-area box, then clamp so we never clip into safe-area.
-const targetTy = offY + padT + (freeYTrue) / 2;
+// When content is taller than viewport (freeYTrue < 0), prefer showing the top by using minTy
+const targetTy = freeYTrue >= 0 ? (offY + padT + freeYTrue / 2) : (offY + padT);
 const minTy = offY + padT;
 const maxTy = offY + (vh - padB) - stageH * s;
-const ty = Math.min(maxTy, Math.max(minTy, targetTy));
+const ty = Math.max(minTy, Math.min(maxTy, targetTy));
 
 root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
