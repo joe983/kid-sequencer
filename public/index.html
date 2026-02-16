@@ -9,7 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <style>
 
@@ -1093,6 +1093,16 @@ LAYOUT DEBUG MODE -------------------- */
   height: var(--wholeSvgSize);
 }
 
+
+/* Allow native Safari pan while pinch-zoomed (iPhone). */
+html.ks-zoomed, html.ks-zoomed body{
+  overflow: auto !important;
+}
+html.ks-zoomed #viewport{
+  overflow: visible !important;
+  touch-action: auto !important;
+}
+
 </style>
 </head>
 <body>
@@ -1775,6 +1785,30 @@ function fitToViewport(){
     document.documentElement.style.setProperty("--contentLift", newLift + "px");
   }
 }
+
+// Detect native pinch-zoom on iOS (VisualViewport scale) and expose as a CSS class.
+// When zoomed, we freeze auto-fit so Safari zoom doesn't "snap back".
+let __ksZoomed = false;
+function __ksIsZoomed(){
+  const vv = window.visualViewport;
+  const s = vv && typeof vv.scale === 'number' ? vv.scale : 1;
+  return Math.abs(s - 1) > 0.02; // small deadband to avoid flicker
+}
+function __ksUpdateZoomState(){
+  const z = __ksIsZoomed();
+  if(z === __ksZoomed) return __ksZoomed;
+  __ksZoomed = z;
+  document.documentElement.classList.toggle('ks-zoomed', __ksZoomed);
+  return __ksZoomed;
+}
+(function(){
+  const vv = window.visualViewport;
+  if(!vv) return;
+  // Keep this light: just toggles a class / boolean.
+  vv.addEventListener('resize', __ksUpdateZoomState, {passive:true});
+  vv.addEventListener('scroll', __ksUpdateZoomState, {passive:true});
+})();
+
 function positionRobotLogo(){
   const logo = document.getElementById('robotLogo');
   const toolsList = document.getElementById('toolsList');
@@ -3360,33 +3394,12 @@ root.classList.add('stageScaled');
   }
 
   let raf = 0;
-  // --- Native Safari pinch-zoom compatibility (iOS): freeze auto-fit while browser zoom != 1 ---
-  let __ksZoomed = false;
-  function __ksViewportScale(){
-    const vv = window.visualViewport;
-    const s = vv && typeof vv.scale === 'number' ? vv.scale : 1;
-    return (s && isFinite(s)) ? s : 1;
-  }
-  function __ksUpdateZoomState(){
-    const s = __ksViewportScale();
-    const zoomed = Math.abs(s - 1) > 0.01;
-    if(zoomed !== __ksZoomed){
-      __ksZoomed = zoomed;
-      document.documentElement.classList.toggle('ks-zoomed', zoomed);
-      // When returning to normal zoom, re-run layout once so stage re-fits precisely.
-      if(!zoomed){
-        try{ window.scheduleLayout && window.scheduleLayout(); }catch(e){}
-      }
-    }
-    return __ksZoomed;
-  }
-
-function layoutPass(){
-    // While the browser is pinch-zoomed, do not fight Safari's zoom by re-fitting/re-scaling.
-    if(__ksUpdateZoomState()) return;
-
+  function layoutPass(){
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
+    // If the user is pinch-zooming (native Safari zoom), freeze auto-fit so it doesn't fight the browser.
+    __ksUpdateZoomState();
+    if(__ready && __ksZoomed){ return; }
     // Compute internal layout in unscaled coordinates
     const prev = pageEl.style.transform;
     pageEl.style.transform = '';
@@ -3416,7 +3429,7 @@ function layoutPass(){
   // Export for other code paths (init, etc.)
   window.scheduleLayout = scheduleLayout;
 
-  const trigger = () => { if(__ksUpdateZoomState()) return; scheduleLayout(); };
+  const trigger = () => scheduleLayout();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
@@ -3434,8 +3447,7 @@ function layoutPass(){
   // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
   document.addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
-    // Allow native Safari panning when pinch-zoomed.
-    if(__ksUpdateZoomState()) return;
+    if(document.documentElement.classList.contains('ks-zoomed')) return;
     // Allow native interaction on form controls if any.
     const t = e.target;
     if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
@@ -3687,8 +3699,6 @@ window.KidSequencer = {
   }
 
   function onDown(e){
-    if(document.documentElement.classList.contains('ks-zoomed')) return;
-
     // Left mouse / primary touch only
     if(e.button !== undefined && e.button !== 0) return;
     if(panBlockedByFader || eventHitsFader(e)) return;
@@ -3707,8 +3717,6 @@ window.KidSequencer = {
   }
 
   function onMove(e){
-    if(document.documentElement.classList.contains('ks-zoomed')) return;
-
     if(!dragging) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
@@ -3743,15 +3751,6 @@ window.KidSequencer = {
       const sr = this.attachShadow({mode:'open'});
       sr.innerHTML = `
 <style>
-
-  /* When Safari is pinch-zoomed, allow native browser panning instead of locking scroll. */
-  html.ks-zoomed, html.ks-zoomed body{
-    overflow: auto !important;
-  }
-  html.ks-zoomed #viewport{
-    overflow: visible !important;
-    touch-action: auto;
-  }
 :host{ display:block; width:100%; }
 /* -------------------- MASTER VOLUME FADER (UI ONLY) -------------------- */
     :host{ --instBtnSize: 58px; --instGap: 10px; }
