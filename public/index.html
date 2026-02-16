@@ -176,7 +176,7 @@ body.loggedIn #robotLogo{
     }
 
     #titleBox{
-      width: var(--toolW);
+      width: 100%;
       height: 58px;
       border-radius: 16px;
       border: 4px solid #1d1d1d;
@@ -188,8 +188,10 @@ body.loggedIn #robotLogo{
       align-items:center;
       justify-content:center;
 
-      position:absolute;
-      left: calc(14px + var(--titleInset));top: 8px;
+      position: static;
+      left: auto;
+      top: auto;
+      margin: 0;
       overflow:hidden;
       line-height: 1;
     }
@@ -1696,9 +1698,15 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
 
-  const toolsRect = toolsEl.getBoundingClientRect();
-  const pageLeft = 14;
-  document.documentElement.style.setProperty("--titleInset", Math.max(0, Math.round(toolsRect.left - pageLeft)) + "px");
+  let __titleInsetPx = 0;
+  // The title box is now part of the left column (#tools). Only compute an inset
+  // when the title is in the top header bar (legacy layout).
+  if(titleBoxEl && titleBoxEl.closest && titleBoxEl.closest('#topBar')){
+    const toolsRect = toolsEl.getBoundingClientRect();
+    const pageLeft = 14;
+    __titleInsetPx = Math.max(0, Math.round(toolsRect.left - pageLeft));
+  }
+  document.documentElement.style.setProperty("--titleInset", __titleInsetPx + "px");
 
   const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
@@ -3277,7 +3285,13 @@ function importGridFromDataUrl(dataUrl){
 
     const s = Math.min(usableW / stageW, usableH / fitStageH);
 
-    const tx = offX + (usableW - stageW * s) / 2;
+    // Center in the *visual viewport* (not just the padded safe-area box),
+    // but clamp so we never clip into the safe-area paddings.
+    const targetTx = offX + (vw - stageW * s) / 2;
+    const minTx = offX + padL;
+    const maxTx = offX + (vw - padR) - stageW * s;
+    const tx = Math.min(maxTx, Math.max(minTx, targetTx));
+
     const freeY = usableH - fitStageH * s;
     const downBias = Math.min(48, Math.max(18, freeY * 0.20));
     const ty = offY + (freeY) / 2 + downBias;
