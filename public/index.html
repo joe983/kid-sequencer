@@ -9,7 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, maximum-scale=2.0, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1.6, user-scalable=yes, viewport-fit=cover" name="viewport"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>Kid Sequencer</title>
@@ -1117,31 +1117,6 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 <body>
 <script>
-    // CRITICAL: Force zoom reset IMMEDIATELY on page load
-    // Safari persists zoom between refreshes - this causes crashes
-    (function(){
-      try {
-        const vv = window.visualViewport;
-        if(vv && typeof vv.scale === 'number' && vv.scale !== 1) {
-          console.log('EARLY ZOOM RESET: Detected scale', vv.scale);
-          // Force viewport reset
-          const meta = document.querySelector('meta[name="viewport"]');
-          if(meta) {
-            const original = meta.getAttribute('content');
-            // Force reset to scale 1
-            meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no');
-            // Wait for reset, then restore zoomability
-            setTimeout(() => {
-              meta.setAttribute('content', original);
-              console.log('Zoom reset complete - re-enabled zooming');
-            }, 300);
-          }
-        }
-      } catch(e) {
-        console.log('Zoom reset failed:', e);
-      }
-    })();
-    
     // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
     (function(){
       try{
@@ -3357,8 +3332,8 @@ function importGridFromDataUrl(dataUrl){
   function applyStageFit(){
     const vv = window.visualViewport;
     
-    // ENFORCE maximum zoom of 2.0x - if user zooms beyond, reset to 2.0
-    if(vv && typeof vv.scale === "number" && vv.scale > 2.0){
+    // ENFORCE maximum zoom of 1.6x - if user zooms beyond, prevent crash
+    if(vv && typeof vv.scale === "number" && vv.scale > 1.6){
       console.log('Zoom limit exceeded:', vv.scale, '- preventing crash');
       // Block layout completely when over limit
       return;
@@ -3366,12 +3341,7 @@ function importGridFromDataUrl(dataUrl){
     
     // If the user has zoomed the page, do not apply our own transform scaling.
     if(vv && typeof vv.scale === "number" && vv.scale !== 1){
-      root.classList.remove('stageScaled','tabletScaled');
-      pageEl.style.transform = '';
-      pageEl.style.width = '';
-      pageEl.style.height = '';
-      pageEl.style.minWidth = '';
-      pageEl.style.minHeight = '';
+      // Freeze the last computed layout at scale=1 to avoid snap/jump on Safari zoom restore.
       return;
     }
 
@@ -3623,7 +3593,26 @@ root.classList.add('stageScaled');
 
   // SIMPLIFIED: Only listen to resize when NOT zooming
   // Rate-limited resize handler
-  let resizeTimer = null;
+  
+  // When the page is zoomed, we intentionally skip layout recalculation.
+  // This helper nudges the stage back into view after orientation changes.
+  function bringPageIntoView(){
+    if(!viewportEl || !pageEl) return;
+
+    const r = pageEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Vertical correction
+    if(r.top > 0) viewportEl.scrollTop = Math.max(0, viewportEl.scrollTop - r.top);
+    if(r.bottom < vh) viewportEl.scrollTop = Math.max(0, viewportEl.scrollTop - (vh - r.bottom));
+
+    // Horizontal correction
+    if(r.left > 0) viewportEl.scrollLeft = Math.max(0, viewportEl.scrollLeft - r.left);
+    if(r.right < vw) viewportEl.scrollLeft = Math.max(0, viewportEl.scrollLeft - (vw - r.right));
+  }
+
+let resizeTimer = null;
   window.addEventListener('resize', () => {
     // Immediately check zoom and toolbar state
     handleZoomChange();
@@ -3640,11 +3629,21 @@ root.classList.add('stageScaled');
     setTimeout(() => {
       handleZoomChange();
       handleViewportHeightChange();
+
+      const vv = window.visualViewport;
+      const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+
+      // If zoomed, don't re-layout; just bring the stage back into view.
+      if(currentScale !== 1){
+        bringPageIntoView();
+        return;
+      }
+
       if(!isZooming && !toolbarTransitioning) trigger();
     }, 300);
   }, {passive:true});
-  
-  // REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
+
+// REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
   // The visualViewport fires constantly during zoom, triggering infinite layout recalculations
   // if(window.visualViewport){
   //   window.visualViewport.addEventListener('resize', trigger, {passive:true});
