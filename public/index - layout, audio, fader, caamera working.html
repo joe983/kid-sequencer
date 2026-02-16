@@ -168,11 +168,16 @@ body.loggedIn #robotLogo{
     }
 
     #topBar{
-      display:none;
+      pointer-events:none;
+      height: 92px;
+      padding: 8px 14px 0;
+      box-sizing:border-box;
+      position: relative;
+      z-index: 3;
     }
 
     #titleBox{
-      width: 100%;
+      width: var(--toolW);
       height: 58px;
       border-radius: 16px;
       border: 4px solid #1d1d1d;
@@ -184,9 +189,8 @@ body.loggedIn #robotLogo{
       align-items:center;
       justify-content:center;
 
-      position: relative;
-      left: auto;
-      top: auto;
+      position:absolute;
+      left: calc(14px + var(--titleInset));top: 8px;
       overflow:hidden;
       line-height: 1;
     }
@@ -1072,7 +1076,9 @@ LAYOUT DEBUG MODE -------------------- */
   <div id="viewport">
   <div id="page">
     <div id="topBar">
-      </div>
+      <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+      
+    </div>
 <div id="robotLogo" aria-hidden="true">
         <div class="robotClip">
 <svg xmlns="http://www.w3.org/2000/svg" width="718" height="591" viewBox="0 0 718 591">
@@ -1108,7 +1114,6 @@ LAYOUT DEBUG MODE -------------------- */
 
       <div id="mainLayout">
         <div id="tools">
-        <div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
           <div id="toolsList"></div>
           <div id="toolsLoginArea">
             <div id="loginCtaWrap" aria-label="Login to unlock">
@@ -1675,9 +1680,7 @@ function __ksSyncViewportVars(){
 function fitToViewport(){
   const { stageW: vw, stageH: vh } = __ksStageSize();
 
-  const contentWrapEl = document.getElementById("contentWrap");
-  const titleInsideContent = !!(contentWrapEl && titleBoxEl && contentWrapEl.contains(titleBoxEl));
-  const headerH = titleInsideContent ? 0 : 92;
+  const headerH = 92;
   const controlsH = 70;
   const vMargins = 24;
   const gridExtra = 20;
@@ -1716,11 +1719,7 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
 
   const playBtn = controlsEl.querySelector(".bigBtn");
-  if (playBtn) {    if(titleInsideContent){
-      // Title moves with the rest of the stage; disabling the title/play alignment lift avoids runaway offsets.
-      document.documentElement.style.setProperty("--contentLift","0px");
-    } else {
-
+  if (playBtn) {
     const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
 
     const playRect  = playBtn.getBoundingClientRect();
@@ -1733,7 +1732,6 @@ function fitToViewport(){
     let newLift = Math.round(currentLift + delta);
     newLift = Math.max(0, Math.min(260, newLift));
     document.documentElement.style.setProperty("--contentLift", newLift + "px");
-    }
   }
 }
 
