@@ -3652,6 +3652,7 @@ window.KidSequencer = {
   let startX = 0, startY = 0;
   let startLeft = 0, startTop = 0;
   let pointerId = null;
+  let activeTouches = 0; // Track number of active touch points
 
   // Disable drag-to-pan while interacting with the volume fader (Shadow DOM)
   let panBlockedByFader = false;
@@ -3670,6 +3671,15 @@ window.KidSequencer = {
   }
 
   function onDown(e){
+    // Track touch count
+    if(e.pointerType === 'touch') activeTouches++;
+    
+    // If multi-touch (pinch zoom), don't interfere - let iOS handle it
+    if(activeTouches > 1) {
+      dragging = false;
+      return;
+    }
+
     // Left mouse / primary touch only
     if(e.button !== undefined && e.button !== 0) return;
     if(panBlockedByFader || eventHitsFader(e)) return;
@@ -3684,19 +3694,34 @@ window.KidSequencer = {
 
     document.body.classList.add('dragging-pan');
     try{ if(pointerId !== null) viewport.setPointerCapture(pointerId); }catch(_){}
-    e.preventDefault();
+    
+    // Only prevent default for single-touch drag, not multi-touch gestures
+    if(activeTouches === 1) {
+      e.preventDefault();
+    }
   }
 
   function onMove(e){
     if(!dragging) return;
+    
+    // Don't interfere with multi-touch gestures
+    if(activeTouches > 1) return;
+    
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     viewport.scrollLeft = startLeft - dx;
     viewport.scrollTop  = startTop  - dy;
-    e.preventDefault();
+    
+    // Only prevent default during single-touch drag
+    if(activeTouches === 1) {
+      e.preventDefault();
+    }
   }
 
-  function onUp(){
+  function onUp(e){
+    // Track touch count
+    if(e.pointerType === 'touch') activeTouches = Math.max(0, activeTouches - 1);
+    
     if(!dragging) return;
     dragging = false;
     document.body.classList.remove('dragging-pan');
