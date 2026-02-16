@@ -3527,44 +3527,33 @@ root.classList.add('stageScaled');
     if(!vv) return;
     
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
-    const isLandscape = window.innerWidth > window.innerHeight;
     
-    // In LANDSCAPE, if zoom is above 1.3x, we're approaching toolbar hide threshold
-    // Block PREEMPTIVELY before toolbar even starts to hide
-    if(isLandscape && currentScale > 1.3) {
-      console.log('LANDSCAPE ZOOM PREEMPTIVE BLOCK - scale:', currentScale);
-      isZooming = true;
-      toolbarTransitioning = true; // Also block as if toolbar is transitioning
-      
-      clearTimeout(zoomDebounceTimer);
-      
-      // Keep blocked for longer in landscape at high zoom
-      zoomDebounceTimer = setTimeout(() => {
-        isZooming = false;
-        toolbarTransitioning = false;
-        lastScale = currentScale;
-        console.log('Landscape zoom block released');
-      }, 2000);
-      
-      lastScale = currentScale;
-      return;
-    }
-    
-    // If zoom is above 1.9x in ANY orientation, we're in danger zone
-    // Block everything to prevent crashes
-    if(currentScale > 1.9) {
-      console.log('ZOOM DANGER ZONE - scale:', currentScale);
+    // If zoom is above 1.5x in ANY orientation, preemptively block everything
+    // User reported crashes at ~2x zoom, so block earlier at 1.5x
+    if(currentScale > 1.5) {
+      console.log('PREEMPTIVE BLOCK - scale:', currentScale, '- ALL LAYOUT DISABLED');
       isZooming = true;
       toolbarTransitioning = true;
       
       clearTimeout(zoomDebounceTimer);
       
-      // Keep blocked for longer when at extreme zoom
+      // Keep blocked for 3 seconds when at high zoom
       zoomDebounceTimer = setTimeout(() => {
-        isZooming = false;
-        toolbarTransitioning = false;
-        lastScale = currentScale;
-      }, 2000);
+        // Check if still zoomed before unblocking
+        const vvCheck = window.visualViewport;
+        const currentCheck = vvCheck && typeof vvCheck.scale === "number" ? vvCheck.scale : 1;
+        
+        if(currentCheck > 1.5) {
+          // Still zoomed - stay blocked
+          console.log('Still zoomed at', currentCheck, '- keeping blocked');
+          handleZoomChange(); // Re-check
+        } else {
+          isZooming = false;
+          toolbarTransitioning = false;
+          lastScale = currentScale;
+          console.log('Zoom below 1.5x - unblocking');
+        }
+      }, 3000);
       
       lastScale = currentScale;
       return;
@@ -3578,7 +3567,6 @@ root.classList.add('stageScaled');
       clearTimeout(zoomDebounceTimer);
       
       // Wait 1000ms (1 second) after last scale change before allowing layout again
-      // This ensures browser UI transitions and zoom animations complete
       zoomDebounceTimer = setTimeout(() => {
         isZooming = false;
         lastScale = currentScale;
@@ -3663,6 +3651,32 @@ root.classList.add('stageScaled');
   // }
   
   window.addEventListener('load', trigger, {once:true});
+
+  // Block layout during scroll when zoomed (especially fast scroll)
+  let scrolling = false;
+  let scrollTimer = null;
+  if(viewportEl) {
+    viewportEl.addEventListener('scroll', () => {
+      const vv = window.visualViewport;
+      const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+      
+      // If scrolling while zoomed, block layout
+      if(currentScale > 1.05) {
+        scrolling = true;
+        isZooming = true; // Also set zooming flag to block layout
+        
+        clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(() => {
+          scrolling = false;
+          // Only unblock if zoom is back to normal
+          if(currentScale <= 1.05) {
+            isZooming = false;
+          }
+          console.log('Scroll ended while zoomed');
+        }, 500); // Wait 500ms after scroll stops
+      }
+    }, {passive: true});
+  }
 
   // One extra pass after fonts settle
   setTimeout(trigger, 120);
