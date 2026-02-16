@@ -3383,6 +3383,17 @@ root.classList.add('stageScaled');
 
   let raf = 0;
   function layoutPass(){
+    // CRITICAL: Abort immediately if user is zoomed or actively touching
+    const vv = window.visualViewport;
+    const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
+    const userIsZooming = (typeof window.__isZooming === 'function') ? window.__isZooming() : false;
+    
+    if(currentScale !== 1 || activeTouches > 0 || userIsZooming) {
+      // User is zoomed or touching - abort this layout pass completely
+      return;
+    }
+    
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
@@ -3415,13 +3426,19 @@ root.classList.add('stageScaled');
   window.scheduleLayout = scheduleLayout;
 
   // Track if user is actively zooming to prevent layout conflicts
+  // Make this global so layoutPass can check it
   let isZooming = false;
   let zoomDebounceTimer = null;
   let lastScale = 1;
+  let lastResizeTime = 0;
+  
+  // Export zoom state globally
+  window.__isZooming = () => isZooming;
 
   const trigger = () => {
     // Don't run layout if user has fingers on the screen
-    if(typeof window.__getActiveTouches === 'function' && window.__getActiveTouches() > 0) return;
+    const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
+    if(activeTouches > 0) return;
     
     // Don't fight the user's native pinch-zoom.
     const vv = window.visualViewport;
@@ -3433,12 +3450,19 @@ root.classList.add('stageScaled');
     // If zoomed (scale !== 1), skip layout
     if(currentScale !== 1) return;
     
+    // Prevent rapid-fire layout calls (rate limit to once per 100ms)
+    const now = Date.now();
+    if(now - lastResizeTime < 100) return;
+    lastResizeTime = now;
+    
     scheduleLayout();
   };
   
   // Detect when zoom starts/ends to block layout during zoom
   const handleZoomChange = () => {
     const vv = window.visualViewport;
+    if(!vv) return;
+    
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     
     // If scale changed, user is zooming
@@ -3448,7 +3472,8 @@ root.classList.add('stageScaled');
       // Clear any pending debounce
       clearTimeout(zoomDebounceTimer);
       
-      // Wait 500ms after last scale change before allowing layout again
+      // Wait 1000ms (1 second) after last scale change before allowing layout again
+      // This ensures browser UI transitions and zoom animations complete
       zoomDebounceTimer = setTimeout(() => {
         isZooming = false;
         lastScale = currentScale;
@@ -3457,7 +3482,7 @@ root.classList.add('stageScaled');
         if(currentScale === 1) {
           trigger();
         }
-      }, 500);
+      }, 1000);
     }
     
     lastScale = currentScale;
@@ -3466,17 +3491,25 @@ root.classList.add('stageScaled');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
-  // Listen to resize, but with zoom protection
+  // SIMPLIFIED: Only listen to resize when NOT zooming
+  // Rate-limited resize handler
+  let resizeTimer = null;
   window.addEventListener('resize', () => {
+    // Immediately check and update zoom state
     handleZoomChange();
-    if(!isZooming) trigger();
+    
+    // Debounce the trigger to prevent rapid-fire calls
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if(!isZooming) trigger();
+    }, 150);
   }, {passive:true});
   
   window.addEventListener('orientationchange', () => {
     setTimeout(() => {
       handleZoomChange();
       if(!isZooming) trigger();
-    }, 60);
+    }, 300);
   }, {passive:true});
   
   // REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
