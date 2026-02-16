@@ -9,7 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover"/>
+<meta content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <style>
 
@@ -74,6 +74,18 @@ html, body {
 /* --- Stage-scale mode (small landscape phones): NO scrolling, stage is positioned + scaled --- */
 html.stageScaled, html.stageScaled body{
   overflow: hidden !important;
+}
+
+/* --- Native Safari pinch-zoom support (TEMP) ---
+   When the browser is zoomed (visualViewport.scale != 1),
+   allow native panning/scrolling so pinch-zoom works. */
+html.nativeZoom, html.nativeZoom body{
+  overflow: auto !important;
+}
+html.nativeZoom #viewport{
+  overflow: auto !important;
+  touch-action: auto !important;
+  overscroll-behavior: auto !important;
 }
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
@@ -1782,33 +1794,7 @@ function positionRobotLogo(){
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
   const page = document.getElementById('page');
   const root = document.documentElement;
-  
-
-// --- Native Safari pinch-zoom support (iOS) ---
-// We allow browser zoom, but we must stop our auto-fit/scroll-lock code from fighting it.
-// `__ksZoomed` becomes true when Safari zoom scale deviates from ~1.0.
-let __ksZoomed = false;
-(function(){
-  const vv = window.visualViewport;
-  if(!vv) return;
-  let last = 1;
-  const update = () => {
-    const s = (vv.scale || 1);
-    // Hysteresis to avoid flicker on tiny float changes
-    const zoomed = (s > 1.02 || s < 0.98);
-    __ksZoomed = zoomed;
-    // If the user returns to normal scale, re-run layout once to re-fit cleanly.
-    if((last > 1.02 || last < 0.98) && !zoomed){
-      try { if (window.scheduleLayout) window.scheduleLayout('zoomEnd'); } catch(_){}
-    }
-    last = s;
-  };
-  update();
-  vv.addEventListener('resize', update, { passive:true });
-  vv.addEventListener('scroll', update, { passive:true });
-})();
-
-if(!logo || !toolsList || !seqWrap || !page) return;
+  if(!logo || !toolsList || !seqWrap || !page) return;
 
   // When the stage is scaled we apply a transform on #page. We must compute positions in the *page*
   // coordinate system (unscaled), not viewport coordinates.
@@ -3411,10 +3397,6 @@ root.classList.add('stageScaled');
   }
 
   function scheduleLayout(){
-    const __reason = arguments[0];
-    // During native browser pinch-zoom, avoid re-fitting (it will 'snap back' and can crash Safari).
-    if (typeof __ksZoomed !== 'undefined' && __ksZoomed && __reason !== 'zoomEnd') return;
-
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(layoutPass);
   }
@@ -3438,13 +3420,34 @@ root.classList.add('stageScaled');
 
   // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
   // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
-  document.addEventListener('touchmove', (e) => {
+  document.
+/* --- Native Safari pinch-zoom detection (TEMP) ---
+   Toggle html.nativeZoom while the browser page is zoomed. */
+(function(){
+  function isZoomed(){
+    const vv = window.visualViewport;
+    if(!vv) return false;
+    return Math.abs((vv.scale || 1) - 1) > 0.02;
+  }
+  function sync(){
+    document.documentElement.classList.toggle('nativeZoom', isZoomed());
+  }
+  // visualViewport fires rapidly during pinch; keep sync lightweight.
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', sync, {passive:true});
+    window.visualViewport.addEventListener('scroll', sync, {passive:true});
+  }
+  window.addEventListener('resize', sync, {passive:true});
+  // run a few times to catch iOS settle
+  sync();
+  setTimeout(sync, 50);
+  setTimeout(sync, 200);
+})();
+addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
-    
-    // Let Safari handle native pinch-zoom and panning.
-    if (e.touches && e.touches.length > 1) return;
-    if (typeof __ksZoomed !== 'undefined' && __ksZoomed) return;
-// Allow native interaction on form controls if any.
+    // Let Safari handle pinch-zoom (2+ touches) and panning while zoomed.
+    if((e.touches && e.touches.length > 1) || document.documentElement.classList.contains('nativeZoom')) return;
+    // Allow native interaction on form controls if any.
     const t = e.target;
     if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
     e.preventDefault();
@@ -3695,6 +3698,8 @@ window.KidSequencer = {
   }
 
   function onDown(e){
+    // If the browser is pinch-zoomed, let Safari handle panning.
+    if(document.documentElement.classList.contains('nativeZoom')) return;
     // Left mouse / primary touch only
     if(e.button !== undefined && e.button !== 0) return;
     if(panBlockedByFader || eventHitsFader(e)) return;
@@ -3714,6 +3719,7 @@ window.KidSequencer = {
 
   function onMove(e){
     if(!dragging) return;
+    if(document.documentElement.classList.contains('nativeZoom')) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     viewport.scrollLeft = startLeft - dx;
