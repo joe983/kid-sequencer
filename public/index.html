@@ -3414,17 +3414,70 @@ root.classList.add('stageScaled');
   // Export for other code paths (init, etc.)
   window.scheduleLayout = scheduleLayout;
 
+  // Track if user is actively zooming to prevent layout conflicts
+  let isZooming = false;
+  let zoomDebounceTimer = null;
+  let lastScale = 1;
+
   const trigger = () => {
+    // Don't run layout if user has fingers on the screen
+    if(typeof window.__getActiveTouches === 'function' && window.__getActiveTouches() > 0) return;
+    
     // Don't fight the user's native pinch-zoom.
     const vv = window.visualViewport;
-    if(vv && typeof vv.scale === "number" && vv.scale !== 1) return;
+    const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    
+    // If actively zooming, skip layout completely
+    if(isZooming) return;
+    
+    // If zoomed (scale !== 1), skip layout
+    if(currentScale !== 1) return;
+    
     scheduleLayout();
   };
+  
+  // Detect when zoom starts/ends to block layout during zoom
+  const handleZoomChange = () => {
+    const vv = window.visualViewport;
+    const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    
+    // If scale changed, user is zooming
+    if(Math.abs(currentScale - lastScale) > 0.001) {
+      isZooming = true;
+      
+      // Clear any pending debounce
+      clearTimeout(zoomDebounceTimer);
+      
+      // Wait 500ms after last scale change before allowing layout again
+      zoomDebounceTimer = setTimeout(() => {
+        isZooming = false;
+        lastScale = currentScale;
+        
+        // Only trigger layout if we've returned to scale 1 (unzoomed)
+        if(currentScale === 1) {
+          trigger();
+        }
+      }, 500);
+    }
+    
+    lastScale = currentScale;
+  };
+  
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
-  window.addEventListener('resize', trigger, {passive:true});
-  window.addEventListener('orientationchange', () => setTimeout(trigger, 60), {passive:true});
+  // Listen to resize, but with zoom protection
+  window.addEventListener('resize', () => {
+    handleZoomChange();
+    if(!isZooming) trigger();
+  }, {passive:true});
+  
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => {
+      handleZoomChange();
+      if(!isZooming) trigger();
+    }, 60);
+  }, {passive:true});
   
   // REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
   // The visualViewport fires constantly during zoom, triggering infinite layout recalculations
@@ -3665,6 +3718,9 @@ window.KidSequencer = {
   let startLeft = 0, startTop = 0;
   let pointerId = null;
   let activeTouches = 0; // Track number of active touch points
+  
+  // Export activeTouches so layout code can check if user is touching
+  window.__getActiveTouches = () => activeTouches;
 
   // Disable drag-to-pan while interacting with the volume fader (Shadow DOM)
   let panBlockedByFader = false;
