@@ -1117,6 +1117,31 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 <body>
 <script>
+    // CRITICAL: Force zoom reset IMMEDIATELY on page load
+    // Safari persists zoom between refreshes - this causes crashes
+    (function(){
+      try {
+        const vv = window.visualViewport;
+        if(vv && typeof vv.scale === 'number' && vv.scale !== 1) {
+          console.log('EARLY ZOOM RESET: Detected scale', vv.scale);
+          // Force viewport reset
+          const meta = document.querySelector('meta[name="viewport"]');
+          if(meta) {
+            const original = meta.getAttribute('content');
+            // Force reset to scale 1
+            meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no');
+            // Wait for reset, then restore zoomability
+            setTimeout(() => {
+              meta.setAttribute('content', original);
+              console.log('Zoom reset complete - re-enabled zooming');
+            }, 300);
+          }
+        }
+      } catch(e) {
+        console.log('Zoom reset failed:', e);
+      }
+    })();
+    
     // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
     (function(){
       try{
@@ -3272,28 +3297,6 @@ function importGridFromDataUrl(dataUrl){
     if(__ready) return;
     __ready = true;
 
-    // CRITICAL: Reset any persisted zoom state from Safari
-    // Safari remembers zoom between refreshes, which causes crashes
-    const vv = window.visualViewport;
-    if(vv && typeof vv.scale === "number" && vv.scale !== 1) {
-      console.log('Detected persisted zoom:', vv.scale, '- resetting to 1.0');
-      // Force zoom reset by setting viewport meta tag
-      try {
-        const viewportMeta = document.querySelector('meta[name="viewport"]');
-        if(viewportMeta) {
-          const content = viewportMeta.getAttribute('content');
-          // Temporarily disable zoom
-          viewportMeta.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-          // Restore after a moment
-          setTimeout(() => {
-            viewportMeta.setAttribute('content', content);
-          }, 100);
-        }
-      } catch(e) {
-        console.log('Could not reset zoom:', e);
-      }
-    }
-
     // Ensure we are at top-left to prevent any offX / scroll-restoration offsets (iOS can restore scroll subtly)
     try{ const vv2 = window.visualViewport; if(!(vv2 && vv2.scale && vv2.scale !== 1)) window.scrollTo(0, 0); }catch(e){}
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
@@ -3524,13 +3527,35 @@ root.classList.add('stageScaled');
     if(!vv) return;
     
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    const isLandscape = window.innerWidth > window.innerHeight;
     
-    // If zoom is above 1.9x, we're approaching the danger zone
+    // In LANDSCAPE, if zoom is above 1.3x, we're approaching toolbar hide threshold
+    // Block PREEMPTIVELY before toolbar even starts to hide
+    if(isLandscape && currentScale > 1.3) {
+      console.log('LANDSCAPE ZOOM PREEMPTIVE BLOCK - scale:', currentScale);
+      isZooming = true;
+      toolbarTransitioning = true; // Also block as if toolbar is transitioning
+      
+      clearTimeout(zoomDebounceTimer);
+      
+      // Keep blocked for longer in landscape at high zoom
+      zoomDebounceTimer = setTimeout(() => {
+        isZooming = false;
+        toolbarTransitioning = false;
+        lastScale = currentScale;
+        console.log('Landscape zoom block released');
+      }, 2000);
+      
+      lastScale = currentScale;
+      return;
+    }
+    
+    // If zoom is above 1.9x in ANY orientation, we're in danger zone
     // Block everything to prevent crashes
     if(currentScale > 1.9) {
       console.log('ZOOM DANGER ZONE - scale:', currentScale);
       isZooming = true;
-      toolbarTransitioning = true; // Also block toolbar transitions
+      toolbarTransitioning = true;
       
       clearTimeout(zoomDebounceTimer);
       
