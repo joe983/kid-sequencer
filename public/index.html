@@ -75,18 +75,6 @@ html, body {
 html.stageScaled, html.stageScaled body{
   overflow: hidden !important;
 }
-
-/* --- Native Safari pinch-zoom support (TEMP) ---
-   When the browser is zoomed (visualViewport.scale != 1),
-   allow native panning/scrolling so pinch-zoom works. */
-html.nativeZoom, html.nativeZoom body{
-  overflow: auto !important;
-}
-html.nativeZoom #viewport{
-  overflow: auto !important;
-  touch-action: auto !important;
-  overscroll-behavior: auto !important;
-}
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
   overflow: hidden !important;
@@ -97,6 +85,20 @@ html.stageScaled #viewport{
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
 }
+
+/* --- Native Safari pinch-zoom mode: allow browser pan/scroll while zoomed --- */
+html.nativeZoom, html.nativeZoom body{
+  overflow: auto !important;
+}
+html.stageScaled.nativeZoom, html.stageScaled.nativeZoom body{
+  overflow: auto !important;
+}
+html.nativeZoom #viewport,
+html.stageScaled.nativeZoom #viewport{
+  overflow: auto !important;
+  touch-action: auto !important;
+}
+
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
   left: 0;
@@ -3404,7 +3406,19 @@ root.classList.add('stageScaled');
   // Export for other code paths (init, etc.)
   window.scheduleLayout = scheduleLayout;
 
-  const trigger = () => scheduleLayout();
+  const __ksIsNativeZoomed = () => {
+    const vv = window.visualViewport;
+    if(!vv) return false;
+    return vv.scale > 1.01;
+  };
+  const trigger = () => {
+    if(__ksIsNativeZoomed()){
+      root.classList.add('nativeZoom');
+      return; // freeze auto-fit while Safari is pinch-zoomed
+    }
+    root.classList.remove('nativeZoom');
+    scheduleLayout();
+  };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
@@ -3420,36 +3434,19 @@ root.classList.add('stageScaled');
 
   // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
   // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
-  document.
-/* --- Native Safari pinch-zoom detection (TEMP) ---
-   Toggle html.nativeZoom while the browser page is zoomed. */
-(function(){
-  function isZoomed(){
-    const vv = window.visualViewport;
-    if(!vv) return false;
-    return Math.abs((vv.scale || 1) - 1) > 0.02;
-  }
-  function sync(){
-    document.documentElement.classList.toggle('nativeZoom', isZoomed());
-  }
-  // visualViewport fires rapidly during pinch; keep sync lightweight.
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', sync, {passive:true});
-    window.visualViewport.addEventListener('scroll', sync, {passive:true});
-  }
-  window.addEventListener('resize', sync, {passive:true});
-  // run a few times to catch iOS settle
-  sync();
-  setTimeout(sync, 50);
-  setTimeout(sync, 200);
-})();
-addEventListener('touchmove', (e) => {
+  document.addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
-    // Let Safari handle pinch-zoom (2+ touches) and panning while zoomed.
-    if((e.touches && e.touches.length > 1) || document.documentElement.classList.contains('nativeZoom')) return;
+
+    // If Safari is pinch-zooming/zoomed, do not block scrolling/panning.
+    if (__ksIsNativeZoomed && __ksIsNativeZoomed()) return;
+
+    // Allow pinch-zoom gesture to start (2+ touches) by not cancelling touchmove.
+    if (e.touches && e.touches.length > 1) return;
+
     // Allow native interaction on form controls if any.
     const t = e.target;
     if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+
     e.preventDefault();
   }, { passive: false });
 })();
@@ -3698,8 +3695,8 @@ window.KidSequencer = {
   }
 
   function onDown(e){
-    // If the browser is pinch-zoomed, let Safari handle panning.
-    if(document.documentElement.classList.contains('nativeZoom')) return;
+    // When Safari is pinch-zoomed, let the browser handle panning.
+    if (window.visualViewport && window.visualViewport.scale > 1.01) return;
     // Left mouse / primary touch only
     if(e.button !== undefined && e.button !== 0) return;
     if(panBlockedByFader || eventHitsFader(e)) return;
@@ -3718,8 +3715,8 @@ window.KidSequencer = {
   }
 
   function onMove(e){
+    if (window.visualViewport && window.visualViewport.scale > 1.01) return;
     if(!dragging) return;
-    if(document.documentElement.classList.contains('nativeZoom')) return;
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     viewport.scrollLeft = startLeft - dx;
