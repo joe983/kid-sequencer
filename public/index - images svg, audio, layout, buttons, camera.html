@@ -1094,15 +1094,6 @@ LAYOUT DEBUG MODE -------------------- */
 }
 
 </style>
-
-<!-- TEMP TEST: loosen stageScaled scroll/gesture locks so iOS Safari native zoom pan works -->
-<style id="ks-native-zoom-test">
-  html.stageScaled, html.stageScaled body{ overflow: auto !important; }
-  html.stageScaled #viewport{
-    overflow: visible !important;
-    touch-action: auto !important;
-  }
-</style>
 </head>
 <body>
 <script>
@@ -1790,9 +1781,6 @@ function positionRobotLogo(){
   const loginWrap = document.getElementById('loginCtaWrap');
   const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
   const page = document.getElementById('page');
-  // TEMP TEST: enable iOS Safari native page zoom + panning (no clamping/snap)
-  window.__KS_NATIVE_ZOOM_TEST = true;
-
   const root = document.documentElement;
   if(!logo || !toolsList || !seqWrap || !page) return;
 
@@ -3422,8 +3410,6 @@ root.classList.add('stageScaled');
   // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
   document.addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
-    // TEMP TEST: allow Safari's native pinch-zoom pan to work when zoomed in.
-    if(window.__KS_NATIVE_ZOOM_TEST) return;
     // Allow native interaction on form controls if any.
     const t = e.target;
     if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
