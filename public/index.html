@@ -76,6 +76,7 @@ html, body {
 /* --- Stage-scale mode (small landscape phones): NO scrolling, stage is positioned + scaled --- */
 html.stageScaled, html.stageScaled body{
   overflow: auto !important; /* allow native pan/zoom */
+  position: relative;
 }
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
@@ -86,6 +87,8 @@ html.stageScaled #viewport{
   padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
+  min-height: 100vh;
+  min-width: 100vw;
 }
 html.stageScaled #page{
   position: absolute; /* remove from normal flow so it can't create scrollable size */
@@ -3350,7 +3353,7 @@ function importGridFromDataUrl(dataUrl){
 const freeYTrue = usableH - stageH * s;
 
 // Center in the padded safe-area box, then clamp so we never clip into safe-area.
-const targetTy = offY + (freeYTrue) / 2;
+const targetTy = offY + padT + (freeYTrue) / 2;
 const minTy = offY + padT;
 const maxTy = offY + (vh - padB) - stageH * s;
 const ty = Math.min(maxTy, Math.max(minTy, targetTy));
@@ -3417,9 +3420,13 @@ root.classList.add('stageScaled');
 
   window.addEventListener('resize', trigger, {passive:true});
   window.addEventListener('orientationchange', () => setTimeout(trigger, 60), {passive:true});
-  if(window.visualViewport){
-    window.visualViewport.addEventListener('resize', trigger, {passive:true});
-  }
+  
+  // REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
+  // The visualViewport fires constantly during zoom, triggering infinite layout recalculations
+  // if(window.visualViewport){
+  //   window.visualViewport.addEventListener('resize', trigger, {passive:true});
+  // }
+  
   window.addEventListener('load', trigger, {once:true});
 
   // One extra pass after fonts settle
