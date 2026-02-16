@@ -95,9 +95,11 @@ html.stageScaled #viewport{
   min-height: 100vh;
   min-width: 100vw;
   overscroll-behavior: none; /* prevent pull-to-refresh */
+  /* In landscape, make sure there's actual scroll height */
+  height: 100vh;
 }
 html.stageScaled #page{
-  position: absolute; /* remove from normal flow so it can't create scrollable size */
+  position: relative; /* keep in document flow to enable scrolling */
   left: 0;
   top: 0;
   transform-origin: top left;
@@ -3269,18 +3271,14 @@ function importGridFromDataUrl(dataUrl){
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
     
     // In landscape, trigger a small scroll to hide Safari's browser toolbar
-    // This mimics what other websites do
+    // Safari requires user-initiated scroll, so we just ensure content is scrollable
+    // User's first pan/drag will naturally trigger toolbar hide
     if(window.innerWidth > window.innerHeight && window.innerHeight < 500) {
-      setTimeout(() => {
-        try {
-          // Scroll down just 1px to trigger toolbar hide
-          if(viewportEl) viewportEl.scrollTop = 1;
-          // Then immediately scroll back to 0
-          setTimeout(() => {
-            try { if(viewportEl) viewportEl.scrollTop = 0; } catch(e){}
-          }, 50);
-        } catch(e){}
-      }, 100);
+      // Ensure viewport is scrollable by adding a tiny bit of extra scroll height
+      if(viewportEl && viewportEl.scrollHeight <= viewportEl.clientHeight) {
+        // Add 1px scroll room
+        try { viewportEl.style.paddingBottom = '1px'; } catch(e){}
+      }
     }
 
     // First pass with the latest VisualViewport values
