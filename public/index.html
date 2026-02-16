@@ -3256,8 +3256,14 @@ function importGridFromDataUrl(dataUrl){
   let lastScale = 1;
   let lastResizeTime = 0;
   
+  // Track viewport height to detect Safari toolbar hide/show
+  let lastViewportHeight = window.innerHeight;
+  let toolbarTransitioning = false;
+  let toolbarDebounceTimer = null;
+  
   // Export zoom state globally for external checks
   window.__isZoomingNow = function(){ return isZooming; };
+  window.__isToolbarTransitioning = function(){ return toolbarTransitioning; };
 
   let __ready = false;
   let __stable = 0;
@@ -3414,15 +3420,15 @@ root.classList.add('stageScaled');
 
   let raf = 0;
   function layoutPass(){
-    // CRITICAL: Abort immediately if user is zoomed or actively touching
+    // CRITICAL: Abort immediately if user is zoomed or actively touching OR toolbar is hiding/showing
     const vv = window.visualViewport;
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
     
-    // Use local isZooming variable directly - it's in same scope
-    if(currentScale !== 1 || activeTouches > 0 || isZooming) {
-      // User is zoomed or touching - abort this layout pass completely
-      console.log('layoutPass ABORTED - zoomed:', currentScale !== 1, 'touching:', activeTouches > 0, 'zooming:', isZooming);
+    // Use local variables directly - they're in same scope
+    if(currentScale !== 1 || activeTouches > 0 || isZooming || toolbarTransitioning) {
+      // User is zoomed or touching or toolbar is animating - abort this layout pass completely
+      if(toolbarTransitioning) console.log('layoutPass ABORTED - toolbar transitioning');
       return;
     }
     
@@ -3468,8 +3474,8 @@ root.classList.add('stageScaled');
     const vv = window.visualViewport;
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     
-    // If actively zooming, skip layout completely
-    if(isZooming) return;
+    // If actively zooming or toolbar transitioning, skip layout completely
+    if(isZooming || toolbarTransitioning) return;
     
     // If zoomed (scale !== 1), skip layout
     if(currentScale !== 1) return;
@@ -3512,6 +3518,33 @@ root.classList.add('stageScaled');
     lastScale = currentScale;
   };
   
+  // Detect Safari toolbar hide/show based on viewport height changes
+  const handleViewportHeightChange = () => {
+    const currentHeight = window.innerHeight;
+    const heightDiff = Math.abs(currentHeight - lastViewportHeight);
+    
+    // If viewport height changed by 40+ pixels, Safari toolbar is probably hiding/showing
+    // Typical Safari toolbar is 44-50px
+    if(heightDiff >= 40) {
+      console.log('Toolbar transition detected - height change:', heightDiff);
+      toolbarTransitioning = true;
+      
+      // Clear any pending debounce
+      clearTimeout(toolbarDebounceTimer);
+      
+      // Wait 1500ms after toolbar transition before allowing layout
+      // Safari's toolbar animation takes ~300-500ms, give extra buffer
+      toolbarDebounceTimer = setTimeout(() => {
+        toolbarTransitioning = false;
+        lastViewportHeight = currentHeight;
+        console.log('Toolbar transition complete');
+        // Don't trigger layout - let user interaction do it naturally
+      }, 1500);
+    }
+    
+    lastViewportHeight = currentHeight;
+  };
+  
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
@@ -3519,20 +3552,22 @@ root.classList.add('stageScaled');
   // Rate-limited resize handler
   let resizeTimer = null;
   window.addEventListener('resize', () => {
-    // Immediately check and update zoom state
+    // Immediately check zoom and toolbar state
     handleZoomChange();
+    handleViewportHeightChange();
     
     // Debounce the trigger to prevent rapid-fire calls
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      if(!isZooming) trigger();
+      if(!isZooming && !toolbarTransitioning) trigger();
     }, 150);
   }, {passive:true});
   
   window.addEventListener('orientationchange', () => {
     setTimeout(() => {
       handleZoomChange();
-      if(!isZooming) trigger();
+      handleViewportHeightChange();
+      if(!isZooming && !toolbarTransitioning) trigger();
     }, 300);
   }, {passive:true});
   
