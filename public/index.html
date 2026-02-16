@@ -9,7 +9,9 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, maximum-scale=3.0, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=2.0, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>Kid Sequencer</title>
 <style>
 
@@ -68,7 +70,7 @@ html, body {
   height: 100%;
   min-width: 100vw;
   min-height: 100vh;
-  overflow: visible;
+  overflow: auto; /* enable scrolling to trigger Safari toolbar hide */
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: none; /* prevent pull-to-refresh and bounce */
   touch-action: manipulation; /* enable zoom and pan on iOS */
@@ -175,6 +177,13 @@ body.loggedIn #robotLogo{
       position: relative;
       z-index: 2;
           box-sizing: border-box;
+    }
+    
+    /* In landscape, ensure content is tall enough to scroll and hide Safari toolbar */
+    @media (orientation: landscape) and (max-height: 500px) {
+      #page {
+        min-height: max(var(--stageH), calc(100vh + 100px));
+      }
     }
 
     #topBar{
@@ -3239,6 +3248,15 @@ function importGridFromDataUrl(dataUrl){
   const pageEl = document.getElementById('page');
   if(!pageEl) return;
 
+  // Track zoom state at top of scope so all functions can access it
+  let isZooming = false;
+  let zoomDebounceTimer = null;
+  let lastScale = 1;
+  let lastResizeTime = 0;
+  
+  // Export zoom state globally for external checks
+  window.__isZoomingNow = function(){ return isZooming; };
+
   let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
@@ -3249,6 +3267,21 @@ function importGridFromDataUrl(dataUrl){
     // Ensure we are at top-left to prevent any offX / scroll-restoration offsets (iOS can restore scroll subtly)
     try{ const vv = window.visualViewport; if(!(vv && vv.scale && vv.scale !== 1)) window.scrollTo(0, 0); }catch(e){}
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
+    
+    // In landscape, trigger a small scroll to hide Safari's browser toolbar
+    // This mimics what other websites do
+    if(window.innerWidth > window.innerHeight && window.innerHeight < 500) {
+      setTimeout(() => {
+        try {
+          // Scroll down just 1px to trigger toolbar hide
+          if(viewportEl) viewportEl.scrollTop = 1;
+          // Then immediately scroll back to 0
+          setTimeout(() => {
+            try { if(viewportEl) viewportEl.scrollTop = 0; } catch(e){}
+          }, 50);
+        } catch(e){}
+      }, 100);
+    }
 
     // First pass with the latest VisualViewport values
     try{ __ksSyncViewportVars(); }catch(e){}
@@ -3387,10 +3420,11 @@ root.classList.add('stageScaled');
     const vv = window.visualViewport;
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
-    const userIsZooming = (typeof window.__isZooming === 'function') ? window.__isZooming() : false;
     
-    if(currentScale !== 1 || activeTouches > 0 || userIsZooming) {
+    // Use local isZooming variable directly - it's in same scope
+    if(currentScale !== 1 || activeTouches > 0 || isZooming) {
       // User is zoomed or touching - abort this layout pass completely
+      console.log('layoutPass ABORTED - zoomed:', currentScale !== 1, 'touching:', activeTouches > 0, 'zooming:', isZooming);
       return;
     }
     
@@ -3425,15 +3459,7 @@ root.classList.add('stageScaled');
   // Export for other code paths (init, etc.)
   window.scheduleLayout = scheduleLayout;
 
-  // Track if user is actively zooming to prevent layout conflicts
-  // Make this global so layoutPass can check it
-  let isZooming = false;
-  let zoomDebounceTimer = null;
-  let lastScale = 1;
-  let lastResizeTime = 0;
-  
-  // Export zoom state globally
-  window.__isZooming = () => isZooming;
+  // Zoom tracking variables are now at top of scope
 
   const trigger = () => {
     // Don't run layout if user has fingers on the screen
