@@ -9,7 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, maximum-scale=2.0, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=1.5, user-scalable=yes, viewport-fit=cover" name="viewport"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>Kid Sequencer</title>
@@ -3357,21 +3357,17 @@ function importGridFromDataUrl(dataUrl){
   function applyStageFit(){
     const vv = window.visualViewport;
     
-    // ENFORCE maximum zoom of 2.0x - if user zooms beyond, reset to 2.0
-    if(vv && typeof vv.scale === "number" && vv.scale > 2.0){
-      console.log('Zoom limit exceeded:', vv.scale, '- preventing crash');
-      // Block layout completely when over limit
-      return;
+    // ENFORCE maximum zoom of 1.5x - if user zooms beyond, just bail out
+    if(vv && typeof vv.scale === "number" && vv.scale > 1.5){
+      return; // Don't touch layout at all - preserve existing transform
     }
     
-    // If the user has zoomed the page, do not apply our own transform scaling.
+    // If the user has zoomed the page, leave the current transform in place.
+    // CRITICAL: Do NOT remove the CSS scale-down transform here.
+    // Removing it forces the browser to render the full 1600x900 stage unscaled
+    // on top of the browser's own zoom, causing Safari to exceed its tile memory
+    // budget and crash the WebKit process on iPhone.
     if(vv && typeof vv.scale === "number" && vv.scale !== 1){
-      root.classList.remove('stageScaled','tabletScaled');
-      pageEl.style.transform = '';
-      pageEl.style.width = '';
-      pageEl.style.height = '';
-      pageEl.style.minWidth = '';
-      pageEl.style.minHeight = '';
       return;
     }
 
@@ -3461,7 +3457,7 @@ root.classList.add('stageScaled');
     // Use local variables directly - they're in same scope
     if(currentScale !== 1 || activeTouches > 0 || isZooming || toolbarTransitioning) {
       // User is zoomed or touching or toolbar is animating - abort this layout pass completely
-      if(toolbarTransitioning) console.log('layoutPass ABORTED - toolbar transitioning');
+      if(toolbarTransitioning) return;
       return;
     }
     
@@ -3528,32 +3524,27 @@ root.classList.add('stageScaled');
     
     const currentScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     
-    // If zoom is above 1.5x in ANY orientation, preemptively block everything
-    // User reported crashes at ~2x zoom, so block earlier at 1.5x
-    if(currentScale > 1.5) {
-      console.log('PREEMPTIVE BLOCK - scale:', currentScale, '- ALL LAYOUT DISABLED');
+    // If zoom is above 1.3x in ANY orientation, preemptively block layout
+    if(currentScale > 1.3) {
       isZooming = true;
       toolbarTransitioning = true;
       
       clearTimeout(zoomDebounceTimer);
       
-      // Keep blocked for 3 seconds when at high zoom
+      // Keep blocked for 2 seconds, then re-check once (no recursion)
       zoomDebounceTimer = setTimeout(() => {
-        // Check if still zoomed before unblocking
         const vvCheck = window.visualViewport;
         const currentCheck = vvCheck && typeof vvCheck.scale === "number" ? vvCheck.scale : 1;
         
-        if(currentCheck > 1.5) {
-          // Still zoomed - stay blocked
-          console.log('Still zoomed at', currentCheck, '- keeping blocked');
-          handleZoomChange(); // Re-check
-        } else {
+        if(currentCheck <= 1.05) {
+          // User has zoomed back to normal - unblock
           isZooming = false;
           toolbarTransitioning = false;
-          lastScale = currentScale;
-          console.log('Zoom below 1.5x - unblocking');
+          lastScale = currentCheck;
+          trigger();
         }
-      }, 3000);
+        // If still zoomed, stay blocked - the next resize/zoom event will re-enter handleZoomChange
+      }, 2000);
       
       lastScale = currentScale;
       return;
@@ -3595,7 +3586,6 @@ root.classList.add('stageScaled');
     // If user is zoomed AND viewport height changed by 5+ pixels, toolbar is hiding/showing
     // This is the dangerous combination that causes crashes
     if(userIsZoomedOrZooming && heightDiff >= 5) {
-      console.log('CRITICAL: Toolbar transition while zoomed - height change:', heightDiff, 'px, scale:', currentScale);
       toolbarTransitioning = true;
       
       // Also immediately block zooming
@@ -3611,7 +3601,6 @@ root.classList.add('stageScaled');
         toolbarTransitioning = false;
         isZooming = false;
         lastViewportHeight = currentHeight;
-        console.log('Toolbar transition complete - safe to continue');
       }, 3000);
     }
     
@@ -3668,11 +3657,12 @@ root.classList.add('stageScaled');
         clearTimeout(scrollTimer);
         scrollTimer = setTimeout(() => {
           scrolling = false;
-          // Only unblock if zoom is back to normal
-          if(currentScale <= 1.05) {
+          // Re-read current scale (don't use the stale closure value)
+          const vvNow = window.visualViewport;
+          const scaleNow = vvNow && typeof vvNow.scale === "number" ? vvNow.scale : 1;
+          if(scaleNow <= 1.05) {
             isZooming = false;
           }
-          console.log('Scroll ended while zoomed');
         }, 500); // Wait 500ms after scroll stops
       }
     }, {passive: true});
