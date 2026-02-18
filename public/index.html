@@ -9,7 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, maximum-scale=1.15, user-scalable=yes, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1, maximum-scale=2.0, user-scalable=yes, viewport-fit=cover" name="viewport"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <title>Kid Sequencer</title>
@@ -1117,7 +1117,20 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 <body>
 <script>
-    // Native zoom is disabled (maximum-scale=1). Zoom is handled via CSS transforms.
+    // Force zoom reset on page load - Safari persists zoom between refreshes
+    (function(){
+      try {
+        const vv = window.visualViewport;
+        if(vv && typeof vv.scale === 'number' && vv.scale !== 1) {
+          const meta = document.querySelector('meta[name="viewport"]');
+          if(meta) {
+            const original = meta.getAttribute('content');
+            meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no');
+            setTimeout(() => { meta.setAttribute('content', original); }, 300);
+          }
+        }
+      } catch(e) {}
+    })();
 
     // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
     (function(){
@@ -3336,6 +3349,13 @@ function importGridFromDataUrl(dataUrl){
   function applyStageFit(){
     const vv = window.visualViewport;
 
+    // If user is native-zooming, don't touch transforms at all.
+    // This prevents the crash from the original code (which stripped transforms during zoom)
+    // and prevents layout recalculation from fighting the native zoom.
+    if(vv && typeof vv.scale === "number" && vv.scale > 1.02){
+      return;
+    }
+
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
 // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
@@ -3411,8 +3431,7 @@ root.classList.add('stageScaled');
     // If user has custom-zoomed, re-apply that on top of the new base
     if(window.__customZoom && window.__customZoom.scale !== 1) {
       const cz = window.__customZoom;
-      const nz = (window.visualViewport && window.visualViewport.scale) || 1;
-      const totalS = s * cz.scale / nz;
+      const totalS = s * cz.scale;
       const czTx = tx + cz.offsetX;
       const czTy = ty + cz.offsetY;
       pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
@@ -3427,10 +3446,12 @@ root.classList.add('stageScaled');
 
   let raf = 0;
   function layoutPass(){
-    // Abort if user is actively doing a custom pinch-zoom or toolbar is transitioning
+    // Abort if user is native-zoomed, actively touching, custom-zooming, or toolbar transitioning
+    const vv = window.visualViewport;
+    const nativeScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
     const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
     
-    if(activeTouches > 1 || isZooming || toolbarTransitioning) {
+    if(nativeScale > 1.02 || activeTouches > 1 || isZooming || toolbarTransitioning) {
       return;
     }
     
@@ -3466,6 +3487,11 @@ root.classList.add('stageScaled');
   // Zoom tracking variables are now at top of scope
 
   const trigger = () => {
+    // Don't run layout during native zoom
+    const vv = window.visualViewport;
+    const nativeScale = vv && typeof vv.scale === "number" ? vv.scale : 1;
+    if(nativeScale > 1.02) return;
+
     // Don't run layout if user is actively pinch-zooming
     const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
     if(activeTouches > 1) return;
@@ -3481,11 +3507,8 @@ root.classList.add('stageScaled');
     scheduleLayout();
   };
   
-  // Zoom change handler is now minimal since native zoom is disabled.
-  // Custom pinch-zoom is handled by the dedicated handler below.
-  const handleZoomChange = () => {
-    // Nothing to do - native zoom is disabled (maximum-scale=1)
-  };
+  // Native zoom is re-enabled; toolbar hide and zoom are handled by Safari natively.
+  const handleZoomChange = () => {};
   
   // Detect Safari toolbar hide/show based on viewport height changes
   const handleViewportHeightChange = () => {
@@ -3896,251 +3919,12 @@ window.KidSequencer = {
 </script>
 
 <script>
-/* ===== Custom pinch-zoom via CSS transforms =====
-   Native pinch-zoom is disabled (maximum-scale=1) because Safari crashes when
-   zooming a 1600x900 page on iPhone (the backing store exceeds WebKit's tile memory budget).
-   Instead we implement zoom by adjusting the existing CSS transform on #page.
-   This is a pure compositing operation — no new tiles are rasterized. */
+/* Native zoom is re-enabled (maximum-scale=2.0). The crash fix is in applyStageFit
+   which no longer strips CSS transforms during zoom. Safari handles all zoom natively,
+   including toolbar auto-hide. */
 (function(){
-  const page = document.getElementById('page');
-  const viewport = document.getElementById('viewport');
-  if(!page || !viewport) return;
-
-  // Custom zoom state
+  // Keep __customZoom defined so applyStageFit code referencing it doesn't break
   window.__customZoom = { scale: 1, offsetX: 0, offsetY: 0 };
-
-  const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
-  const MAX_ZOOM = 2.2;
-
-  // Track active touches for pinch detection
-  let touches = {};      // pointerId -> {x, y}
-  let pinching = false;
-  let initialDist = 0;
-  let initialScale = 1;
-  let initialMidX = 0, initialMidY = 0;
-  let initialOffsetX = 0, initialOffsetY = 0;
-
-  // Panning while zoomed
-  let panning = false;
-  let panStartX = 0, panStartY = 0;
-  let panStartOffsetX = 0, panStartOffsetY = 0;
-
-  function dist(a, b){
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-
-  function midpoint(a, b){
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-
-  function applyCustomZoom(){
-    const bt = window.__baseTransform;
-    if(!bt) return;
-    const cz = window.__customZoom;
-    // Compensate for native zoom so visual scale = bt.s * cz.scale exactly
-    const nz = (window.visualViewport && window.visualViewport.scale) || 1;
-    const totalS = bt.s * cz.scale / nz;
-    const tx = bt.tx + cz.offsetX;
-    const ty = bt.ty + cz.offsetY;
-    page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
-  }
-
-  function clampOffsets(duringPinch){
-    const bt = window.__baseTransform;
-    if(!bt) return;
-    const cz = window.__customZoom;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const nz = (window.visualViewport && window.visualViewport.scale) || 1;
-    const totalS = bt.s * cz.scale / nz;
-    const scaledW = bt.stageW * totalS;
-    const scaledH = bt.stageH * totalS;
-
-    // The page's left edge on screen = bt.tx + cz.offsetX
-    // The page's right edge on screen = bt.tx + cz.offsetX + scaledW
-
-    if(scaledW > vw){
-      // Content wider than viewport: keep edges from pulling away
-      // Right edge must stay at or past the left viewport edge
-      const minX = vw - scaledW - bt.tx;
-      // Left edge must stay at or before the right viewport edge
-      const maxX = -bt.tx;
-      cz.offsetX = Math.max(minX, Math.min(maxX, cz.offsetX));
-    } else if(!duringPinch) {
-      // Content fits: only re-center after pinch ends (not during)
-      cz.offsetX = (vw - scaledW) / 2 - bt.tx;
-    }
-
-    if(scaledH > vh){
-      const minY = vh - scaledH - bt.ty;
-      const maxY = -bt.ty;
-      cz.offsetY = Math.max(minY, Math.min(maxY, cz.offsetY));
-    } else if(!duringPinch) {
-      cz.offsetY = (vh - scaledH) / 2 - bt.ty;
-    }
-  }
-
-  // Two-phase pinch: let native zoom start (triggers toolbar hide), then take over with custom zoom
-  let pinchStartTime = 0;
-  let nativePhase = false;
-  const NATIVE_PHASE_MS = 140; // ms to let native zoom run before taking over
-
-  // Reset native zoom back to 1x by briefly locking the viewport
-  function resetNativeZoom(){
-    const meta = document.querySelector('meta[name="viewport"]');
-    if(!meta) return;
-    const original = meta.getAttribute('content');
-    meta.setAttribute('content', 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no');
-    setTimeout(() => { meta.setAttribute('content', original); }, 60);
-  }
-
-  // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  viewport.addEventListener('touchstart', (e) => {
-    if(e.touches.length === 2) {
-      // Start pinch
-      pinching = true;
-      panning = false;
-      nativePhase = true;
-      pinchStartTime = Date.now();
-
-      // Block layout system from overwriting our transform during pinch
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
-
-      const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-      initialDist = dist(t0, t1);
-      initialScale = window.__customZoom.scale;
-      const mid = midpoint(t0, t1);
-      initialMidX = mid.x;
-      initialMidY = mid.y;
-      initialOffsetX = window.__customZoom.offsetX;
-      initialOffsetY = window.__customZoom.offsetY;
-
-      // DON'T preventDefault — let Safari see the native pinch gesture to trigger toolbar hide
-    } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
-      // Start pan while zoomed
-      panning = true;
-      // Block layout during pan while zoomed
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
-      panStartX = e.touches[0].clientX;
-      panStartY = e.touches[0].clientY;
-      panStartOffsetX = window.__customZoom.offsetX;
-      panStartOffsetY = window.__customZoom.offsetY;
-      e.preventDefault();
-    }
-  }, {passive: false});
-
-  viewport.addEventListener('touchmove', (e) => {
-    if(pinching && e.touches.length >= 2) {
-      const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-
-      // Phase 1: let native zoom run to trigger Safari toolbar hide
-      if(nativePhase) {
-        if(Date.now() - pinchStartTime < NATIVE_PHASE_MS) {
-          return; // pass through to Safari — no preventDefault
-        }
-        // Transition to Phase 2: re-capture initial state at current finger positions
-        nativePhase = false;
-        initialDist = dist(t0, t1);
-        initialScale = window.__customZoom.scale;
-        const mid2 = midpoint(t0, t1);
-        initialMidX = mid2.x;
-        initialMidY = mid2.y;
-        initialOffsetX = window.__customZoom.offsetX;
-        initialOffsetY = window.__customZoom.offsetY;
-      }
-
-      // Phase 2: custom CSS zoom
-      const newDist = dist(t0, t1);
-      const mid = midpoint(t0, t1);
-
-      // Calculate new scale
-      let newScale = initialScale * (newDist / initialDist);
-      newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
-      window.__customZoom.scale = newScale;
-
-      // Adjust offset so the pinch midpoint stays stable
-      const bt = window.__baseTransform;
-      if(bt) {
-        const midDx = mid.x - initialMidX;
-        const midDy = mid.y - initialMidY;
-        const scaleRatio = newScale / initialScale;
-        const originX = initialMidX - bt.tx - initialOffsetX;
-        const originY = initialMidY - bt.ty - initialOffsetY;
-        window.__customZoom.offsetX = initialOffsetX + midDx + originX * (1 - scaleRatio);
-        window.__customZoom.offsetY = initialOffsetY + midDy + originY * (1 - scaleRatio);
-      }
-
-      clampOffsets(true);
-      applyCustomZoom();
-      e.preventDefault();
-    } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
-      const dx = e.touches[0].clientX - panStartX;
-      const dy = e.touches[0].clientY - panStartY;
-      window.__customZoom.offsetX = panStartOffsetX + dx;
-      window.__customZoom.offsetY = panStartOffsetY + dy;
-      clampOffsets(false); // during pan - allow centering
-      applyCustomZoom();
-      e.preventDefault();
-    }
-  }, {passive: false});
-
-  viewport.addEventListener('touchend', (e) => {
-    if(e.touches.length < 2) {
-      if(pinching) {
-        pinching = false;
-        nativePhase = false;
-        // If scale is very close to 1, snap back to 1
-        if(window.__customZoom.scale < 1.05) {
-          window.__customZoom.scale = 1;
-          window.__customZoom.offsetX = 0;
-          window.__customZoom.offsetY = 0;
-          applyCustomZoom();
-          if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-          if(window.scheduleLayout) window.scheduleLayout();
-          // Reset native zoom back to 1x
-          resetNativeZoom();
-        } else {
-          // Final clamp to re-center if content fits in viewport
-          clampOffsets(false);
-          applyCustomZoom();
-          if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-        }
-      }
-    }
-    if(e.touches.length === 0) {
-      panning = false;
-      pinching = false;
-      nativePhase = false;
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-    }
-  }, {passive: true});
-
-  viewport.addEventListener('touchcancel', () => {
-    pinching = false;
-    panning = false;
-    nativePhase = false;
-  }, {passive: true});
-
-  // Double-tap to reset zoom
-  let lastTapTime = 0;
-  viewport.addEventListener('touchend', (e) => {
-    if(e.touches.length !== 0) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    const now = Date.now();
-    if(now - lastTapTime < 300) {
-      window.__customZoom.scale = 1;
-      window.__customZoom.offsetX = 0;
-      window.__customZoom.offsetY = 0;
-      applyCustomZoom();
-      if(window.scheduleLayout) window.scheduleLayout();
-      resetNativeZoom();
-      lastTapTime = 0;
-    } else {
-      lastTapTime = now;
-    }
-  }, {passive: true});
 })();
 </script>
 <style>
