@@ -3912,33 +3912,59 @@ window.KidSequencer = {
   const MAX_ZOOM = 2.2;
 
   // --- Landscape toolbar hide helper ---
-  // Safari hides its toolbar when content scrolls. With native zoom disabled,
-  // we need to create real scroll room and trigger a scroll when the user zooms in landscape.
+  // Safari hides its toolbar when the document scrolls. With native zoom disabled,
+  // we create real document-level scroll room and trigger window.scrollTo so Safari
+  // collapses the toolbar.
+  //
+  // KEY INSIGHT: html and body both have `height: 100%` which pins them to viewport
+  // height. Even with overflow:auto, a spacer child only creates *body-level* overflow,
+  // but window.scrollTo scrolls the *document viewport* (html element). We must
+  // temporarily release the height constraint so html expands and creates real
+  // document-level scroll room.
   let spacer = null;
-  function ensureLandscapeScrollRoom(){
-    if(window.innerWidth <= window.innerHeight) return; // portrait - skip
+  let toolbarHidden = false;
+  let heightOverrideStyle = null;
+
+  function ensureScrollRoom(){
+    // Create a style override that releases html/body height from 100% to auto
+    if(!heightOverrideStyle) {
+      heightOverrideStyle = document.createElement('style');
+      heightOverrideStyle.id = '__zoomHeightOverride';
+      document.head.appendChild(heightOverrideStyle);
+    }
+    heightOverrideStyle.textContent = `
+      html, body { height: auto !important; min-height: 100vh !important; }
+    `;
+
+    // Add spacer to body to create content taller than viewport
     if(!spacer) {
       spacer = document.createElement('div');
       spacer.id = '__zoomSpacer';
-      spacer.style.cssText = 'width:1px;height:1px;pointer-events:none;position:relative;';
-      viewport.appendChild(spacer);
+      spacer.style.cssText = 'width:1px;pointer-events:none;position:relative;z-index:-1;opacity:0;';
+      document.body.appendChild(spacer);
     }
-    // Make spacer tall enough to extend past viewport bottom
-    const extra = 80;
-    spacer.style.height = extra + 'px';
-    spacer.style.marginTop = (window.innerHeight + 10) + 'px';
+    spacer.style.height = '60px';
   }
+
   function triggerToolbarHide(){
-    if(window.innerWidth <= window.innerHeight) return; // portrait - skip
-    ensureLandscapeScrollRoom();
-    // Instant scroll (no smooth / no rAF) so Safari collapses the toolbar ASAP
-    try{ window.scrollTo(0, 1); }catch(_){ }
+    if(toolbarHidden) return;
+    ensureScrollRoom();
+    // Programmatic scroll triggers Safari toolbar collapse
+    requestAnimationFrame(() => {
+      try{ window.scrollTo(0, 1); }catch(_){}
+    });
+    toolbarHidden = true;
   }
+
   function removeLandscapeScrollRoom(){
+    toolbarHidden = false;
     if(spacer) {
       spacer.style.height = '0px';
-      spacer.style.marginTop = '0px';
     }
+    if(heightOverrideStyle) {
+      heightOverrideStyle.textContent = '';
+    }
+    try{ window.scrollTo(0, 0); }catch(_){}
   }
 
   // Track active touches for pinch detection
@@ -4070,8 +4096,8 @@ window.KidSequencer = {
 
       clampOffsets(true); // during active pinch - don't force centering
       applyCustomZoom();
-      // In landscape, hide Safari toolbar as soon as user zooms in
-      if(window.innerWidth > window.innerHeight && newScale > 1.02) {
+      // Hide Safari toolbar as soon as user starts zooming in (any orientation)
+      if(newScale > 1.01) {
         triggerToolbarHide();
       }
       e.preventDefault();
