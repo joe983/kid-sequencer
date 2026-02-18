@@ -3936,12 +3936,6 @@ window.KidSequencer = {
     // If multi-touch (pinch zoom), don't interfere - let iOS handle it
     if(activeTouches > 1) {
       dragging = false;
-      // CRITICAL: Release any captured pointer so iOS can recognize pinch-zoom.
-      // Without this, the first finger's pointer stays captured by the viewport
-      // and Safari never initiates the native zoom gesture.
-      try { if(pointerId !== null) viewport.releasePointerCapture(pointerId); } catch(_){}
-      pointerId = null;
-      document.body.classList.remove('dragging-pan');
       return;
     }
 
@@ -3970,14 +3964,7 @@ window.KidSequencer = {
     if(!dragging) return;
     
     // Don't interfere with multi-touch gestures
-    if(activeTouches > 1) {
-      // Release pointer capture if we had it, so iOS pinch-zoom works
-      dragging = false;
-      try { if(pointerId !== null) viewport.releasePointerCapture(pointerId); } catch(_){}
-      pointerId = null;
-      document.body.classList.remove('dragging-pan');
-      return;
-    }
+    if(activeTouches > 1) return;
     
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
