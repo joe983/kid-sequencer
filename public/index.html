@@ -3436,8 +3436,7 @@ root.classList.add('stageScaled');
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
-    const prev = pageEl.style.transform;
-    pageEl.style.transform = '';
+    // Do not clear transforms here; it causes visible jitter during toolbar transitions.
     try{
       fitToViewport();
       buildGrid();
@@ -3445,7 +3444,6 @@ root.classList.add('stageScaled');
     }catch(e){
       console.error('layoutPass failed', e);
     }
-    pageEl.style.transform = prev;
 
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
@@ -3503,7 +3501,7 @@ root.classList.add('stageScaled');
       toolbarDebounceTimer = setTimeout(() => {
         toolbarTransitioning = false;
         lastViewportHeight = currentHeight;
-      }, 500);
+      }, 180);
     }
     
     lastViewportHeight = currentHeight;
@@ -3911,7 +3909,7 @@ window.KidSequencer = {
   window.__customZoom = { scale: 1, offsetX: 0, offsetY: 0 };
 
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
-  const MAX_ZOOM = 2.5;
+  const MAX_ZOOM = 2.2;
 
   // --- Landscape toolbar hide helper ---
   // Safari hides its toolbar when content scrolls. With native zoom disabled,
@@ -3933,14 +3931,8 @@ window.KidSequencer = {
   function triggerToolbarHide(){
     if(window.innerWidth <= window.innerHeight) return; // portrait - skip
     ensureLandscapeScrollRoom();
-    // Trigger the scroll that hides Safari's toolbar
-    requestAnimationFrame(() => {
-      try {
-        window.scrollTo({ top: 1, behavior: 'smooth' });
-      } catch(_) {
-        window.scrollTo(0, 1);
-      }
-    });
+    // Instant scroll (no smooth / no rAF) so Safari collapses the toolbar ASAP
+    try{ window.scrollTo(0, 1); }catch(_){ }
   }
   function removeLandscapeScrollRoom(){
     if(spacer) {
@@ -4078,6 +4070,10 @@ window.KidSequencer = {
 
       clampOffsets(true); // during active pinch - don't force centering
       applyCustomZoom();
+      // In landscape, hide Safari toolbar as soon as user zooms in
+      if(window.innerWidth > window.innerHeight && newScale > 1.02) {
+        triggerToolbarHide();
+      }
       e.preventDefault();
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
