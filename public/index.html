@@ -3920,6 +3920,15 @@ window.KidSequencer = {
   // doesn't visually jump. No spacers, no margin hacks, no viewport modifications.
   let scrollRoomActive = false;
 
+  // Scroll sync: during grace frames, native scroll can move the document.
+  // We listen for scroll events and immediately re-apply the transform with
+  // the latest scrollY to eliminate the 1-frame visual lag.
+  let scrollSyncActive = false;
+  function onScrollSync(){
+    if(!scrollRoomActive || !pinching) return;
+    applyCustomZoom();
+  }
+
   function ensureLandscapeScrollRoom(){
     if(window.innerWidth <= window.innerHeight) return;
     if(scrollRoomActive) return;
@@ -3927,8 +3936,15 @@ window.KidSequencer = {
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
-    document.body.style.minHeight = (window.innerHeight + 400) + 'px';
+    // Large scroll room so Safari has plenty of distance to trigger toolbar collapse
+    document.body.style.minHeight = (window.innerHeight * 3) + 'px';
     void document.body.offsetHeight;
+
+    // Start scroll sync listener
+    if(!scrollSyncActive) {
+      scrollSyncActive = true;
+      window.addEventListener('scroll', onScrollSync, {passive: true});
+    }
   }
 
   function removeLandscapeScrollRoom(){
@@ -3939,6 +3955,12 @@ window.KidSequencer = {
     document.body.style.height = '';
     document.body.style.minHeight = '';
     try{ window.scrollTo(0, 0); }catch(_){}
+
+    // Remove scroll sync listener
+    if(scrollSyncActive) {
+      scrollSyncActive = false;
+      window.removeEventListener('scroll', onScrollSync);
+    }
   }
 
   // Track active touches for pinch detection
@@ -4011,7 +4033,7 @@ window.KidSequencer = {
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
   let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 2;
+  const TOOLBAR_GRACE_FRAMES = 3;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
