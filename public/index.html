@@ -3352,18 +3352,6 @@ function importGridFromDataUrl(dataUrl){
     const usableW = Math.max(0, vw - padL - padR);
     const usableH = Math.max(0, vh - padT - padB);
 
-    // DEBUG: show values on all devices
-    let dbg = document.getElementById('__dbg');
-    if(!dbg){ dbg = document.createElement('div'); dbg.id='__dbg'; document.documentElement.appendChild(dbg); }
-    dbg.setAttribute('style','position:fixed;top:0;left:0;background:rgba(0,0,0,0.95);color:lime;font:12px monospace;padding:8px;z-index:2147483647;pointer-events:none;white-space:pre;max-width:100vw;overflow:hidden;width:auto;height:auto;display:block;visibility:visible;opacity:1;transform:none;');
-    const shouldScaleDbg = (usableW < stageW) || (usableH < stageH);
-    dbg.textContent = `vw=${vw.toFixed(0)} vh=${vh.toFixed(0)} offX=${offX.toFixed(1)} offY=${offY.toFixed(1)}
-padL=${padL.toFixed(0)} padR=${padR.toFixed(0)} padT=${padT.toFixed(0)} padB=${padB.toFixed(0)}
-usableW=${usableW.toFixed(0)} usableH=${usableH.toFixed(0)}
-stageW=${stageW} stageH=${stageH} shouldScale=${shouldScaleDbg}
-vpScrollL=${viewportEl?viewportEl.scrollLeft:'-'} winScrollX=${window.scrollX}`;
-
-
     // Only enter scaled mode if the stage cannot fit at 1:1.
     const shouldScale = (usableW < stageW) || (usableH < stageH);
 
@@ -3390,20 +3378,22 @@ vpScrollL=${viewportEl?viewportEl.scrollLeft:'-'} winScrollX=${window.scrollX}`;
 
     // Center in the *visual viewport* (not just the padded safe-area box),
     // but clamp so we never clip into the safe-area paddings.
-    const targetTx = offX + (vw - stageW * s) / 2;
-    const minTx = offX + padL;
-    const maxTx = offX + (vw - padR) - stageW * s;
+    // #page is inside #viewport which has safe-area padding, so #page already
+    // starts at padL from the screen edge. The translate is relative to #page's
+    // position, so we subtract padL to avoid double-counting.
+    const targetTx = offX + (vw - stageW * s) / 2 - padL;
+    const minTx = offX;
+    const maxTx = offX + vw - padL - padR - stageW * s;
     const tx = Math.min(maxTx, Math.max(minTx, targetTx));
 
-    // Vertical placement: scale uses fitStageH (a slightly reduced height in iPhone-landscape),
+    // Vertical: same logic — #page starts at padT, so subtract it.
 // but translation should center using the *real* stage height so we don't drift downward.
 const freeYTrue = usableH - stageH * s;
 
-// Center in the padded safe-area box, then clamp so we never clip into safe-area.
-// When content is taller than viewport (freeYTrue < 0), prefer showing the top by using minTy
-const targetTy = freeYTrue >= 0 ? (offY + padT + freeYTrue / 2) : (offY + padT);
-const minTy = offY + padT;
-const maxTy = offY + (vh - padB) - stageH * s;
+// When content is taller than viewport (freeYTrue < 0), prefer showing the top
+const targetTy = freeYTrue >= 0 ? (offY + freeYTrue / 2) : offY;
+const minTy = offY;
+const maxTy = offY + vh - padT - padB - stageH * s;
 const ty = Math.max(minTy, Math.min(maxTy, targetTy));
 
 root.classList.add('stageScaled');
@@ -3416,11 +3406,6 @@ root.classList.add('stageScaled');
     pageEl.style.minHeight = stageH + 'px';
 
     pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
-
-    // DEBUG: append scale/translate values
-    if(dbg) dbg.textContent += `\ns=${s.toFixed(4)} scaledW=${(stageW*s).toFixed(0)}
-targetTx=${targetTx.toFixed(1)} minTx=${minTx.toFixed(1)} maxTx=${maxTx.toFixed(1)}
-tx=${tx.toFixed(1)} ty=${ty.toFixed(1)}`;
 
     // Store base transform for the custom pinch-zoom handler to compound onto
     window.__baseTransform = { tx, ty, s, stageW, stageH };
