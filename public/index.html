@@ -3378,22 +3378,20 @@ function importGridFromDataUrl(dataUrl){
 
     // Center in the *visual viewport* (not just the padded safe-area box),
     // but clamp so we never clip into the safe-area paddings.
-    // #page is inside #viewport which has safe-area padding, so #page already
-    // starts at padL from the screen edge. The translate is relative to #page's
-    // position, so we subtract padL to avoid double-counting.
-    const targetTx = offX + (vw - stageW * s) / 2 - padL;
-    const minTx = offX;
-    const maxTx = offX + vw - padL - padR - stageW * s;
+    const targetTx = offX + (vw - stageW * s) / 2;
+    const minTx = offX + padL;
+    const maxTx = offX + (vw - padR) - stageW * s;
     const tx = Math.min(maxTx, Math.max(minTx, targetTx));
 
-    // Vertical: same logic — #page starts at padT, so subtract it.
+    // Vertical placement: scale uses fitStageH (a slightly reduced height in iPhone-landscape),
 // but translation should center using the *real* stage height so we don't drift downward.
 const freeYTrue = usableH - stageH * s;
 
-// When content is taller than viewport (freeYTrue < 0), prefer showing the top
-const targetTy = freeYTrue >= 0 ? (offY + freeYTrue / 2) : offY;
-const minTy = offY;
-const maxTy = offY + vh - padT - padB - stageH * s;
+// Center in the padded safe-area box, then clamp so we never clip into safe-area.
+// When content is taller than viewport (freeYTrue < 0), prefer showing the top by using minTy
+const targetTy = freeYTrue >= 0 ? (offY + padT + freeYTrue / 2) : (offY + padT);
+const minTy = offY + padT;
+const maxTy = offY + (vh - padB) - stageH * s;
 const ty = Math.max(minTy, Math.min(maxTy, targetTy));
 
 root.classList.add('stageScaled');
@@ -3937,8 +3935,6 @@ window.KidSequencer = {
     document.body.style.height = 'auto';
     document.body.style.minHeight = 'calc(100vh + 200px)';
     void document.body.offsetHeight;
-    // Pre-scroll so Safari sees the page is already scrolled away from top
-    try{ window.scrollTo(0, 100); }catch(_){}
   }
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
@@ -4020,7 +4016,7 @@ window.KidSequencer = {
   // Grace frames: let first N touchmove frames through un-prevented in landscape
   // so Safari sees a real user scroll on the now-genuinely-scrollable document.
   let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 5;
+  const TOOLBAR_GRACE_FRAMES = 2;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4067,25 +4063,6 @@ window.KidSequencer = {
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
 
-      // In landscape during grace frames: do NOT zoom, just let the touch
-      // pass through as a native scroll so Safari collapses the toolbar.
-      // After grace period, re-snapshot the pinch state and start zooming.
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Update the initial snapshot each frame so when we start zooming
-        // after the grace period, we start from the current finger positions
-        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-        initialDist = dist(t0, t1);
-        initialScale = window.__customZoom.scale;
-        const mid = midpoint(t0, t1);
-        initialMidX = mid.x;
-        initialMidY = mid.y;
-        initialOffsetX = window.__customZoom.offsetX;
-        initialOffsetY = window.__customZoom.offsetY;
-        // Don't preventDefault — Safari needs these to detect a real scroll
-        return;
-      }
-
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4110,7 +4087,14 @@ window.KidSequencer = {
 
       clampOffsets(true);
       applyCustomZoom();
-      e.preventDefault();
+
+      // In landscape, let first frames through so Safari sees real scroll on
+      // the genuinely-scrollable document and collapses the toolbar.
+      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
+        // Don't preventDefault — Safari needs these to detect a real scroll
+      } else {
+        e.preventDefault();
+      }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
