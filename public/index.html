@@ -3415,7 +3415,8 @@ root.classList.add('stageScaled');
       const cz = window.__customZoom;
       const totalS = s * cz.scale;
       const czTx = tx + cz.offsetX;
-      const czTy = ty + cz.offsetY;
+      const scrollComp = (typeof scrollRoomActive !== 'undefined' && scrollRoomActive) ? window.scrollY : 0;
+      const czTy = ty + cz.offsetY - scrollComp;
       pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
     }
     // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
@@ -3913,32 +3914,87 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
-  // DEBUG
-  let zDbg = document.createElement('div');
-  zDbg.id = '__zdbg';
-  zDbg.setAttribute('style','position:fixed;bottom:0;left:0;background:rgba(0,0,0,0.9);color:lime;font:11px monospace;padding:6px;z-index:2147483647;pointer-events:none;white-space:pre;transform:none;');
-  document.documentElement.appendChild(zDbg);
-  let graceDbg = 0;
-  function updateDbg(extra){
+  // DEBUG LOGGER — logs to in-memory array, tiny share button to export
+  const __debugLog = [];
+  const __logMax = 2000; // max entries kept
+  let __logSeq = 0;
+  function dbgLog(event, extra){
     const cz = window.__customZoom;
     const ih = window.innerHeight, iw = window.innerWidth;
     const vv = window.visualViewport;
-    const vvh = vv ? vv.height : ih;
-    zDbg.textContent = `scale=${cz.scale.toFixed(3)} scrollY=${window.scrollY} scrollRoom=${scrollRoomActive}
-innerW=${iw} innerH=${ih} vvH=${vvh.toFixed(0)}
-docScrollH=${document.documentElement.scrollHeight}
-bodyMinH=${document.body.style.minHeight||'(none)'}
-pinch=${pinching} pan=${panning} grace=${graceDbg}
-${extra||''}`;
+    const entry = {
+      seq: __logSeq++,
+      t: Date.now(),
+      event,
+      scale: +cz.scale.toFixed(3),
+      oX: +cz.offsetX.toFixed(0),
+      oY: +cz.offsetY.toFixed(0),
+      scrollY: window.scrollY,
+      scrollRoom: scrollRoomActive,
+      iW: iw,
+      iH: ih,
+      vvH: vv ? +vv.height.toFixed(0) : ih,
+      docScrollH: document.documentElement.scrollHeight,
+      pinch: pinching,
+      pan: panning,
+      ...extra
+    };
+    __debugLog.push(entry);
+    if(__debugLog.length > __logMax) __debugLog.splice(0, __debugLog.length - __logMax);
   }
-  setInterval(() => updateDbg('idle'), 500);
 
-  // --- Landscape toolbar hide (v4 approach) ---
-  // Top+bottom spacers to create scroll room above and below.
-  // Pre-scroll to middle so user starts away from scrollTop=0.
-  // Scroll guard prevents reaching top (which re-shows toolbar).
-  let spacerTop = null;
-  let spacerBottom = null;
+  // Periodic idle logging (every 1s)
+  setInterval(() => dbgLog('idle'), 1000);
+
+  // Orientation/resize logging
+  window.addEventListener('resize', () => dbgLog('resize'), {passive:true});
+  window.addEventListener('orientationchange', () => dbgLog('orientationchange'), {passive:true});
+
+  // Share button — tiny dot in top-left corner
+  const __shareBtn = document.createElement('button');
+  __shareBtn.textContent = '📋';
+  __shareBtn.setAttribute('style','position:fixed;top:4px;left:4px;z-index:2147483647;font-size:16px;width:30px;height:30px;border-radius:50%;border:1px solid #666;background:rgba(0,0,0,0.5);cursor:pointer;opacity:0.4;padding:0;');
+  document.documentElement.appendChild(__shareBtn);
+  __shareBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const logText = __debugLog.map(e => {
+      const ts = new Date(e.t).toISOString().substr(11,12);
+      return `${e.seq} ${ts} ${e.event} s=${e.scale} oX=${e.oX} oY=${e.oY} sY=${e.scrollY} sR=${e.scrollRoom} ${e.iW}x${e.iH} vvH=${e.vvH} dSH=${e.docScrollH} p=${e.pinch} pn=${e.pan}` + 
+        (e.grace !== undefined ? ` g=${e.grace}` : '') +
+        (e.note ? ` [${e.note}]` : '');
+    }).join('\n');
+    
+    if(navigator.share) {
+      try {
+        const blob = new Blob([logText], {type:'text/plain'});
+        const file = new File([blob], 'zoom-debug-' + Date.now() + '.txt', {type:'text/plain'});
+        await navigator.share({ files: [file], title: 'Zoom Debug Log' });
+      } catch(err) {
+        // Fallback to share as text
+        try { await navigator.share({ text: logText, title: 'Zoom Debug Log' }); } catch(_){}
+      }
+    } else {
+      // Fallback: copy to clipboard
+      try { 
+        await navigator.clipboard.writeText(logText);
+        __shareBtn.textContent = '✅';
+        setTimeout(() => __shareBtn.textContent = '📋', 1500);
+      } catch(_) {
+        // Last resort: prompt
+        prompt('Copy log:', logText.substring(0, 2000));
+      }
+    }
+  });
+
+  // --- Landscape toolbar hide ---
+  // NO top spacer (that caused blank screen on reset).
+  // Only bottom spacer + body minHeight for scroll room.
+  // Pre-scroll to SCROLL_PAD on pinch start.
+  // Transform compensation: applyCustomZoom subtracts scrollY so page stays
+  // visually stable even though the document is scrolled.
+  // Scroll guard: prevents scrollY reaching 0 (which re-shows toolbar).
+  let spacer = null;
   let scrollRoomActive = false;
   const SCROLL_PAD = 500;
 
@@ -3947,23 +4003,14 @@ ${extra||''}`;
     if(scrollRoomActive) return;
     scrollRoomActive = true;
 
-    // Top spacer — first child of body
-    if(!spacerTop) {
-      spacerTop = document.createElement('div');
-      spacerTop.id = '__zoomSpacerTop';
-      spacerTop.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.insertBefore(spacerTop, document.body.firstChild);
+    // Bottom spacer only
+    if(!spacer) {
+      spacer = document.createElement('div');
+      spacer.id = '__zoomSpacer';
+      spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(spacer);
     }
-    spacerTop.style.height = SCROLL_PAD + 'px';
-
-    // Bottom spacer — end of body
-    if(!spacerBottom) {
-      spacerBottom = document.createElement('div');
-      spacerBottom.id = '__zoomSpacerBottom';
-      spacerBottom.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.appendChild(spacerBottom);
-    }
-    spacerBottom.style.height = SCROLL_PAD + 'px';
+    spacer.style.height = (SCROLL_PAD * 2) + 'px';
 
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
@@ -3971,15 +4018,14 @@ ${extra||''}`;
     document.body.style.minHeight = 'calc(100vh + ' + (SCROLL_PAD * 2) + 'px)';
     void document.body.offsetHeight;
 
-    // Pre-scroll to middle
+    // Pre-scroll to middle — transform compensation keeps page visually stable
     window.scrollTo(0, SCROLL_PAD);
   }
 
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
-    if(spacerTop) spacerTop.style.height = '0px';
-    if(spacerBottom) spacerBottom.style.height = '0px';
+    if(spacer) spacer.style.height = '0px';
     document.documentElement.style.height = '';
     document.documentElement.style.minHeight = '';
     document.body.style.height = '';
@@ -4014,7 +4060,9 @@ ${extra||''}`;
     const cz = window.__customZoom;
     const totalS = bt.s * cz.scale;
     const tx = bt.tx + cz.offsetX;
-    const ty = bt.ty + cz.offsetY;
+    // Compensate for document scroll so page doesn't jump
+    const scrollComp = scrollRoomActive ? window.scrollY : 0;
+    const ty = bt.ty + cz.offsetY - scrollComp;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4077,7 +4125,7 @@ ${extra||''}`;
 
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
-        updateDbg('touchstart landscape');
+        dbgLog('touchstart-landscape');
       } else {
         e.preventDefault();
       }
@@ -4095,7 +4143,7 @@ ${extra||''}`;
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
-      graceDbg = pinchMoveCount;
+      
 
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
@@ -4121,12 +4169,10 @@ ${extra||''}`;
       applyCustomZoom();
 
       if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — let Safari see real scroll
-        if(window.scrollY < 50) window.scrollTo(0, 50);
-        updateDbg('GRACE ' + pinchMoveCount);
+        dbgLog('grace', {grace: pinchMoveCount});
       } else {
         e.preventDefault();
-        if(pinchMoveCount < 20 || pinchMoveCount % 50 === 0) updateDbg('prevented');
+        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {grace: pinchMoveCount});
       }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
@@ -4143,33 +4189,26 @@ ${extra||''}`;
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
-        // If scale is very close to 1, snap back to 1
         if(window.__customZoom.scale < 1.05) {
           window.__customZoom.scale = 1;
           window.__customZoom.offsetX = 0;
           window.__customZoom.offsetY = 0;
+          removeLandscapeScrollRoom();
           applyCustomZoom();
-          // Unblock layout and trigger it to restore base position
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
-          removeLandscapeScrollRoom();
-          updateDbg('RESET to 1');
+          dbgLog('reset-to-1');
         } else {
-          // Final clamp to re-center if content fits in viewport
           clampOffsets(false);
           applyCustomZoom();
-          // Unblock layout (but it won't overwrite since we re-apply custom zoom in applyStageFit)
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-          
-          // In landscape, scroll room stays active while zoomed
-          updateDbg('ENDED zoomed');
+          dbgLog('ended-zoomed');
         }
       }
     }
     if(e.touches.length === 0) {
       panning = false;
       pinching = false;
-      // Safety: make sure layout is unblocked
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
     }
   }, {passive: true});
@@ -4179,12 +4218,16 @@ ${extra||''}`;
     panning = false;
   }, {passive: true});
 
-  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
+  // Scroll guard: while scroll room is active, prevent scrollY from getting
+  // too low (which would re-show the toolbar) or too high
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    if(window.scrollY < 100) {
+    if(window.scrollY < 50) {
+      dbgLog('scroll-guard', {note:'scrollY<50, jumping to SCROLL_PAD'});
       window.scrollTo(0, SCROLL_PAD);
+    }
+    if(window.__customZoom.scale > 1.02) {
+      applyCustomZoom();
     }
   }, {passive: true});
 
@@ -4199,9 +4242,10 @@ ${extra||''}`;
       window.__customZoom.scale = 1;
       window.__customZoom.offsetX = 0;
       window.__customZoom.offsetY = 0;
+      removeLandscapeScrollRoom();
       applyCustomZoom();
       if(window.scheduleLayout) window.scheduleLayout();
-      removeLandscapeScrollRoom();
+      dbgLog('doubletap-reset');
       lastTapTime = 0;
     } else {
       lastTapTime = now;
