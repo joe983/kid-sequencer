@@ -3914,32 +3914,58 @@ window.KidSequencer = {
   // --- Landscape toolbar hide helper ---
   // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
   // We combine two things: (1) make the document genuinely scrollable by overriding
-  // html/body height constraints and adding an in-flow spacer, and (2) let the first
+  // html/body height constraints and adding in-flow spacers, and (2) let the first
   // couple of touchmove frames through without preventDefault so Safari sees a real
   // user scroll on a scrollable document and collapses immediately.
-  let spacer = null;
+  //
+  // IMPORTANT: We add scroll room ABOVE and BELOW the content. Safari re-shows the
+  // toolbar when scrollTop reaches 0. By adding a spacer before the content and
+  // pre-scrolling to the middle, the user can never reach the true top.
+  let spacerTop = null;
+  let spacerBottom = null;
   let scrollRoomActive = false;
+  const SCROLL_PAD = 500; // px of scroll room above and below
+
   function ensureLandscapeScrollRoom(){
     if(window.innerWidth <= window.innerHeight) return;
     if(scrollRoomActive) return;
     scrollRoomActive = true;
-    if(!spacer) {
-      spacer = document.createElement('div');
-      spacer.id = '__zoomSpacer';
-      spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.appendChild(spacer);
+
+    // Top spacer — inserted as first child of body
+    if(!spacerTop) {
+      spacerTop = document.createElement('div');
+      spacerTop.id = '__zoomSpacerTop';
+      spacerTop.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.insertBefore(spacerTop, document.body.firstChild);
     }
-    spacer.style.height = '200px';
+    spacerTop.style.height = SCROLL_PAD + 'px';
+
+    // Bottom spacer — appended at end of body
+    if(!spacerBottom) {
+      spacerBottom = document.createElement('div');
+      spacerBottom.id = '__zoomSpacerBottom';
+      spacerBottom.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(spacerBottom);
+    }
+    spacerBottom.style.height = SCROLL_PAD + 'px';
+
+    // Override html/body height constraints so document is genuinely scrollable
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
-    document.body.style.minHeight = 'calc(100vh + 200px)';
+    document.body.style.minHeight = 'calc(100vh + ' + (SCROLL_PAD * 2) + 'px)';
     void document.body.offsetHeight;
+
+    // Pre-scroll to the middle so user starts away from scrollTop=0
+    // This prevents Safari from showing the toolbar when user scrolls up
+    window.scrollTo(0, SCROLL_PAD);
   }
+
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
-    if(spacer) spacer.style.height = '0px';
+    if(spacerTop) spacerTop.style.height = '0px';
+    if(spacerBottom) spacerBottom.style.height = '0px';
     document.documentElement.style.height = '';
     document.documentElement.style.minHeight = '';
     document.body.style.height = '';
@@ -4092,6 +4118,8 @@ window.KidSequencer = {
       // the genuinely-scrollable document and collapses the toolbar.
       if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
         // Don't preventDefault — Safari needs these to detect a real scroll
+        // But clamp scroll so user never reaches scrollTop=0 (which re-shows toolbar)
+        if(window.scrollY < 50) window.scrollTo(0, 50);
       } else {
         e.preventDefault();
       }
@@ -4142,6 +4170,16 @@ window.KidSequencer = {
   viewport.addEventListener('touchcancel', () => {
     pinching = false;
     panning = false;
+  }, {passive: true});
+
+  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
+  // because Safari re-shows the toolbar when it detects you're at the top.
+  window.addEventListener('scroll', () => {
+    if(!scrollRoomActive) return;
+    if(window.__customZoom.scale <= 1.02) return;
+    if(window.scrollY < 50) {
+      window.scrollTo(0, 50);
+    }
   }, {passive: true});
 
   // Double-tap to reset zoom
