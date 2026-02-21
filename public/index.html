@@ -3913,19 +3913,6 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
-  // DEBUG: zoom info overlay
-  let zDbg = document.createElement('div');
-  zDbg.id = '__zdbg';
-  zDbg.setAttribute('style','position:fixed;bottom:0;left:0;background:rgba(0,0,0,0.9);color:lime;font:11px monospace;padding:6px;z-index:2147483647;pointer-events:none;white-space:pre;transform:none;');
-  document.documentElement.appendChild(zDbg);
-  function updateZoomDebug(extra){
-    const cz = window.__customZoom;
-    zDbg.textContent = `scale=${cz.scale.toFixed(3)} oX=${cz.offsetX.toFixed(0)} oY=${cz.offsetY.toFixed(0)}
-scrollY=${window.scrollY} scrollRoom=${scrollRoomActive}
-pinch=${pinching} pan=${panning} graceFrame=${pinchMoveCount}
-${extra||''}`;
-  }
-
   // --- Landscape toolbar hide helper ---
   // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
   // We combine two things: (1) make the document genuinely scrollable by overriding
@@ -4031,7 +4018,7 @@ ${extra||''}`;
   // Grace frames: let first N touchmove frames through un-prevented in landscape
   // so Safari sees a real user scroll on the now-genuinely-scrollable document.
   let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 2;
+  const TOOLBAR_GRACE_FRAMES = 5;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4078,6 +4065,25 @@ ${extra||''}`;
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
 
+      // In landscape during grace frames: do NOT zoom, just let the touch
+      // pass through as a native scroll so Safari collapses the toolbar.
+      // After grace period, re-snapshot the pinch state and start zooming.
+      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
+        // Update the initial snapshot each frame so when we start zooming
+        // after the grace period, we start from the current finger positions
+        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        initialDist = dist(t0, t1);
+        initialScale = window.__customZoom.scale;
+        const mid = midpoint(t0, t1);
+        initialMidX = mid.x;
+        initialMidY = mid.y;
+        initialOffsetX = window.__customZoom.offsetX;
+        initialOffsetY = window.__customZoom.offsetY;
+        // Don't preventDefault — Safari needs these to detect a real scroll
+        return;
+      }
+
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4102,16 +4108,7 @@ ${extra||''}`;
 
       clampOffsets(true);
       applyCustomZoom();
-
-      // In landscape, let first frames through so Safari sees real scroll on
-      // the genuinely-scrollable document and collapses the toolbar.
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — Safari needs these to detect a real scroll
-        updateZoomDebug('GRACE frame ' + pinchMoveCount);
-      } else {
-        e.preventDefault();
-        updateZoomDebug('prevented');
-      }
+      e.preventDefault();
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
@@ -4137,7 +4134,6 @@ ${extra||''}`;
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
           removeLandscapeScrollRoom();
-          updateZoomDebug('RESET to 1');
         } else {
           // Final clamp to re-center if content fits in viewport
           clampOffsets(false);
@@ -4146,7 +4142,6 @@ ${extra||''}`;
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           
           // In landscape, scroll room stays active while zoomed
-          updateZoomDebug('ENDED zoomed');
         }
       }
     }
@@ -4162,9 +4157,6 @@ ${extra||''}`;
     pinching = false;
     panning = false;
   }, {passive: true});
-
-  // Periodic debug update
-  setInterval(() => updateZoomDebug('idle'), 500);
 
   // Double-tap to reset zoom
   let lastTapTime = 0;
