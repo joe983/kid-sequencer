@@ -3912,33 +3912,47 @@ window.KidSequencer = {
   const MAX_ZOOM = 2.2;
 
   // --- Landscape toolbar hide helper ---
-  // Safari hides its toolbar when content scrolls. With native zoom disabled,
-  // we need to create real scroll room and trigger a scroll when the user zooms in landscape.
+  // Safari collapses its toolbar on document-level scroll. The previous approach
+  // put the spacer inside #viewport, but window.scrollTo scrolls the *document*,
+  // not a div. Also html/body { height:100% } clamped the document so it couldn't scroll.
+  // Fix: append spacer to <body>, temporarily override height constraints,
+  // then scrollTo on the now-genuinely-scrollable document.
   let spacer = null;
+  let scrollRoomActive = false;
   function ensureLandscapeScrollRoom(){
-    if(window.innerWidth <= window.innerHeight) return; // portrait - skip
+    if(window.innerWidth <= window.innerHeight) return;
+    if(scrollRoomActive) return;
+    scrollRoomActive = true;
     if(!spacer) {
       spacer = document.createElement('div');
       spacer.id = '__zoomSpacer';
-      spacer.style.cssText = 'width:1px;height:1px;pointer-events:none;position:relative;';
-      viewport.appendChild(spacer);
+      // In-flow element on <body> so it extends document scroll height
+      spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(spacer);
     }
-    // Make spacer tall enough to extend past viewport bottom
-    const extra = 80;
-    spacer.style.height = extra + 'px';
-    spacer.style.marginTop = (window.innerHeight + 10) + 'px';
+    spacer.style.height = '200px';
+    // Override html/body height:100% so document can actually scroll
+    document.documentElement.style.height = 'auto';
+    document.documentElement.style.minHeight = '0';
+    document.body.style.height = 'auto';
+    document.body.style.minHeight = 'calc(100vh + 200px)';
+    // Force layout recalc
+    void document.body.offsetHeight;
   }
   function triggerToolbarHide(){
-    if(window.innerWidth <= window.innerHeight) return; // portrait - skip
+    if(window.innerWidth <= window.innerHeight) return;
     ensureLandscapeScrollRoom();
-    // Instant scroll (no smooth / no rAF) so Safari collapses the toolbar ASAP
-    try{ window.scrollTo(0, 1); }catch(_){ }
+    try{ window.scrollTo(0, 1); }catch(_){}
   }
   function removeLandscapeScrollRoom(){
-    if(spacer) {
-      spacer.style.height = '0px';
-      spacer.style.marginTop = '0px';
-    }
+    if(!scrollRoomActive) return;
+    scrollRoomActive = false;
+    if(spacer) spacer.style.height = '0px';
+    document.documentElement.style.height = '';
+    document.documentElement.style.minHeight = '';
+    document.body.style.height = '';
+    document.body.style.minHeight = '';
+    try{ window.scrollTo(0, 0); }catch(_){}
   }
 
   // Track active touches for pinch detection
@@ -4007,20 +4021,11 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  // --- Landscape toolbar-hide strategy ---
-  // Safari only collapses its toolbar when it sees a *real* (un-prevented) scroll.
-  // In landscape, we let the first few touchmove frames pass without preventDefault
-  // so Safari registers a native scroll and hides the toolbar, then we take over.
-  let pinchMoveCount = 0;        // how many touchmove frames since pinch started
-  const TOOLBAR_GRACE_FRAMES = 5; // let this many frames through un-prevented
-  function isLandscape(){ return window.innerWidth > window.innerHeight; }
-
   viewport.addEventListener('touchstart', (e) => {
     if(e.touches.length === 2) {
       // Start pinch
       pinching = true;
       panning = false;
-      pinchMoveCount = 0;
 
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4035,14 +4040,7 @@ window.KidSequencer = {
       initialOffsetX = window.__customZoom.offsetX;
       initialOffsetY = window.__customZoom.offsetY;
 
-      // In landscape: do NOT preventDefault on touchstart — let the browser
-      // think a scroll might be starting so it can collapse the toolbar.
-      // In portrait: prevent immediately (toolbar isn't an issue).
-      if(isLandscape()) {
-        ensureLandscapeScrollRoom();
-      } else {
-        e.preventDefault();
-      }
+      e.preventDefault();
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
@@ -4058,8 +4056,6 @@ window.KidSequencer = {
 
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
-      pinchMoveCount++;
-
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4088,17 +4084,11 @@ window.KidSequencer = {
 
       clampOffsets(true); // during active pinch - don't force centering
       applyCustomZoom();
-
-      // In landscape, let the first few frames pass un-prevented so Safari
-      // sees a real scroll gesture and collapses the toolbar.
-      // After the grace period, prevent to stop the page from actually scrolling.
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — let Safari see the native scroll
-        // Also nudge scroll position to help trigger toolbar collapse
-        try{ window.scrollTo(0, 1); }catch(_){}
-      } else {
-        e.preventDefault();
+      // In landscape, hide Safari toolbar as soon as user zooms in
+      if(window.innerWidth > window.innerHeight && newScale > 1.02) {
+        triggerToolbarHide();
       }
+      e.preventDefault();
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
