@@ -3912,33 +3912,60 @@ window.KidSequencer = {
   const MAX_ZOOM = 2.2;
 
   // --- Landscape toolbar hide helper ---
-  // Safari hides its toolbar when content scrolls. With native zoom disabled,
-  // we need to create real scroll room and trigger a scroll when the user zooms in landscape.
+  // Safari collapses its toolbar ONLY on *document-level* scroll (the main frame).
+  // We append an in-flow spacer to <body> to create real document scroll room,
+  // then programmatically scroll the document downward.
   let spacer = null;
   function ensureLandscapeScrollRoom(){
     if(window.innerWidth <= window.innerHeight) return; // portrait - skip
     if(!spacer) {
       spacer = document.createElement('div');
       spacer.id = '__zoomSpacer';
-      spacer.style.cssText = 'width:1px;height:1px;pointer-events:none;position:relative;';
-      viewport.appendChild(spacer);
+      // Must be in-flow (not absolute) so it actually extends <body> scroll height
+      // even when html/body have height:100%.
+      spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(spacer);
     }
-    // Make spacer tall enough to extend past viewport bottom
-    const extra = 80;
-    spacer.style.height = extra + 'px';
-    spacer.style.marginTop = (window.innerHeight + 10) + 'px';
+    // Enough height to create genuine scroll room beyond the viewport
+    spacer.style.height = '200px';
   }
   function triggerToolbarHide(){
     if(window.innerWidth <= window.innerHeight) return; // portrait - skip
     ensureLandscapeScrollRoom();
-    // Instant scroll (no smooth / no rAF) so Safari collapses the toolbar ASAP
-    try{ window.scrollTo(0, 1); }catch(_){ }
+
+    // Temporarily override html/body height constraints so the spacer
+    // actually makes the document taller than the viewport
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlH = html.style.height;
+    const prevBodyH = body.style.height;
+    const prevHtmlMinH = html.style.minHeight;
+    const prevBodyMinH = body.style.minHeight;
+
+    html.style.height = 'auto';
+    html.style.minHeight = '0';
+    body.style.height = 'auto';
+    body.style.minHeight = 'calc(100vh + 200px)';
+
+    // Force layout so the scroll height updates
+    void body.offsetHeight;
+
+    // Scroll down — this is what Safari watches to collapse the toolbar
+    window.scrollTo(0, 1);
+
+    // Restore after a short delay (toolbar animation takes ~300ms)
+    setTimeout(() => {
+      html.style.height = prevHtmlH;
+      html.style.minHeight = prevHtmlMinH;
+      body.style.height = prevBodyH;
+      body.style.minHeight = prevBodyMinH;
+    }, 400);
   }
   function removeLandscapeScrollRoom(){
     if(spacer) {
       spacer.style.height = '0px';
-      spacer.style.marginTop = '0px';
     }
+    try{ window.scrollTo(0, 0); }catch(_){}
   }
 
   // Track active touches for pinch detection
@@ -4007,12 +4034,6 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  // --- Landscape toolbar-hide strategy ---
-  // Safari only collapses its toolbar when it sees a *real* (un-prevented) scroll.
-  // In landscape, we let the first few touchmove frames pass without preventDefault
-  // so Safari registers a native scroll and hides the toolbar, then we take over.
-  let pinchMoveCount = 0;        // how many touchmove frames since pinch started
-  const TOOLBAR_GRACE_FRAMES = 5; // let this many frames through un-prevented
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4020,7 +4041,6 @@ window.KidSequencer = {
       // Start pinch
       pinching = true;
       panning = false;
-      pinchMoveCount = 0;
 
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4035,14 +4055,12 @@ window.KidSequencer = {
       initialOffsetX = window.__customZoom.offsetX;
       initialOffsetY = window.__customZoom.offsetY;
 
-      // In landscape: do NOT preventDefault on touchstart — let the browser
-      // think a scroll might be starting so it can collapse the toolbar.
-      // In portrait: prevent immediately (toolbar isn't an issue).
+      // In landscape, trigger toolbar hide immediately on pinch start
       if(isLandscape()) {
-        ensureLandscapeScrollRoom();
-      } else {
-        e.preventDefault();
+        triggerToolbarHide();
       }
+
+      e.preventDefault();
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
@@ -4058,8 +4076,6 @@ window.KidSequencer = {
 
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
-      pinchMoveCount++;
-
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4088,17 +4104,11 @@ window.KidSequencer = {
 
       clampOffsets(true); // during active pinch - don't force centering
       applyCustomZoom();
-
-      // In landscape, let the first few frames pass un-prevented so Safari
-      // sees a real scroll gesture and collapses the toolbar.
-      // After the grace period, prevent to stop the page from actually scrolling.
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — let Safari see the native scroll
-        // Also nudge scroll position to help trigger toolbar collapse
-        try{ window.scrollTo(0, 1); }catch(_){}
-      } else {
-        e.preventDefault();
+      // In landscape, keep trying to hide toolbar during pinch
+      if(isLandscape() && newScale > 1.02) {
+        triggerToolbarHide();
       }
+      e.preventDefault();
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
