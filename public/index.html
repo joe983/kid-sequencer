@@ -3914,33 +3914,22 @@ window.KidSequencer = {
   // --- Landscape toolbar hide helper ---
   // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
   // We combine two things: (1) make the document genuinely scrollable by overriding
-  // html/body height constraints and adding in-flow spacers, and (2) let the first
-  // couple of touchmove frames through without preventDefault so Safari sees a real
-  // user scroll on a scrollable document and collapses immediately.
+  // html/body height constraints, and (2) let the first couple of touchmove frames
+  // through without preventDefault so Safari sees a real user scroll.
   //
-  // IMPORTANT: We add scroll room ABOVE and BELOW the content. Safari re-shows the
-  // toolbar when scrollTop reaches 0. By adding a spacer before the content and
-  // pre-scrolling to the middle, the user can never reach the true top.
-  let spacerTop = null;
+  // Safari re-shows the toolbar when scrollTop reaches 0. To prevent this we add
+  // scroll room ABOVE via body padding-top (no visible element) and BELOW via a
+  // spacer, then pre-scroll into the middle.
   let spacerBottom = null;
   let scrollRoomActive = false;
-  const SCROLL_PAD = 500; // px of scroll room above and below
+  const SCROLL_PAD = 500;
 
   function ensureLandscapeScrollRoom(){
     if(window.innerWidth <= window.innerHeight) return;
     if(scrollRoomActive) return;
     scrollRoomActive = true;
 
-    // Top spacer — inserted as first child of body
-    if(!spacerTop) {
-      spacerTop = document.createElement('div');
-      spacerTop.id = '__zoomSpacerTop';
-      spacerTop.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.insertBefore(spacerTop, document.body.firstChild);
-    }
-    spacerTop.style.height = SCROLL_PAD + 'px';
-
-    // Bottom spacer — appended at end of body
+    // Bottom spacer
     if(!spacerBottom) {
       spacerBottom = document.createElement('div');
       spacerBottom.id = '__zoomSpacerBottom';
@@ -3949,27 +3938,27 @@ window.KidSequencer = {
     }
     spacerBottom.style.height = SCROLL_PAD + 'px';
 
-    // Override html/body height constraints so document is genuinely scrollable
+    // Override html/body height constraints and add top padding for scroll room
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
     document.body.style.minHeight = 'calc(100vh + ' + (SCROLL_PAD * 2) + 'px)';
+    document.body.style.paddingTop = SCROLL_PAD + 'px';
     void document.body.offsetHeight;
 
     // Pre-scroll to the middle so user starts away from scrollTop=0
-    // This prevents Safari from showing the toolbar when user scrolls up
     window.scrollTo(0, SCROLL_PAD);
   }
 
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
-    if(spacerTop) spacerTop.style.height = '0px';
     if(spacerBottom) spacerBottom.style.height = '0px';
     document.documentElement.style.height = '';
     document.documentElement.style.minHeight = '';
     document.body.style.height = '';
     document.body.style.minHeight = '';
+    document.body.style.paddingTop = '';
     try{ window.scrollTo(0, 0); }catch(_){}
   }
 
