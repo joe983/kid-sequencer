@@ -3302,21 +3302,8 @@ function importGridFromDataUrl(dataUrl){
     requestAnimationFrame(() => {
       try{ fitToViewport(); }catch(e){}
       try{ scheduleLayout(); }catch(e){}
-      // Force scroll reset — Safari can restore scroll position after layout
-      try{ if(viewportEl){ viewportEl.scrollLeft = 0; viewportEl.scrollTop = 0; } }catch(e){}
-      try{ window.scrollTo(0, 0); }catch(e){}
       // One last safety pass for slow iOS UI settling
-      setTimeout(() => {
-        try{ scheduleLayout(); }catch(e){}
-        // Final scroll reset after everything has settled
-        try{ if(viewportEl){ viewportEl.scrollLeft = 0; viewportEl.scrollTop = 0; } }catch(e){}
-        try{ window.scrollTo(0, 0); }catch(e){}
-      }, 150);
-      // Extra delayed reset for stubborn Safari scroll restoration
-      setTimeout(() => {
-        try{ if(viewportEl){ viewportEl.scrollLeft = 0; viewportEl.scrollTop = 0; } }catch(e){}
-        try{ window.scrollTo(0, 0); }catch(e){}
-      }, 500);
+      setTimeout(() => { try{ scheduleLayout(); }catch(e){} }, 150);
     });
   }
 
@@ -3417,6 +3404,17 @@ root.classList.add('stageScaled');
     pageEl.style.minHeight = stageH + 'px';
 
     pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+
+    // DEBUG: show centering values
+    let dbg = document.getElementById('__dbg');
+    if(!dbg){ dbg = document.createElement('div'); dbg.id='__dbg'; dbg.style.cssText='position:fixed;top:0;left:0;background:rgba(0,0,0,0.85);color:#0f0;font:11px monospace;padding:6px;z-index:99999;pointer-events:none;white-space:pre;'; document.body.appendChild(dbg); }
+    dbg.textContent = `vw=${vw.toFixed(0)} vh=${vh.toFixed(0)} offX=${offX.toFixed(1)} offY=${offY.toFixed(1)}
+padL=${padL.toFixed(0)} padR=${padR.toFixed(0)} padT=${padT.toFixed(0)} padB=${padB.toFixed(0)}
+usableW=${usableW.toFixed(0)} usableH=${usableH.toFixed(0)}
+stageW=${stageW} stageH=${stageH} s=${s.toFixed(4)}
+scaledW=${(stageW*s).toFixed(0)} targetTx=${targetTx.toFixed(1)} minTx=${minTx.toFixed(1)} maxTx=${maxTx.toFixed(1)}
+tx=${tx.toFixed(1)} ty=${ty.toFixed(1)}
+vpScrollL=${viewportEl?viewportEl.scrollLeft:'-'} winScrollX=${window.scrollX}`;
 
     // Store base transform for the custom pinch-zoom handler to compound onto
     window.__baseTransform = { tx, ty, s, stageW, stageH };
