@@ -3913,29 +3913,6 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
-  // DEBUG
-  let zDbg = document.createElement('div');
-  zDbg.id = '__zdbg';
-  zDbg.setAttribute('style','position:fixed;bottom:0;left:0;background:rgba(0,0,0,0.9);color:lime;font:11px monospace;padding:6px;z-index:2147483647;pointer-events:none;white-space:pre;transform:none;');
-  document.documentElement.appendChild(zDbg);
-  let pinchMoveCountDbg = 0;
-  function updateZDbg(extra){
-    const cz = window.__customZoom;
-    const iw = window.innerWidth, ih = window.innerHeight;
-    const vv = window.visualViewport;
-    const vvh = vv ? vv.height : ih;
-    // Toolbar visible if innerHeight < screen.height in landscape
-    const tbVisible = (ih < screen.height && iw > ih) ? 'YES' : 'no';
-    zDbg.textContent = `scale=${cz.scale.toFixed(3)} scrollY=${window.scrollY} scrollRoom=${scrollRoomActive}
-innerW=${iw} innerH=${ih} vvH=${vvh.toFixed(0)}
-screen=${screen.width}x${screen.height} tbVisible=${tbVisible}
-docScrollH=${document.documentElement.scrollHeight}
-bodyMinH=${document.body.style.minHeight||'(none)'}
-pinch=${pinching} pan=${panning} grace=${pinchMoveCountDbg}
-${extra||''}`;
-  }
-  setInterval(() => updateZDbg('idle'), 500);
-
   // --- Landscape toolbar hide helper ---
   // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
   // We combine two things: (1) make the document genuinely scrollable by overriding
@@ -3960,6 +3937,8 @@ ${extra||''}`;
     document.body.style.height = 'auto';
     document.body.style.minHeight = 'calc(100vh + 200px)';
     void document.body.offsetHeight;
+    // Pre-scroll so Safari sees the page is already scrolled away from top
+    try{ window.scrollTo(0, 100); }catch(_){}
   }
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
@@ -4087,7 +4066,6 @@ ${extra||''}`;
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
-      pinchMoveCountDbg = pinchMoveCount;
 
       // In landscape during grace frames: do NOT zoom, just let the touch
       // pass through as a native scroll so Safari collapses the toolbar.
@@ -4105,7 +4083,6 @@ ${extra||''}`;
         initialOffsetX = window.__customZoom.offsetX;
         initialOffsetY = window.__customZoom.offsetY;
         // Don't preventDefault — Safari needs these to detect a real scroll
-        updateZDbg('GRACE ' + pinchMoveCount);
         return;
       }
 
