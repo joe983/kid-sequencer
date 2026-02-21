@@ -3302,8 +3302,6 @@ function importGridFromDataUrl(dataUrl){
     requestAnimationFrame(() => {
       try{ fitToViewport(); }catch(e){}
       try{ scheduleLayout(); }catch(e){}
-      // Activate landscape scroll room if already in landscape
-      if(typeof window.__checkLandscapeScrollRoom === 'function') window.__checkLandscapeScrollRoom();
       // One last safety pass for slow iOS UI settling
       setTimeout(() => { try{ scheduleLayout(); }catch(e){} }, 150);
     });
@@ -3526,8 +3524,6 @@ root.classList.add('stageScaled');
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if(!isZooming && !toolbarTransitioning) trigger();
-      // Activate/deactivate landscape scroll room
-      if(typeof window.__checkLandscapeScrollRoom === 'function') window.__checkLandscapeScrollRoom();
     }, 150);
   }, {passive:true});
   
@@ -3536,8 +3532,6 @@ root.classList.add('stageScaled');
       handleZoomChange();
       handleViewportHeightChange();
       if(!isZooming && !toolbarTransitioning) trigger();
-      // Activate/deactivate landscape scroll room
-      if(typeof window.__checkLandscapeScrollRoom === 'function') window.__checkLandscapeScrollRoom();
     }, 300);
   }, {passive:true});
   
@@ -3919,10 +3913,35 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
+  // DEBUG
+  let zDbg = document.createElement('div');
+  zDbg.id = '__zdbg';
+  zDbg.setAttribute('style','position:fixed;bottom:0;left:0;background:rgba(0,0,0,0.9);color:lime;font:11px monospace;padding:6px;z-index:2147483647;pointer-events:none;white-space:pre;transform:none;');
+  document.documentElement.appendChild(zDbg);
+  let pinchMoveCountDbg = 0;
+  function updateZDbg(extra){
+    const cz = window.__customZoom;
+    const iw = window.innerWidth, ih = window.innerHeight;
+    const vv = window.visualViewport;
+    const vvh = vv ? vv.height : ih;
+    // Toolbar visible if innerHeight < screen.height in landscape
+    const tbVisible = (ih < screen.height && iw > ih) ? 'YES' : 'no';
+    zDbg.textContent = `scale=${cz.scale.toFixed(3)} scrollY=${window.scrollY} scrollRoom=${scrollRoomActive}
+innerW=${iw} innerH=${ih} vvH=${vvh.toFixed(0)}
+screen=${screen.width}x${screen.height} tbVisible=${tbVisible}
+docScrollH=${document.documentElement.scrollHeight}
+bodyMinH=${document.body.style.minHeight||'(none)'}
+pinch=${pinching} pan=${panning} grace=${pinchMoveCountDbg}
+${extra||''}`;
+  }
+  setInterval(() => updateZDbg('idle'), 500);
+
   // --- Landscape toolbar hide helper ---
-  // Safari sometimes auto-hides the toolbar when rotating to landscape if the
-  // page is already scrollable and scrolled. Strategy: ALWAYS activate scroll room
-  // in landscape (not just on pinch), so the toolbar stays hidden.
+  // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
+  // We combine two things: (1) make the document genuinely scrollable by overriding
+  // html/body height constraints and adding an in-flow spacer, and (2) let the first
+  // couple of touchmove frames through without preventDefault so Safari sees a real
+  // user scroll on a scrollable document and collapses immediately.
   let spacer = null;
   let scrollRoomActive = false;
   function ensureLandscapeScrollRoom(){
@@ -3941,8 +3960,6 @@ window.KidSequencer = {
     document.body.style.height = 'auto';
     document.body.style.minHeight = 'calc(100vh + 200px)';
     void document.body.offsetHeight;
-    // Pre-scroll so Safari sees the page is already scrolled
-    try{ window.scrollTo(0, 1); }catch(_){}
   }
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
@@ -3954,20 +3971,6 @@ window.KidSequencer = {
     document.body.style.minHeight = '';
     try{ window.scrollTo(0, 0); }catch(_){}
   }
-
-  // Auto-activate scroll room whenever we're in landscape
-  function checkLandscapeScrollRoom(){
-    if(window.innerWidth > window.innerHeight) {
-      ensureLandscapeScrollRoom();
-    } else {
-      // Portrait: only remove if not zoomed
-      if(!window.__customZoom || window.__customZoom.scale <= 1.02) {
-        removeLandscapeScrollRoom();
-      }
-    }
-  }
-  // Expose so the resize/orientation handlers can call it
-  window.__checkLandscapeScrollRoom = checkLandscapeScrollRoom;
 
   // Track active touches for pinch detection
   let touches = {};      // pointerId -> {x, y}
@@ -4035,6 +4038,10 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
+  // Grace frames: let first N touchmove frames through un-prevented in landscape
+  // so Safari sees a real user scroll on the now-genuinely-scrollable document.
+  let pinchMoveCount = 0;
+  const TOOLBAR_GRACE_FRAMES = 5;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4042,6 +4049,7 @@ window.KidSequencer = {
       // Start pinch
       pinching = true;
       panning = false;
+      pinchMoveCount = 0;
 
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4056,7 +4064,13 @@ window.KidSequencer = {
       initialOffsetX = window.__customZoom.offsetX;
       initialOffsetY = window.__customZoom.offsetY;
 
-      e.preventDefault();
+      if(isLandscape()) {
+        // Make document scrollable BEFORE the first touchmove arrives
+        ensureLandscapeScrollRoom();
+        // Don't preventDefault — let Safari see a potential scroll starting
+      } else {
+        e.preventDefault();
+      }
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
@@ -4072,6 +4086,29 @@ window.KidSequencer = {
 
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
+      pinchMoveCount++;
+      pinchMoveCountDbg = pinchMoveCount;
+
+      // In landscape during grace frames: do NOT zoom, just let the touch
+      // pass through as a native scroll so Safari collapses the toolbar.
+      // After grace period, re-snapshot the pinch state and start zooming.
+      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
+        // Update the initial snapshot each frame so when we start zooming
+        // after the grace period, we start from the current finger positions
+        const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
+        initialDist = dist(t0, t1);
+        initialScale = window.__customZoom.scale;
+        const mid = midpoint(t0, t1);
+        initialMidX = mid.x;
+        initialMidY = mid.y;
+        initialOffsetX = window.__customZoom.offsetX;
+        initialOffsetY = window.__customZoom.offsetY;
+        // Don't preventDefault — Safari needs these to detect a real scroll
+        updateZDbg('GRACE ' + pinchMoveCount);
+        return;
+      }
+
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4159,16 +4196,12 @@ window.KidSequencer = {
       window.__customZoom.offsetY = 0;
       applyCustomZoom();
       if(window.scheduleLayout) window.scheduleLayout();
-      // Don't remove scroll room — keep it active in landscape
-      checkLandscapeScrollRoom();
+      removeLandscapeScrollRoom();
       lastTapTime = 0;
     } else {
       lastTapTime = now;
     }
   }, {passive: true});
-
-  // Activate scroll room immediately if already in landscape on load
-  checkLandscapeScrollRoom();
 })();
 </script>
 <style>
