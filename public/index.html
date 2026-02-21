@@ -3912,11 +3912,11 @@ window.KidSequencer = {
   const MAX_ZOOM = 2.2;
 
   // --- Landscape toolbar hide helper ---
-  // Safari collapses its toolbar on document-level scroll. The previous approach
-  // put the spacer inside #viewport, but window.scrollTo scrolls the *document*,
-  // not a div. Also html/body { height:100% } clamped the document so it couldn't scroll.
-  // Fix: append spacer to <body>, temporarily override height constraints,
-  // then scrollTo on the now-genuinely-scrollable document.
+  // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
+  // We combine two things: (1) make the document genuinely scrollable by overriding
+  // html/body height constraints and adding an in-flow spacer, and (2) let the first
+  // couple of touchmove frames through without preventDefault so Safari sees a real
+  // user scroll on a scrollable document and collapses immediately.
   let spacer = null;
   let scrollRoomActive = false;
   function ensureLandscapeScrollRoom(){
@@ -3926,23 +3926,15 @@ window.KidSequencer = {
     if(!spacer) {
       spacer = document.createElement('div');
       spacer.id = '__zoomSpacer';
-      // In-flow element on <body> so it extends document scroll height
       spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
       document.body.appendChild(spacer);
     }
     spacer.style.height = '200px';
-    // Override html/body height:100% so document can actually scroll
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
     document.body.style.minHeight = 'calc(100vh + 200px)';
-    // Force layout recalc
     void document.body.offsetHeight;
-  }
-  function triggerToolbarHide(){
-    if(window.innerWidth <= window.innerHeight) return;
-    ensureLandscapeScrollRoom();
-    try{ window.scrollTo(0, 1); }catch(_){}
   }
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
@@ -4021,11 +4013,18 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
+  // Grace frames: let first N touchmove frames through un-prevented in landscape
+  // so Safari sees a real user scroll on the now-genuinely-scrollable document.
+  let pinchMoveCount = 0;
+  const TOOLBAR_GRACE_FRAMES = 2;
+  function isLandscape(){ return window.innerWidth > window.innerHeight; }
+
   viewport.addEventListener('touchstart', (e) => {
     if(e.touches.length === 2) {
       // Start pinch
       pinching = true;
       panning = false;
+      pinchMoveCount = 0;
 
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4040,7 +4039,13 @@ window.KidSequencer = {
       initialOffsetX = window.__customZoom.offsetX;
       initialOffsetY = window.__customZoom.offsetY;
 
-      e.preventDefault();
+      if(isLandscape()) {
+        // Make document scrollable BEFORE the first touchmove arrives
+        ensureLandscapeScrollRoom();
+        // Don't preventDefault — let Safari see a potential scroll starting
+      } else {
+        e.preventDefault();
+      }
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
@@ -4056,6 +4061,8 @@ window.KidSequencer = {
 
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
+      pinchMoveCount++;
+
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       const newDist = dist(t0, t1);
@@ -4069,32 +4076,31 @@ window.KidSequencer = {
       // Adjust offset so the pinch midpoint stays stable
       const bt = window.__baseTransform;
       if(bt) {
-        // How much the midpoint shifted in screen pixels
         const midDx = mid.x - initialMidX;
         const midDy = mid.y - initialMidY;
-
-        // Zoom toward pinch center: shift offset proportionally to scale change
         const scaleRatio = newScale / initialScale;
         const originX = initialMidX - bt.tx - initialOffsetX;
         const originY = initialMidY - bt.ty - initialOffsetY;
-
         window.__customZoom.offsetX = initialOffsetX + midDx + originX * (1 - scaleRatio);
         window.__customZoom.offsetY = initialOffsetY + midDy + originY * (1 - scaleRatio);
       }
 
-      clampOffsets(true); // during active pinch - don't force centering
+      clampOffsets(true);
       applyCustomZoom();
-      // In landscape, hide Safari toolbar as soon as user zooms in
-      if(window.innerWidth > window.innerHeight && newScale > 1.02) {
-        triggerToolbarHide();
+
+      // In landscape, let first frames through so Safari sees real scroll on
+      // the genuinely-scrollable document and collapses the toolbar.
+      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
+        // Don't preventDefault — Safari needs these to detect a real scroll
+      } else {
+        e.preventDefault();
       }
-      e.preventDefault();
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
       window.__customZoom.offsetX = panStartOffsetX + dx;
       window.__customZoom.offsetY = panStartOffsetY + dy;
-      clampOffsets(false); // during pan - allow centering
+      clampOffsets(false);
       applyCustomZoom();
       e.preventDefault();
     }
@@ -4121,8 +4127,7 @@ window.KidSequencer = {
           // Unblock layout (but it won't overwrite since we re-apply custom zoom in applyStageFit)
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           
-          // In landscape, trigger Safari toolbar hide
-          triggerToolbarHide();
+          // In landscape, scroll room stays active while zoomed
         }
       }
     }
