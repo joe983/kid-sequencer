@@ -4012,7 +4012,7 @@ window.KidSequencer = {
   // In landscape, we let the first few touchmove frames pass without preventDefault
   // so Safari registers a native scroll and hides the toolbar, then we take over.
   let pinchMoveCount = 0;        // how many touchmove frames since pinch started
-  const TOOLBAR_GRACE_FRAMES = 3; // let this many frames through un-prevented
+  const TOOLBAR_GRACE_FRAMES = 5; // let this many frames through un-prevented
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
