@@ -3413,7 +3413,9 @@ root.classList.add('stageScaled');
       const cz = window.__customZoom;
       const totalS = s * cz.scale;
       const czTx = tx + cz.offsetX;
-      const czTy = ty + cz.offsetY;
+      // Compensate for document scroll when scroll room is active
+      const scrollComp = (typeof scrollRoomActive !== 'undefined' && scrollRoomActive) ? window.scrollY : 0;
+      const czTy = ty + cz.offsetY - scrollComp;
       pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
     }
     // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
@@ -3913,37 +3915,20 @@ window.KidSequencer = {
 
   // --- Landscape toolbar hide helper ---
   // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
-  // Strategy:
-  //   1. Make the document tall (body minHeight) so it's genuinely scrollable
-  //   2. Offset #viewport upward by SCROLL_PAD via transform so it visually stays in place
-  //   3. Pre-scroll to SCROLL_PAD so the viewport appears at the top of the screen
-  //   4. Let first 2 pinch-move frames through un-prevented → Safari sees real scroll → toolbar hides
-  //   5. Scroll guard prevents scrollTop from reaching 0 (which would re-show toolbar)
-  //
-  // This avoids inserting spacer elements before #viewport which would break layout centering.
+  // Minimal approach: just make the body tall so it's scrollable, let grace frames
+  // through, and compensate for any scroll offset in applyCustomZoom so the page
+  // doesn't visually jump. No spacers, no margin hacks, no viewport modifications.
   let scrollRoomActive = false;
-  const SCROLL_PAD = 500;
 
   function ensureLandscapeScrollRoom(){
     if(window.innerWidth <= window.innerHeight) return;
     if(scrollRoomActive) return;
     scrollRoomActive = true;
-
-    // Make document genuinely scrollable
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
-    document.body.style.minHeight = (window.innerHeight + SCROLL_PAD * 2) + 'px';
-
-    // Offset viewport upward so it visually stays at the same screen position
-    // even though the document now has SCROLL_PAD pixels of scroll room above.
-    // Use margin-top (not transform) to avoid creating a new stacking context.
-    viewport.style.marginTop = '-' + SCROLL_PAD + 'px';
-
+    document.body.style.minHeight = (window.innerHeight + 400) + 'px';
     void document.body.offsetHeight;
-
-    // Pre-scroll into the middle — viewport appears at screen top
-    window.scrollTo(0, SCROLL_PAD);
   }
 
   function removeLandscapeScrollRoom(){
@@ -3953,7 +3938,6 @@ window.KidSequencer = {
     document.documentElement.style.minHeight = '';
     document.body.style.height = '';
     document.body.style.minHeight = '';
-    viewport.style.marginTop = '';
     try{ window.scrollTo(0, 0); }catch(_){}
   }
 
@@ -3984,7 +3968,10 @@ window.KidSequencer = {
     const cz = window.__customZoom;
     const totalS = bt.s * cz.scale;
     const tx = bt.tx + cz.offsetX;
-    const ty = bt.ty + cz.offsetY;
+    // Compensate for any document scroll so the page doesn't visually jump
+    // when grace frames allow native scroll to happen
+    const scrollComp = scrollRoomActive ? window.scrollY : 0;
+    const ty = bt.ty + cz.offsetY - scrollComp;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4098,7 +4085,7 @@ window.KidSequencer = {
 
       // In landscape, let first frames through so Safari sees real scroll
       if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — Safari needs these to detect a real scroll
+        // Don't preventDefault — Safari needs to detect a real scroll
       } else {
         e.preventDefault();
       }
@@ -4149,16 +4136,6 @@ window.KidSequencer = {
   viewport.addEventListener('touchcancel', () => {
     pinching = false;
     panning = false;
-  }, {passive: true});
-
-  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
-  // because Safari re-shows the toolbar when it detects you're at the top.
-  window.addEventListener('scroll', () => {
-    if(!scrollRoomActive) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    if(window.scrollY < 100) {
-      window.scrollTo(0, SCROLL_PAD);
-    }
   }, {passive: true});
 
   // Double-tap to reset zoom
