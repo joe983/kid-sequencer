@@ -3415,8 +3415,7 @@ root.classList.add('stageScaled');
       const cz = window.__customZoom;
       const totalS = s * cz.scale;
       const czTx = tx + cz.offsetX;
-      const scrollComp = (typeof scrollRoomActive !== 'undefined' && scrollRoomActive) ? window.scrollY : 0;
-      const czTy = ty + cz.offsetY - scrollComp;
+      const czTy = ty + cz.offsetY;
       pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
     }
     // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
@@ -3914,75 +3913,106 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
-  // DEBUG LOGGER — logs to in-memory array, persisted to sessionStorage
-  let __debugLog = [];
-  const __logMax = 2000;
-  let __logSeq = 0;
-  
-  // Restore from sessionStorage on load
-  try {
-    const saved = sessionStorage.getItem('__zoomDebugLog');
-    if(saved) {
-      __debugLog = JSON.parse(saved);
-      __logSeq = __debugLog.length ? (__debugLog[__debugLog.length-1].seq + 1) : 0;
+  // FIRESTORE DEBUG LOGGER
+  // Writes debug events to Firestore collection 'zoomDebug' in batches
+  let __fbDb = null;
+  let __fbLogBuf = [];
+  let __fbSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2,4);
+  let __fbSeq = 0;
+  let __fbFlushTimer = null;
+
+  // Init Firebase for logging
+  (async function(){
+    try {
+      const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+      const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      // Use named app to avoid conflict with main app init
+      let app;
+      try { app = getApp('dbgLog'); } catch(_) {
+        app = initializeApp({
+          apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
+          authDomain: "kid-sequencer.firebaseapp.com",
+          projectId: "kid-sequencer",
+          storageBucket: "kid-sequencer.firebasestorage.app",
+          messagingSenderId: "715996068165",
+          appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
+        }, 'dbgLog');
+      }
+      __fbDb = getFirestore(app);
+      dbgLog('LOGGER-READY');
+    } catch(e) {
+      console.warn('Debug logger init failed', e);
     }
-  } catch(_){}
+  })();
+
+  async function __fbFlush(){
+    if(!__fbDb || __fbLogBuf.length === 0) return;
+    const batch = __fbLogBuf.splice(0, __fbLogBuf.length);
+    try {
+      const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+      await addDoc(collection(__fbDb, 'zoomDebug'), {
+        sessionId: __fbSessionId,
+        ts: Date.now(),
+        entries: batch
+      });
+    } catch(e) {
+      // Put them back if write failed
+      __fbLogBuf.unshift(...batch);
+      console.warn('Debug flush failed', e);
+    }
+  }
 
   function dbgLog(event, extra){
     const cz = window.__customZoom;
     const ih = window.innerHeight, iw = window.innerWidth;
     const vv = window.visualViewport;
     const entry = {
-      seq: __logSeq++,
+      seq: __fbSeq++,
       t: Date.now(),
-      event,
-      scale: +cz.scale.toFixed(3),
+      event: event,
+      s: +cz.scale.toFixed(3),
       oX: +cz.offsetX.toFixed(0),
       oY: +cz.offsetY.toFixed(0),
-      scrollY: window.scrollY,
-      scrollRoom: scrollRoomActive,
+      sY: window.scrollY,
+      sR: scrollRoomActive,
       iW: iw,
       iH: ih,
       vvH: vv ? +vv.height.toFixed(0) : ih,
-      docScrollH: document.documentElement.scrollHeight,
-      pinch: pinching,
-      pan: panning,
-      ...extra
+      dSH: document.documentElement.scrollHeight
     };
-    __debugLog.push(entry);
-    if(__debugLog.length > __logMax) __debugLog.splice(0, __debugLog.length - __logMax);
-    // Persist every 10 entries
-    if(__logSeq % 10 === 0) {
-      try { sessionStorage.setItem('__zoomDebugLog', JSON.stringify(__debugLog)); } catch(_){}
+    if(extra) Object.assign(entry, extra);
+    __fbLogBuf.push(entry);
+
+    // Flush every 3 seconds (batched to reduce writes)
+    if(!__fbFlushTimer) {
+      __fbFlushTimer = setTimeout(() => {
+        __fbFlushTimer = null;
+        __fbFlush();
+      }, 3000);
     }
   }
 
-  // Save on page unload too
-  window.addEventListener('beforeunload', () => {
-    try { sessionStorage.setItem('__zoomDebugLog', JSON.stringify(__debugLog)); } catch(_){}
+  // Flush on page unload
+  window.addEventListener('beforeunload', () => __fbFlush());
+  // Also flush on visibility change (when switching tabs/apps on iOS)
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'hidden') __fbFlush();
   });
 
-  // Log page load/refresh
+  // Periodic idle log (every 2s)
+  setInterval(() => dbgLog('idle'), 2000);
+  // Orientation/resize
+  window.addEventListener('resize', () => dbgLog('resize'), {passive:true});
+  window.addEventListener('orientationchange', () => dbgLog('orient'), {passive:true});
+  
   dbgLog('PAGE-LOAD');
 
-  // Periodic idle logging (every 1s)
-  setInterval(() => dbgLog('idle'), 1000);
-
-  // Orientation/resize logging
-  window.addEventListener('resize', () => dbgLog('resize'), {passive:true});
-  window.addEventListener('orientationchange', () => dbgLog('orientationchange'), {passive:true});
-
-  // Expose log array for standalone share button
-  window.__debugLog = __debugLog;
-
-  // --- Landscape toolbar hide ---
-  // NO top spacer (that caused blank screen on reset).
-  // Only bottom spacer + body minHeight for scroll room.
-  // Pre-scroll to SCROLL_PAD on pinch start.
-  // Transform compensation: applyCustomZoom subtracts scrollY so page stays
-  // visually stable even though the document is scrolled.
-  // Scroll guard: prevents scrollY reaching 0 (which re-shows toolbar).
-  let spacer = null;
+  // --- Landscape toolbar hide (v4 approach) ---
+  // Top+bottom spacers to create scroll room above and below.
+  // Pre-scroll to middle so user starts away from scrollTop=0.
+  // Scroll guard prevents reaching top (which re-shows toolbar).
+  let spacerTop = null;
+  let spacerBottom = null;
   let scrollRoomActive = false;
   const SCROLL_PAD = 500;
 
@@ -3991,14 +4021,23 @@ window.KidSequencer = {
     if(scrollRoomActive) return;
     scrollRoomActive = true;
 
-    // Bottom spacer only
-    if(!spacer) {
-      spacer = document.createElement('div');
-      spacer.id = '__zoomSpacer';
-      spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.appendChild(spacer);
+    // Top spacer — first child of body
+    if(!spacerTop) {
+      spacerTop = document.createElement('div');
+      spacerTop.id = '__zoomSpacerTop';
+      spacerTop.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.insertBefore(spacerTop, document.body.firstChild);
     }
-    spacer.style.height = (SCROLL_PAD * 2) + 'px';
+    spacerTop.style.height = SCROLL_PAD + 'px';
+
+    // Bottom spacer — end of body
+    if(!spacerBottom) {
+      spacerBottom = document.createElement('div');
+      spacerBottom.id = '__zoomSpacerBottom';
+      spacerBottom.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(spacerBottom);
+    }
+    spacerBottom.style.height = SCROLL_PAD + 'px';
 
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
@@ -4006,14 +4045,15 @@ window.KidSequencer = {
     document.body.style.minHeight = 'calc(100vh + ' + (SCROLL_PAD * 2) + 'px)';
     void document.body.offsetHeight;
 
-    // Pre-scroll to middle — transform compensation keeps page visually stable
+    // Pre-scroll to middle
     window.scrollTo(0, SCROLL_PAD);
   }
 
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
-    if(spacer) spacer.style.height = '0px';
+    if(spacerTop) spacerTop.style.height = '0px';
+    if(spacerBottom) spacerBottom.style.height = '0px';
     document.documentElement.style.height = '';
     document.documentElement.style.minHeight = '';
     document.body.style.height = '';
@@ -4048,9 +4088,7 @@ window.KidSequencer = {
     const cz = window.__customZoom;
     const totalS = bt.s * cz.scale;
     const tx = bt.tx + cz.offsetX;
-    // Compensate for document scroll so page doesn't jump
-    const scrollComp = scrollRoomActive ? window.scrollY : 0;
-    const ty = bt.ty + cz.offsetY - scrollComp;
+    const ty = bt.ty + cz.offsetY;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4113,7 +4151,7 @@ window.KidSequencer = {
 
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
-        dbgLog('touchstart-landscape');
+        dbgLog('ts-land');
       } else {
         e.preventDefault();
       }
@@ -4157,10 +4195,12 @@ window.KidSequencer = {
       applyCustomZoom();
 
       if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        dbgLog('grace', {grace: pinchMoveCount});
+        // Don't preventDefault — let Safari see real scroll
+        if(window.scrollY < 50) window.scrollTo(0, 50);
+        dbgLog('grace', {g: pinchMoveCount});
       } else {
         e.preventDefault();
-        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {grace: pinchMoveCount});
+        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
       }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
@@ -4177,26 +4217,33 @@ window.KidSequencer = {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
+        // If scale is very close to 1, snap back to 1
         if(window.__customZoom.scale < 1.05) {
           window.__customZoom.scale = 1;
           window.__customZoom.offsetX = 0;
           window.__customZoom.offsetY = 0;
-          removeLandscapeScrollRoom();
           applyCustomZoom();
+          // Unblock layout and trigger it to restore base position
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
-          dbgLog('reset-to-1');
+          removeLandscapeScrollRoom();
+          dbgLog('reset');
         } else {
+          // Final clamp to re-center if content fits in viewport
           clampOffsets(false);
           applyCustomZoom();
+          // Unblock layout (but it won't overwrite since we re-apply custom zoom in applyStageFit)
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-          dbgLog('ended-zoomed');
+          
+          // In landscape, scroll room stays active while zoomed
+          dbgLog('ended-zoom');
         }
       }
     }
     if(e.touches.length === 0) {
       panning = false;
       pinching = false;
+      // Safety: make sure layout is unblocked
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
     }
   }, {passive: true});
@@ -4206,16 +4253,12 @@ window.KidSequencer = {
     panning = false;
   }, {passive: true});
 
-  // Scroll guard: while scroll room is active, prevent scrollY from getting
-  // too low (which would re-show the toolbar) or too high
+  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
-    if(window.scrollY < 50) {
-      dbgLog('scroll-guard', {note:'scrollY<50, jumping to SCROLL_PAD'});
+    if(window.__customZoom.scale <= 1.02) return;
+    if(window.scrollY < 100) {
       window.scrollTo(0, SCROLL_PAD);
-    }
-    if(window.__customZoom.scale > 1.02) {
-      applyCustomZoom();
     }
   }, {passive: true});
 
@@ -4230,10 +4273,9 @@ window.KidSequencer = {
       window.__customZoom.scale = 1;
       window.__customZoom.offsetX = 0;
       window.__customZoom.offsetY = 0;
-      removeLandscapeScrollRoom();
       applyCustomZoom();
       if(window.scheduleLayout) window.scheduleLayout();
-      dbgLog('doubletap-reset');
+      removeLandscapeScrollRoom();
       lastTapTime = 0;
     } else {
       lastTapTime = now;
@@ -4682,56 +4724,5 @@ window.KidSequencer = {
 </script>
 
 </body>
-<script>
-// DEBUG SHARE BUTTON — standalone, after everything else
-(function(){
-  var btn = document.createElement('div');
-  btn.id = '__dbgShareBtn';
-  btn.innerHTML = '📋';
-  btn.style.cssText = 'position:fixed;bottom:60px;right:10px;z-index:2147483647;font-size:24px;width:44px;height:44px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,0.7);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
-  document.body.appendChild(btn);
-  
-  var longTimer = null;
-  btn.addEventListener('touchstart', function(e){
-    e.stopPropagation();
-    longTimer = setTimeout(function(){
-      // Long press: clear log
-      if(window.__debugLog) { window.__debugLog.length = 0; }
-      try { sessionStorage.removeItem('__zoomDebugLog'); } catch(x){}
-      btn.innerHTML = '🗑️';
-      setTimeout(function(){ btn.innerHTML = '📋'; }, 1000);
-      longTimer = null;
-    }, 1000);
-  }, {passive:false});
-  btn.addEventListener('touchend', function(e){
-    e.stopPropagation();
-    if(longTimer) { clearTimeout(longTimer); longTimer = null; }
-  }, {passive:false});
-  
-  btn.addEventListener('click', function(e){
-    e.preventDefault();
-    e.stopPropagation();
-    var log = window.__debugLog || [];
-    var lines = log.map(function(e){
-      var ts = new Date(e.t).toISOString().substr(11,12);
-      return e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.scale + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.scrollY + ' sR=' + e.scrollRoom + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.docScrollH + ' p=' + e.pinch + ' pn=' + e.pan + (e.grace !== undefined ? ' g=' + e.grace : '') + (e.note ? ' [' + e.note + ']' : '');
-    }).join('\n');
-    
-    if(navigator.share) {
-      try {
-        var blob = new Blob([lines], {type:'text/plain'});
-        var file = new File([blob], 'zoom-debug.txt', {type:'text/plain'});
-        navigator.share({ files: [file], title: 'Zoom Debug' }).catch(function(){
-          navigator.share({ text: lines, title: 'Zoom Debug' }).catch(function(){});
-        });
-      } catch(x) {
-        try { navigator.share({ text: lines, title: 'Zoom Debug' }); } catch(y){}
-      }
-    } else {
-      try { navigator.clipboard.writeText(lines); btn.innerHTML='✅'; setTimeout(function(){btn.innerHTML='📋';},1500); } catch(x){ prompt('Log:',lines.substring(0,2000)); }
-    }
-  });
-})();
-</script>
 </html>
 <!-- AUTH HARDENING NOT INSERTED: getAuth(app) not found -->
