@@ -3972,58 +3972,8 @@ window.KidSequencer = {
   window.addEventListener('resize', () => dbgLog('resize'), {passive:true});
   window.addEventListener('orientationchange', () => dbgLog('orientationchange'), {passive:true});
 
-  // Share button — tiny dot in top-left corner
-  const __shareBtn = document.createElement('button');
-  __shareBtn.textContent = '📋';
-  __shareBtn.setAttribute('style','position:fixed;top:4px;left:4px;z-index:2147483647;font-size:16px;width:30px;height:30px;border-radius:50%;border:1px solid #666;background:rgba(0,0,0,0.5);cursor:pointer;opacity:0.4;padding:0;');
-  document.documentElement.appendChild(__shareBtn);
-  
-  // Long-press to clear log
-  let __longPressTimer = null;
-  __shareBtn.addEventListener('touchstart', () => {
-    __longPressTimer = setTimeout(() => {
-      __debugLog.length = 0;
-      __logSeq = 0;
-      try { sessionStorage.removeItem('__zoomDebugLog'); } catch(_){}
-      __shareBtn.textContent = '🗑️';
-      setTimeout(() => __shareBtn.textContent = '📋', 1000);
-      __longPressTimer = null;
-    }, 1000);
-  }, {passive:true});
-  __shareBtn.addEventListener('touchend', () => {
-    if(__longPressTimer) { clearTimeout(__longPressTimer); __longPressTimer = null; }
-  }, {passive:true});
-  __shareBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const logText = __debugLog.map(e => {
-      const ts = new Date(e.t).toISOString().substr(11,12);
-      return `${e.seq} ${ts} ${e.event} s=${e.scale} oX=${e.oX} oY=${e.oY} sY=${e.scrollY} sR=${e.scrollRoom} ${e.iW}x${e.iH} vvH=${e.vvH} dSH=${e.docScrollH} p=${e.pinch} pn=${e.pan}` + 
-        (e.grace !== undefined ? ` g=${e.grace}` : '') +
-        (e.note ? ` [${e.note}]` : '');
-    }).join('\n');
-    
-    if(navigator.share) {
-      try {
-        const blob = new Blob([logText], {type:'text/plain'});
-        const file = new File([blob], 'zoom-debug-' + Date.now() + '.txt', {type:'text/plain'});
-        await navigator.share({ files: [file], title: 'Zoom Debug Log' });
-      } catch(err) {
-        // Fallback to share as text
-        try { await navigator.share({ text: logText, title: 'Zoom Debug Log' }); } catch(_){}
-      }
-    } else {
-      // Fallback: copy to clipboard
-      try { 
-        await navigator.clipboard.writeText(logText);
-        __shareBtn.textContent = '✅';
-        setTimeout(() => __shareBtn.textContent = '📋', 1500);
-      } catch(_) {
-        // Last resort: prompt
-        prompt('Copy log:', logText.substring(0, 2000));
-      }
-    }
-  });
+  // Expose log array for standalone share button
+  window.__debugLog = __debugLog;
 
   // --- Landscape toolbar hide ---
   // NO top spacer (that caused blank screen on reset).
@@ -4732,5 +4682,56 @@ window.KidSequencer = {
 </script>
 
 </body>
+<script>
+// DEBUG SHARE BUTTON — standalone, after everything else
+(function(){
+  var btn = document.createElement('div');
+  btn.id = '__dbgShareBtn';
+  btn.innerHTML = '📋';
+  btn.style.cssText = 'position:fixed;bottom:60px;right:10px;z-index:2147483647;font-size:24px;width:44px;height:44px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,0.7);cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;touch-action:manipulation;';
+  document.body.appendChild(btn);
+  
+  var longTimer = null;
+  btn.addEventListener('touchstart', function(e){
+    e.stopPropagation();
+    longTimer = setTimeout(function(){
+      // Long press: clear log
+      if(window.__debugLog) { window.__debugLog.length = 0; }
+      try { sessionStorage.removeItem('__zoomDebugLog'); } catch(x){}
+      btn.innerHTML = '🗑️';
+      setTimeout(function(){ btn.innerHTML = '📋'; }, 1000);
+      longTimer = null;
+    }, 1000);
+  }, {passive:false});
+  btn.addEventListener('touchend', function(e){
+    e.stopPropagation();
+    if(longTimer) { clearTimeout(longTimer); longTimer = null; }
+  }, {passive:false});
+  
+  btn.addEventListener('click', function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    var log = window.__debugLog || [];
+    var lines = log.map(function(e){
+      var ts = new Date(e.t).toISOString().substr(11,12);
+      return e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.scale + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.scrollY + ' sR=' + e.scrollRoom + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.docScrollH + ' p=' + e.pinch + ' pn=' + e.pan + (e.grace !== undefined ? ' g=' + e.grace : '') + (e.note ? ' [' + e.note + ']' : '');
+    }).join('\n');
+    
+    if(navigator.share) {
+      try {
+        var blob = new Blob([lines], {type:'text/plain'});
+        var file = new File([blob], 'zoom-debug.txt', {type:'text/plain'});
+        navigator.share({ files: [file], title: 'Zoom Debug' }).catch(function(){
+          navigator.share({ text: lines, title: 'Zoom Debug' }).catch(function(){});
+        });
+      } catch(x) {
+        try { navigator.share({ text: lines, title: 'Zoom Debug' }); } catch(y){}
+      }
+    } else {
+      try { navigator.clipboard.writeText(lines); btn.innerHTML='✅'; setTimeout(function(){btn.innerHTML='📋';},1500); } catch(x){ prompt('Log:',lines.substring(0,2000)); }
+    }
+  });
+})();
+</script>
 </html>
 <!-- AUTH HARDENING NOT INSERTED: getAuth(app) not found -->
