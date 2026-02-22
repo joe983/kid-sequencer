@@ -3921,15 +3921,30 @@ window.KidSequencer = {
   let __fbSeq = 0;
   let __fbFlushTimer = null;
 
-  // Init Firebase for logging
+  // Tiny status dot - red=not connected, green=connected, flashes on flush
+  let __fbDot = document.createElement('div');
+  __fbDot.setAttribute('style','position:fixed;top:4px;right:4px;width:10px;height:10px;border-radius:50%;background:red;z-index:2147483647;pointer-events:none;opacity:0.7;transition:background 0.3s;');
+  document.documentElement.appendChild(__fbDot);
+
+  // Load Firebase compat SDK via script tags (works in non-module scripts)
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if(document.querySelector('script[src="'+src+'"]')) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
   (async function(){
     try {
-      const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
-      const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      // Use named app to avoid conflict with main app init
+      await loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js');
       let app;
-      try { app = getApp('dbgLog'); } catch(_) {
-        app = initializeApp({
+      try { app = firebase.app('dbgLog'); } catch(_) {
+        app = firebase.initializeApp({
           apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
           authDomain: "kid-sequencer.firebaseapp.com",
           projectId: "kid-sequencer",
@@ -3938,9 +3953,11 @@ window.KidSequencer = {
           appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
         }, 'dbgLog');
       }
-      __fbDb = getFirestore(app);
+      __fbDb = app.firestore();
+      __fbDot.style.background = 'green';
       dbgLog('LOGGER-READY');
     } catch(e) {
+      __fbDot.style.background = 'orange';
       console.warn('Debug logger init failed', e);
     }
   })();
@@ -3949,15 +3966,16 @@ window.KidSequencer = {
     if(!__fbDb || __fbLogBuf.length === 0) return;
     const batch = __fbLogBuf.splice(0, __fbLogBuf.length);
     try {
-      const { collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-      await addDoc(collection(__fbDb, 'zoomDebug'), {
+      await __fbDb.collection('zoomDebug').add({
         sessionId: __fbSessionId,
         ts: Date.now(),
         entries: batch
       });
+      __fbDot.style.background = 'white';
+      setTimeout(() => __fbDot.style.background = 'green', 300);
     } catch(e) {
-      // Put them back if write failed
       __fbLogBuf.unshift(...batch);
+      __fbDot.style.background = 'red';
       console.warn('Debug flush failed', e);
     }
   }
@@ -3966,6 +3984,8 @@ window.KidSequencer = {
     const cz = window.__customZoom;
     const ih = window.innerHeight, iw = window.innerWidth;
     const vv = window.visualViewport;
+    let sR = false;
+    try { sR = scrollRoomActive; } catch(_) { sR = false; }
     const entry = {
       seq: __fbSeq++,
       t: Date.now(),
@@ -3974,7 +3994,7 @@ window.KidSequencer = {
       oX: +cz.offsetX.toFixed(0),
       oY: +cz.offsetY.toFixed(0),
       sY: window.scrollY,
-      sR: scrollRoomActive,
+      sR: sR,
       iW: iw,
       iH: ih,
       vvH: vv ? +vv.height.toFixed(0) : ih,
