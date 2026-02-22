@@ -4003,12 +4003,15 @@ window.KidSequencer = {
     if(extra) Object.assign(entry, extra);
     __fbLogBuf.push(entry);
 
-    // Flush every 3 seconds (batched to reduce writes)
-    if(!__fbFlushTimer) {
+    // Flush immediately for important events, batch for high-frequency ones
+    const immediate = ['PAGE-LOAD','LOGGER-READY','ts-land','reset','ended-zoom','doubletap-reset','orient','resize','scroll-guard'];
+    if(immediate.includes(event)) {
+      __fbFlush();
+    } else if(!__fbFlushTimer) {
       __fbFlushTimer = setTimeout(() => {
         __fbFlushTimer = null;
         __fbFlush();
-      }, 3000);
+      }, 2000);
     }
   }
 
@@ -4220,6 +4223,10 @@ window.KidSequencer = {
         dbgLog('grace', {g: pinchMoveCount});
       } else {
         e.preventDefault();
+        // After grace period, snap scroll back to SCROLL_PAD to prevent drift
+        if(isLandscape() && scrollRoomActive && pinchMoveCount === TOOLBAR_GRACE_FRAMES + 1) {
+          window.scrollTo(0, SCROLL_PAD);
+        }
         if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
       }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
@@ -4237,25 +4244,25 @@ window.KidSequencer = {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
-        // If scale is very close to 1, snap back to 1
         if(window.__customZoom.scale < 1.05) {
+          // Zoom reset
           window.__customZoom.scale = 1;
           window.__customZoom.offsetX = 0;
           window.__customZoom.offsetY = 0;
+          removeLandscapeScrollRoom();
           applyCustomZoom();
-          // Unblock layout and trigger it to restore base position
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
-          removeLandscapeScrollRoom();
           dbgLog('reset');
         } else {
-          // Final clamp to re-center if content fits in viewport
+          // Still zoomed — keep isZooming TRUE so layout doesn't
+          // overwrite our transform when toolbar-resize fires
           clampOffsets(false);
+          // Snap scrollY back to SCROLL_PAD to stabilise viewport
+          if(scrollRoomActive) {
+            window.scrollTo(0, SCROLL_PAD);
+          }
           applyCustomZoom();
-          // Unblock layout (but it won't overwrite since we re-apply custom zoom in applyStageFit)
-          if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-          
-          // In landscape, scroll room stays active while zoomed
           dbgLog('ended-zoom');
         }
       }
@@ -4263,8 +4270,10 @@ window.KidSequencer = {
     if(e.touches.length === 0) {
       panning = false;
       pinching = false;
-      // Safety: make sure layout is unblocked
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+      // Only unblock layout if NOT zoomed
+      if(window.__customZoom.scale < 1.05) {
+        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+      }
     }
   }, {passive: true});
 
@@ -4273,13 +4282,17 @@ window.KidSequencer = {
     panning = false;
   }, {passive: true});
 
-  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
+  // Scroll guard: while scroll room is active, keep scrollY near SCROLL_PAD.
+  // This prevents the viewport from shrinking as scrollY drifts during pinch,
+  // and prevents toolbar re-appearing if scrollY reaches 0.
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    if(window.scrollY < 100) {
+    const drift = Math.abs(window.scrollY - SCROLL_PAD);
+    if(drift > 30) {
       window.scrollTo(0, SCROLL_PAD);
     }
+    // Keep transform in sync with scroll position
+    applyCustomZoom();
   }, {passive: true});
 
   // Double-tap to reset zoom
@@ -4293,9 +4306,11 @@ window.KidSequencer = {
       window.__customZoom.scale = 1;
       window.__customZoom.offsetX = 0;
       window.__customZoom.offsetY = 0;
-      applyCustomZoom();
-      if(window.scheduleLayout) window.scheduleLayout();
       removeLandscapeScrollRoom();
+      applyCustomZoom();
+      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+      if(window.scheduleLayout) window.scheduleLayout();
+      dbgLog('doubletap-reset');
       lastTapTime = 0;
     } else {
       lastTapTime = now;
