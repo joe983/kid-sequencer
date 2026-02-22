@@ -76,6 +76,19 @@ html, body {
   touch-action: manipulation; /* allow native pan gestures for Safari toolbar hide */
 }
 
+/* When using the landscape "scroll room" trick, keep the app fixed while the document scrolls.
+   This avoids the UI visibly moving when we nudge scrollY to collapse Safari's chrome. */
+html.ks-scroll-room #viewport{
+  position: fixed !important;
+  left: 0; top: 0;
+  width: var(--vvw, 100vw);
+  height: var(--vvh, 100vh);
+  overflow: hidden !important;
+}
+html.ks-scroll-room, html.ks-scroll-room body{
+  overscroll-behavior: none;
+}
+
 
 /* --- Stage-scale mode (small landscape phones): NO scrolling, stage is positioned + scaled --- */
 html.stageScaled, html.stageScaled body{
@@ -3415,7 +3428,7 @@ root.classList.add('stageScaled');
       const cz = window.__customZoom;
       const totalS = s * cz.scale;
       const czTx = tx + cz.offsetX;
-      const czTy = ty + cz.offsetY - ((typeof scrollRoomActive !== 'undefined' && scrollRoomActive) ? window.scrollY : 0);
+      const czTy = ty + cz.offsetY - ((window.__ksScrollRoomActive) ? window.scrollY : 0);
       pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
     }
     // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
@@ -3984,8 +3997,7 @@ window.KidSequencer = {
     const cz = window.__customZoom;
     const ih = window.innerHeight, iw = window.innerWidth;
     const vv = window.visualViewport;
-    let sR = false;
-    try { sR = scrollRoomActive; } catch(_) { sR = false; }
+    const sR = !!window.__ksScrollRoomActive;
     const entry = {
       seq: __fbSeq++,
       t: Date.now(),
@@ -4031,18 +4043,35 @@ window.KidSequencer = {
   dbgLog('PAGE-LOAD');
 
   // --- Landscape toolbar auto-hide ---
-  // Strategy: make document scrollable and pre-scroll to 1px as soon as we
-  // enter landscape. Safari auto-hides toolbar on scrollable+scrolled pages.
-  // NO top spacer (causes blank screen). Only bottom spacer + body minHeight.
-  // Transform compensation: applyCustomZoom subtracts scrollY.
+  // IMPORTANT: iOS Safari does not provide a guaranteed, fully-programmatic way to
+  // force-hide the browser UI. This is a best-effort "scroll-room" trick:
+  //   1) Make the document scrollable in small-landscape
+  //   2) Nudge window.scrollY a few times after layout/orientation settles
+  //   3) Keep the app fixed so the scroll doesn't visually move the UI (CSS class ks-scroll-room)
+  const root = document.documentElement;
   let spacer = null;
-  let scrollRoomActive = false;
-  const SCROLL_PAD = 1; // minimal scroll — just enough for Safari to see "scrolled"
+
+  window.__ksScrollRoomActive = false;
+  const SCROLL_PAD = 48; // px: large enough to trigger toolbar collapse more often than 1px
+  window.__ksScrollPad = SCROLL_PAD;
+
+  function isIOS(){
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    // iPadOS can report as Mac; touch capability is a practical hint.
+    return (/iP(hone|od|ad)/.test(platform) || (/Mac/.test(platform) && ('ontouchend' in document))) && /WebKit/.test(ua);
+  }
+
+  function isSmallLandscape(){
+    if(!isIOS()) return false;
+    return window.innerWidth > window.innerHeight && window.innerHeight < 520;
+  }
 
   function ensureLandscapeScrollRoom(){
-    if(window.innerWidth <= window.innerHeight) return;
-    if(scrollRoomActive) return;
-    scrollRoomActive = true;
+    if(!isSmallLandscape()) return;
+    if(window.__ksScrollRoomActive) return;
+    window.__ksScrollRoomActive = true;
+    root.classList.add('ks-scroll-room');
 
     if(!spacer) {
       spacer = document.createElement('div');
@@ -4050,22 +4079,25 @@ window.KidSequencer = {
       spacer.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
       document.body.appendChild(spacer);
     }
-    spacer.style.height = '200px';
+    spacer.style.height = '240px';
 
+    // Make sure the document has real scroll height.
     document.documentElement.style.height = 'auto';
     document.documentElement.style.minHeight = '0';
     document.body.style.height = 'auto';
-    document.body.style.minHeight = 'calc(100vh + 200px)';
+    document.body.style.minHeight = 'calc(100vh + 240px)';
     void document.body.offsetHeight;
 
-    // Scroll down by 1px — Safari sees "page is scrolled" and may hide toolbar
-    window.scrollTo(0, SCROLL_PAD);
+    // Initial nudge.
+    try{ window.scrollTo(0, SCROLL_PAD); }catch(_){}
     dbgLog('scroll-room-on', {note: 'landscape auto'});
   }
 
   function removeLandscapeScrollRoom(){
-    if(!scrollRoomActive) return;
-    scrollRoomActive = false;
+    if(!window.__ksScrollRoomActive) return;
+    window.__ksScrollRoomActive = false;
+    root.classList.remove('ks-scroll-room');
+
     if(spacer) spacer.style.height = '0px';
     document.documentElement.style.height = '';
     document.documentElement.style.minHeight = '';
@@ -4075,10 +4107,35 @@ window.KidSequencer = {
     dbgLog('scroll-room-off');
   }
 
+  // Try a short burst of scroll nudges after we enter landscape.
+  // Some iOS versions ignore the first programmatic scroll during orientation/page show.
+  function kickToolbarHide(reason){
+    if(!isSmallLandscape()) return;
+    ensureLandscapeScrollRoom();
+
+    const steps = [0, SCROLL_PAD, SCROLL_PAD + 1, SCROLL_PAD];
+    let i = 0;
+    const step = () => {
+      if(!isSmallLandscape() || !window.__ksScrollRoomActive) return;
+      try{ window.scrollTo(0, steps[i]); }catch(_){}
+      i++;
+      if(i < steps.length) requestAnimationFrame(step);
+    };
+    step();
+
+    // Follow-up timeouts (covers slow UI settling / BFCache restore).
+    setTimeout(() => { if(isSmallLandscape()) try{ window.scrollTo(0, SCROLL_PAD); }catch(_){} }, 60);
+    setTimeout(() => { if(isSmallLandscape()) try{ window.scrollTo(0, SCROLL_PAD); }catch(_){} }, 180);
+    setTimeout(() => { if(isSmallLandscape()) try{ window.scrollTo(0, SCROLL_PAD); }catch(_){} }, 450);
+
+    dbgLog('scroll-kick', {reason: reason || ''});
+  }
+
   // Auto-activate on landscape, deactivate on portrait
-  function checkLandscape(){
-    if(window.innerWidth > window.innerHeight) {
+  function checkLandscape(reason){
+    if(isSmallLandscape()) {
       ensureLandscapeScrollRoom();
+      kickToolbarHide(reason || 'checkLandscape');
     } else {
       if(window.__customZoom.scale < 1.05) {
         removeLandscapeScrollRoom();
@@ -4086,15 +4143,23 @@ window.KidSequencer = {
     }
   }
 
-  // Run on load
-  checkLandscape();
+  // Run on script load
+  checkLandscape('initial');
+
+  // Run on load-ish events
+  window.addEventListener('pageshow', (e) => {
+    setTimeout(() => checkLandscape(e && e.persisted ? 'pageshow-bfcache' : 'pageshow'), 250);
+  }, {passive:true});
+  window.addEventListener('load', () => {
+    setTimeout(() => checkLandscape('load'), 250);
+  }, {passive:true});
 
   // Run on orientation change and resize
   window.addEventListener('orientationchange', () => {
-    setTimeout(checkLandscape, 350);
+    setTimeout(() => checkLandscape('orientationchange'), 450);
   }, {passive:true});
   window.addEventListener('resize', () => {
-    setTimeout(checkLandscape, 200);
+    setTimeout(() => checkLandscape('resize'), 250);
   }, {passive:true});
 
   // Track active touches for pinch detection
@@ -4125,7 +4190,7 @@ window.KidSequencer = {
     const totalS = bt.s * cz.scale;
     const tx = bt.tx + cz.offsetX;
     // Compensate for document scroll so page doesn't jump
-    const scrollComp = scrollRoomActive ? window.scrollY : 0;
+    const scrollComp = window.__ksScrollRoomActive ? window.scrollY : 0;
     const ty = bt.ty + cz.offsetY - scrollComp;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
@@ -4266,7 +4331,7 @@ window.KidSequencer = {
           // overwrite our transform when toolbar-resize fires
           clampOffsets(false);
           // Snap scrollY back to SCROLL_PAD to stabilise viewport
-          if(scrollRoomActive) {
+          if(window.__ksScrollRoomActive) {
             window.scrollTo(0, SCROLL_PAD);
           }
           applyCustomZoom();
@@ -4289,12 +4354,22 @@ window.KidSequencer = {
     panning = false;
   }, {passive: true});
 
-  // Scroll guard: keep scrollY at 1 while in landscape to prevent toolbar reappearing
+  // Scroll guard: keep scrollY pinned while in landscape scroll-room mode.
+  // If scrollY drifts back to 0, Safari can re-show the toolbar.
+  let __scrollGuardBusy = false;
   window.addEventListener('scroll', () => {
-    if(!scrollRoomActive) return;
-    if(window.scrollY === 0) {
-      window.scrollTo(0, SCROLL_PAD);
+    if(!window.__ksScrollRoomActive) return;
+
+    const y = window.scrollY;
+    if(!__scrollGuardBusy && Math.abs(y - SCROLL_PAD) > 2) {
+      __scrollGuardBusy = true;
+      requestAnimationFrame(() => {
+        try{ window.scrollTo(0, SCROLL_PAD); }catch(_){}
+        __scrollGuardBusy = false;
+      });
+      dbgLog('scroll-guard', {from: y});
     }
+
     applyCustomZoom();
   }, {passive: true});
 
