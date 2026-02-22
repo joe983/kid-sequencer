@@ -3914,10 +3914,20 @@ window.KidSequencer = {
   const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
   const MAX_ZOOM = 2.2;
 
-  // DEBUG LOGGER — logs to in-memory array, tiny share button to export
-  const __debugLog = [];
-  const __logMax = 2000; // max entries kept
+  // DEBUG LOGGER — logs to in-memory array, persisted to sessionStorage
+  let __debugLog = [];
+  const __logMax = 2000;
   let __logSeq = 0;
+  
+  // Restore from sessionStorage on load
+  try {
+    const saved = sessionStorage.getItem('__zoomDebugLog');
+    if(saved) {
+      __debugLog = JSON.parse(saved);
+      __logSeq = __debugLog.length ? (__debugLog[__debugLog.length-1].seq + 1) : 0;
+    }
+  } catch(_){}
+
   function dbgLog(event, extra){
     const cz = window.__customZoom;
     const ih = window.innerHeight, iw = window.innerWidth;
@@ -3941,7 +3951,19 @@ window.KidSequencer = {
     };
     __debugLog.push(entry);
     if(__debugLog.length > __logMax) __debugLog.splice(0, __debugLog.length - __logMax);
+    // Persist every 10 entries
+    if(__logSeq % 10 === 0) {
+      try { sessionStorage.setItem('__zoomDebugLog', JSON.stringify(__debugLog)); } catch(_){}
+    }
   }
+
+  // Save on page unload too
+  window.addEventListener('beforeunload', () => {
+    try { sessionStorage.setItem('__zoomDebugLog', JSON.stringify(__debugLog)); } catch(_){}
+  });
+
+  // Log page load/refresh
+  dbgLog('PAGE-LOAD');
 
   // Periodic idle logging (every 1s)
   setInterval(() => dbgLog('idle'), 1000);
@@ -3955,6 +3977,22 @@ window.KidSequencer = {
   __shareBtn.textContent = '📋';
   __shareBtn.setAttribute('style','position:fixed;top:4px;left:4px;z-index:2147483647;font-size:16px;width:30px;height:30px;border-radius:50%;border:1px solid #666;background:rgba(0,0,0,0.5);cursor:pointer;opacity:0.4;padding:0;');
   document.documentElement.appendChild(__shareBtn);
+  
+  // Long-press to clear log
+  let __longPressTimer = null;
+  __shareBtn.addEventListener('touchstart', () => {
+    __longPressTimer = setTimeout(() => {
+      __debugLog.length = 0;
+      __logSeq = 0;
+      try { sessionStorage.removeItem('__zoomDebugLog'); } catch(_){}
+      __shareBtn.textContent = '🗑️';
+      setTimeout(() => __shareBtn.textContent = '📋', 1000);
+      __longPressTimer = null;
+    }, 1000);
+  }, {passive:true});
+  __shareBtn.addEventListener('touchend', () => {
+    if(__longPressTimer) { clearTimeout(__longPressTimer); __longPressTimer = null; }
+  }, {passive:true});
   __shareBtn.addEventListener('click', async (e) => {
     e.preventDefault();
     e.stopPropagation();
