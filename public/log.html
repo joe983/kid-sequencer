@@ -57,6 +57,7 @@
 <div class="controls">
   <button id="refreshBtn">🔄 Refresh</button>
   <button id="autoBtn">▶ Auto-refresh</button>
+  <button id="exportBtn">💾 Export .txt</button>
   <label class="filter-label">Filter: 
     <select id="filterEvt">
       <option value="">All events</option>
@@ -204,6 +205,34 @@ document.getElementById('autoBtn').onclick = function() {
     this.textContent = '⏸ Stop auto';
     loadSessions();
   }
+};
+
+document.getElementById('exportBtn').onclick = function() {
+  if (!selectedSession) { alert('Select a session first'); return; }
+  // Gather all entries for selected session
+  const sessionDocs = allDocs.filter(d => d.sessionId === selectedSession);
+  const allEntries = [];
+  sessionDocs.forEach(d => (d.entries || []).forEach(e => allEntries.push(e)));
+  allEntries.sort((a, b) => a.seq - b.seq);
+  
+  const lines = allEntries.map(e => {
+    const ts = new Date(e.t).toISOString().substr(11, 12);
+    let line = e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.s + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.sY + ' sR=' + e.sR + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.dSH;
+    if (e.g !== undefined) line += ' g=' + e.g;
+    if (e.note) line += ' [' + e.note + ']';
+    return line;
+  });
+  
+  const header = 'Session: ' + selectedSession + '\nExported: ' + new Date().toISOString() + '\nEntries: ' + lines.length + '\n\n';
+  const text = header + lines.join('\n');
+  
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'zoom-debug-' + selectedSession + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 document.getElementById('clearBtn').onclick = async function() {
