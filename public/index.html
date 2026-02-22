@@ -4150,8 +4150,9 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
+  // No grace frames — always preventDefault to prevent scrollY drift which crashes Safari.
+  // Toolbar collapse is triggered by scroll room + pre-scroll alone.
   let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 2;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4175,9 +4176,8 @@ window.KidSequencer = {
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
         dbgLog('ts-land');
-      } else {
-        e.preventDefault();
       }
+      e.preventDefault();
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       panning = true;
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4192,7 +4192,6 @@ window.KidSequencer = {
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
-      
 
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
@@ -4216,19 +4215,9 @@ window.KidSequencer = {
 
       clampOffsets(true);
       applyCustomZoom();
+      e.preventDefault();
 
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — let Safari see real scroll
-        if(window.scrollY < 50) window.scrollTo(0, 50);
-        dbgLog('grace', {g: pinchMoveCount});
-      } else {
-        e.preventDefault();
-        // After grace period, snap scroll back to SCROLL_PAD to prevent drift
-        if(isLandscape() && scrollRoomActive && pinchMoveCount === TOOLBAR_GRACE_FRAMES + 1) {
-          window.scrollTo(0, SCROLL_PAD);
-        }
-        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
-      }
+      if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
