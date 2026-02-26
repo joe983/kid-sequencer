@@ -4239,7 +4239,11 @@ window.KidSequencer = {
         // Right after grace period ends, snap scrollY back and lock it
         if(isLandscape() && !toolbarTriggered && pinchMoveCount === GRACE_FRAMES + 1) {
           toolbarTriggered = true;
+          // Aggressive snap — try multiple times to overcome Safari's momentum
           window.scrollTo(0, SCROLL_PAD);
+          setTimeout(() => window.scrollTo(0, SCROLL_PAD), 16);
+          setTimeout(() => window.scrollTo(0, SCROLL_PAD), 50);
+          setTimeout(() => window.scrollTo(0, SCROLL_PAD), 100);
           dbgLog('grace-end-snap', {sY: window.scrollY});
         }
         if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
@@ -4264,17 +4268,19 @@ window.KidSequencer = {
           window.__customZoom.scale = 1;
           window.__customZoom.offsetX = 0;
           window.__customZoom.offsetY = 0;
-          // In landscape, keep scroll room active (toolbar stays hidden)
-          if(!isLandscape()) {
-            removeLandscapeScrollRoom();
-          } else {
-            // Snap scroll back to SCROLL_PAD
-            window.scrollTo(0, SCROLL_PAD);
-          }
+          // Always remove scroll room on reset so viewport recovers full size
+          removeLandscapeScrollRoom();
           applyCustomZoom();
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
           dbgLog('reset');
+          // In landscape, re-add scroll room after viewport recovers
+          if(isLandscape()) {
+            setTimeout(() => {
+              ensureLandscapeScrollRoom();
+              // toolbarTriggered stays true — no grace frames needed
+            }, 350);
+          }
         } else {
           // Still zoomed — keep isZooming TRUE so layout doesn't
           // overwrite our transform when toolbar-resize fires
@@ -4308,6 +4314,8 @@ window.KidSequencer = {
   // and prevents toolbar re-appearing if scrollY reaches 0.
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
+    // Don't fight scroll during grace frames — that's when we NEED scroll to happen
+    if(pinching && !toolbarTriggered && pinchMoveCount <= GRACE_FRAMES) return;
     const drift = Math.abs(window.scrollY - SCROLL_PAD);
     if(drift > 30) {
       window.scrollTo(0, SCROLL_PAD);
@@ -4327,15 +4335,14 @@ window.KidSequencer = {
       window.__customZoom.scale = 1;
       window.__customZoom.offsetX = 0;
       window.__customZoom.offsetY = 0;
-      if(!isLandscape()) {
-        removeLandscapeScrollRoom();
-      } else {
-        window.scrollTo(0, SCROLL_PAD);
-      }
+      removeLandscapeScrollRoom();
       applyCustomZoom();
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
       if(window.scheduleLayout) window.scheduleLayout();
       dbgLog('doubletap-reset');
+      if(isLandscape()) {
+        setTimeout(() => ensureLandscapeScrollRoom(), 350);
+      }
       lastTapTime = 0;
     } else {
       lastTapTime = now;
