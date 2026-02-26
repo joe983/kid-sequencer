@@ -3897,11 +3897,15 @@ window.KidSequencer = {
 </script>
 
 <script>
-/* ===== Custom pinch-zoom via CSS transforms =====
+/* ===== Custom pinch-zoom via CSS transforms (v27) =====
    Native pinch-zoom is disabled (maximum-scale=1) because Safari crashes when
    zooming a 1600x900 page on iPhone (the backing store exceeds WebKit's tile memory budget).
    Instead we implement zoom by adjusting the existing CSS transform on #page.
-   This is a pure compositing operation — no new tiles are rasterized. */
+   This is a pure compositing operation — no new tiles are rasterized.
+   
+   v27: Grace frames let scrollY DRIFT (no clamp during grace) so Safari sees
+   real scroll delta for toolbar hide. Snap back to SCROLL_PAD on grace-end,
+   then aggressive per-frame clamping kills residual momentum. */
 (function(){
   const page = document.getElementById('page');
   const viewport = document.getElementById('viewport');
@@ -4172,12 +4176,14 @@ window.KidSequencer = {
   }
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  // Grace frames: ONE attempt on first pinch after fresh landscape entry.
-  // Let 2 frames through un-prevented so Safari sees real touch scroll → toolbar collapses.
-  // After grace, aggressively clamp scrollY on EVERY frame to prevent drift/viewport shrink.
+  // v27 Grace strategy:
+  // Let first 3 touchmove frames through WITHOUT preventDefault AND without scroll clamping.
+  // Safari needs to see a real scrollY delta to trigger toolbar hide.
+  // After grace-end, snap scrollY back to SCROLL_PAD and resume aggressive clamping.
   let pinchMoveCount = 0;
   let graceAttempted = false; // true after first grace attempt — never try again until portrait
-  const GRACE_FRAMES = 2;
+  let graceScrollStart = 0;  // scrollY at start of grace, for logging drift
+  const GRACE_FRAMES = 3;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4202,7 +4208,11 @@ window.KidSequencer = {
         ensureLandscapeScrollRoom();
         dbgLog('ts-land', {ga: graceAttempted});
         // If we haven't tried grace yet, don't preventDefault on touchstart
-        if(!graceAttempted) return;
+        // and record current scrollY so we can measure drift
+        if(!graceAttempted) {
+          graceScrollStart = window.scrollY;
+          return;
+        }
       }
       e.preventDefault();
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
@@ -4243,19 +4253,27 @@ window.KidSequencer = {
       clampOffsets(true);
       applyCustomZoom();
 
-      // Grace frames: first pinch after fresh landscape, let 2 frames through
+      // v27 Grace: Let scrollY DRIFT during grace frames so Safari sees real scroll delta.
+      // After grace ends, snap scrollY back and clamp aggressively.
       if(isLandscape() && !graceAttempted && pinchMoveCount <= GRACE_FRAMES) {
-        dbgLog('grace', {g: pinchMoveCount, sY: window.scrollY});
+        // DURING GRACE: do NOT preventDefault, do NOT clamp scroll.
+        // Safari needs to see real touch scroll to trigger toolbar hide.
+        const drift = window.scrollY - graceScrollStart;
+        dbgLog('grace', {g: pinchMoveCount, sY: window.scrollY, drift: drift});
         // Don't preventDefault — let Safari see real touch scroll
       } else {
         e.preventDefault();
-        // After grace ends, mark as attempted and aggressively clamp scroll
+        // The frame immediately after grace ends: snap scrollY back and mark done
         if(!graceAttempted && pinchMoveCount === GRACE_FRAMES + 1) {
           graceAttempted = true;
-          dbgLog('grace-end', {sY: window.scrollY, iH: window.innerHeight});
+          const preSnapY = window.scrollY;
+          const driftFinal = preSnapY - graceScrollStart;
+          // Snap scrollY back to SCROLL_PAD immediately
+          window.scrollTo(0, SCROLL_PAD);
+          dbgLog('grace-end', {preSnapY: preSnapY, drift: driftFinal, postSnapY: window.scrollY, iH: window.innerHeight});
         }
-        // Clamp scrollY EVERY frame after grace to prevent momentum drift
-        if(scrollRoomActive && Math.abs(window.scrollY - SCROLL_PAD) > 5) {
+        // Clamp scrollY EVERY frame after grace to kill any residual momentum
+        if(scrollRoomActive && Math.abs(window.scrollY - SCROLL_PAD) > 3) {
           window.scrollTo(0, SCROLL_PAD);
         }
         if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
@@ -4314,14 +4332,16 @@ window.KidSequencer = {
   }, {passive: true});
 
   // Scroll guard: while scroll room is active, keep scrollY near SCROLL_PAD.
-  // Pauses during grace frames so Safari can see real scroll.
+  // v27: Pauses during grace frames so Safari can see real scroll delta.
+  // After grace, clamps aggressively to kill momentum.
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
-    // Don't fight scroll during grace frames
+    // Don't fight scroll during grace frames — Safari needs to see the drift
     if(pinching && !graceAttempted && pinchMoveCount <= GRACE_FRAMES) return;
     const drift = Math.abs(window.scrollY - SCROLL_PAD);
-    if(drift > 10) {
+    if(drift > 3) {
       window.scrollTo(0, SCROLL_PAD);
+      if(drift > 15) dbgLog('scroll-guard', {sY: window.scrollY, drift: drift});
     }
     applyCustomZoom();
   }, {passive: true});
