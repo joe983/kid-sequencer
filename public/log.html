@@ -36,6 +36,8 @@
   .log-table td { padding: 3px 6px; border-bottom: 1px solid #333; white-space: nowrap; }
   .log-table tr:hover { background: #2a2a4a; }
   .log-table tr.event-grace td { color: #ff0; }
+  .log-table tr.event-grace-end td { color: #fa0; font-weight: bold; }
+  .log-table tr.event-scroll-room-on td { color: #8f8; }
   .log-table tr.event-pinch td { color: #0ff; }
   .log-table tr.event-reset td { color: #f80; }
   .log-table tr.event-ts-land td { color: #f0f; }
@@ -63,10 +65,12 @@
       <option value="">All events</option>
       <option value="pinch">pinch</option>
       <option value="grace">grace</option>
+      <option value="grace-end">grace-end</option>
       <option value="ts-land">touchstart-land</option>
       <option value="reset">reset</option>
       <option value="ended-zoom">ended-zoom</option>
       <option value="scroll-guard">scroll-guard</option>
+      <option value="scroll-room-on">scroll-room-on</option>
       <option value="resize">resize</option>
       <option value="orient">orient</option>
       <option value="idle">idle</option>
@@ -83,7 +87,7 @@
     <thead>
       <tr>
         <th>#</th><th>Time</th><th>Event</th><th>Scale</th><th>oX</th><th>oY</th>
-        <th>sY</th><th>sRoom</th><th>iW</th><th>iH</th><th>vvH</th><th>dSH</th><th>Extra</th>
+        <th>sY</th><th>sRoom</th><th>iW</th><th>iH</th><th>vvH</th><th>dSH</th><th>oH</th><th>sH</th><th>Extra</th>
       </tr>
     </thead>
     <tbody id="logBody"></tbody>
@@ -183,9 +187,13 @@ function renderSession(session) {
     const ts = new Date(e.t).toISOString().substr(11, 12);
     const extra = [];
     if (e.g !== undefined) extra.push('g=' + e.g);
+    if (e.ga !== undefined) extra.push('ga=' + e.ga);
     if (e.note) extra.push(e.note);
+    if (e.baseH !== undefined) extra.push('baseH=' + e.baseH);
+    if (e.newH !== undefined) extra.push('newH=' + e.newH);
+    if (e.finalH !== undefined) extra.push('finalH=' + e.finalH);
     
-    tr.innerHTML = `<td>${e.seq}</td><td>${ts}</td><td>${e.event}</td><td>${e.s}</td><td>${e.oX}</td><td>${e.oY}</td><td>${e.sY}</td><td>${e.sR}</td><td>${e.iW}</td><td>${e.iH}</td><td>${e.vvH}</td><td>${e.dSH}</td><td>${extra.join(' ')}</td>`;
+    tr.innerHTML = `<td>${e.seq}</td><td>${ts}</td><td>${e.event}</td><td>${e.s}</td><td>${e.oX}</td><td>${e.oY}</td><td>${e.sY}</td><td>${e.sR}</td><td>${e.iW}</td><td>${e.iH}</td><td>${e.vvH}</td><td>${e.dSH}</td><td>${e.oH||''}</td><td>${e.sH||''}</td><td>${extra.join(' ')}</td>`;
     logBody.appendChild(tr);
   });
 }
@@ -232,8 +240,17 @@ document.getElementById('exportBtn').onclick = function() {
     const lines = allEntries.map(e => {
       const ts = new Date(e.t).toISOString().substr(11, 12);
       let line = e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.s + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.sY + ' sR=' + e.sR + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.dSH;
+      if (e.oH !== undefined) line += ' oH=' + e.oH;
+      if (e.sH !== undefined) line += ' sH=' + e.sH;
+      if (e.sW !== undefined) line += ' sW=' + e.sW;
       if (e.g !== undefined) line += ' g=' + e.g;
+      if (e.ga !== undefined) line += ' ga=' + e.ga;
       if (e.note) line += ' [' + e.note + ']';
+      // Include any other extra fields
+      const knownKeys = new Set(['seq','t','event','s','oX','oY','sY','sR','iW','iH','vvH','dSH','oH','sH','sW','g','ga','note']);
+      Object.keys(e).forEach(k => {
+        if (!knownKeys.has(k)) line += ' ' + k + '=' + JSON.stringify(e[k]);
+      });
       return line;
     });
     
