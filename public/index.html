@@ -4153,6 +4153,13 @@ window.KidSequencer = {
   // and we try to encourage toolbar collapse via a programmatic scroll "nudge" when
   // entering landscape.
   let pinchMoveCount = 0;
+  // Distance-based grace (first landscape pinch only): allow a small amount of
+  // vertical motion so Safari can collapse the toolbar, then lock scroll hard.
+  let firstLandscapePinchPending = false;
+  let graceActive = false;
+  let graceUsedPx = 0;
+  let graceLastMidY = 0;
+  const GRACE_BUDGET_PX = 15; // total midpoint Y travel allowed before we hard-lock
   // Pinch/scroll guard tuning
   const PINCH_DRIFT_PX = 2;      // px drift allowed while pinching / immediately after
   const PINCH_GUARD_MS  = 300;   // ms after pinch end to keep tight guard
@@ -4204,11 +4211,14 @@ window.KidSequencer = {
     const nowLand = isLandscape();
     if(nowLand && !_lastWasLandscape){
       // Just entered landscape
+      firstLandscapePinchPending = true;
       setTimeout(() => landscapeNudge(reason || 'enter-land'), 60);
       // Keep scroll pinned while Safari settles its UI
       scheduleLandscapePinBurst(reason || 'enter-land');
     } else if(!nowLand && _lastWasLandscape){
       // Left landscape
+      firstLandscapePinchPending = false;
+      graceActive = false;
       _clearLandPins();
       removeLandscapeScrollRoom();
     } else if(nowLand && !scrollRoomActive){
@@ -4251,9 +4261,18 @@ window.KidSequencer = {
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
         dbgLog('ts-land');
+        // Arm distance-based grace for the first pinch after entering landscape.
+        if(firstLandscapePinchPending) {
+          graceActive = true;
+          graceUsedPx = 0;
+          graceLastMidY = initialMidY;
+          dbgLog('grace-arm', {budget: GRACE_BUDGET_PX});
+        }
         pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
       }
-      e.preventDefault();
+      if(!graceActive) {
+        e.preventDefault();
+      }
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       panning = true;
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
@@ -4292,8 +4311,31 @@ window.KidSequencer = {
 
       clampOffsets(true);
       applyCustomZoom();
-      e.preventDefault();
-      if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
+
+      // Distance-based grace: allow small vertical movement (no preventDefault)
+      // so Safari can collapse the toolbar on the first landscape pinch.
+      if(graceActive && isLandscape()) {
+        const dy = Math.abs(mid.y - graceLastMidY);
+        graceUsedPx += dy;
+        graceLastMidY = mid.y;
+
+        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('grace', {g: pinchMoveCount, used: +graceUsedPx.toFixed(1)});
+
+        if(graceUsedPx >= GRACE_BUDGET_PX) {
+          graceActive = false;
+          firstLandscapePinchPending = false;
+          // Now hard-lock scroll and prevent defaults for the rest of the pinch.
+          if(scrollRoomActive) window.scrollTo(0, SCROLL_PAD);
+          pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
+          dbgLog('grace-end-snap', {used: +graceUsedPx.toFixed(1)});
+          e.preventDefault();
+        } else {
+          // No preventDefault during grace window
+        }
+      } else {
+        e.preventDefault();
+        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
+      }
 
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
@@ -4310,6 +4352,9 @@ window.KidSequencer = {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
+        if(graceActive) dbgLog('grace-cancel', {used: +graceUsedPx.toFixed(1)});
+        graceActive = false;
+        firstLandscapePinchPending = false;
         if(isLandscape()) pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
         if(window.__customZoom.scale < 1.05) {
           // Zoom reset
@@ -4357,8 +4402,14 @@ window.KidSequencer = {
     if(_scrollGuardFixing) return;
 
     const now = Date.now();
-    const tight = (pinching || now < pinchScrollGuardUntil);
+    const tight = ((pinching && !graceActive) || now < pinchScrollGuardUntil);
     const threshold = tight ? PINCH_DRIFT_PX : 30;
+
+    // During grace window, do not fight scroll; we want Safari to treat this as a real scroll.
+    if(graceActive) {
+      applyCustomZoom();
+      return;
+    }
 
     const drift = Math.abs(window.scrollY - SCROLL_PAD);
     if(drift > threshold) {
