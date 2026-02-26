@@ -4157,6 +4157,12 @@ window.KidSequencer = {
   let pinchMoveCount = 0;
   let toolbarTriggered = false; // true after first grace cycle — no more grace needed
   const GRACE_FRAMES = 2;
+
+  // Tight scroll guard while pinching (and briefly after) to prevent Safari viewport shrink.
+  let pinchScrollGuardUntil = 0; // ms timestamp
+  const PINCH_GUARD_MS = 300;
+  const PINCH_DRIFT_PX = 2;
+  let _scrollGuardFixing = false;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   viewport.addEventListener('touchstart', (e) => {
@@ -4180,6 +4186,7 @@ window.KidSequencer = {
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
         dbgLog('ts-land', {tt: toolbarTriggered});
+        pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
         // If we need grace frames, don't preventDefault on touchstart
         if(!toolbarTriggered) return;
       }
@@ -4198,6 +4205,7 @@ window.KidSequencer = {
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
       pinchMoveCount++;
+      if(isLandscape()) pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
 
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
@@ -4252,6 +4260,7 @@ window.KidSequencer = {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
+        if(isLandscape()) pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
         if(window.__customZoom.scale < 1.05) {
           // Zoom reset
           window.__customZoom.scale = 1;
@@ -4295,10 +4304,22 @@ window.KidSequencer = {
   // and prevents toolbar re-appearing if scrollY reaches 0.
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
+    if(_scrollGuardFixing) return;
+
+    const now = Date.now();
+    const inGrace = isLandscape() && pinching && !toolbarTriggered && pinchMoveCount <= GRACE_FRAMES;
+    const tight = (!inGrace) && (pinching || now < pinchScrollGuardUntil);
+    const threshold = tight ? PINCH_DRIFT_PX : 30;
+
     const drift = Math.abs(window.scrollY - SCROLL_PAD);
-    if(drift > 30) {
+    if(drift > threshold) {
+      _scrollGuardFixing = true;
+      const before = window.scrollY;
       window.scrollTo(0, SCROLL_PAD);
+      dbgLog('scroll-guard', {drift: +drift.toFixed(1), thr: threshold, before, phase: tight ? 'tight' : (inGrace ? 'grace' : 'loose')});
+      requestAnimationFrame(() => { _scrollGuardFixing = false; });
     }
+
     // Keep transform in sync with scroll position
     applyCustomZoom();
   }, {passive: true});
