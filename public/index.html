@@ -4075,7 +4075,6 @@ window.KidSequencer = {
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
-    toolbarTriggered = false; // reset so grace frames fire again next landscape
     if(spacerTop) spacerTop.style.height = '0px';
     if(spacerBottom) spacerBottom.style.height = '0px';
     document.documentElement.style.height = '';
@@ -4149,21 +4148,45 @@ window.KidSequencer = {
       cz.offsetY = (vh - scaledH) / 2 - bt.ty;
     }
   }
-
-  // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  // Grace frames: let first 2 touchmove frames through un-prevented on the FIRST
-  // pinch in landscape so Safari sees real scroll and collapses the toolbar.
-  // After grace, snap scrollY back and preventDefault all subsequent frames.
+  // Use touch events (not pointer events) so we get reliable multi-touch on iOS.
+  // EXPERIMENTAL: no grace frames. We always preventDefault() from touchstart onward,
+  // and we try to encourage toolbar collapse via a programmatic scroll "nudge" when
+  // entering landscape.
   let pinchMoveCount = 0;
-  let toolbarTriggered = false; // true after first grace cycle — no more grace needed
-  const GRACE_FRAMES = 2;
-
-  // Tight scroll guard while pinching (and briefly after) to prevent Safari viewport shrink.
-  let pinchScrollGuardUntil = 0; // ms timestamp
-  const PINCH_GUARD_MS = 300;
-  const PINCH_DRIFT_PX = 2;
-  let _scrollGuardFixing = false;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
+
+  // Detect entering/leaving landscape and apply a one-time scroll nudge to try to
+  // collapse the Safari toolbar without relying on gesture-based scrolling.
+  let _lastWasLandscape = isLandscape();
+  function landscapeNudge(reason){
+    if(!isLandscape()) return;
+    ensureLandscapeScrollRoom();
+    try{
+      const to = SCROLL_PAD + 1;
+      window.scrollTo(0, to);
+      dbgLog('land-nudge', {reason, to});
+      requestAnimationFrame(() => { try{ window.scrollTo(0, SCROLL_PAD); }catch(_){} });
+    }catch(_){}
+  }
+
+  function handleOrientationModeChange(reason){
+    const nowLand = isLandscape();
+    if(nowLand && !_lastWasLandscape){
+      // Just entered landscape
+      setTimeout(() => landscapeNudge(reason || 'enter-land'), 60);
+    } else if(!nowLand && _lastWasLandscape){
+      // Left landscape
+      removeLandscapeScrollRoom();
+    } else if(nowLand && !scrollRoomActive){
+      // Land but scroll room missing (rare) — restore
+      ensureLandscapeScrollRoom();
+    }
+    _lastWasLandscape = nowLand;
+  }
+
+  window.addEventListener('orientationchange', () => handleOrientationModeChange('orientationchange'), {passive:true});
+  window.addEventListener('resize', () => handleOrientationModeChange('resize'), {passive:true});
+  window.addEventListener('load', () => handleOrientationModeChange('load'), {once:true});
 
   viewport.addEventListener('touchstart', (e) => {
     if(e.touches.length === 2) {
@@ -4185,10 +4208,8 @@ window.KidSequencer = {
 
       if(isLandscape()) {
         ensureLandscapeScrollRoom();
-        dbgLog('ts-land', {tt: toolbarTriggered});
+        dbgLog('ts-land');
         pinchScrollGuardUntil = Date.now() + PINCH_GUARD_MS;
-        // If we need grace frames, don't preventDefault on touchstart
-        if(!toolbarTriggered) return;
       }
       e.preventDefault();
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
@@ -4229,22 +4250,9 @@ window.KidSequencer = {
 
       clampOffsets(true);
       applyCustomZoom();
+      e.preventDefault();
+      if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
 
-      // Grace frames: first pinch in landscape lets 2 frames through un-prevented
-      if(isLandscape() && !toolbarTriggered && pinchMoveCount <= GRACE_FRAMES) {
-        // Let Safari see real scroll to trigger toolbar collapse
-        dbgLog('grace', {g: pinchMoveCount, sY: window.scrollY});
-        // Don't call e.preventDefault()
-      } else {
-        e.preventDefault();
-        // Right after grace period ends, snap scrollY back and lock it
-        if(isLandscape() && !toolbarTriggered && pinchMoveCount === GRACE_FRAMES + 1) {
-          toolbarTriggered = true;
-          window.scrollTo(0, SCROLL_PAD);
-          dbgLog('grace-end-snap', {sY: window.scrollY});
-        }
-        if(pinchMoveCount <= 10 || pinchMoveCount % 50 === 0) dbgLog('pinch', {g: pinchMoveCount});
-      }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
       const dy = e.touches[0].clientY - panStartY;
@@ -4307,8 +4315,7 @@ window.KidSequencer = {
     if(_scrollGuardFixing) return;
 
     const now = Date.now();
-    const inGrace = isLandscape() && pinching && !toolbarTriggered && pinchMoveCount <= GRACE_FRAMES;
-    const tight = (!inGrace) && (pinching || now < pinchScrollGuardUntil);
+    const tight = (pinching || now < pinchScrollGuardUntil);
     const threshold = tight ? PINCH_DRIFT_PX : 30;
 
     const drift = Math.abs(window.scrollY - SCROLL_PAD);
@@ -4316,7 +4323,7 @@ window.KidSequencer = {
       _scrollGuardFixing = true;
       const before = window.scrollY;
       window.scrollTo(0, SCROLL_PAD);
-      dbgLog('scroll-guard', {drift: +drift.toFixed(1), thr: threshold, before, phase: tight ? 'tight' : (inGrace ? 'grace' : 'loose')});
+      dbgLog('scroll-guard', {drift: +drift.toFixed(1), thr: threshold, before, phase: tight ? 'tight' : 'loose'});
       requestAnimationFrame(() => { _scrollGuardFixing = false; });
     }
 
