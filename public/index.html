@@ -3998,13 +3998,16 @@ window.KidSequencer = {
       iW: iw,
       iH: ih,
       vvH: vv ? +vv.height.toFixed(0) : ih,
-      dSH: document.documentElement.scrollHeight
+      dSH: document.documentElement.scrollHeight,
+      oH: window.outerHeight,
+      sH: screen.height,
+      sW: screen.width
     };
     if(extra) Object.assign(entry, extra);
     __fbLogBuf.push(entry);
 
     // Flush immediately for important events, batch for high-frequency ones
-    const immediate = ['PAGE-LOAD','LOGGER-READY','ts-land','reset','ended-zoom','doubletap-reset','orient','resize','scroll-guard'];
+    const immediate = ['PAGE-LOAD','LOGGER-READY','ts-land','reset','ended-zoom','doubletap-reset','orient','resize','scroll-guard','tb-test-start','tb-strategy-1-focus','tb-strategy-2-bigjump','tb-strategy-3-oscillate','tb-strategy-4-meta','tb-strategy-5-raf','tb-test-none-worked','scroll-room-on'];
     if(immediate.includes(event)) {
       __fbFlush();
     } else if(!__fbFlushTimer) {
@@ -4030,6 +4033,8 @@ window.KidSequencer = {
     setTimeout(() => {
       if(window.innerWidth > window.innerHeight) {
         ensureLandscapeScrollRoom();
+      } else {
+        toolbarTestDone = false;
       }
     }, 350);
   }, {passive:true});
@@ -4168,9 +4173,99 @@ window.KidSequencer = {
 
   // Use touch events (not pointer events) so we get reliable multi-touch on iOS
   // No grace frames — always preventDefault to prevent scrollY drift which crashes Safari.
-  // Toolbar collapse is triggered by scroll room + pre-scroll alone.
   let pinchMoveCount = 0;
+  let toolbarTestDone = false;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
+
+  // Test multiple toolbar collapse strategies after first pinch ends
+  async function tryToolbarCollapse() {
+    if(toolbarTestDone) return;
+    toolbarTestDone = true;
+    
+    const baseH = window.innerHeight;
+    dbgLog('tb-test-start', {baseH: baseH});
+    
+    // Strategy 1: focus() on a hidden input (sometimes triggers minimal-ui)
+    try {
+      const inp = document.createElement('input');
+      inp.style.cssText = 'position:fixed;top:-100px;opacity:0;height:0;';
+      document.body.appendChild(inp);
+      inp.focus();
+      inp.blur();
+      document.body.removeChild(inp);
+      await new Promise(r => setTimeout(r, 100));
+      if(window.innerHeight !== baseH) {
+        dbgLog('tb-strategy-1-focus', {newH: window.innerHeight});
+        return;
+      }
+    } catch(e) {}
+    
+    // Strategy 2: scrollTo with large jump
+    try {
+      window.scrollTo(0, 0);
+      void document.body.offsetHeight;
+      window.scrollTo(0, 800);
+      await new Promise(r => setTimeout(r, 200));
+      window.scrollTo(0, SCROLL_PAD);
+      if(window.innerHeight !== baseH) {
+        dbgLog('tb-strategy-2-bigjump', {newH: window.innerHeight});
+        return;
+      }
+    } catch(e) {}
+    
+    // Strategy 3: rapid scroll oscillation
+    try {
+      for(let i = 0; i < 5; i++) {
+        window.scrollTo(0, SCROLL_PAD + 200);
+        await new Promise(r => setTimeout(r, 16));
+        window.scrollTo(0, SCROLL_PAD - 200);
+        await new Promise(r => setTimeout(r, 16));
+      }
+      window.scrollTo(0, SCROLL_PAD);
+      await new Promise(r => setTimeout(r, 100));
+      if(window.innerHeight !== baseH) {
+        dbgLog('tb-strategy-3-oscillate', {newH: window.innerHeight});
+        return;
+      }
+    } catch(e) {}
+    
+    // Strategy 4: change viewport meta temporarily
+    try {
+      const meta = document.querySelector('meta[name="viewport"]');
+      const orig = meta.content;
+      meta.content = 'width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=3, viewport-fit=cover';
+      await new Promise(r => setTimeout(r, 100));
+      meta.content = orig;
+      await new Promise(r => setTimeout(r, 200));
+      window.scrollTo(0, SCROLL_PAD);
+      if(window.innerHeight !== baseH) {
+        dbgLog('tb-strategy-4-meta', {newH: window.innerHeight});
+        return;
+      }
+    } catch(e) {}
+    
+    // Strategy 5: requestAnimationFrame scroll chain
+    try {
+      let frames = 0;
+      await new Promise(resolve => {
+        function tick() {
+          window.scrollTo(0, SCROLL_PAD + frames * 2);
+          frames++;
+          if(frames < 30) requestAnimationFrame(tick);
+          else resolve();
+        }
+        requestAnimationFrame(tick);
+      });
+      window.scrollTo(0, SCROLL_PAD);
+      await new Promise(r => setTimeout(r, 200));
+      if(window.innerHeight !== baseH) {
+        dbgLog('tb-strategy-5-raf', {newH: window.innerHeight});
+        return;
+      }
+    } catch(e) {}
+    
+    dbgLog('tb-test-none-worked', {finalH: window.innerHeight});
+  }
 
   viewport.addEventListener('touchstart', (e) => {
     if(e.touches.length === 2) {
@@ -4260,6 +4355,13 @@ window.KidSequencer = {
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
           dbgLog('reset');
+          // After first reset in landscape, run toolbar collapse test
+          if(isLandscape() && !toolbarTestDone) {
+            setTimeout(() => {
+              ensureLandscapeScrollRoom();
+              tryToolbarCollapse();
+            }, 400);
+          }
         } else {
           // Still zoomed — keep isZooming TRUE so layout doesn't
           // overwrite our transform when toolbar-resize fires
