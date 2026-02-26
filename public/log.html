@@ -208,29 +208,45 @@ document.getElementById('autoBtn').onclick = function() {
 };
 
 document.getElementById('exportBtn').onclick = function() {
-  if (!selectedSession) { alert('Select a session first'); return; }
-  // Gather all entries for selected session
-  const sessionDocs = allDocs.filter(d => d.sessionId === selectedSession);
-  const allEntries = [];
-  sessionDocs.forEach(d => (d.entries || []).forEach(e => allEntries.push(e)));
-  allEntries.sort((a, b) => a.seq - b.seq);
+  if (allDocs.length === 0) { alert('No logs to export'); return; }
   
-  const lines = allEntries.map(e => {
-    const ts = new Date(e.t).toISOString().substr(11, 12);
-    let line = e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.s + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.sY + ' sR=' + e.sR + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.dSH;
-    if (e.g !== undefined) line += ' g=' + e.g;
-    if (e.note) line += ' [' + e.note + ']';
-    return line;
+  // Group all docs by session
+  const sessions = {};
+  allDocs.forEach(d => {
+    if (!sessions[d.sessionId]) sessions[d.sessionId] = [];
+    sessions[d.sessionId].push(d);
   });
-  
-  const header = 'Session: ' + selectedSession + '\nExported: ' + new Date().toISOString() + '\nEntries: ' + lines.length + '\n\n';
-  const text = header + lines.join('\n');
+
+  const sections = [];
+  const sorted = Object.entries(sessions).sort((a, b) => {
+    const aTs = Math.min(...a[1].map(d => d.ts));
+    const bTs = Math.min(...b[1].map(d => d.ts));
+    return aTs - bTs;
+  });
+
+  sorted.forEach(([sid, docs]) => {
+    const allEntries = [];
+    docs.forEach(d => (d.entries || []).forEach(e => allEntries.push(e)));
+    allEntries.sort((a, b) => a.seq - b.seq);
+    
+    const lines = allEntries.map(e => {
+      const ts = new Date(e.t).toISOString().substr(11, 12);
+      let line = e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.s + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.sY + ' sR=' + e.sR + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.dSH;
+      if (e.g !== undefined) line += ' g=' + e.g;
+      if (e.note) line += ' [' + e.note + ']';
+      return line;
+    });
+    
+    sections.push('=== Session: ' + sid + ' ===\nEntries: ' + lines.length + '\n\n' + lines.join('\n'));
+  });
+
+  const text = 'Zoom Debug Log - All Sessions\nExported: ' + new Date().toISOString() + '\nTotal sessions: ' + sorted.length + '\n\n' + sections.join('\n\n\n');
   
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'zoom-debug-' + selectedSession + '.txt';
+  a.download = 'zoom-debug-all-' + Date.now() + '.txt';
   a.click();
   URL.revokeObjectURL(url);
 };
