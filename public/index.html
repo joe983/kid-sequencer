@@ -4153,6 +4153,11 @@ window.KidSequencer = {
   // and we try to encourage toolbar collapse via a programmatic scroll "nudge" when
   // entering landscape.
   let pinchMoveCount = 0;
+  // Pinch/scroll guard tuning
+  const PINCH_DRIFT_PX = 2;      // px drift allowed while pinching / immediately after
+  const PINCH_GUARD_MS  = 300;   // ms after pinch end to keep tight guard
+  let pinchScrollGuardUntil = 0;
+  let _scrollGuardFixing = false;
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
 
   // Detect entering/leaving landscape and apply a one-time scroll nudge to try to
@@ -4169,19 +4174,56 @@ window.KidSequencer = {
     }catch(_){}
   }
 
+  // After orientation / resize, Safari sometimes resets scrollY to 0 which re-shows the toolbar.
+  // This short "pin burst" re-asserts scrollY back to SCROLL_PAD a few times to stabilise.
+  let _landPinTimers = [];
+  function _clearLandPins(){
+    for(const t of _landPinTimers) clearTimeout(t);
+    _landPinTimers = [];
+  }
+  function scheduleLandscapePinBurst(reason){
+    if(!isLandscape()) return;
+    ensureLandscapeScrollRoom();
+    _clearLandPins();
+    const delays = [0, 50, 150, 300, 600];
+    for(const d of delays){
+      _landPinTimers.push(setTimeout(() => {
+        if(!isLandscape() || !scrollRoomActive) return;
+        if(_scrollGuardFixing) return; // avoid fighting our own scroll handler
+        const before = window.scrollY;
+        try{ window.scrollTo(0, SCROLL_PAD); }catch(_){}
+        requestAnimationFrame(() => {
+          dbgLog('land-pin', {reason, d, before, after: window.scrollY});
+        });
+      }, d));
+    }
+  }
+
+
   function handleOrientationModeChange(reason){
     const nowLand = isLandscape();
     if(nowLand && !_lastWasLandscape){
       // Just entered landscape
       setTimeout(() => landscapeNudge(reason || 'enter-land'), 60);
+      // Keep scroll pinned while Safari settles its UI
+      scheduleLandscapePinBurst(reason || 'enter-land');
     } else if(!nowLand && _lastWasLandscape){
       // Left landscape
+      _clearLandPins();
       removeLandscapeScrollRoom();
     } else if(nowLand && !scrollRoomActive){
       // Land but scroll room missing (rare) — restore
       ensureLandscapeScrollRoom();
+      scheduleLandscapePinBurst(reason || 'restore-land');
+    } else if(nowLand){
+      // Still landscape: resizes can re-show bars and reset scroll
+      scheduleLandscapePinBurst(reason || 'land');
+    } else {
+      // Still portrait: ensure no pending pin bursts
+      _clearLandPins();
     }
     _lastWasLandscape = nowLand;
+  }
   }
 
   window.addEventListener('orientationchange', () => handleOrientationModeChange('orientationchange'), {passive:true});
