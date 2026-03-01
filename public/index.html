@@ -3410,7 +3410,7 @@ root.classList.add('stageScaled');
     pageEl.style.minHeight = stageH + 'px';
 
     // Store base transform for the custom pinch-zoom handler to compound onto
-    window.__baseTransform = { tx, ty, s, stageW, stageH };
+    window.__baseTransform = { tx, ty, s, stageW, stageH, offX, offY };
 
     // If zoom system owns the transform, we've stored the base — now bail out.
     // Do NOT write to page.style.transform — the zoom handler manages it exclusively.
@@ -3994,8 +3994,18 @@ window.KidSequencer = {
     if(!bt) return;
     const cz = window.__customZoom;
     const totalS = bt.s * cz.scale;
-    const tx = bt.tx + cz.offsetX;
-    const ty = bt.ty + cz.offsetY;
+    
+    // Compensate for Safari toolbar animation shifting the visible viewport.
+    // bt.ty was computed with a specific visualViewport.offsetTop (bt.offY).
+    // If that has changed since, adjust so the stage follows the visible area.
+    const vv = window.visualViewport;
+    const currentOffY = vv ? vv.offsetTop : 0;
+    const currentOffX = vv ? vv.offsetLeft : 0;
+    const driftX = currentOffX - (bt.offX || 0);
+    const driftY = currentOffY - (bt.offY || 0);
+    
+    const tx = bt.tx + cz.offsetX + driftX;
+    const ty = bt.ty + cz.offsetY + driftY;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4003,33 +4013,35 @@ window.KidSequencer = {
     const bt = window.__baseTransform;
     if(!bt) return;
     const cz = window.__customZoom;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const vv = window.visualViewport;
+    // Use visual viewport dimensions when available (accounts for toolbar state)
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
     const totalS = bt.s * cz.scale;
     const scaledW = bt.stageW * totalS;
     const scaledH = bt.stageH * totalS;
+    
+    // Account for viewport offset drift (toolbar animation)
+    const driftX = (vv ? vv.offsetLeft : 0) - (bt.offX || 0);
+    const driftY = (vv ? vv.offsetTop : 0) - (bt.offY || 0);
 
-    // The page's left edge on screen = bt.tx + cz.offsetX
-    // The page's right edge on screen = bt.tx + cz.offsetX + scaledW
+    // The page's left edge on screen = bt.tx + cz.offsetX + driftX
+    // Clamp so content edges don't pull away from visible viewport edges
 
     if(scaledW > vw){
-      // Content wider than viewport: keep edges from pulling away
-      // Right edge must stay at or past the left viewport edge
-      const minX = vw - scaledW - bt.tx;
-      // Left edge must stay at or before the right viewport edge
-      const maxX = -bt.tx;
+      const minX = vw - scaledW - bt.tx - driftX;
+      const maxX = -bt.tx - driftX;
       cz.offsetX = Math.max(minX, Math.min(maxX, cz.offsetX));
     } else if(!duringPinch) {
-      // Content fits: only re-center after pinch ends (not during)
-      cz.offsetX = (vw - scaledW) / 2 - bt.tx;
+      cz.offsetX = (vw - scaledW) / 2 - bt.tx - driftX;
     }
 
     if(scaledH > vh){
-      const minY = vh - scaledH - bt.ty;
-      const maxY = -bt.ty;
+      const minY = vh - scaledH - bt.ty - driftY;
+      const maxY = -bt.ty - driftY;
       cz.offsetY = Math.max(minY, Math.min(maxY, cz.offsetY));
     } else if(!duringPinch) {
-      cz.offsetY = (vh - scaledH) / 2 - bt.ty;
+      cz.offsetY = (vh - scaledH) / 2 - bt.ty - driftY;
     }
   }
 
@@ -4272,6 +4284,27 @@ window.KidSequencer = {
       window.scrollTo(0, 50);
     }
   }, {passive: true});
+
+  // Track viewport offset changes while zoomed (toolbar hide/show).
+  // This is safe because applyCustomZoom is a pure compositing operation —
+  // unlike scheduleLayout, it doesn't trigger reflow or tile rasterization.
+  if(window.visualViewport) {
+    let lastVVOffY = window.visualViewport.offsetTop;
+    window.visualViewport.addEventListener('resize', () => {
+      // Only act when zoom handler owns the transform and user is zoomed
+      const cz = window.__customZoom;
+      if(!cz || cz.scale <= 1.02) return;
+      if(typeof window.__getZoomOwnsTransform !== 'function' || !window.__getZoomOwnsTransform()) return;
+      
+      const newOffY = window.visualViewport.offsetTop;
+      if(Math.abs(newOffY - lastVVOffY) > 1) {
+        lastVVOffY = newOffY;
+        // Re-clamp and re-apply to track the viewport shift
+        clampOffsets(false);
+        applyCustomZoom();
+      }
+    }, {passive: true});
+  }
 
   // Double-tap to reset zoom
   let lastTapTime = 0;
