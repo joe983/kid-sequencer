@@ -3930,6 +3930,7 @@ window.KidSequencer = {
     if(window.innerWidth <= window.innerHeight) return;
     if(scrollRoomActive) return;
     scrollRoomActive = true;
+    window.__zoomScrollRoomActive = true;
 
     // Top spacer — inserted as first child of body
     if(!spacerTop) {
@@ -3964,6 +3965,7 @@ window.KidSequencer = {
   function removeLandscapeScrollRoom(){
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
+    window.__zoomScrollRoomActive = false;
     if(spacerTop) spacerTop.style.height = '0px';
     if(spacerBottom) spacerBottom.style.height = '0px';
     document.documentElement.style.height = '';
@@ -4065,9 +4067,14 @@ window.KidSequencer = {
       initialOffsetX = window.__customZoom.offsetX;
       initialOffsetY = window.__customZoom.offsetY;
 
+      // Debug log
+      if(typeof window.__zoomLog === 'function') window.__zoomLog('pinch', { note: 'start dist=' + Math.round(initialDist) });
+
       if(isLandscape()) {
         // Make document scrollable BEFORE the first touchmove arrives
         ensureLandscapeScrollRoom();
+        window.__zoomScrollRoomActive = true;
+        if(typeof window.__zoomLog === 'function') window.__zoomLog('scroll-room-on');
         // Don't preventDefault — let Safari see a potential scroll starting
       } else {
         e.preventDefault();
@@ -4081,6 +4088,7 @@ window.KidSequencer = {
       panStartY = e.touches[0].clientY;
       panStartOffsetX = window.__customZoom.offsetX;
       panStartOffsetY = window.__customZoom.offsetY;
+      if(typeof window.__zoomLog === 'function') window.__zoomLog('ts-land');
       e.preventDefault();
     }
   }, {passive: false});
@@ -4120,8 +4128,13 @@ window.KidSequencer = {
         // Don't preventDefault — Safari needs these to detect a real scroll
         // But clamp scroll so user never reaches scrollTop=0 (which re-shows toolbar)
         if(window.scrollY < 50) window.scrollTo(0, 50);
+        if(typeof window.__zoomLog === 'function') window.__zoomLog('grace', { g: pinchMoveCount, ga: TOOLBAR_GRACE_FRAMES });
       } else {
         e.preventDefault();
+        // Log the first frame after grace period ends
+        if(pinchMoveCount === TOOLBAR_GRACE_FRAMES + 1 && typeof window.__zoomLog === 'function') {
+          window.__zoomLog('grace-end', { g: pinchMoveCount });
+        }
       }
     } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       const dx = e.touches[0].clientX - panStartX;
@@ -4140,6 +4153,7 @@ window.KidSequencer = {
         pinching = false;
         // If scale is very close to 1, snap back to 1
         if(window.__customZoom.scale < 1.05) {
+          if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'snap-back s=' + window.__customZoom.scale.toFixed(3) });
           window.__customZoom.scale = 1;
           window.__customZoom.offsetX = 0;
           window.__customZoom.offsetY = 0;
@@ -4148,10 +4162,12 @@ window.KidSequencer = {
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           if(window.scheduleLayout) window.scheduleLayout();
           removeLandscapeScrollRoom();
+          window.__zoomScrollRoomActive = false;
         } else {
           // Final clamp to re-center if content fits in viewport
           clampOffsets(false);
           applyCustomZoom();
+          if(typeof window.__zoomLog === 'function') window.__zoomLog('ended-zoom', { note: 'staying zoomed s=' + window.__customZoom.scale.toFixed(3) });
           // Unblock layout (but it won't overwrite since we re-apply custom zoom in applyStageFit)
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           
@@ -4190,12 +4206,14 @@ window.KidSequencer = {
     const now = Date.now();
     if(now - lastTapTime < 300) {
       // Double-tap detected — reset zoom
+      if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'double-tap' });
       window.__customZoom.scale = 1;
       window.__customZoom.offsetX = 0;
       window.__customZoom.offsetY = 0;
       applyCustomZoom();
       if(window.scheduleLayout) window.scheduleLayout();
       removeLandscapeScrollRoom();
+      window.__zoomScrollRoomActive = false;
       lastTapTime = 0;
     } else {
       lastTapTime = now;
@@ -4640,6 +4658,155 @@ window.KidSequencer = {
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
+})();
+</script>
+
+<script type="module">
+/* ===== ZOOM DEBUG LOGGER =====
+   Sends zoom/pinch/layout events to Firestore so they can be viewed in log.html.
+   Self-contained: initialises its own Firebase app instance (namespaced to avoid
+   colliding with the main app's Firebase). */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+(function(){
+  // --- Firebase setup (separate app instance) ---
+  let db = null;
+  try {
+    const debugApp = initializeApp({
+      apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
+      authDomain: "kid-sequencer.firebaseapp.com",
+      projectId: "kid-sequencer",
+      storageBucket: "kid-sequencer.firebasestorage.app",
+      messagingSenderId: "715996068165",
+      appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
+    }, 'zoomDebug'); // named app to avoid collision
+    db = getFirestore(debugApp);
+    console.info('[ZoomDebug] Logger ready');
+  } catch(e) {
+    console.warn('[ZoomDebug] Firebase init failed, logging disabled', e);
+    return;
+  }
+
+  // --- Session ID (one per page load) ---
+  const sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,6);
+  let seq = 0;
+  const BATCH_SIZE = 30;
+  const FLUSH_INTERVAL = 10000; // ms
+  let buffer = [];
+
+  // --- Snapshot helper ---
+  function snap(event, extra) {
+    const vv = window.visualViewport;
+    const cz = window.__customZoom || { scale: 1, offsetX: 0, offsetY: 0 };
+    const entry = {
+      seq: seq++,
+      t: Date.now(),
+      event: event,
+      s: +(cz.scale).toFixed(3),
+      oX: +(cz.offsetX).toFixed(1),
+      oY: +(cz.offsetY).toFixed(1),
+      sY: Math.round(window.scrollY),
+      sR: window.__zoomScrollRoomActive ? 1 : 0,
+      iW: window.innerWidth,
+      iH: window.innerHeight,
+      vvH: vv ? Math.round(vv.height) : 0,
+      dSH: document.documentElement.scrollHeight
+    };
+    // Optional fields
+    if (vv) { entry.oH = Math.round(vv.offsetTop); entry.sW = Math.round(vv.width); }
+    if (window.screen) { entry.sH = window.screen.height; }
+    if (extra) Object.assign(entry, extra);
+    buffer.push(entry);
+    if (buffer.length >= BATCH_SIZE) flush();
+  }
+
+  // --- Flush buffer to Firestore ---
+  let flushPromise = null;
+  async function flush() {
+    if (!db || buffer.length === 0) return;
+    if (flushPromise) return; // don't overlap
+    const batch = buffer.splice(0);
+    flushPromise = (async () => {
+      try {
+        await addDoc(collection(db, 'zoomDebug'), {
+          sessionId: sessionId,
+          ts: Date.now(),
+          entries: batch
+        });
+      } catch(e) {
+        console.warn('[ZoomDebug] flush failed', e);
+        // put entries back at front
+        buffer.unshift(...batch);
+      } finally {
+        flushPromise = null;
+      }
+    })();
+  }
+
+  // Periodic flush
+  setInterval(flush, FLUSH_INTERVAL);
+  // Flush on page unload
+  window.addEventListener('pagehide', () => flush());
+  window.addEventListener('beforeunload', () => flush());
+
+  // --- Expose global logging function ---
+  window.__zoomLog = snap;
+  window.__zoomLogFlush = flush;
+
+  // --- Auto-log key events ---
+
+  // PAGE-LOAD
+  snap('PAGE-LOAD', { note: navigator.userAgent.slice(0, 80) });
+
+  // Resize
+  let resizeLogTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeLogTimer);
+    resizeLogTimer = setTimeout(() => snap('resize'), 200);
+  }, { passive: true });
+
+  // Orientation change
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => snap('orient'), 350);
+  }, { passive: true });
+
+  // Scroll guard events (when zoomed, prevent scrollTop=0)
+  const origScrollGuard = window.addEventListener;
+  // We'll hook into scroll to detect guard activations
+  let lastScrollGuardLog = 0;
+  window.addEventListener('scroll', () => {
+    if (!window.__zoomScrollRoomActive) return;
+    const cz = window.__customZoom;
+    if (!cz || cz.scale <= 1.02) return;
+    if (window.scrollY < 50) {
+      const now = Date.now();
+      if (now - lastScrollGuardLog > 500) {
+        lastScrollGuardLog = now;
+        snap('scroll-guard', { note: 'scrollY clamped from ' + window.scrollY });
+      }
+    }
+  }, { passive: true });
+
+  // Idle heartbeat (every 30s if no other events logged recently)
+  let lastEventTime = Date.now();
+  const origSnap = snap;
+  // Wrap snap to track timing
+  window.__zoomLog = function(event, extra) {
+    lastEventTime = Date.now();
+    origSnap(event, extra);
+  };
+  setInterval(() => {
+    if (Date.now() - lastEventTime > 25000) {
+      origSnap('idle');
+      lastEventTime = Date.now();
+    }
+  }, 30000);
+
+  // Log that the logger itself is ready
+  snap('LOGGER-READY');
+
+  console.info('[ZoomDebug] Session:', sessionId);
 })();
 </script>
 
