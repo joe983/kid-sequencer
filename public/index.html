@@ -3994,23 +3994,8 @@ window.KidSequencer = {
     if(!bt) return;
     const cz = window.__customZoom;
     const totalS = bt.s * cz.scale;
-    
-    // Compensate for Safari toolbar animation shifting the visible viewport.
-    // bt.ty was computed with a specific visualViewport.offsetTop (bt.offY).
-    // ONLY apply drift when fingers are NOT on screen — during an active pinch/pan,
-    // Safari's offsetTop jumps around as part of native viewport manipulation and
-    // would cause jerkiness if we tried to follow it.
-    let driftX = 0, driftY = 0;
-    if(!pinching && !panning) {
-      const vv = window.visualViewport;
-      const currentOffY = vv ? vv.offsetTop : 0;
-      const currentOffX = vv ? vv.offsetLeft : 0;
-      driftX = currentOffX - (bt.offX || 0);
-      driftY = currentOffY - (bt.offY || 0);
-    }
-    
-    const tx = bt.tx + cz.offsetX + driftX;
-    const ty = bt.ty + cz.offsetY + driftY;
+    const tx = bt.tx + cz.offsetX;
+    const ty = bt.ty + cz.offsetY;
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4018,39 +4003,33 @@ window.KidSequencer = {
     const bt = window.__baseTransform;
     if(!bt) return;
     const cz = window.__customZoom;
-    const vv = window.visualViewport;
-    const fingersActive = pinching || panning;
-    
-    // During active touch, use window.innerWidth/Height which are more stable than
-    // visualViewport dimensions (Safari changes vv.width/height during native pinch handling).
-    // Between gestures, use visualViewport for accurate toolbar-aware dimensions.
-    const vw = (!fingersActive && vv) ? vv.width : window.innerWidth;
-    const vh = (!fingersActive && vv) ? vv.height : window.innerHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const totalS = bt.s * cz.scale;
     const scaledW = bt.stageW * totalS;
     const scaledH = bt.stageH * totalS;
-    
-    // Only account for viewport offset drift between gestures (not during active touch)
-    let driftX = 0, driftY = 0;
-    if(!fingersActive) {
-      driftX = (vv ? vv.offsetLeft : 0) - (bt.offX || 0);
-      driftY = (vv ? vv.offsetTop : 0) - (bt.offY || 0);
-    }
+
+    // The page's left edge on screen = bt.tx + cz.offsetX
+    // The page's right edge on screen = bt.tx + cz.offsetX + scaledW
 
     if(scaledW > vw){
-      const minX = vw - scaledW - bt.tx - driftX;
-      const maxX = -bt.tx - driftX;
+      // Content wider than viewport: keep edges from pulling away
+      // Right edge must stay at or past the left viewport edge
+      const minX = vw - scaledW - bt.tx;
+      // Left edge must stay at or before the right viewport edge
+      const maxX = -bt.tx;
       cz.offsetX = Math.max(minX, Math.min(maxX, cz.offsetX));
     } else if(!duringPinch) {
-      cz.offsetX = (vw - scaledW) / 2 - bt.tx - driftX;
+      // Content fits: only re-center after pinch ends (not during)
+      cz.offsetX = (vw - scaledW) / 2 - bt.tx;
     }
 
     if(scaledH > vh){
-      const minY = vh - scaledH - bt.ty - driftY;
-      const maxY = -bt.ty - driftY;
+      const minY = vh - scaledH - bt.ty;
+      const maxY = -bt.ty;
       cz.offsetY = Math.max(minY, Math.min(maxY, cz.offsetY));
     } else if(!duringPinch) {
-      cz.offsetY = (vh - scaledH) / 2 - bt.ty - driftY;
+      cz.offsetY = (vh - scaledH) / 2 - bt.ty;
     }
   }
 
@@ -4298,44 +4277,42 @@ window.KidSequencer = {
   // Safari shifts visualViewport.offsetTop when the toolbar appears/disappears.
   // If we don't follow this, a white band appears between the toolbar and content.
   //
+  // Strategy: when the toolbar shifts BETWEEN gestures, update __baseTransform.ty and .offY
+  // so the base position reflects the new toolbar state. This means applyCustomZoom() and
+  // clampOffsets() naturally produce the correct result with no special drift logic.
+  //
   // This is safe because it only adjusts page.style.transform (a compositing operation) —
   // it does NOT call scheduleLayout/trigger/applyStageFit, which caused the old crash loop.
-  // Safari fires 'scroll' on visualViewport for toolbar shifts, and sometimes 'resize' too.
   if(window.visualViewport) {
-    let lastTrackedOffY = window.visualViewport.offsetTop;
-    
     function handleViewportOffsetChange() {
-      // Never apply drift correction while fingers are on screen — Safari's
-      // offsetTop jumps around during native touch handling and would cause jerkiness.
+      // Never adjust while fingers are on screen — Safari's offsetTop jumps around
+      // during native touch handling and would cause jerkiness.
       if(pinching || panning) return;
       
       const vv = window.visualViewport;
-      const newOffY = vv.offsetTop;
-      if(Math.abs(newOffY - lastTrackedOffY) < 1) return;
-      lastTrackedOffY = newOffY;
-      
       const bt = window.__baseTransform;
       if(!bt) return;
       
-      const cz = window.__customZoom;
-      const isZoomed = cz && cz.scale > 1.02;
-      const zoomOwns = typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform();
+      const newOffY = vv.offsetTop;
+      const newOffX = vv.offsetLeft;
       
-      if(isZoomed && zoomOwns) {
-        // Zoomed: re-clamp and re-apply custom zoom (drift compensation built into applyCustomZoom)
-        clampOffsets(false);
+      // Check if offset actually changed from what's baked into the base transform
+      const deltaY = newOffY - (bt.offY || 0);
+      const deltaX = newOffX - (bt.offX || 0);
+      if(Math.abs(deltaY) < 1 && Math.abs(deltaX) < 1) return;
+      
+      // Shift the base transform to follow the toolbar movement
+      bt.ty += deltaY;
+      bt.tx += deltaX;
+      bt.offY = newOffY;
+      bt.offX = newOffX;
+      
+      // Re-apply the transform (works for both zoomed and non-zoomed)
+      const cz = window.__customZoom;
+      if(cz && cz.scale > 1.02) {
         applyCustomZoom();
-      } else if(!zoomOwns) {
-        // Not zoomed or layout owns transform: patch just the Y offset in the existing transform.
-        // This avoids a full layout recompute but keeps the content tracking the toolbar.
-        const driftY = newOffY - (bt.offY || 0);
-        const driftX = (vv.offsetLeft || 0) - (bt.offX || 0);
-        const oX = cz ? cz.offsetX : 0;
-        const oY = cz ? cz.offsetY : 0;
-        const s = bt.s * (cz ? cz.scale : 1);
-        const tx = bt.tx + oX + driftX;
-        const ty = bt.ty + oY + driftY;
-        page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
+      } else {
+        page.style.transform = `translate(${bt.tx}px, ${bt.ty}px) scale(${bt.s})`;
       }
     }
     
