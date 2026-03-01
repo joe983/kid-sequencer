@@ -3997,12 +3997,17 @@ window.KidSequencer = {
     
     // Compensate for Safari toolbar animation shifting the visible viewport.
     // bt.ty was computed with a specific visualViewport.offsetTop (bt.offY).
-    // If that has changed since, adjust so the stage follows the visible area.
-    const vv = window.visualViewport;
-    const currentOffY = vv ? vv.offsetTop : 0;
-    const currentOffX = vv ? vv.offsetLeft : 0;
-    const driftX = currentOffX - (bt.offX || 0);
-    const driftY = currentOffY - (bt.offY || 0);
+    // ONLY apply drift when fingers are NOT on screen — during an active pinch/pan,
+    // Safari's offsetTop jumps around as part of native viewport manipulation and
+    // would cause jerkiness if we tried to follow it.
+    let driftX = 0, driftY = 0;
+    if(!pinching && !panning) {
+      const vv = window.visualViewport;
+      const currentOffY = vv ? vv.offsetTop : 0;
+      const currentOffX = vv ? vv.offsetLeft : 0;
+      driftX = currentOffX - (bt.offX || 0);
+      driftY = currentOffY - (bt.offY || 0);
+    }
     
     const tx = bt.tx + cz.offsetX + driftX;
     const ty = bt.ty + cz.offsetY + driftY;
@@ -4014,19 +4019,23 @@ window.KidSequencer = {
     if(!bt) return;
     const cz = window.__customZoom;
     const vv = window.visualViewport;
-    // Use visual viewport dimensions when available (accounts for toolbar state)
-    const vw = vv ? vv.width : window.innerWidth;
-    const vh = vv ? vv.height : window.innerHeight;
+    const fingersActive = pinching || panning;
+    
+    // During active touch, use window.innerWidth/Height which are more stable than
+    // visualViewport dimensions (Safari changes vv.width/height during native pinch handling).
+    // Between gestures, use visualViewport for accurate toolbar-aware dimensions.
+    const vw = (!fingersActive && vv) ? vv.width : window.innerWidth;
+    const vh = (!fingersActive && vv) ? vv.height : window.innerHeight;
     const totalS = bt.s * cz.scale;
     const scaledW = bt.stageW * totalS;
     const scaledH = bt.stageH * totalS;
     
-    // Account for viewport offset drift (toolbar animation)
-    const driftX = (vv ? vv.offsetLeft : 0) - (bt.offX || 0);
-    const driftY = (vv ? vv.offsetTop : 0) - (bt.offY || 0);
-
-    // The page's left edge on screen = bt.tx + cz.offsetX + driftX
-    // Clamp so content edges don't pull away from visible viewport edges
+    // Only account for viewport offset drift between gestures (not during active touch)
+    let driftX = 0, driftY = 0;
+    if(!fingersActive) {
+      driftX = (vv ? vv.offsetLeft : 0) - (bt.offX || 0);
+      driftY = (vv ? vv.offsetTop : 0) - (bt.offY || 0);
+    }
 
     if(scaledW > vw){
       const minX = vw - scaledW - bt.tx - driftX;
@@ -4296,6 +4305,10 @@ window.KidSequencer = {
     let lastTrackedOffY = window.visualViewport.offsetTop;
     
     function handleViewportOffsetChange() {
+      // Never apply drift correction while fingers are on screen — Safari's
+      // offsetTop jumps around during native touch handling and would cause jerkiness.
+      if(pinching || panning) return;
+      
       const vv = window.visualViewport;
       const newOffY = vv.offsetTop;
       if(Math.abs(newOffY - lastTrackedOffY) < 1) return;
