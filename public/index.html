@@ -4169,6 +4169,9 @@ window.KidSequencer = {
     handbackGeneration++;
   }
   
+  // Expose cancel so it can be called from outside the IIFE if needed
+  window.__cancelZoomHandback = cancelPendingHandback;
+  
   function deferredLayoutHandback() {
     cancelPendingHandback();
     const gen = handbackGeneration;
@@ -4176,8 +4179,12 @@ window.KidSequencer = {
     handbackLastH = window.innerHeight;
     
     function doHandback(reason) {
-      // If a new pinch started since we were scheduled, abort
+      // If a new pinch/pan started since we were scheduled, abort.
+      // Check BOTH generation AND current zoom state.
       if(gen !== handbackGeneration) return;
+      // Extra safety: if user is currently zoomed (scale > 1), don't release
+      if(window.__customZoom && window.__customZoom.scale > 1.05) return;
+      
       clearInterval(handbackTimer);
       clearTimeout(handbackSafetyTimer);
       handbackTimer = null;
