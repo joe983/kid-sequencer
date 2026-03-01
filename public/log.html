@@ -44,10 +44,10 @@
   .log-table tr.event-idle td { color: #555; }
   .log-table tr.event-resize td { color: #88f; }
   .log-table tr.event-orient td { color: #88f; }
+  .log-table tr.event-layout-handback td { color: #4f4; font-weight: bold; }
   .log-table tr.event-PAGE-LOAD td { color: #f00; font-weight: bold; }
   .log-table tr.event-LOGGER-READY td { color: #0f0; font-weight: bold; }
   .log-table tr.event-scroll-guard td { color: #f44; }
-  .log-table tr.event-layout-handback td { color: #4f4; font-weight: bold; }
   #status { color: #888; margin: 10px 0; font-size: 12px; }
   .log-container { max-height: 80vh; overflow: auto; }
   .filter-label { color: #aaa; font-size: 12px; }
@@ -89,7 +89,7 @@
     <thead>
       <tr>
         <th>#</th><th>Time</th><th>Event</th><th>Scale</th><th>oX</th><th>oY</th>
-        <th>sY</th><th>sRoom</th><th>iW</th><th>iH</th><th>vvH</th><th>dSH</th><th>oH</th><th>sH</th><th>Extra</th>
+        <th>sY</th><th>sRoom</th><th>zO</th><th>iW</th><th>iH</th><th>vvH</th><th>dSH</th><th>oH</th><th>sH</th><th>Extra</th>
       </tr>
     </thead>
     <tbody id="logBody"></tbody>
@@ -195,7 +195,7 @@ function renderSession(session) {
     if (e.newH !== undefined) extra.push('newH=' + e.newH);
     if (e.finalH !== undefined) extra.push('finalH=' + e.finalH);
     
-    tr.innerHTML = `<td>${e.seq}</td><td>${ts}</td><td>${e.event}</td><td>${e.s}</td><td>${e.oX}</td><td>${e.oY}</td><td>${e.sY}</td><td>${e.sR}</td><td>${e.iW}</td><td>${e.iH}</td><td>${e.vvH}</td><td>${e.dSH}</td><td>${e.oH||''}</td><td>${e.sH||''}</td><td>${extra.join(' ')}</td>`;
+    tr.innerHTML = `<td>${e.seq}</td><td>${ts}</td><td>${e.event}</td><td>${e.s}</td><td>${e.oX}</td><td>${e.oY}</td><td>${e.sY}</td><td>${e.sR}</td><td>${e.zO !== undefined ? e.zO : ''}</td><td>${e.iW}</td><td>${e.iH}</td><td>${e.vvH}</td><td>${e.dSH}</td><td>${e.oH||''}</td><td>${e.sH||''}</td><td>${extra.join(' ')}</td>`;
     logBody.appendChild(tr);
   });
 }
