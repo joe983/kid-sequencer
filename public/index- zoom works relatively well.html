@@ -4051,9 +4051,6 @@ window.KidSequencer = {
       panning = false;
       pinchMoveCount = 0;
 
-      // Cancel any pending deferred handback from a previous zoom cycle
-      cancelPendingHandback();
-      
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
       // Claim exclusive transform ownership — layout system will not touch
@@ -4085,10 +4082,8 @@ window.KidSequencer = {
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
-      // Cancel any pending handback and reclaim transform ownership
-      cancelPendingHandback();
+      // Block layout during pan while zoomed
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
       panStartX = e.touches[0].clientX;
       panStartY = e.touches[0].clientY;
       panStartOffsetX = window.__customZoom.offsetX;
@@ -4156,41 +4151,15 @@ window.KidSequencer = {
   // before letting the layout system recalculate. Safari's toolbar animation
   // takes ~300-400ms, during which innerHeight changes multiple times.
   let handbackTimer = null;
-  let handbackSafetyTimer = null;
   let handbackStableCount = 0;
   let handbackLastH = 0;
-  let handbackGeneration = 0;  // incremented each call; stale callbacks check this
-  
-  function cancelPendingHandback() {
-    clearInterval(handbackTimer);
-    clearTimeout(handbackSafetyTimer);
-    handbackTimer = null;
-    handbackSafetyTimer = null;
-    handbackGeneration++;
-  }
-  
   function deferredLayoutHandback() {
-    cancelPendingHandback();
-    const gen = handbackGeneration;
+    clearInterval(handbackTimer);
     handbackStableCount = 0;
     handbackLastH = window.innerHeight;
     
-    function doHandback(reason) {
-      // If a new pinch started since we were scheduled, abort
-      if(gen !== handbackGeneration) return;
-      clearInterval(handbackTimer);
-      clearTimeout(handbackSafetyTimer);
-      handbackTimer = null;
-      handbackSafetyTimer = null;
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-      if(window.scheduleLayout) window.scheduleLayout();
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: reason });
-    }
-    
     // Poll every 80ms until height is stable for 5 consecutive reads (~400ms)
     handbackTimer = setInterval(() => {
-      if(gen !== handbackGeneration) { clearInterval(handbackTimer); return; }
       const h = window.innerHeight;
       if(Math.abs(h - handbackLastH) < 2) {
         handbackStableCount++;
@@ -4199,13 +4168,24 @@ window.KidSequencer = {
         handbackLastH = h;
       }
       if(handbackStableCount >= 5) {
-        doHandback('viewport settled h=' + h);
+        clearInterval(handbackTimer);
+        // NOW release transform ownership and run layout
+        if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
+        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+        if(window.scheduleLayout) window.scheduleLayout();
+        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'viewport settled h=' + h });
       }
     }, 80);
     
     // Safety: always release after 1.5s no matter what
-    handbackSafetyTimer = setTimeout(() => {
-      doHandback('safety timeout');
+    setTimeout(() => {
+      clearInterval(handbackTimer);
+      if(typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform()) {
+        if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
+        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+        if(window.scheduleLayout) window.scheduleLayout();
+        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'safety timeout' });
+      }
     }, 1500);
   }
 
@@ -4230,9 +4210,7 @@ window.KidSequencer = {
           clampOffsets(false);
           applyCustomZoom();
           if(typeof window.__zoomLog === 'function') window.__zoomLog('ended-zoom', { note: 'staying zoomed s=' + window.__customZoom.scale.toFixed(3) });
-          // Cancel any stale handback and ensure we still own the transform
-          cancelPendingHandback();
-          if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
+          // Keep zoomOwnsTransform=true — we're still zoomed, layout should not interfere
           // Just unblock isZooming so non-transform layout stuff can run if needed
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           
