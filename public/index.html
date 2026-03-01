@@ -4285,25 +4285,49 @@ window.KidSequencer = {
     }
   }, {passive: true});
 
-  // Track viewport offset changes while zoomed (toolbar hide/show).
-  // This is safe because applyCustomZoom is a pure compositing operation —
-  // unlike scheduleLayout, it doesn't trigger reflow or tile rasterization.
+  // Track viewport offset changes (toolbar show/hide) in BOTH zoomed and non-zoomed states.
+  // Safari shifts visualViewport.offsetTop when the toolbar appears/disappears.
+  // If we don't follow this, a white band appears between the toolbar and content.
+  //
+  // This is safe because it only adjusts page.style.transform (a compositing operation) —
+  // it does NOT call scheduleLayout/trigger/applyStageFit, which caused the old crash loop.
+  // Safari fires 'scroll' on visualViewport for toolbar shifts, and sometimes 'resize' too.
   if(window.visualViewport) {
-    let lastVVOffY = window.visualViewport.offsetTop;
-    window.visualViewport.addEventListener('resize', () => {
-      // Only act when zoom handler owns the transform and user is zoomed
-      const cz = window.__customZoom;
-      if(!cz || cz.scale <= 1.02) return;
-      if(typeof window.__getZoomOwnsTransform !== 'function' || !window.__getZoomOwnsTransform()) return;
+    let lastTrackedOffY = window.visualViewport.offsetTop;
+    
+    function handleViewportOffsetChange() {
+      const vv = window.visualViewport;
+      const newOffY = vv.offsetTop;
+      if(Math.abs(newOffY - lastTrackedOffY) < 1) return;
+      lastTrackedOffY = newOffY;
       
-      const newOffY = window.visualViewport.offsetTop;
-      if(Math.abs(newOffY - lastVVOffY) > 1) {
-        lastVVOffY = newOffY;
-        // Re-clamp and re-apply to track the viewport shift
+      const bt = window.__baseTransform;
+      if(!bt) return;
+      
+      const cz = window.__customZoom;
+      const isZoomed = cz && cz.scale > 1.02;
+      const zoomOwns = typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform();
+      
+      if(isZoomed && zoomOwns) {
+        // Zoomed: re-clamp and re-apply custom zoom (drift compensation built into applyCustomZoom)
         clampOffsets(false);
         applyCustomZoom();
+      } else if(!zoomOwns) {
+        // Not zoomed or layout owns transform: patch just the Y offset in the existing transform.
+        // This avoids a full layout recompute but keeps the content tracking the toolbar.
+        const driftY = newOffY - (bt.offY || 0);
+        const driftX = (vv.offsetLeft || 0) - (bt.offX || 0);
+        const oX = cz ? cz.offsetX : 0;
+        const oY = cz ? cz.offsetY : 0;
+        const s = bt.s * (cz ? cz.scale : 1);
+        const tx = bt.tx + oX + driftX;
+        const ty = bt.ty + oY + driftY;
+        page.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
       }
-    }, {passive: true});
+    }
+    
+    window.visualViewport.addEventListener('resize', handleViewportOffsetChange, {passive: true});
+    window.visualViewport.addEventListener('scroll', handleViewportOffsetChange, {passive: true});
   }
 
   // Double-tap to reset zoom
