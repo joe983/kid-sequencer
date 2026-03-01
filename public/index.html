@@ -3974,12 +3974,6 @@ window.KidSequencer = {
   let initialDist = 0;
   let initialScale = 1;
   let initialMidX = 0, initialMidY = 0;
-  // Freeze viewport metrics during pinch to avoid clamp jitter while Safari toolbar animates
-  let pinchFrozen = false;
-  let pinchFrozenVW = 0;
-  let pinchFrozenVH = 0;
-  // Delay enabling scroll-room until we know the gesture is an actual zoom
-  const SCROLL_ROOM_ENABLE_SCALE = 1.03;
   let initialOffsetX = 0, initialOffsetY = 0;
 
   // Panning while zoomed
@@ -4009,8 +4003,8 @@ window.KidSequencer = {
     const bt = window.__baseTransform;
     if(!bt) return;
     const cz = window.__customZoom;
-    const vw = (duringPinch && pinchFrozen) ? pinchFrozenVW : window.innerWidth;
-    const vh = (duringPinch && pinchFrozen) ? pinchFrozenVH : window.innerHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const totalS = bt.s * cz.scale;
     const scaledW = bt.stageW * totalS;
     const scaledH = bt.stageH * totalS;
@@ -4076,18 +4070,12 @@ window.KidSequencer = {
       // Debug log
       if(typeof window.__zoomLog === 'function') window.__zoomLog('pinch', { note: 'start dist=' + Math.round(initialDist) });
 
-      // Cancel any pending layout handback from a previous gesture
-      if(typeof cancelLayoutHandback === 'function') cancelLayoutHandback();
-
-      // Freeze viewport metrics during pinch to avoid clamp jitter while Safari UI animates
-      pinchFrozen = true;
-      pinchFrozenVW = window.innerWidth;
-      pinchFrozenVH = window.innerHeight;
-
       if(isLandscape()) {
-        // Don't enable scroll-room until we know this is a real zoom (see touchmove).
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('scroll-room-pending');
-        // Don't preventDefault — allow early frames when scroll-room becomes active
+        // Make document scrollable BEFORE the first touchmove arrives
+        ensureLandscapeScrollRoom();
+        window.__zoomScrollRoomActive = true;
+        if(typeof window.__zoomLog === 'function') window.__zoomLog('scroll-room-on');
+        // Don't preventDefault — let Safari see a potential scroll starting
       } else {
         e.preventDefault();
       }
@@ -4119,13 +4107,6 @@ window.KidSequencer = {
       newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
       window.__customZoom.scale = newScale;
 
-      // In landscape, only enable scroll-room once the gesture is an actual zoom.
-      if(isLandscape() && !scrollRoomActive && newScale > SCROLL_ROOM_ENABLE_SCALE) {
-        ensureLandscapeScrollRoom();
-        window.__zoomScrollRoomActive = true;
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('scroll-room-on');
-      }
-
       // Adjust offset so the pinch midpoint stays stable
       const bt = window.__baseTransform;
       if(bt) {
@@ -4143,7 +4124,7 @@ window.KidSequencer = {
 
       // In landscape, let first frames through so Safari sees real scroll on
       // the genuinely-scrollable document and collapses the toolbar.
-      if(isLandscape() && scrollRoomActive && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
+      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
         // Don't preventDefault — Safari needs these to detect a real scroll
         // But clamp scroll so user never reaches scrollTop=0 (which re-shows toolbar)
         if(window.scrollY < 50) window.scrollTo(0, 50);
@@ -4170,79 +4151,35 @@ window.KidSequencer = {
   // before letting the layout system recalculate. Safari's toolbar animation
   // takes ~300-400ms, during which innerHeight changes multiple times.
   let handbackTimer = null;
-  let handbackSafetyTimeout = null;
   let handbackStableCount = 0;
   let handbackLastH = 0;
-
-  function cancelLayoutHandback(){
-    clearInterval(handbackTimer);
-    clearTimeout(handbackSafetyTimeout);
-    handbackTimer = null;
-    handbackSafetyTimeout = null;
-    handbackStableCount = 0;
-  }
-
-  function __handbackSafeToRelease(){
-    // Only hand transform control back when no gesture is active and we're effectively unzoomed.
-    if(pinching) return false;
-    if(panning) return false;
-    if(isZooming) return false;
-    if(window.__customZoom && window.__customZoom.scale > 1.02) return false;
-    return true;
-  }
-
   function deferredLayoutHandback() {
-    cancelLayoutHandback();
+    clearInterval(handbackTimer);
+    handbackStableCount = 0;
     handbackLastH = window.innerHeight;
-
+    
     // Poll every 80ms until height is stable for 5 consecutive reads (~400ms)
     handbackTimer = setInterval(() => {
       const h = window.innerHeight;
-
       if(Math.abs(h - handbackLastH) < 2) {
         handbackStableCount++;
       } else {
         handbackStableCount = 0;
         handbackLastH = h;
       }
-
       if(handbackStableCount >= 5) {
-        // Only release if it's still safe at execution time (avoid mid-gesture races)
-        if(!__handbackSafeToRelease()) {
-          handbackStableCount = 0;
-          handbackLastH = h;
-          return;
-        }
-
         clearInterval(handbackTimer);
-        handbackTimer = null;
-
+        // NOW release transform ownership and run layout
         if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
         if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
         if(window.scheduleLayout) window.scheduleLayout();
         if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'viewport settled h=' + h });
       }
     }, 80);
-
-    // Safety: attempt release after 1.5s, but never force-release mid gesture / while zoomed
-    handbackSafetyTimeout = setTimeout(() => {
+    
+    // Safety: always release after 1.5s no matter what
+    setTimeout(() => {
       clearInterval(handbackTimer);
-      handbackTimer = null;
-
-      if(!__handbackSafeToRelease()) {
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'safety timeout (deferred)' });
-        // Try again shortly rather than force releasing into an active gesture
-        handbackSafetyTimeout = setTimeout(() => {
-          if(__handbackSafeToRelease()) {
-            if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-            if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-            if(window.scheduleLayout) window.scheduleLayout();
-            if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'released after deferral' });
-          }
-        }, 600);
-        return;
-      }
-
       if(typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform()) {
         if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
         if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
@@ -4256,7 +4193,6 @@ window.KidSequencer = {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
-        pinchFrozen = false;
         // If scale is very close to 1, snap back to 1
         if(window.__customZoom.scale < 1.05) {
           if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'snap-back s=' + window.__customZoom.scale.toFixed(3) });
@@ -4285,7 +4221,6 @@ window.KidSequencer = {
     if(e.touches.length === 0) {
       panning = false;
       pinching = false;
-      pinchFrozen = false;
       // Safety: if not zoomed, make sure flags are cleared
       if(window.__customZoom.scale <= 1.02) {
         if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
@@ -4307,13 +4242,6 @@ window.KidSequencer = {
     if(window.scrollY < 50) {
       window.scrollTo(0, 50);
     }
-  }, {passive: true});
-
-  // Also guard the internal scroller, if the app uses one
-  viewport.addEventListener('scroll', () => {
-    if(!scrollRoomActive) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    if(viewport.scrollTop < 50) viewport.scrollTop = 50;
   }, {passive: true});
 
   // Double-tap to reset zoom
