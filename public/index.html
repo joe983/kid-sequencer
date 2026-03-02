@@ -3512,11 +3512,13 @@ root.classList.add('stageScaled');
   window.addEventListener('resize', () => {
     handleZoomChange();
     
-    // Debounce the trigger to prevent rapid-fire calls
+    // Debounce the trigger to prevent rapid-fire calls during toolbar animation.
+    // Use a longer debounce (200ms) to let Safari's toolbar animation (~300-400ms) 
+    // coalesce into fewer layout passes.
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if(!isZooming && !zoomOwnsTransform) trigger();
-    }, 150);
+    }, 200);
   }, {passive:true});
   
   window.addEventListener('orientationchange', () => {
@@ -3959,13 +3961,22 @@ window.KidSequencer = {
     if(!scrollRoomActive) return;
     scrollRoomActive = false;
     window.__zoomScrollRoomActive = false;
-    if(spacerTop) spacerTop.style.height = '0px';
-    if(spacerBottom) spacerBottom.style.height = '0px';
-    document.documentElement.style.height = '';
-    document.documentElement.style.minHeight = '';
-    document.body.style.height = '';
-    document.body.style.minHeight = '';
-    try{ window.scrollTo(0, 0); }catch(_){}
+    
+    // First scroll to the content position (above spacer) before removing spacers
+    // This prevents a visible jump when spacers disappear
+    try{ window.scrollTo({ top: 0, behavior: 'instant' }); }catch(_){
+      try{ window.scrollTo(0, 0); }catch(_){}
+    }
+    
+    // Remove spacers after a micro-delay to let the scroll take effect
+    requestAnimationFrame(() => {
+      if(spacerTop) spacerTop.style.height = '0px';
+      if(spacerBottom) spacerBottom.style.height = '0px';
+      document.documentElement.style.height = '';
+      document.documentElement.style.minHeight = '';
+      document.body.style.height = '';
+      document.body.style.minHeight = '';
+    });
   }
 
   // Track active touches for pinch detection
@@ -3996,6 +4007,10 @@ window.KidSequencer = {
     const totalS = bt.s * cz.scale;
     const tx = bt.tx + cz.offsetX;
     const ty = bt.ty + cz.offsetY;
+    // Promote to compositor layer during zoom for smoother transforms
+    if(cz.scale > 1.01) {
+      page.style.willChange = 'transform';
+    }
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
@@ -4037,8 +4052,23 @@ window.KidSequencer = {
   // Grace frames: let first N touchmove frames through un-prevented in landscape
   // so Safari sees a real user scroll on the now-genuinely-scrollable document.
   let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 4;
+  const TOOLBAR_GRACE_FRAMES = 3; // reduced from 4 — 3 is enough for Safari toolbar trigger
   function isLandscape(){ return window.innerWidth > window.innerHeight; }
+
+  // --- RAF-batched transform application for smoother rendering ---
+  let _zoomRafPending = false;
+  function scheduleZoomApply(){
+    if(_zoomRafPending) return;
+    _zoomRafPending = true;
+    requestAnimationFrame(() => {
+      _zoomRafPending = false;
+      applyCustomZoom();
+    });
+  }
+
+  // --- Smoothing: exponential moving average on scale to reduce jitter ---
+  let _smoothScale = 1;
+  const SMOOTH_FACTOR = 0.45; // 0 = no smoothing, 1 = max smoothing. 0.45 = responsive but smooth
 
   viewport.addEventListener('touchstart', (e) => {
     if(e.touches.length === 2) {
@@ -4051,6 +4081,9 @@ window.KidSequencer = {
       panning = false;
       pinchMoveCount = 0;
 
+      // Cancel any pending deferred handback from a previous zoom cycle
+      cancelPendingHandback();
+      
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
       // Claim exclusive transform ownership — layout system will not touch
@@ -4061,6 +4094,7 @@ window.KidSequencer = {
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
       initialDist = dist(t0, t1);
       initialScale = window.__customZoom.scale;
+      _smoothScale = initialScale;
       const mid = midpoint(t0, t1);
       initialMidX = mid.x;
       initialMidY = mid.y;
@@ -4082,8 +4116,10 @@ window.KidSequencer = {
     } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
       // Start pan while zoomed
       panning = true;
-      // Block layout during pan while zoomed
+      // Cancel any pending handback and reclaim transform ownership
+      cancelPendingHandback();
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
+      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
       panStartX = e.touches[0].clientX;
       panStartY = e.touches[0].clientY;
       panStartOffsetX = window.__customZoom.offsetX;
@@ -4102,9 +4138,13 @@ window.KidSequencer = {
       const newDist = dist(t0, t1);
       const mid = midpoint(t0, t1);
 
-      // Calculate new scale
-      let newScale = initialScale * (newDist / initialDist);
-      newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newScale));
+      // Calculate raw new scale
+      let rawScale = initialScale * (newDist / initialDist);
+      rawScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, rawScale));
+      
+      // Smooth the scale to reduce jitter from noisy touch input
+      _smoothScale = _smoothScale * SMOOTH_FACTOR + rawScale * (1 - SMOOTH_FACTOR);
+      const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, _smoothScale));
       window.__customZoom.scale = newScale;
 
       // Adjust offset so the pinch midpoint stays stable
@@ -4120,14 +4160,16 @@ window.KidSequencer = {
       }
 
       clampOffsets(true);
-      applyCustomZoom();
+      
+      // Use RAF-batched apply for smoother rendering (coalesces multiple
+      // touchmove events that fire within the same frame)
+      scheduleZoomApply();
 
       // In landscape, let first frames through so Safari sees real scroll on
       // the genuinely-scrollable document and collapses the toolbar.
       if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
         // Don't preventDefault — Safari needs these to detect a real scroll
-        // But clamp scroll so user never reaches scrollTop=0 (which re-shows toolbar)
-        if(window.scrollY < 50) window.scrollTo(0, 50);
+        // Avoid fighting scrollY during grace — just let it be
         if(typeof window.__zoomLog === 'function') window.__zoomLog('grace', { g: pinchMoveCount, ga: TOOLBAR_GRACE_FRAMES });
       } else {
         e.preventDefault();
@@ -4142,7 +4184,7 @@ window.KidSequencer = {
       window.__customZoom.offsetX = panStartOffsetX + dx;
       window.__customZoom.offsetY = panStartOffsetY + dy;
       clampOffsets(false);
-      applyCustomZoom();
+      scheduleZoomApply();
       e.preventDefault();
     }
   }, {passive: false});
@@ -4151,15 +4193,58 @@ window.KidSequencer = {
   // before letting the layout system recalculate. Safari's toolbar animation
   // takes ~300-400ms, during which innerHeight changes multiple times.
   let handbackTimer = null;
+  let handbackSafetyTimer = null;
   let handbackStableCount = 0;
   let handbackLastH = 0;
-  function deferredLayoutHandback() {
+  let handbackGeneration = 0;  // incremented each call; stale callbacks check this
+  
+  function cancelPendingHandback() {
     clearInterval(handbackTimer);
+    clearTimeout(handbackSafetyTimer);
+    handbackTimer = null;
+    handbackSafetyTimer = null;
+    handbackGeneration++;
+  }
+  
+  // Expose cancel so it can be called from outside the IIFE if needed
+  window.__cancelZoomHandback = cancelPendingHandback;
+  
+  function deferredLayoutHandback() {
+    cancelPendingHandback();
+    const gen = handbackGeneration;
     handbackStableCount = 0;
     handbackLastH = window.innerHeight;
     
-    // Poll every 80ms until height is stable for 5 consecutive reads (~400ms)
+    function doHandback(reason) {
+      // If a new pinch/pan started since we were scheduled, abort.
+      if(gen !== handbackGeneration) return;
+      // Extra safety: if user is currently zoomed (scale > 1), don't release
+      if(window.__customZoom && window.__customZoom.scale > 1.05) return;
+      
+      clearInterval(handbackTimer);
+      clearTimeout(handbackSafetyTimer);
+      handbackTimer = null;
+      handbackSafetyTimer = null;
+      
+      // Smooth transition: ensure transform is exactly at base before handing back
+      // This prevents any visual jump when the layout system takes over
+      if(window.__baseTransform) {
+        const bt = window.__baseTransform;
+        page.style.transform = `translate(${bt.tx}px, ${bt.ty}px) scale(${bt.s})`;
+      }
+      // Remove compositor layer hint now that zoom is done
+      page.style.willChange = '';
+      
+      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
+      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+      if(window.scheduleLayout) window.scheduleLayout();
+      if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: reason });
+    }
+    
+    // Poll every 50ms (was 80ms) until height is stable for 4 consecutive reads (~200ms)
+    // Faster polling catches the end of toolbar animation sooner
     handbackTimer = setInterval(() => {
+      if(gen !== handbackGeneration) { clearInterval(handbackTimer); return; }
       const h = window.innerHeight;
       if(Math.abs(h - handbackLastH) < 2) {
         handbackStableCount++;
@@ -4167,50 +4252,66 @@ window.KidSequencer = {
         handbackStableCount = 0;
         handbackLastH = h;
       }
-      if(handbackStableCount >= 5) {
-        clearInterval(handbackTimer);
-        // NOW release transform ownership and run layout
-        if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-        if(window.scheduleLayout) window.scheduleLayout();
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'viewport settled h=' + h });
+      if(handbackStableCount >= 4) {
+        doHandback('viewport settled h=' + h);
       }
-    }, 80);
+    }, 50);
     
-    // Safety: always release after 1.5s no matter what
-    setTimeout(() => {
-      clearInterval(handbackTimer);
-      if(typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform()) {
-        if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-        if(window.scheduleLayout) window.scheduleLayout();
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'safety timeout' });
-      }
-    }, 1500);
+    // Safety: always release after 1.2s no matter what (was 1.5s)
+    handbackSafetyTimer = setTimeout(() => {
+      doHandback('safety timeout');
+    }, 1200);
   }
 
   viewport.addEventListener('touchend', (e) => {
     if(e.touches.length < 2) {
       if(pinching) {
         pinching = false;
-        // If scale is very close to 1, snap back to 1
-        if(window.__customZoom.scale < 1.05) {
+        // If scale is very close to 1, animate back to 1
+        if(window.__customZoom.scale < 1.08) {
           if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'snap-back s=' + window.__customZoom.scale.toFixed(3) });
-          window.__customZoom.scale = 1;
-          window.__customZoom.offsetX = 0;
-          window.__customZoom.offsetY = 0;
-          applyCustomZoom();
-          removeLandscapeScrollRoom();
-          window.__zoomScrollRoomActive = false;
-          // DON'T immediately scheduleLayout or release zoomOwnsTransform.
-          // Wait for viewport to settle (toolbar animation, etc.)
-          deferredLayoutHandback();
+          
+          // Animated snap-back for smooth feel
+          const startScale = window.__customZoom.scale;
+          const startOX = window.__customZoom.offsetX;
+          const startOY = window.__customZoom.offsetY;
+          const duration = 180; // ms — quick but visible
+          const startTime = performance.now();
+          
+          function animateSnapBack(now) {
+            const elapsed = now - startTime;
+            const t = Math.min(1, elapsed / duration);
+            // ease-out cubic
+            const ease = 1 - Math.pow(1 - t, 3);
+            
+            window.__customZoom.scale = startScale + (1 - startScale) * ease;
+            window.__customZoom.offsetX = startOX * (1 - ease);
+            window.__customZoom.offsetY = startOY * (1 - ease);
+            applyCustomZoom();
+            
+            if(t < 1) {
+              requestAnimationFrame(animateSnapBack);
+            } else {
+              // Ensure final state is exact
+              window.__customZoom.scale = 1;
+              window.__customZoom.offsetX = 0;
+              window.__customZoom.offsetY = 0;
+              applyCustomZoom();
+              removeLandscapeScrollRoom();
+              window.__zoomScrollRoomActive = false;
+              // Wait for viewport to settle (toolbar animation, etc.)
+              deferredLayoutHandback();
+            }
+          }
+          requestAnimationFrame(animateSnapBack);
         } else {
           // Final clamp to re-center if content fits in viewport
           clampOffsets(false);
           applyCustomZoom();
           if(typeof window.__zoomLog === 'function') window.__zoomLog('ended-zoom', { note: 'staying zoomed s=' + window.__customZoom.scale.toFixed(3) });
-          // Keep zoomOwnsTransform=true — we're still zoomed, layout should not interfere
+          // Cancel any stale handback and ensure we still own the transform
+          cancelPendingHandback();
+          if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
           // Just unblock isZooming so non-transform layout stuff can run if needed
           if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
           
@@ -4236,31 +4337,64 @@ window.KidSequencer = {
 
   // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
   // because Safari re-shows the toolbar when it detects you're at the top.
+  // Only active AFTER grace period ends to avoid fighting Safari during toolbar hide.
+  let _scrollGuardRaf = false;
   window.addEventListener('scroll', () => {
     if(!scrollRoomActive) return;
     if(window.__customZoom.scale <= 1.02) return;
-    if(window.scrollY < 50) {
-      window.scrollTo(0, 50);
+    // Don't fight scroll during grace frames — let Safari handle it
+    if(pinching && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) return;
+    if(window.scrollY < 50 && !_scrollGuardRaf) {
+      _scrollGuardRaf = true;
+      requestAnimationFrame(() => {
+        _scrollGuardRaf = false;
+        if(window.scrollY < 50 && scrollRoomActive && window.__customZoom.scale > 1.02) {
+          window.scrollTo(0, 50);
+        }
+      });
     }
   }, {passive: true});
 
-  // Double-tap to reset zoom
+  // Double-tap to reset zoom (animated)
   let lastTapTime = 0;
   viewport.addEventListener('touchend', (e) => {
     if(e.touches.length !== 0) return;
     if(window.__customZoom.scale <= 1.02) return; // Only reset if zoomed in
     const now = Date.now();
     if(now - lastTapTime < 300) {
-      // Double-tap detected — reset zoom
+      // Double-tap detected — animated reset zoom
       if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'double-tap' });
-      window.__customZoom.scale = 1;
-      window.__customZoom.offsetX = 0;
-      window.__customZoom.offsetY = 0;
-      applyCustomZoom();
-      removeLandscapeScrollRoom();
-      window.__zoomScrollRoomActive = false;
-      // Defer layout handback until viewport settles
-      deferredLayoutHandback();
+      
+      const startScale = window.__customZoom.scale;
+      const startOX = window.__customZoom.offsetX;
+      const startOY = window.__customZoom.offsetY;
+      const duration = 250; // ms
+      const startTime = performance.now();
+      
+      function animateReset(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        // ease-out cubic
+        const ease = 1 - Math.pow(1 - t, 3);
+        
+        window.__customZoom.scale = startScale + (1 - startScale) * ease;
+        window.__customZoom.offsetX = startOX * (1 - ease);
+        window.__customZoom.offsetY = startOY * (1 - ease);
+        applyCustomZoom();
+        
+        if(t < 1) {
+          requestAnimationFrame(animateReset);
+        } else {
+          window.__customZoom.scale = 1;
+          window.__customZoom.offsetX = 0;
+          window.__customZoom.offsetY = 0;
+          applyCustomZoom();
+          removeLandscapeScrollRoom();
+          window.__zoomScrollRoomActive = false;
+          deferredLayoutHandback();
+        }
+      }
+      requestAnimationFrame(animateReset);
       lastTapTime = 0;
     } else {
       lastTapTime = now;
