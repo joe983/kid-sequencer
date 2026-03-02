@@ -1709,13 +1709,13 @@ function __ksSyncViewportVars(){
   const vpEl = document.getElementById('viewport');
   if(vpEl && vv){
     const oY = vv.offsetTop || 0;
-    if(oY > 0){
-      vpEl.style.top = oY + 'px';
-      vpEl.style.height = vvh + 'px';
-    } else {
-      vpEl.style.top = '0px';
-      vpEl.style.height = vvh + 'px';
-    }
+    // Override inset:0 with explicit positioning so the viewport matches the visible area
+    vpEl.style.top = oY + 'px';
+    vpEl.style.bottom = 'auto';
+    vpEl.style.height = vvh + 'px';
+    vpEl.style.width = vvw + 'px';
+    vpEl.style.left = (vv.offsetLeft || 0) + 'px';
+    vpEl.style.right = 'auto';
   }
 }
 
@@ -3351,13 +3351,16 @@ function importGridFromDataUrl(dataUrl){
 const freeYTrue = usableH - stageH * s;
 
 // When the scaled stage is taller than the usable area (freeYTrue < 0), pin to the top
-// so the controls/play buttons stay visible below the browser toolbar.
+// so the controls/play buttons stay visible below the browser toolbar — the bottom overflows
+// (which is fine since the bottom has less-critical content like the drum panel).
 // When there's room, center vertically but clamp to safe-area paddings.
 const targetTy = freeYTrue >= 0
   ? offY + padT + (freeYTrue) / 2
   : offY + padT;
 const minTy = offY + padT;
-const maxTy = offY + (vh - padB) - stageH * s;
+// maxTy must never go below minTy — if the stage overflows, we accept bottom overflow.
+const maxTyRaw = offY + (vh - padB) - stageH * s;
+const maxTy = Math.max(minTy, maxTyRaw);
 const ty = Math.min(maxTy, Math.max(minTy, targetTy));
 
 root.classList.add('stageScaled');
