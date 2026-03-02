@@ -191,7 +191,7 @@ async function loadSessions() {
     const sorted = Object.entries(sessions).sort((a, b) => b[1].lastTs - a[1].lastTs);
     
     if (sorted.length === 0) {
-      sessionsEl.innerHTML = '<div style="color:#888">No sessions found. Add <b>?logLayout=1</b> to the app URL to start logging.</div>';
+      sessionsEl.innerHTML = '<div style="color:#888">No sessions found. Open the app to start logging (disable with ?logLayout=0).</div>';
       statusEl.textContent = 'No data yet.';
       return;
     }

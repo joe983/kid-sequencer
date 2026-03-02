@@ -1703,6 +1703,20 @@ function __ksSyncViewportVars(){
   const vvh = vv ? vv.height : window.innerHeight;
   document.documentElement.style.setProperty('--vvw', vvw + 'px');
   document.documentElement.style.setProperty('--vvh', vvh + 'px');
+
+  // On iPhone Safari the visual viewport can be offset vertically when the toolbar is visible.
+  // Shift the fixed #viewport down so its content starts below the toolbar.
+  const vpEl = document.getElementById('viewport');
+  if(vpEl && vv){
+    const oY = vv.offsetTop || 0;
+    if(oY > 0){
+      vpEl.style.top = oY + 'px';
+      vpEl.style.height = vvh + 'px';
+    } else {
+      vpEl.style.top = '0px';
+      vpEl.style.height = vvh + 'px';
+    }
+  }
 }
 
 function fitToViewport(){
@@ -3336,8 +3350,12 @@ function importGridFromDataUrl(dataUrl){
 // but translation should center using the *real* stage height so we don't drift downward.
 const freeYTrue = usableH - stageH * s;
 
-// Center in the padded safe-area box, then clamp so we never clip into safe-area.
-const targetTy = offY + (freeYTrue) / 2;
+// When the scaled stage is taller than the usable area (freeYTrue < 0), pin to the top
+// so the controls/play buttons stay visible below the browser toolbar.
+// When there's room, center vertically but clamp to safe-area paddings.
+const targetTy = freeYTrue >= 0
+  ? offY + padT + (freeYTrue) / 2
+  : offY + padT;
 const minTy = offY + padT;
 const maxTy = offY + (vh - padB) - stageH * s;
 const ty = Math.min(maxTy, Math.max(minTy, targetTy));
@@ -4142,30 +4160,44 @@ window.KidSequencer = {
 
 <script type="module">
 /* ==================== LAYOUT DEBUG LOGGER ====================
-   Captures layout, scroll, pan, resize, and overflow diagnostics
-   and sends them to Firestore collection "zoomDebug".
-   Enable with ?logLayout=1 in the URL.
+   Captures layout, scroll, pan, resize, and overflow diagnostics.
+   Sends to Firestore collection "zoomDebug".
+   Disable with ?logLayout=0 in the URL.
    ============================================================= */
 (async () => {
   const params = new URLSearchParams(window.location.search);
-  if (!params.has('logLayout') || params.get('logLayout') === '0') return;
+  if (params.get('logLayout') === '0') return;
 
-  // --- Firebase setup ---
+  const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+  if (!isHttp) { console.info('[LayoutDebug] Skipping in file:// mode'); return; }
+
+  // --- Firebase setup: reuse existing app or create, then sign in anonymously ---
   let db = null;
   try {
-    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
+    const { initializeApp, getApps, getApp } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js');
     const { getFirestore, collection, addDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
-    const app = initializeApp({
-      apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
-      authDomain: "kid-sequencer.firebaseapp.com",
-      projectId: "kid-sequencer",
-      storageBucket: "kid-sequencer.firebasestorage.app",
-      messagingSenderId: "715996068165",
-      appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
-    }, 'layoutDebugApp');
+    const { getAuth, signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
+
+    // Reuse the default app if it exists (from firebase-init.js), otherwise create one
+    let app;
+    try { app = getApp(); } catch(_) {
+      app = initializeApp({
+        apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
+        authDomain: "kid-sequencer.firebaseapp.com",
+        projectId: "kid-sequencer",
+        storageBucket: "kid-sequencer.firebasestorage.app",
+        messagingSenderId: "715996068165",
+        appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
+      });
+    }
+
+    // Sign in anonymously so Firestore rules allow writes
+    const auth = getAuth(app);
+    try { await signInAnonymously(auth); } catch(e) { console.warn('[LayoutDebug] Anon auth failed:', e); }
+
     db = getFirestore(app);
     window.__layoutDebugFirestore = { db, collection, addDoc };
-    console.log('[LayoutDebug] Logger ready — sending to Firestore "zoomDebug"');
+    console.log('[LayoutDebug] Logger ready');
   } catch (e) {
     console.warn('[LayoutDebug] Firestore init failed, logging to console only:', e);
   }
@@ -4413,7 +4445,7 @@ window.KidSequencer = {
 
   // Expose for manual use in console
   window.__layoutDebug = { logEntry, flush, snap, sessionId };
-  console.log('[LayoutDebug] Session:', sessionId, '— call __layoutDebug.snap() or __layoutDebug.logEntry("test") from console');
+  console.log('[LayoutDebug] Session:', sessionId, '— call __layoutDebug.snap() or __layoutDebug.logEntry("test") from console. Disable with ?logLayout=0');
 })();
 </script>
 
