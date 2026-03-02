@@ -9,9 +9,7 @@
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
   </script>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" name="viewport"/>
-<meta name="apple-mobile-web-app-capable" content="yes"/>
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <style>
 
@@ -56,50 +54,39 @@
 
 html, body {
   height: 100%;
-  overflow: auto; /* allow native pan/zoom */
+  overflow: hidden; /* scrolling happens in #viewport so horizontal bar is always reachable */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  -webkit-overflow-scrolling: touch; /* momentum scroll on iOS */
-  overscroll-behavior-y: none; /* prevent pull-to-refresh */
-  overscroll-behavior-x: none; /* prevent horizontal overscroll bounce */
 }
 
 #viewport{
-  position: relative; /* was fixed */
-  width: 100%;
-  height: 100%;
-  min-width: 100vw;
-  min-height: 100vh;
-  overflow: auto; /* enable scrolling to trigger Safari toolbar hide */
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: none; /* prevent pull-to-refresh and bounce */
-  touch-action: manipulation; /* allow native pan gestures for Safari toolbar hide */
+  position: fixed;
+  inset: 0;
+  /* iOS: match the *visible* viewport height to avoid the 1–3px “scroll wiggle” in landscape */
+  height: var(--vvh, 100vh);
+  width: var(--vvw, 100vw);
+  overflow: auto;
+  /* allow trackpad horizontal scroll */
+  overscroll-behavior: none;
 }
 
 
 /* --- Stage-scale mode (small landscape phones): NO scrolling, stage is positioned + scaled --- */
 html.stageScaled, html.stageScaled body{
-  overflow: auto !important; /* allow native pan/zoom */
-  position: relative;
-  overscroll-behavior: none; /* prevent pull-to-refresh on iOS */
+  overflow: hidden !important;
 }
 html.stageScaled{ --toolsLift: 12px; }
 html.stageScaled #viewport{
-  overflow: auto !important;
-  touch-action: manipulation; /* allow native pan gestures for Safari toolbar hide */
+  overflow: hidden !important;
+  touch-action: none; /* prevent swipe scrolling while scaled */
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
-  min-height: 100vh;
-  min-width: 100vw;
-  overscroll-behavior: none; /* prevent pull-to-refresh */
-  /* In landscape, make sure there's actual scroll height */
-  height: 100vh;
 }
 html.stageScaled #page{
-  position: relative; /* keep in document flow to enable scrolling */
+  position: absolute; /* remove from normal flow so it can't create scrollable size */
   left: 0;
   top: 0;
   transform-origin: top left;
@@ -179,13 +166,6 @@ body.loggedIn #robotLogo{
       position: relative;
       z-index: 2;
           box-sizing: border-box;
-    }
-    
-    /* In landscape, ensure content is tall enough to scroll and hide Safari toolbar */
-    @media (orientation: landscape) and (max-height: 500px) {
-      #page {
-        min-height: max(var(--stageH), calc(100vh + 100px));
-      }
     }
 
     #topBar{
@@ -1117,8 +1097,6 @@ LAYOUT DEBUG MODE -------------------- */
 </head>
 <body>
 <script>
-    // Native zoom is disabled (maximum-scale=1). Zoom is handled via CSS transforms.
-
     // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
     (function(){
       try{
@@ -3252,29 +3230,6 @@ function importGridFromDataUrl(dataUrl){
   const pageEl = document.getElementById('page');
   if(!pageEl) return;
 
-  // Track zoom state at top of scope so all functions can access it
-  // With native zoom disabled, isZooming tracks our custom CSS-transform zoom
-  let isZooming = false;
-  let zoomDebounceTimer = null;
-  let lastScale = 1;
-  let lastResizeTime = 0;
-  
-  // NEW ARCHITECTURE: When true, the zoom system has exclusive ownership of
-  // page.style.transform. The layout system still computes __baseTransform
-  // but does NOT write to the DOM. This prevents Safari toolbar transitions
-  // from fighting with pinch-zoom transforms.
-  let zoomOwnsTransform = false;
-  
-  // Track viewport height to detect Safari toolbar hide/show
-  let lastViewportHeight = window.innerHeight;
-  
-  // Export zoom state globally for external checks AND for the custom zoom handler to set
-  window.__isZoomingNow = function(){ return isZooming; };
-  window.__isToolbarTransitioning = function(){ return false; }; // kept for compat, always false now
-  window.__setIsZooming = function(val){ isZooming = val; };
-  window.__setZoomOwnsTransform = function(val){ zoomOwnsTransform = val; };
-  window.__getZoomOwnsTransform = function(){ return zoomOwnsTransform; };
-
   let __ready = false;
   let __stable = 0;
   let __lastVW = 0, __lastVH = 0;
@@ -3283,19 +3238,8 @@ function importGridFromDataUrl(dataUrl){
     __ready = true;
 
     // Ensure we are at top-left to prevent any offX / scroll-restoration offsets (iOS can restore scroll subtly)
-    try{ const vv2 = window.visualViewport; if(!(vv2 && vv2.scale && vv2.scale !== 1)) window.scrollTo(0, 0); }catch(e){}
+    try{ window.scrollTo(0, 0); }catch(e){}
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
-    
-    // In landscape, trigger a small scroll to hide Safari's browser toolbar
-    // Safari requires user-initiated scroll, so we just ensure content is scrollable
-    // User's first pan/drag will naturally trigger toolbar hide
-    if(window.innerWidth > window.innerHeight && window.innerHeight < 500) {
-      // Ensure viewport is scrollable by adding a tiny bit of extra scroll height
-      if(viewportEl && viewportEl.scrollHeight <= viewportEl.clientHeight) {
-        // Add 1px scroll room
-        try { viewportEl.style.paddingBottom = '1px'; } catch(e){}
-      }
-    }
 
     // First pass with the latest VisualViewport values
     try{ __ksSyncViewportVars(); }catch(e){}
@@ -3340,11 +3284,10 @@ function importGridFromDataUrl(dataUrl){
   setTimeout(__reveal, 900);
 
   function applyStageFit(){
-    const vv = window.visualViewport;
-
     const { vw, vh, offX, offY } = __ksViewport();
     const { stageW, stageH } = __ksStageSize();
-// In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
+
+    // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
     // Measure its paddings once per pass.
     let padL = 0, padR = 0, padT = 0, padB = 0;
     if(viewportEl){
@@ -3394,11 +3337,10 @@ function importGridFromDataUrl(dataUrl){
 const freeYTrue = usableH - stageH * s;
 
 // Center in the padded safe-area box, then clamp so we never clip into safe-area.
-// When content is taller than viewport (freeYTrue < 0), prefer showing the top by using minTy
-const targetTy = freeYTrue >= 0 ? (offY + padT + freeYTrue / 2) : (offY + padT);
+const targetTy = offY + (freeYTrue) / 2;
 const minTy = offY + padT;
 const maxTy = offY + (vh - padB) - stageH * s;
-const ty = Math.max(minTy, Math.min(maxTy, targetTy));
+const ty = Math.min(maxTy, Math.max(minTy, targetTy));
 
 root.classList.add('stageScaled');
     root.classList.remove('tabletScaled');
@@ -3409,52 +3351,21 @@ root.classList.add('stageScaled');
     pageEl.style.minWidth = stageW + 'px';
     pageEl.style.minHeight = stageH + 'px';
 
-    // Store base transform for the custom pinch-zoom handler to compound onto
-    window.__baseTransform = { tx, ty, s, stageW, stageH };
-
-    // If zoom system owns the transform, we've stored the base — now bail out.
-    // Do NOT write to page.style.transform — the zoom handler manages it exclusively.
-    if(zoomOwnsTransform) {
-      return;
-    }
-
     pageEl.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`;
 
-    // If user has custom-zoomed, re-apply that on top of the new base
-    if(window.__customZoom && window.__customZoom.scale !== 1) {
-      const cz = window.__customZoom;
-      const totalS = s * cz.scale;
-      const czTx = tx + cz.offsetX;
-      const czTy = ty + cz.offsetY;
-      pageEl.style.transform = `translate(${czTx}px, ${czTy}px) scale(${totalS})`;
-    }
     // Keep the "viewport" scroller pinned (no accidental scrollbars after refresh)
-    // Only do this when not custom-zoomed.
-    const cz = window.__customZoom;
-    if(viewportEl && (!cz || cz.scale <= 1.02)){
+    if(viewportEl){
       try{ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; }catch(e){}
     }
   }
 
   let raf = 0;
   function layoutPass(){
-    // Abort if user is actively doing a custom pinch-zoom
-    const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
-    
-    if(activeTouches > 1 || isZooming) {
-      return;
-    }
-    
-    // If zoom owns the transform, skip internal layout recalculation entirely.
-    // The zoom handler manages the transform; we'll do a full layout when it releases.
-    if(zoomOwnsTransform) {
-      return;
-    }
-    
     // Sync the fixed #viewport box to the visible viewport (prevents the 1–3px iPhone landscape scroll).
     try{ __ksSyncViewportVars(); }catch(e){}
     // Compute internal layout in unscaled coordinates
-    // Do not clear transforms here; it causes visible jitter during toolbar transitions.
+    const prev = pageEl.style.transform;
+    pageEl.style.transform = '';
     try{
       fitToViewport();
       buildGrid();
@@ -3462,6 +3373,7 @@ root.classList.add('stageScaled');
     }catch(e){
       console.error('layoutPass failed', e);
     }
+    pageEl.style.transform = prev;
 
     // Now scale & center the stage
     try{ applyStageFit(); }catch(e){ console.error('applyStageFit failed', e); }
@@ -3480,82 +3392,29 @@ root.classList.add('stageScaled');
   // Export for other code paths (init, etc.)
   window.scheduleLayout = scheduleLayout;
 
-  // Zoom tracking variables are now at top of scope
-
-  const trigger = () => {
-    // Don't run layout if user is actively pinch-zooming
-    const activeTouches = (typeof window.__getActiveTouches === 'function') ? window.__getActiveTouches() : 0;
-    if(activeTouches > 1) return;
-    
-    // If actively zooming or zoom owns the transform, skip layout completely
-    if(isZooming || zoomOwnsTransform) return;
-    
-    // Prevent rapid-fire layout calls (rate limit to once per 100ms)
-    const now = Date.now();
-    if(now - lastResizeTime < 100) return;
-    lastResizeTime = now;
-    
-    scheduleLayout();
-  };
-  
-  // Zoom change handler is now minimal since native zoom is disabled.
-  // Custom pinch-zoom is handled by the dedicated handler below.
-  const handleZoomChange = () => {
-    // Nothing to do - native zoom is disabled (maximum-scale=1)
-  };
-  
+  const trigger = () => scheduleLayout();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', trigger, {once:true});
   else scheduleLayout();
 
-  // SIMPLIFIED: Only listen to resize when zoom doesn't own transform
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    handleZoomChange();
-    
-    // Debounce the trigger to prevent rapid-fire calls during toolbar animation.
-    // Use a longer debounce (200ms) to let Safari's toolbar animation (~300-400ms) 
-    // coalesce into fewer layout passes.
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if(!isZooming && !zoomOwnsTransform) trigger();
-    }, 200);
-  }, {passive:true});
-  
-  window.addEventListener('orientationchange', () => {
-    setTimeout(() => {
-      handleZoomChange();
-      if(!isZooming && !zoomOwnsTransform) trigger();
-    }, 300);
-  }, {passive:true});
-  
-  // REMOVED: visualViewport resize listener causes crash loop during pinch-zoom on iOS
-  // The visualViewport fires constantly during zoom, triggering infinite layout recalculations
-  // if(window.visualViewport){
-  //   window.visualViewport.addEventListener('resize', trigger, {passive:true});
-  // }
-  
-  window.addEventListener('load', trigger, {once:true});
-
-  // Block layout during scroll when custom-zoomed (especially fast scroll)
-  let scrolling = false;
-  let scrollTimer = null;
-  if(viewportEl) {
-    viewportEl.addEventListener('scroll', () => {
-      const cz = window.__customZoom;
-      const userIsZoomed = cz && cz.scale > 1.05;
-      
-      if(userIsZoomed) {
-        scrolling = true;
-        clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(() => {
-          scrolling = false;
-        }, 300);
-      }
-    }, {passive: true});
+  window.addEventListener('resize', trigger, {passive:true});
+  window.addEventListener('orientationchange', () => setTimeout(trigger, 60), {passive:true});
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', trigger, {passive:true});
   }
+  window.addEventListener('load', trigger, {once:true});
 
   // One extra pass after fonts settle
   setTimeout(trigger, 120);
+
+  // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
+  // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
+  document.addEventListener('touchmove', (e) => {
+    if(!root.classList.contains('stageScaled')) return;
+    // Allow native interaction on form controls if any.
+    const t = e.target;
+    if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+    e.preventDefault();
+  }, { passive: false });
 })();
 
 
@@ -3784,10 +3643,6 @@ window.KidSequencer = {
   let startX = 0, startY = 0;
   let startLeft = 0, startTop = 0;
   let pointerId = null;
-  let activeTouches = 0; // Track number of active touch points
-  
-  // Export activeTouches so layout code can check if user is touching
-  window.__getActiveTouches = () => activeTouches;
 
   // Disable drag-to-pan while interacting with the volume fader (Shadow DOM)
   let panBlockedByFader = false;
@@ -3806,24 +3661,6 @@ window.KidSequencer = {
   }
 
   function onDown(e){
-    // Track touch count
-    if(e.pointerType === 'touch') activeTouches++;
-    
-    // If multi-touch (pinch zoom), don't interfere - release any captured pointer
-    if(activeTouches > 1) {
-      dragging = false;
-      try { if(pointerId !== null) viewport.releasePointerCapture(pointerId); } catch(_){}
-      pointerId = null;
-      document.body.classList.remove('dragging-pan');
-      return;
-    }
-
-    // If custom-zoomed and touch, let the custom zoom touch handler deal with panning
-    const cz = window.__customZoom;
-    if(e.pointerType === 'touch' && cz && cz.scale > 1.02) {
-      return;
-    }
-
     // Left mouse / primary touch only
     if(e.button !== undefined && e.button !== 0) return;
     if(panBlockedByFader || eventHitsFader(e)) return;
@@ -3837,45 +3674,20 @@ window.KidSequencer = {
     startTop = viewport.scrollTop;
 
     document.body.classList.add('dragging-pan');
-    // Only capture pointer on mouse - on touch, native scroll needs to work for Safari toolbar
-    if(e.pointerType === 'mouse') {
-      try{ if(pointerId !== null) viewport.setPointerCapture(pointerId); }catch(_){}
-    }
-    
-    // On touch: let native scroll handle it (needed for Safari toolbar hide in landscape).
-    // On mouse: prevent default to enable drag-to-pan without text selection.
-    if(e.pointerType === 'mouse') {
-      e.preventDefault();
-    }
+    try{ if(pointerId !== null) viewport.setPointerCapture(pointerId); }catch(_){}
+    e.preventDefault();
   }
 
   function onMove(e){
     if(!dragging) return;
-    
-    // Don't interfere with multi-touch gestures
-    if(activeTouches > 1) {
-      dragging = false;
-      try { if(pointerId !== null) viewport.releasePointerCapture(pointerId); } catch(_){}
-      pointerId = null;
-      document.body.classList.remove('dragging-pan');
-      return;
-    }
-    
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     viewport.scrollLeft = startLeft - dx;
     viewport.scrollTop  = startTop  - dy;
-    
-    // Only prevent default for mouse drag, not touch (touch needs native scroll for toolbar hide)
-    if(e.pointerType === 'mouse') {
-      e.preventDefault();
-    }
+    e.preventDefault();
   }
 
-  function onUp(e){
-    // Track touch count
-    if(e.pointerType === 'touch') activeTouches = Math.max(0, activeTouches - 1);
-    
+  function onUp(){
     if(!dragging) return;
     dragging = false;
     document.body.classList.remove('dragging-pan');
@@ -3886,520 +3698,6 @@ window.KidSequencer = {
   viewport.addEventListener('pointermove', onMove, {passive:false});
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
-})();
-</script>
-
-<script>
-/* ===== Custom pinch-zoom via CSS transforms =====
-   Native pinch-zoom is disabled (maximum-scale=1) because Safari crashes when
-   zooming a 1600x900 page on iPhone (the backing store exceeds WebKit's tile memory budget).
-   Instead we implement zoom by adjusting the existing CSS transform on #page.
-   This is a pure compositing operation — no new tiles are rasterized. */
-(function(){
-  const page = document.getElementById('page');
-  const viewport = document.getElementById('viewport');
-  if(!page || !viewport) return;
-
-  // Custom zoom state
-  window.__customZoom = { scale: 1, offsetX: 0, offsetY: 0 };
-
-  const MIN_ZOOM = 1;   // 1 = base fit scale (no extra zoom)
-  const MAX_ZOOM = 2.2;
-
-  // --- Landscape toolbar hide helper ---
-  // Safari collapses its toolbar ONLY on a real user-driven document-level scroll.
-  // We combine two things: (1) make the document genuinely scrollable by overriding
-  // html/body height constraints and adding in-flow spacers, and (2) let the first
-  // couple of touchmove frames through without preventDefault so Safari sees a real
-  // user scroll on a scrollable document and collapses immediately.
-  //
-  // IMPORTANT: We add scroll room ABOVE and BELOW the content. Safari re-shows the
-  // toolbar when scrollTop reaches 0. By adding a spacer before the content and
-  // pre-scrolling to the middle, the user can never reach the true top.
-  let spacerTop = null;
-  let spacerBottom = null;
-  let scrollRoomActive = false;
-  const SCROLL_PAD = 500; // px of scroll room above and below
-
-  function ensureLandscapeScrollRoom(){
-    if(window.innerWidth <= window.innerHeight) return;
-    if(scrollRoomActive) return;
-    scrollRoomActive = true;
-    window.__zoomScrollRoomActive = true;
-
-    // Top spacer — inserted as first child of body
-    if(!spacerTop) {
-      spacerTop = document.createElement('div');
-      spacerTop.id = '__zoomSpacerTop';
-      spacerTop.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.insertBefore(spacerTop, document.body.firstChild);
-    }
-    spacerTop.style.height = SCROLL_PAD + 'px';
-
-    // Bottom spacer — appended at end of body
-    if(!spacerBottom) {
-      spacerBottom = document.createElement('div');
-      spacerBottom.id = '__zoomSpacerBottom';
-      spacerBottom.style.cssText = 'width:1px;pointer-events:none;visibility:hidden;';
-      document.body.appendChild(spacerBottom);
-    }
-    spacerBottom.style.height = SCROLL_PAD + 'px';
-
-    // Override html/body height constraints so document is genuinely scrollable
-    document.documentElement.style.height = 'auto';
-    document.documentElement.style.minHeight = '0';
-    document.body.style.height = 'auto';
-    document.body.style.minHeight = 'calc(100vh + ' + (SCROLL_PAD * 2) + 'px)';
-    void document.body.offsetHeight;
-
-    // Pre-scroll to the middle so user starts away from scrollTop=0
-    // This prevents Safari from showing the toolbar when user scrolls up
-    window.scrollTo(0, SCROLL_PAD);
-  }
-
-  function removeLandscapeScrollRoom(){
-    if(!scrollRoomActive) return;
-    scrollRoomActive = false;
-    window.__zoomScrollRoomActive = false;
-    
-    // First scroll to the content position (above spacer) before removing spacers
-    // This prevents a visible jump when spacers disappear
-    try{ window.scrollTo({ top: 0, behavior: 'instant' }); }catch(_){
-      try{ window.scrollTo(0, 0); }catch(_){}
-    }
-    
-    // Remove spacers after a micro-delay to let the scroll take effect
-    requestAnimationFrame(() => {
-      if(spacerTop) spacerTop.style.height = '0px';
-      if(spacerBottom) spacerBottom.style.height = '0px';
-      document.documentElement.style.height = '';
-      document.documentElement.style.minHeight = '';
-      document.body.style.height = '';
-      document.body.style.minHeight = '';
-    });
-  }
-
-  // Track active touches for pinch detection
-  let touches = {};      // pointerId -> {x, y}
-  let pinching = false;
-  let initialDist = 0;
-  let initialScale = 1;
-  let initialMidX = 0, initialMidY = 0;
-  let initialOffsetX = 0, initialOffsetY = 0;
-
-  // Panning while zoomed
-  let panning = false;
-  let panStartX = 0, panStartY = 0;
-  let panStartOffsetX = 0, panStartOffsetY = 0;
-
-  function dist(a, b){
-    return Math.hypot(a.x - b.x, a.y - b.y);
-  }
-
-  function midpoint(a, b){
-    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  }
-
-  function applyCustomZoom(){
-    const bt = window.__baseTransform;
-    if(!bt) return;
-    const cz = window.__customZoom;
-    const totalS = bt.s * cz.scale;
-    const tx = bt.tx + cz.offsetX;
-    const ty = bt.ty + cz.offsetY;
-    // Promote to compositor layer during zoom for smoother transforms
-    if(cz.scale > 1.01) {
-      page.style.willChange = 'transform';
-    }
-    page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
-  }
-
-  function clampOffsets(duringPinch){
-    const bt = window.__baseTransform;
-    if(!bt) return;
-    const cz = window.__customZoom;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const totalS = bt.s * cz.scale;
-    const scaledW = bt.stageW * totalS;
-    const scaledH = bt.stageH * totalS;
-
-    // The page's left edge on screen = bt.tx + cz.offsetX
-    // The page's right edge on screen = bt.tx + cz.offsetX + scaledW
-
-    if(scaledW > vw){
-      // Content wider than viewport: keep edges from pulling away
-      // Right edge must stay at or past the left viewport edge
-      const minX = vw - scaledW - bt.tx;
-      // Left edge must stay at or before the right viewport edge
-      const maxX = -bt.tx;
-      cz.offsetX = Math.max(minX, Math.min(maxX, cz.offsetX));
-    } else if(!duringPinch) {
-      // Content fits: only re-center after pinch ends (not during)
-      cz.offsetX = (vw - scaledW) / 2 - bt.tx;
-    }
-
-    if(scaledH > vh){
-      const minY = vh - scaledH - bt.ty;
-      const maxY = -bt.ty;
-      cz.offsetY = Math.max(minY, Math.min(maxY, cz.offsetY));
-    } else if(!duringPinch) {
-      cz.offsetY = (vh - scaledH) / 2 - bt.ty;
-    }
-  }
-
-  // Use touch events (not pointer events) so we get reliable multi-touch on iOS
-  // Grace frames: let first N touchmove frames through un-prevented in landscape
-  // so Safari sees a real user scroll on the now-genuinely-scrollable document.
-  let pinchMoveCount = 0;
-  const TOOLBAR_GRACE_FRAMES = 3; // reduced from 4 — 3 is enough for Safari toolbar trigger
-  function isLandscape(){ return window.innerWidth > window.innerHeight; }
-
-  // --- RAF-batched transform application for smoother rendering ---
-  let _zoomRafPending = false;
-  function scheduleZoomApply(){
-    if(_zoomRafPending) return;
-    _zoomRafPending = true;
-    requestAnimationFrame(() => {
-      _zoomRafPending = false;
-      applyCustomZoom();
-    });
-  }
-
-  // --- Smoothing: exponential moving average on scale to reduce jitter ---
-  let _smoothScale = 1;
-  const SMOOTH_FACTOR = 0.45; // 0 = no smoothing, 1 = max smoothing. 0.45 = responsive but smooth
-
-  viewport.addEventListener('touchstart', (e) => {
-    if(e.touches.length === 2) {
-      // Guard: touchstart fires per-finger, so we may see length===2 twice.
-      // Only process the first one.
-      if(pinching) return;
-      
-      // Start pinch
-      pinching = true;
-      panning = false;
-      pinchMoveCount = 0;
-
-      // Cancel any pending deferred handback from a previous zoom cycle
-      cancelPendingHandback();
-      
-      // Block layout system from overwriting our transform during pinch
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
-      // Claim exclusive transform ownership — layout system will not touch
-      // page.style.transform until we explicitly release this.
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
-
-      const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-      initialDist = dist(t0, t1);
-      initialScale = window.__customZoom.scale;
-      _smoothScale = initialScale;
-      const mid = midpoint(t0, t1);
-      initialMidX = mid.x;
-      initialMidY = mid.y;
-      initialOffsetX = window.__customZoom.offsetX;
-      initialOffsetY = window.__customZoom.offsetY;
-
-      // Debug log
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('pinch', { note: 'start dist=' + Math.round(initialDist) });
-
-      if(isLandscape()) {
-        // Make document scrollable BEFORE the first touchmove arrives
-        ensureLandscapeScrollRoom();
-        window.__zoomScrollRoomActive = true;
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('scroll-room-on');
-        // Don't preventDefault — let Safari see a potential scroll starting
-      } else {
-        e.preventDefault();
-      }
-    } else if(e.touches.length === 1 && window.__customZoom.scale > 1.02) {
-      // Start pan while zoomed
-      panning = true;
-      // Cancel any pending handback and reclaim transform ownership
-      cancelPendingHandback();
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
-      panStartX = e.touches[0].clientX;
-      panStartY = e.touches[0].clientY;
-      panStartOffsetX = window.__customZoom.offsetX;
-      panStartOffsetY = window.__customZoom.offsetY;
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('ts-land');
-      e.preventDefault();
-    }
-  }, {passive: false});
-
-  viewport.addEventListener('touchmove', (e) => {
-    if(pinching && e.touches.length >= 2) {
-      pinchMoveCount++;
-
-      const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
-      const newDist = dist(t0, t1);
-      const mid = midpoint(t0, t1);
-
-      // Calculate raw new scale
-      let rawScale = initialScale * (newDist / initialDist);
-      rawScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, rawScale));
-      
-      // Smooth the scale to reduce jitter from noisy touch input
-      _smoothScale = _smoothScale * SMOOTH_FACTOR + rawScale * (1 - SMOOTH_FACTOR);
-      const newScale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, _smoothScale));
-      window.__customZoom.scale = newScale;
-
-      // Adjust offset so the pinch midpoint stays stable
-      const bt = window.__baseTransform;
-      if(bt) {
-        const midDx = mid.x - initialMidX;
-        const midDy = mid.y - initialMidY;
-        const scaleRatio = newScale / initialScale;
-        const originX = initialMidX - bt.tx - initialOffsetX;
-        const originY = initialMidY - bt.ty - initialOffsetY;
-        window.__customZoom.offsetX = initialOffsetX + midDx + originX * (1 - scaleRatio);
-        window.__customZoom.offsetY = initialOffsetY + midDy + originY * (1 - scaleRatio);
-      }
-
-      clampOffsets(true);
-      
-      // Use RAF-batched apply for smoother rendering (coalesces multiple
-      // touchmove events that fire within the same frame)
-      scheduleZoomApply();
-
-      // In landscape, let first frames through so Safari sees real scroll on
-      // the genuinely-scrollable document and collapses the toolbar.
-      if(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) {
-        // Don't preventDefault — Safari needs these to detect a real scroll
-        // Avoid fighting scrollY during grace — just let it be
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('grace', { g: pinchMoveCount, ga: TOOLBAR_GRACE_FRAMES });
-      } else {
-        e.preventDefault();
-        // Log the first frame after grace period ends
-        if(pinchMoveCount === TOOLBAR_GRACE_FRAMES + 1 && typeof window.__zoomLog === 'function') {
-          window.__zoomLog('grace-end', { g: pinchMoveCount });
-        }
-      }
-    } else if(panning && e.touches.length === 1 && window.__customZoom.scale > 1.02) {
-      const dx = e.touches[0].clientX - panStartX;
-      const dy = e.touches[0].clientY - panStartY;
-      window.__customZoom.offsetX = panStartOffsetX + dx;
-      window.__customZoom.offsetY = panStartOffsetY + dy;
-      clampOffsets(false);
-      scheduleZoomApply();
-      e.preventDefault();
-    }
-  }, {passive: false});
-
-  // Deferred handback: after zoom resets to 1×, wait for viewport to stabilize
-  // before letting the layout system recalculate. Safari's toolbar animation
-  // takes ~300-400ms, during which innerHeight changes multiple times.
-  let handbackTimer = null;
-  let handbackSafetyTimer = null;
-  let handbackStableCount = 0;
-  let handbackLastH = 0;
-  let handbackGeneration = 0;  // incremented each call; stale callbacks check this
-  
-  function cancelPendingHandback() {
-    clearInterval(handbackTimer);
-    clearTimeout(handbackSafetyTimer);
-    handbackTimer = null;
-    handbackSafetyTimer = null;
-    handbackGeneration++;
-  }
-  
-  // Expose cancel so it can be called from outside the IIFE if needed
-  window.__cancelZoomHandback = cancelPendingHandback;
-  
-  function deferredLayoutHandback() {
-    cancelPendingHandback();
-    const gen = handbackGeneration;
-    handbackStableCount = 0;
-    handbackLastH = window.innerHeight;
-    
-    function doHandback(reason) {
-      // If a new pinch/pan started since we were scheduled, abort.
-      if(gen !== handbackGeneration) return;
-      // Extra safety: if user is currently zoomed (scale > 1), don't release
-      if(window.__customZoom && window.__customZoom.scale > 1.05) return;
-      
-      clearInterval(handbackTimer);
-      clearTimeout(handbackSafetyTimer);
-      handbackTimer = null;
-      handbackSafetyTimer = null;
-      
-      // Smooth transition: ensure transform is exactly at base before handing back
-      // This prevents any visual jump when the layout system takes over
-      if(window.__baseTransform) {
-        const bt = window.__baseTransform;
-        page.style.transform = `translate(${bt.tx}px, ${bt.ty}px) scale(${bt.s})`;
-      }
-      // Remove compositor layer hint now that zoom is done
-      page.style.willChange = '';
-      
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-      if(window.scheduleLayout) window.scheduleLayout();
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: reason });
-    }
-    
-    // Poll every 50ms (was 80ms) until height is stable for 4 consecutive reads (~200ms)
-    // Faster polling catches the end of toolbar animation sooner
-    handbackTimer = setInterval(() => {
-      if(gen !== handbackGeneration) { clearInterval(handbackTimer); return; }
-      const h = window.innerHeight;
-      if(Math.abs(h - handbackLastH) < 2) {
-        handbackStableCount++;
-      } else {
-        handbackStableCount = 0;
-        handbackLastH = h;
-      }
-      if(handbackStableCount >= 4) {
-        doHandback('viewport settled h=' + h);
-      }
-    }, 50);
-    
-    // Safety: always release after 1.2s no matter what (was 1.5s)
-    handbackSafetyTimer = setTimeout(() => {
-      doHandback('safety timeout');
-    }, 1200);
-  }
-
-  viewport.addEventListener('touchend', (e) => {
-    if(e.touches.length < 2) {
-      if(pinching) {
-        pinching = false;
-        // If scale is very close to 1, animate back to 1
-        if(window.__customZoom.scale < 1.08) {
-          if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'snap-back s=' + window.__customZoom.scale.toFixed(3) });
-          
-          // Animated snap-back for smooth feel
-          const startScale = window.__customZoom.scale;
-          const startOX = window.__customZoom.offsetX;
-          const startOY = window.__customZoom.offsetY;
-          const duration = 180; // ms — quick but visible
-          const startTime = performance.now();
-          
-          function animateSnapBack(now) {
-            const elapsed = now - startTime;
-            const t = Math.min(1, elapsed / duration);
-            // ease-out cubic
-            const ease = 1 - Math.pow(1 - t, 3);
-            
-            window.__customZoom.scale = startScale + (1 - startScale) * ease;
-            window.__customZoom.offsetX = startOX * (1 - ease);
-            window.__customZoom.offsetY = startOY * (1 - ease);
-            applyCustomZoom();
-            
-            if(t < 1) {
-              requestAnimationFrame(animateSnapBack);
-            } else {
-              // Ensure final state is exact
-              window.__customZoom.scale = 1;
-              window.__customZoom.offsetX = 0;
-              window.__customZoom.offsetY = 0;
-              applyCustomZoom();
-              removeLandscapeScrollRoom();
-              window.__zoomScrollRoomActive = false;
-              // Wait for viewport to settle (toolbar animation, etc.)
-              deferredLayoutHandback();
-            }
-          }
-          requestAnimationFrame(animateSnapBack);
-        } else {
-          // Final clamp to re-center if content fits in viewport
-          clampOffsets(false);
-          applyCustomZoom();
-          if(typeof window.__zoomLog === 'function') window.__zoomLog('ended-zoom', { note: 'staying zoomed s=' + window.__customZoom.scale.toFixed(3) });
-          // Cancel any stale handback and ensure we still own the transform
-          cancelPendingHandback();
-          if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
-          // Just unblock isZooming so non-transform layout stuff can run if needed
-          if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-          
-          // In landscape, scroll room stays active while zoomed
-        }
-      }
-    }
-    if(e.touches.length === 0) {
-      panning = false;
-      pinching = false;
-      // Safety: if not zoomed, make sure flags are cleared
-      if(window.__customZoom.scale <= 1.02) {
-        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-        // Don't clear zoomOwnsTransform here — deferredLayoutHandback handles that
-      }
-    }
-  }, {passive: true});
-
-  viewport.addEventListener('touchcancel', () => {
-    pinching = false;
-    panning = false;
-  }, {passive: true});
-
-  // Scroll guard: while zoomed in landscape, prevent scrollTop from reaching 0
-  // because Safari re-shows the toolbar when it detects you're at the top.
-  // Only active AFTER grace period ends to avoid fighting Safari during toolbar hide.
-  let _scrollGuardRaf = false;
-  window.addEventListener('scroll', () => {
-    if(!scrollRoomActive) return;
-    if(window.__customZoom.scale <= 1.02) return;
-    // Don't fight scroll during grace frames — let Safari handle it
-    if(pinching && pinchMoveCount <= TOOLBAR_GRACE_FRAMES) return;
-    if(window.scrollY < 50 && !_scrollGuardRaf) {
-      _scrollGuardRaf = true;
-      requestAnimationFrame(() => {
-        _scrollGuardRaf = false;
-        if(window.scrollY < 50 && scrollRoomActive && window.__customZoom.scale > 1.02) {
-          window.scrollTo(0, 50);
-        }
-      });
-    }
-  }, {passive: true});
-
-  // Double-tap to reset zoom (animated)
-  let lastTapTime = 0;
-  viewport.addEventListener('touchend', (e) => {
-    if(e.touches.length !== 0) return;
-    if(window.__customZoom.scale <= 1.02) return; // Only reset if zoomed in
-    const now = Date.now();
-    if(now - lastTapTime < 300) {
-      // Double-tap detected — animated reset zoom
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('reset', { note: 'double-tap' });
-      
-      const startScale = window.__customZoom.scale;
-      const startOX = window.__customZoom.offsetX;
-      const startOY = window.__customZoom.offsetY;
-      const duration = 250; // ms
-      const startTime = performance.now();
-      
-      function animateReset(now) {
-        const elapsed = now - startTime;
-        const t = Math.min(1, elapsed / duration);
-        // ease-out cubic
-        const ease = 1 - Math.pow(1 - t, 3);
-        
-        window.__customZoom.scale = startScale + (1 - startScale) * ease;
-        window.__customZoom.offsetX = startOX * (1 - ease);
-        window.__customZoom.offsetY = startOY * (1 - ease);
-        applyCustomZoom();
-        
-        if(t < 1) {
-          requestAnimationFrame(animateReset);
-        } else {
-          window.__customZoom.scale = 1;
-          window.__customZoom.offsetX = 0;
-          window.__customZoom.offsetY = 0;
-          applyCustomZoom();
-          removeLandscapeScrollRoom();
-          window.__zoomScrollRoomActive = false;
-          deferredLayoutHandback();
-        }
-      }
-      requestAnimationFrame(animateReset);
-      lastTapTime = 0;
-    } else {
-      lastTapTime = now;
-    }
-  }, {passive: true});
 })();
 </script>
 <style>
@@ -4839,156 +4137,6 @@ window.KidSequencer = {
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
-})();
-</script>
-
-<script type="module">
-/* ===== ZOOM DEBUG LOGGER =====
-   Sends zoom/pinch/layout events to Firestore so they can be viewed in log.html.
-   Self-contained: initialises its own Firebase app instance (namespaced to avoid
-   colliding with the main app's Firebase). */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getFirestore, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-
-(function(){
-  // --- Firebase setup (separate app instance) ---
-  let db = null;
-  try {
-    const debugApp = initializeApp({
-      apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
-      authDomain: "kid-sequencer.firebaseapp.com",
-      projectId: "kid-sequencer",
-      storageBucket: "kid-sequencer.firebasestorage.app",
-      messagingSenderId: "715996068165",
-      appId: "1:715996068165:web:84e127454cb9bb0c35a62c"
-    }, 'zoomDebug'); // named app to avoid collision
-    db = getFirestore(debugApp);
-    console.info('[ZoomDebug] Logger ready');
-  } catch(e) {
-    console.warn('[ZoomDebug] Firebase init failed, logging disabled', e);
-    return;
-  }
-
-  // --- Session ID (one per page load) ---
-  const sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,6);
-  let seq = 0;
-  const BATCH_SIZE = 30;
-  const FLUSH_INTERVAL = 10000; // ms
-  let buffer = [];
-
-  // --- Snapshot helper ---
-  function snap(event, extra) {
-    const vv = window.visualViewport;
-    const cz = window.__customZoom || { scale: 1, offsetX: 0, offsetY: 0 };
-    const entry = {
-      seq: seq++,
-      t: Date.now(),
-      event: event,
-      s: +(cz.scale).toFixed(3),
-      oX: +(cz.offsetX).toFixed(1),
-      oY: +(cz.offsetY).toFixed(1),
-      sY: Math.round(window.scrollY),
-      sR: window.__zoomScrollRoomActive ? 1 : 0,
-      zO: (typeof window.__getZoomOwnsTransform === 'function' && window.__getZoomOwnsTransform()) ? 1 : 0,
-      iW: window.innerWidth,
-      iH: window.innerHeight,
-      vvH: vv ? Math.round(vv.height) : 0,
-      dSH: document.documentElement.scrollHeight
-    };
-    // Optional fields
-    if (vv) { entry.oH = Math.round(vv.offsetTop); entry.sW = Math.round(vv.width); }
-    if (window.screen) { entry.sH = window.screen.height; }
-    if (extra) Object.assign(entry, extra);
-    buffer.push(entry);
-    if (buffer.length >= BATCH_SIZE) flush();
-  }
-
-  // --- Flush buffer to Firestore ---
-  let flushPromise = null;
-  async function flush() {
-    if (!db || buffer.length === 0) return;
-    if (flushPromise) return; // don't overlap
-    const batch = buffer.splice(0);
-    flushPromise = (async () => {
-      try {
-        await addDoc(collection(db, 'zoomDebug'), {
-          sessionId: sessionId,
-          ts: Date.now(),
-          entries: batch
-        });
-      } catch(e) {
-        console.warn('[ZoomDebug] flush failed', e);
-        // put entries back at front
-        buffer.unshift(...batch);
-      } finally {
-        flushPromise = null;
-      }
-    })();
-  }
-
-  // Periodic flush
-  setInterval(flush, FLUSH_INTERVAL);
-  // Flush on page unload
-  window.addEventListener('pagehide', () => flush());
-  window.addEventListener('beforeunload', () => flush());
-
-  // --- Expose global logging function ---
-  window.__zoomLog = snap;
-  window.__zoomLogFlush = flush;
-
-  // --- Auto-log key events ---
-
-  // PAGE-LOAD
-  snap('PAGE-LOAD', { note: navigator.userAgent.slice(0, 80) });
-
-  // Resize
-  let resizeLogTimer = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeLogTimer);
-    resizeLogTimer = setTimeout(() => snap('resize'), 200);
-  }, { passive: true });
-
-  // Orientation change
-  window.addEventListener('orientationchange', () => {
-    setTimeout(() => snap('orient'), 350);
-  }, { passive: true });
-
-  // Scroll guard events (when zoomed, prevent scrollTop=0)
-  const origScrollGuard = window.addEventListener;
-  // We'll hook into scroll to detect guard activations
-  let lastScrollGuardLog = 0;
-  window.addEventListener('scroll', () => {
-    if (!window.__zoomScrollRoomActive) return;
-    const cz = window.__customZoom;
-    if (!cz || cz.scale <= 1.02) return;
-    if (window.scrollY < 50) {
-      const now = Date.now();
-      if (now - lastScrollGuardLog > 500) {
-        lastScrollGuardLog = now;
-        snap('scroll-guard', { note: 'scrollY clamped from ' + window.scrollY });
-      }
-    }
-  }, { passive: true });
-
-  // Idle heartbeat (every 30s if no other events logged recently)
-  let lastEventTime = Date.now();
-  const origSnap = snap;
-  // Wrap snap to track timing
-  window.__zoomLog = function(event, extra) {
-    lastEventTime = Date.now();
-    origSnap(event, extra);
-  };
-  setInterval(() => {
-    if (Date.now() - lastEventTime > 25000) {
-      origSnap('idle');
-      lastEventTime = Date.now();
-    }
-  }, 30000);
-
-  // Log that the logger itself is ready
-  snap('LOGGER-READY');
-
-  console.info('[ZoomDebug] Session:', sessionId);
 })();
 </script>
 
