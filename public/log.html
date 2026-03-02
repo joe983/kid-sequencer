@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zoom Debug Log Viewer</title>
+<title>Layout Debug Log Viewer</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: monospace; background: #1a1a2e; color: #0f0; padding: 10px; }
@@ -28,33 +28,55 @@
   .session-item:hover { background: #3a3a6a; }
   .session-item.active { border-color: #0f0; background: #1a3a1a; }
   .session-info { color: #aaa; font-size: 12px; }
+  .session-ua { color: #666; font-size: 10px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
   .log-table { width: 100%; border-collapse: collapse; font-size: 11px; }
   .log-table th { 
     background: #2a2a4a; color: #fff; padding: 4px 6px; text-align: left;
-    position: sticky; top: 0; border-bottom: 2px solid #0f0;
+    position: sticky; top: 0; border-bottom: 2px solid #0f0; z-index: 2;
+    white-space: nowrap;
   }
   .log-table td { padding: 3px 6px; border-bottom: 1px solid #333; white-space: nowrap; }
   .log-table tr:hover { background: #2a2a4a; }
-  .log-table tr.event-grace td { color: #ff0; }
-  .log-table tr.event-grace-end td { color: #fa0; font-weight: bold; }
-  .log-table tr.event-scroll-room-on td { color: #8f8; }
-  .log-table tr.event-pinch td { color: #0ff; }
-  .log-table tr.event-reset td { color: #f80; }
-  .log-table tr.event-ts-land td { color: #f0f; }
-  .log-table tr.event-idle td { color: #555; }
-  .log-table tr.event-resize td { color: #88f; }
-  .log-table tr.event-orient td { color: #88f; }
-  .log-table tr.event-PAGE-LOAD td { color: #f00; font-weight: bold; }
-  .log-table tr.event-LOGGER-READY td { color: #0f0; font-weight: bold; }
-  .log-table tr.event-scroll-guard td { color: #f44; }
-  .log-table tr.event-layout-handback td { color: #4f4; font-weight: bold; }
+
+  /* Event type color coding */
+  .log-table tr.evt-PAGE-LOAD td { color: #f00; font-weight: bold; }
+  .log-table tr.evt-layout-pass td { color: #4f4; }
+  .log-table tr.evt-resize td { color: #88f; }
+  .log-table tr.evt-vv-resize td { color: #aaf; }
+  .log-table tr.evt-vv-scroll td { color: #f8f; }
+  .log-table tr.evt-orient-change td { color: #ff0; font-weight: bold; }
+  .log-table tr.evt-vp-scroll td { color: #0ff; }
+  .log-table tr.evt-pan-end td { color: #fa0; }
+  .log-table tr.evt-touch-start td { color: #f0f; }
+  .log-table tr.evt-overflow-detected td { color: #f44; font-weight: bold; }
+  .log-table tr.evt-class-change td { color: #ff8; }
+  .log-table tr.evt-idle-snap td { color: #555; }
+
+  /* Highlight cells with issues */
+  .log-table td.warn { color: #f80 !important; font-weight: bold; }
+  .log-table td.error { color: #f44 !important; font-weight: bold; }
+
   #status { color: #888; margin: 10px 0; font-size: 12px; }
   .log-container { max-height: 80vh; overflow: auto; }
   .filter-label { color: #aaa; font-size: 12px; }
+
+  .detail-panel {
+    position: fixed; right: 0; top: 0; bottom: 0; width: 420px;
+    background: #1a1a2e; border-left: 2px solid #0f0;
+    overflow: auto; padding: 12px; display: none; z-index: 100;
+    font-size: 12px;
+  }
+  .detail-panel.show { display: block; }
+  .detail-panel h3 { color: #0f0; margin-bottom: 8px; }
+  .detail-panel pre { color: #ccc; white-space: pre-wrap; word-break: break-all; }
+  .detail-panel .close-btn {
+    position: absolute; right: 8px; top: 8px; background: #444;
+    color: #fff; border: none; padding: 4px 10px; cursor: pointer; border-radius: 3px;
+  }
 </style>
 </head>
 <body>
-<h1>Zoom Debug Log Viewer</h1>
+<h1>📐 Layout Debug Log Viewer</h1>
 <div id="status">Connecting to Firestore...</div>
 
 <div class="controls">
@@ -64,22 +86,22 @@
   <label class="filter-label">Filter: 
     <select id="filterEvt">
       <option value="">All events</option>
-      <option value="pinch">pinch</option>
-      <option value="grace">grace</option>
-      <option value="grace-end">grace-end</option>
-      <option value="ts-land">touchstart-land</option>
-      <option value="reset">reset</option>
-      <option value="ended-zoom">ended-zoom</option>
-      <option value="scroll-guard">scroll-guard</option>
-      <option value="layout-handback">layout-handback</option>
-      <option value="scroll-room-on">scroll-room-on</option>
-      <option value="resize">resize</option>
-      <option value="orient">orient</option>
-      <option value="idle">idle</option>
       <option value="PAGE-LOAD">PAGE-LOAD</option>
+      <option value="layout-pass">layout-pass</option>
+      <option value="resize">resize</option>
+      <option value="vv-resize">vv-resize</option>
+      <option value="vv-scroll">vv-scroll</option>
+      <option value="orient-change">orient-change</option>
+      <option value="vp-scroll">vp-scroll</option>
+      <option value="pan-end">pan-end</option>
+      <option value="touch-start">touch-start</option>
+      <option value="overflow-detected">overflow-detected</option>
+      <option value="class-change">class-change</option>
+      <option value="idle-snap">idle-snap</option>
     </select>
   </label>
   <label class="filter-label">Hide idle: <input type="checkbox" id="hideIdle" checked></label>
+  <label class="filter-label">Only issues: <input type="checkbox" id="onlyIssues"></label>
   <button id="clearBtn" class="danger">🗑 Clear All Logs</button>
 </div>
 
@@ -88,12 +110,35 @@
   <table class="log-table" id="logTable">
     <thead>
       <tr>
-        <th>#</th><th>Time</th><th>Event</th><th>Scale</th><th>oX</th><th>oY</th>
-        <th>sY</th><th>sRoom</th><th>iW</th><th>iH</th><th>vvH</th><th>dSH</th><th>oH</th><th>sH</th><th>Extra</th>
+        <th>#</th>
+        <th>Time</th>
+        <th>Event</th>
+        <th>vvW</th>
+        <th>vvH</th>
+        <th>vvS</th>
+        <th>iW</th>
+        <th>iH</th>
+        <th>vpSL</th>
+        <th>vpST</th>
+        <th>vpSW</th>
+        <th>vpSH</th>
+        <th>pgW</th>
+        <th>pgH</th>
+        <th>Mode</th>
+        <th>Cell</th>
+        <th>OvfX</th>
+        <th>OvfY</th>
+        <th>Extra</th>
       </tr>
     </thead>
     <tbody id="logBody"></tbody>
   </table>
+</div>
+
+<div class="detail-panel" id="detailPanel">
+  <button class="close-btn" onclick="document.getElementById('detailPanel').classList.remove('show')">✕</button>
+  <h3>Entry Detail</h3>
+  <pre id="detailContent"></pre>
 </div>
 
 <script type="module">
@@ -115,6 +160,10 @@ const sessionsEl = document.getElementById('sessions');
 const logBody = document.getElementById('logBody');
 const filterEvt = document.getElementById('filterEvt');
 const hideIdle = document.getElementById('hideIdle');
+const onlyIssues = document.getElementById('onlyIssues');
+const detailPanel = document.getElementById('detailPanel');
+const detailContent = document.getElementById('detailContent');
+
 let allDocs = [];
 let selectedSession = null;
 let autoInterval = null;
@@ -122,7 +171,7 @@ let autoInterval = null;
 async function loadSessions() {
   statusEl.textContent = 'Loading...';
   try {
-    const q = query(collection(db, 'zoomDebug'), orderBy('ts', 'desc'), limit(100));
+    const q = query(collection(db, 'layoutDebug'), orderBy('ts', 'desc'), limit(200));
     const snap = await getDocs(q);
     allDocs = [];
     snap.forEach(d => allDocs.push({ id: d.id, ...d.data() }));
@@ -130,18 +179,19 @@ async function loadSessions() {
     // Group by session
     const sessions = {};
     allDocs.forEach(d => {
-      if (!sessions[d.sessionId]) sessions[d.sessionId] = { docs: [], firstTs: d.ts, lastTs: d.ts, count: 0 };
-      sessions[d.sessionId].docs.push(d);
-      sessions[d.sessionId].count += (d.entries || []).length;
-      if (d.ts < sessions[d.sessionId].firstTs) sessions[d.sessionId].firstTs = d.ts;
-      if (d.ts > sessions[d.sessionId].lastTs) sessions[d.sessionId].lastTs = d.ts;
+      const sid = d.sessionId || 'unknown';
+      if (!sessions[sid]) sessions[sid] = { docs: [], firstTs: d.ts, lastTs: d.ts, count: 0, ua: d.ua || '' };
+      sessions[sid].docs.push(d);
+      sessions[sid].count += (d.entries || []).length;
+      if (d.ts < sessions[sid].firstTs) sessions[sid].firstTs = d.ts;
+      if (d.ts > sessions[sid].lastTs) sessions[sid].lastTs = d.ts;
     });
 
     sessionsEl.innerHTML = '';
     const sorted = Object.entries(sessions).sort((a, b) => b[1].lastTs - a[1].lastTs);
     
     if (sorted.length === 0) {
-      sessionsEl.innerHTML = '<div style="color:#888">No sessions found. Use the app to generate logs.</div>';
+      sessionsEl.innerHTML = '<div style="color:#888">No sessions found. Add <b>?logLayout=1</b> to the app URL to start logging.</div>';
       statusEl.textContent = 'No data yet.';
       return;
     }
@@ -150,7 +200,13 @@ async function loadSessions() {
       const div = document.createElement('div');
       div.className = 'session-item' + (sid === selectedSession ? ' active' : '');
       const time = new Date(info.firstTs).toLocaleString();
-      div.innerHTML = `<span>${sid}</span><span class="session-info">${time} — ${info.count} entries</span>`;
+      const uaShort = parseUA(info.ua);
+      div.innerHTML = `
+        <div>
+          <span>${sid}</span>
+          <div class="session-ua" title="${esc(info.ua)}">${uaShort}</div>
+        </div>
+        <span class="session-info">${time} — ${info.count} entries</span>`;
       div.onclick = () => { selectedSession = sid; renderSession(sessions[sid]); loadSessions(); };
       sessionsEl.appendChild(div);
     });
@@ -169,6 +225,39 @@ async function loadSessions() {
   }
 }
 
+function esc(s) { return (s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+function parseUA(ua) {
+  if (!ua) return '—';
+  const iphone = ua.match(/iPhone/);
+  const ipad = ua.match(/iPad/);
+  const android = ua.match(/Android\s*([\d.]+)/);
+  const chrome = ua.match(/Chrome\/([\d]+)/);
+  const safari = ua.match(/Version\/([\d.]+).*Safari/);
+  const firefox = ua.match(/Firefox\/([\d]+)/);
+  
+  let device = 'Desktop';
+  if (iphone) device = 'iPhone';
+  else if (ipad) device = 'iPad';
+  else if (android) device = 'Android ' + android[1];
+  
+  let browser = '';
+  if (chrome && !ua.includes('Edg')) browser = 'Chrome ' + chrome[1];
+  else if (safari) browser = 'Safari ' + safari[1];
+  else if (firefox) browser = 'Firefox ' + firefox[1];
+  else if (ua.includes('Edg')) browser = 'Edge';
+  
+  return `${device} · ${browser}`;
+}
+
+function hasIssue(e) {
+  if (e.event === 'overflow-detected') return true;
+  if (e.vpOverflowX || e.vpOverflowY) return true;
+  if (e.vvS && e.vvS !== 1) return true;
+  if (e.scaled && (e.vpSL > 0 || e.vpST > 0)) return true;
+  return false;
+}
+
 function renderSession(session) {
   const allEntries = [];
   session.docs.forEach(d => {
@@ -178,30 +267,76 @@ function renderSession(session) {
 
   const filter = filterEvt.value;
   const noIdle = hideIdle.checked;
+  const issuesOnly = onlyIssues.checked;
 
   logBody.innerHTML = '';
   allEntries.forEach(e => {
     if (filter && e.event !== filter) return;
-    if (noIdle && e.event === 'idle') return;
+    if (noIdle && e.event === 'idle-snap') return;
+    if (issuesOnly && !hasIssue(e)) return;
     
     const tr = document.createElement('tr');
-    tr.className = 'event-' + e.event;
+    tr.className = 'evt-' + e.event;
     const ts = new Date(e.t).toISOString().substr(11, 12);
+
+    let mode = '—';
+    if (e.scaled) mode = 'scaled';
+    else if (e.tablet) mode = 'tablet';
+    else mode = 'desktop';
+
     const extra = [];
-    if (e.g !== undefined) extra.push('g=' + e.g);
-    if (e.ga !== undefined) extra.push('ga=' + e.ga);
-    if (e.note) extra.push(e.note);
-    if (e.baseH !== undefined) extra.push('baseH=' + e.baseH);
-    if (e.newH !== undefined) extra.push('newH=' + e.newH);
-    if (e.finalH !== undefined) extra.push('finalH=' + e.finalH);
-    
-    tr.innerHTML = `<td>${e.seq}</td><td>${ts}</td><td>${e.event}</td><td>${e.s}</td><td>${e.oX}</td><td>${e.oY}</td><td>${e.sY}</td><td>${e.sR}</td><td>${e.iW}</td><td>${e.iH}</td><td>${e.vvH}</td><td>${e.dSH}</td><td>${e.oH||''}</td><td>${e.sH||''}</td><td>${extra.join(' ')}</td>`;
+    if (e.panDX !== undefined) extra.push(`pan:${e.panDX},${e.panDY} ${e.panDT}ms`);
+    if (e.layoutN !== undefined) extra.push(`L#${e.layoutN}`);
+    if (e.htmlClass) extra.push(`cls:${e.htmlClass}`);
+    if (e.orient) extra.push(`${e.orient}`);
+    if (e.touches) extra.push(`${e.touches}T @${e.tX},${e.tY}`);
+    if (e.pgTransform && e.pgTransform !== 'none') {
+      const scaleMatch = e.pgTransform.match(/scale\(([\d.]+)\)/);
+      if (scaleMatch) extra.push(`s=${scaleMatch[1]}`);
+    }
+    if (e.overflows) {
+      e.overflows.forEach(o => extra.push(`⚠${o.id}:${o.dir} ${o.scroll}>${o.client}`));
+    }
+
+    const ovfXClass = e.vpOverflowX ? ' warn' : '';
+    const ovfYClass = e.vpOverflowY ? ' warn' : '';
+    const slClass = (e.scaled && e.vpSL > 0) ? ' warn' : '';
+    const stClass = (e.scaled && e.vpST > 0) ? ' warn' : '';
+
+    tr.innerHTML = `
+      <td>${e.seq}</td>
+      <td>${ts}</td>
+      <td>${e.event}</td>
+      <td>${e.vvW ?? ''}</td>
+      <td>${e.vvH ?? ''}</td>
+      <td>${e.vvS ?? ''}</td>
+      <td>${e.iW ?? ''}</td>
+      <td>${e.iH ?? ''}</td>
+      <td class="${slClass}">${e.vpSL ?? ''}</td>
+      <td class="${stClass}">${e.vpST ?? ''}</td>
+      <td>${e.vpSW ?? ''}</td>
+      <td>${e.vpSH ?? ''}</td>
+      <td>${e.pgW ?? ''}</td>
+      <td>${e.pgH ?? ''}</td>
+      <td>${mode}</td>
+      <td>${e.cell ?? ''}</td>
+      <td class="${ovfXClass}">${e.vpOverflowX ? '⚠Y' : 'ok'}</td>
+      <td class="${ovfYClass}">${e.vpOverflowY ? '⚠Y' : 'ok'}</td>
+      <td>${extra.join(' | ')}</td>`;
+
+    tr.style.cursor = 'pointer';
+    tr.onclick = () => {
+      detailContent.textContent = JSON.stringify(e, null, 2);
+      detailPanel.classList.add('show');
+    };
+
     logBody.appendChild(tr);
   });
 }
 
 filterEvt.onchange = () => loadSessions();
 hideIdle.onchange = () => loadSessions();
+onlyIssues.onchange = () => loadSessions();
 
 document.getElementById('refreshBtn').onclick = loadSessions;
 
@@ -220,11 +355,11 @@ document.getElementById('autoBtn').onclick = function() {
 document.getElementById('exportBtn').onclick = function() {
   if (allDocs.length === 0) { alert('No logs to export'); return; }
   
-  // Group all docs by session
   const sessions = {};
   allDocs.forEach(d => {
-    if (!sessions[d.sessionId]) sessions[d.sessionId] = [];
-    sessions[d.sessionId].push(d);
+    const sid = d.sessionId || 'unknown';
+    if (!sessions[sid]) sessions[sid] = [];
+    sessions[sid].push(d);
   });
 
   const sections = [];
@@ -239,43 +374,47 @@ document.getElementById('exportBtn').onclick = function() {
     docs.forEach(d => (d.entries || []).forEach(e => allEntries.push(e)));
     allEntries.sort((a, b) => a.seq - b.seq);
     
+    const ua = docs[0]?.ua || '';
     const lines = allEntries.map(e => {
       const ts = new Date(e.t).toISOString().substr(11, 12);
-      let line = e.seq + ' ' + ts + ' ' + e.event + ' s=' + e.s + ' oX=' + e.oX + ' oY=' + e.oY + ' sY=' + e.sY + ' sR=' + e.sR + ' ' + e.iW + 'x' + e.iH + ' vvH=' + e.vvH + ' dSH=' + e.dSH;
-      if (e.oH !== undefined) line += ' oH=' + e.oH;
-      if (e.sH !== undefined) line += ' sH=' + e.sH;
-      if (e.sW !== undefined) line += ' sW=' + e.sW;
-      if (e.g !== undefined) line += ' g=' + e.g;
-      if (e.ga !== undefined) line += ' ga=' + e.ga;
-      if (e.note) line += ' [' + e.note + ']';
-      // Include any other extra fields
-      const knownKeys = new Set(['seq','t','event','s','oX','oY','sY','sR','iW','iH','vvH','dSH','oH','sH','sW','g','ga','note']);
-      Object.keys(e).forEach(k => {
-        if (!knownKeys.has(k)) line += ' ' + k + '=' + JSON.stringify(e[k]);
-      });
+      let line = `${e.seq} ${ts} ${e.event}`;
+      line += ` vv=${e.vvW}x${e.vvH}@${e.vvS}`;
+      line += ` iW=${e.iW} iH=${e.iH}`;
+      line += ` vpScroll=${e.vpSL},${e.vpST}`;
+      line += ` vpSize=${e.vpSW}x${e.vpSH}`;
+      line += ` pgSize=${e.pgW}x${e.pgH}`;
+      line += ` mode=${e.scaled ? 'scaled' : e.tablet ? 'tablet' : 'desktop'}`;
+      line += ` cell=${e.cell}`;
+      if (e.vpOverflowX) line += ' ⚠OVF-X';
+      if (e.vpOverflowY) line += ' ⚠OVF-Y';
+      if (e.pgTransform && e.pgTransform !== 'none') line += ` transform=[${e.pgTransform}]`;
+      if (e.panDX !== undefined) line += ` pan=${e.panDX},${e.panDY}`;
+      if (e.overflows) line += ` OVERFLOWS:${JSON.stringify(e.overflows)}`;
+      if (e.orient) line += ` orient=${e.orient}`;
+      if (e.htmlClass) line += ` class=[${e.htmlClass}]`;
       return line;
     });
     
-    sections.push('=== Session: ' + sid + ' ===\nEntries: ' + lines.length + '\n\n' + lines.join('\n'));
+    sections.push(`=== Session: ${sid} ===\nUA: ${ua}\nEntries: ${lines.length}\n\n${lines.join('\n')}`);
   });
 
-  const text = 'Zoom Debug Log - All Sessions\nExported: ' + new Date().toISOString() + '\nTotal sessions: ' + sorted.length + '\n\n' + sections.join('\n\n\n');
+  const text = `Layout Debug Log - All Sessions\nExported: ${new Date().toISOString()}\nTotal sessions: ${sorted.length}\n\n${sections.join('\n\n\n')}`;
   
   const blob = new Blob([text], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'zoom-debug-all-' + Date.now() + '.txt';
+  a.download = 'layout-debug-' + Date.now() + '.txt';
   a.click();
   URL.revokeObjectURL(url);
 };
 
 document.getElementById('clearBtn').onclick = async function() {
-  if (!confirm('Delete ALL debug logs from Firestore?')) return;
+  if (!confirm('Delete ALL layout debug logs from Firestore?')) return;
   statusEl.textContent = 'Deleting...';
   try {
     for (const d of allDocs) {
-      await deleteDoc(doc(db, 'zoomDebug', d.id));
+      await deleteDoc(doc(db, 'layoutDebug', d.id));
     }
     selectedSession = null;
     logBody.innerHTML = '';
