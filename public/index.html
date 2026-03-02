@@ -4143,7 +4143,7 @@ window.KidSequencer = {
 <script type="module">
 /* ==================== LAYOUT DEBUG LOGGER ====================
    Captures layout, scroll, pan, resize, and overflow diagnostics
-   and sends them to Firestore collection "layoutDebug".
+   and sends them to Firestore collection "zoomDebug".
    Enable with ?logLayout=1 in the URL.
    ============================================================= */
 (async () => {
@@ -4165,7 +4165,7 @@ window.KidSequencer = {
     }, 'layoutDebugApp');
     db = getFirestore(app);
     window.__layoutDebugFirestore = { db, collection, addDoc };
-    console.log('[LayoutDebug] Logger ready — sending to Firestore "layoutDebug"');
+    console.log('[LayoutDebug] Logger ready — sending to Firestore "zoomDebug"');
   } catch (e) {
     console.warn('[LayoutDebug] Firestore init failed, logging to console only:', e);
   }
@@ -4260,7 +4260,7 @@ window.KidSequencer = {
 
     try {
       const { collection, addDoc } = window.__layoutDebugFirestore;
-      await addDoc(collection(db, 'layoutDebug'), {
+      await addDoc(collection(db, 'zoomDebug'), {
         sessionId,
         ts: Date.now(),
         ua: navigator.userAgent,

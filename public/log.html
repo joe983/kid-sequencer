@@ -171,7 +171,7 @@ let autoInterval = null;
 async function loadSessions() {
   statusEl.textContent = 'Loading...';
   try {
-    const q = query(collection(db, 'layoutDebug'), orderBy('ts', 'desc'), limit(200));
+    const q = query(collection(db, 'zoomDebug'), orderBy('ts', 'desc'), limit(200));
     const snap = await getDocs(q);
     allDocs = [];
     snap.forEach(d => allDocs.push({ id: d.id, ...d.data() }));
@@ -414,7 +414,7 @@ document.getElementById('clearBtn').onclick = async function() {
   statusEl.textContent = 'Deleting...';
   try {
     for (const d of allDocs) {
-      await deleteDoc(doc(db, 'layoutDebug', d.id));
+      await deleteDoc(doc(db, 'zoomDebug', d.id));
     }
     selectedSession = null;
     logBody.innerHTML = '';
