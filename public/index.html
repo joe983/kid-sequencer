@@ -4055,11 +4055,6 @@ window.KidSequencer = {
       panning = false;
       pinchMoveCount = 0;
 
-      // Cancel any pending handback from a previous pinch — we're starting a new one
-      clearInterval(handbackTimer);
-      clearTimeout(handbackSafetyTimer);
-      clearTimeout(handbackDelayTimer);
-
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
       // Claim exclusive ownership of page.style.transform
