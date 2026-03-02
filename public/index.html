@@ -4055,14 +4055,20 @@ window.KidSequencer = {
       panning = false;
       pinchMoveCount = 0;
 
+      // Cancel any pending handback from a previous pinch — we're starting a new one
+      clearInterval(handbackTimer);
+      clearTimeout(handbackSafetyTimer);
+      clearTimeout(handbackDelayTimer);
+
       // Block layout system from overwriting our transform during pinch
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
       // Claim exclusive ownership of page.style.transform
       if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
       
-      // Record the "good" viewport height before zoom changes it
+      // Record the "good" viewport dims before zoom changes them
       if(window.__customZoom.scale <= 1.02) {
         preZoomInnerHeight = window.innerHeight;
+        preZoomInnerWidth = window.innerWidth;
       }
       
       // Capture viewport dimensions for stable clamping during pinch
@@ -4113,7 +4119,7 @@ window.KidSequencer = {
     if(pinching && e.touches.length >= 2) {
       // Deduplicate: skip if we already processed a touchmove this frame
       const now = e.timeStamp || performance.now();
-      if(now - lastTouchMoveTime < 2) {
+      if(now - lastTouchMoveTime < 4) {
         // Same frame — still need to preventDefault after grace period
         if(!(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES)) {
           e.preventDefault();
@@ -4185,19 +4191,19 @@ window.KidSequencer = {
   let handbackSafetyTimer = null;
   let handbackDelayTimer = null;
   
-  // Remember the "good" viewport height from before zoom started
-  // (the height we should expect to return to after reset)
+  // Remember the "good" viewport dims from before zoom started
   let preZoomInnerHeight = window.innerHeight;
+  let preZoomInnerWidth = window.innerWidth;
   
   function deferredLayoutHandback() {
     clearInterval(handbackTimer);
     clearTimeout(handbackSafetyTimer);
     clearTimeout(handbackDelayTimer);
     
-    const MIN_DELAY = 350;     // ms before we even start checking
+    const MIN_DELAY = 400;     // ms before we even start checking (Safari toolbar anim ~300-400ms)
     const POLL_INTERVAL = 60;  // ms between reads
     const STABLE_THRESHOLD = 6; // need 6 stable reads (~360ms of stability)
-    const SAFETY_TIMEOUT = 2000; // max total wait
+    const SAFETY_TIMEOUT = 2500; // max total wait
     const MIN_REASONABLE_H = 200; // viewport must be at least this tall to be "settled"
     
     // Wait the minimum delay before starting to poll
@@ -4211,11 +4217,14 @@ window.KidSequencer = {
         const w = window.innerWidth;
         const isLand = w > h;
         
-        // In landscape, the "good" height should be close to preZoomInnerHeight
-        // or at least MIN_REASONABLE_H. If we're still at a tiny height, don't settle.
-        const heightReasonable = !isLand || h >= Math.min(MIN_REASONABLE_H, preZoomInnerHeight * 0.7);
+        // In landscape, the viewport should return close to the pre-zoom dimensions.
+        // Width should be close to preZoomInnerWidth (Safari shrinks it during CSS zoom).
+        // Height should be at least MIN_REASONABLE_H.
+        const heightOk = !isLand || h >= Math.min(MIN_REASONABLE_H, preZoomInnerHeight * 0.7);
+        const widthOk = !isLand || w >= preZoomInnerWidth * 0.85;
+        const dimsReasonable = heightOk && widthOk;
         
-        if(Math.abs(h - lastH) < 2 && Math.abs(w - lastW) < 2 && heightReasonable) {
+        if(Math.abs(h - lastH) < 2 && Math.abs(w - lastW) < 2 && dimsReasonable) {
           stableCount++;
         } else {
           stableCount = 0;
@@ -4242,8 +4251,9 @@ window.KidSequencer = {
   function doHandback(reason) {
     if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
     if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-    // Update preZoomInnerHeight to the current settled value
+    // Update preZoom dims to the current settled values
     preZoomInnerHeight = window.innerHeight;
+    preZoomInnerWidth = window.innerWidth;
     // Ensure we're at clean scroll position
     try { window.scrollTo(0, 0); } catch(_){}
     // Run layout immediately, then again after a paint to catch any late Safari updates
