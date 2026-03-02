@@ -3997,12 +3997,19 @@ window.KidSequencer = {
     page.style.transform = `translate(${tx}px, ${ty}px) scale(${totalS})`;
   }
 
+  // Capture viewport dimensions at pinch start — Safari reports wildly fluctuating
+  // innerWidth/innerHeight during CSS transform changes. Using the captured values
+  // prevents jittery clamping.
+  let capturedVW = window.innerWidth;
+  let capturedVH = window.innerHeight;
+
   function clampOffsets(duringPinch){
     const bt = window.__baseTransform;
     if(!bt) return;
     const cz = window.__customZoom;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // Use captured dimensions during pinch, live dimensions after
+    const vw = duringPinch ? capturedVW : window.innerWidth;
+    const vh = duringPinch ? capturedVH : window.innerHeight;
     const totalS = bt.s * cz.scale;
     const scaledW = bt.stageW * totalS;
     const scaledH = bt.stageH * totalS;
@@ -4052,6 +4059,15 @@ window.KidSequencer = {
       if(typeof window.__setIsZooming === 'function') window.__setIsZooming(true);
       // Claim exclusive ownership of page.style.transform
       if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(true);
+      
+      // Record the "good" viewport height before zoom changes it
+      if(window.__customZoom.scale <= 1.02) {
+        preZoomInnerHeight = window.innerHeight;
+      }
+      
+      // Capture viewport dimensions for stable clamping during pinch
+      capturedVW = window.innerWidth;
+      capturedVH = window.innerHeight;
 
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       const t1 = { x: e.touches[1].clientX, y: e.touches[1].clientY };
@@ -4089,8 +4105,23 @@ window.KidSequencer = {
     }
   }, {passive: false});
 
+  // Deduplicate touchmove: Safari fires once per changed touch point,
+  // so with 2 fingers we often get 2 touchmove events in the same frame.
+  let lastTouchMoveTime = 0;
+  
   viewport.addEventListener('touchmove', (e) => {
     if(pinching && e.touches.length >= 2) {
+      // Deduplicate: skip if we already processed a touchmove this frame
+      const now = e.timeStamp || performance.now();
+      if(now - lastTouchMoveTime < 2) {
+        // Same frame — still need to preventDefault after grace period
+        if(!(isLandscape() && pinchMoveCount <= TOOLBAR_GRACE_FRAMES)) {
+          e.preventDefault();
+        }
+        return;
+      }
+      lastTouchMoveTime = now;
+      
       pinchMoveCount++;
 
       const t0 = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -4145,50 +4176,82 @@ window.KidSequencer = {
 
   // --- Deferred layout handback ---
   // After a reset/snap-back, DON'T immediately call scheduleLayout().
-  // Instead, wait for the viewport dimensions to settle (Safari's toolbar animation
-  // takes ~300-400ms). Poll innerHeight until it's been stable for 5 consecutive reads,
-  // then release zoomOwnsTransform and run layout.
+  // Safari's toolbar animation takes ~300-400ms and the viewport dimensions
+  // are unreliable during that window. We:
+  //   1. Wait a minimum 350ms delay (let toolbar animation START)
+  //   2. Then poll until innerHeight is stable AND reasonable (not the shrunken zoom viewport)
+  //   3. Only then release zoomOwnsTransform and run layout.
   let handbackTimer = null;
   let handbackSafetyTimer = null;
+  let handbackDelayTimer = null;
+  
+  // Remember the "good" viewport height from before zoom started
+  // (the height we should expect to return to after reset)
+  let preZoomInnerHeight = window.innerHeight;
+  
   function deferredLayoutHandback() {
-    // Clear any previous handback polling
     clearInterval(handbackTimer);
     clearTimeout(handbackSafetyTimer);
+    clearTimeout(handbackDelayTimer);
     
-    let stableCount = 0;
-    let lastH = window.innerHeight;
-    const STABLE_THRESHOLD = 5; // need 5 stable reads
-    const POLL_INTERVAL = 80;   // ms between reads
-    const SAFETY_TIMEOUT = 1500; // max wait
+    const MIN_DELAY = 350;     // ms before we even start checking
+    const POLL_INTERVAL = 60;  // ms between reads
+    const STABLE_THRESHOLD = 6; // need 6 stable reads (~360ms of stability)
+    const SAFETY_TIMEOUT = 2000; // max total wait
+    const MIN_REASONABLE_H = 200; // viewport must be at least this tall to be "settled"
     
-    handbackTimer = setInterval(() => {
-      const h = window.innerHeight;
-      if(Math.abs(h - lastH) < 2) {
-        stableCount++;
-      } else {
-        stableCount = 0;
-        lastH = h;
-      }
+    // Wait the minimum delay before starting to poll
+    handbackDelayTimer = setTimeout(() => {
+      let stableCount = 0;
+      let lastH = window.innerHeight;
+      let lastW = window.innerWidth;
       
-      if(stableCount >= STABLE_THRESHOLD) {
-        clearInterval(handbackTimer);
-        clearTimeout(handbackSafetyTimer);
-        // Release ownership and run layout
-        if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-        if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-        if(window.scheduleLayout) window.scheduleLayout();
-        if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'viewport settled h=' + h });
-      }
-    }, POLL_INTERVAL);
+      handbackTimer = setInterval(() => {
+        const h = window.innerHeight;
+        const w = window.innerWidth;
+        const isLand = w > h;
+        
+        // In landscape, the "good" height should be close to preZoomInnerHeight
+        // or at least MIN_REASONABLE_H. If we're still at a tiny height, don't settle.
+        const heightReasonable = !isLand || h >= Math.min(MIN_REASONABLE_H, preZoomInnerHeight * 0.7);
+        
+        if(Math.abs(h - lastH) < 2 && Math.abs(w - lastW) < 2 && heightReasonable) {
+          stableCount++;
+        } else {
+          stableCount = 0;
+          lastH = h;
+          lastW = w;
+        }
+        
+        if(stableCount >= STABLE_THRESHOLD) {
+          clearInterval(handbackTimer);
+          clearTimeout(handbackSafetyTimer);
+          doHandback('viewport settled h=' + h + ' w=' + w);
+        }
+      }, POLL_INTERVAL);
+    }, MIN_DELAY);
     
     // Safety timeout — release ownership even if viewport never settles
     handbackSafetyTimer = setTimeout(() => {
       clearInterval(handbackTimer);
-      if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
-      if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
-      if(window.scheduleLayout) window.scheduleLayout();
-      if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: 'safety timeout' });
+      clearTimeout(handbackDelayTimer);
+      doHandback('safety timeout h=' + window.innerHeight);
     }, SAFETY_TIMEOUT);
+  }
+  
+  function doHandback(reason) {
+    if(typeof window.__setZoomOwnsTransform === 'function') window.__setZoomOwnsTransform(false);
+    if(typeof window.__setIsZooming === 'function') window.__setIsZooming(false);
+    // Update preZoomInnerHeight to the current settled value
+    preZoomInnerHeight = window.innerHeight;
+    // Ensure we're at clean scroll position
+    try { window.scrollTo(0, 0); } catch(_){}
+    // Run layout immediately, then again after a paint to catch any late Safari updates
+    if(window.scheduleLayout) {
+      window.scheduleLayout();
+      requestAnimationFrame(() => { if(window.scheduleLayout) window.scheduleLayout(); });
+    }
+    if(typeof window.__zoomLog === 'function') window.__zoomLog('layout-handback', { note: reason });
   }
 
   viewport.addEventListener('touchend', (e) => {
