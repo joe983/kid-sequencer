@@ -10,49 +10,54 @@
 :host{
   display: block;
   width: 100%;
-  /* match the instrument button width — no extra column width needed */
   --instBtnSize: 58px;
   --instGap: 10px;
 }
 
-/* ── outer row: single centred column, no side readout ───────────────────── */
+/* ── outer row ───────────────────────────────────────────────────────────── */
+/* NO margin-top — parent #rightCol gap:12px spaces this from instButtons    */
 .seqFaderRow{
   width: 100%;
   display: flex;
   justify-content: center;
-  /* top gap matches the gap between instrument buttons */
-  margin-top: var(--instGap);
 }
 
 /* ── fader panel ─────────────────────────────────────────────────────────── */
 /*
-  Height fills from just below the last instBtn all the way to the bottom
-  of the sequencer grid, matching the grid's bottom edge.
+  Target height on desktop (cell≥46):
+    grid height  = cell*8 + gap*7  (396px at cell=46)
+    buttons      = 58px*4 + 10px*3 = 262px
+    rightCol gaps= 12px (tempo→inst) + 12px (inst→fader) = 24px
+    box-shadow   = 8px (visual drop, subtract so shadow doesn't exceed grid)
+    ──────────────────────────────────────────────────────────────
+    panel height = 396 − 262 − 24 − 8 = 102px  ✓
 
-  Grid height  = cell*8 + gap*7
-  Used above   = 4 buttons + 3 gaps  (instBtnSize*4 + instGap*3)
-  Remaining    = grid height - above
-  We subtract the panel's own vertical padding (10px top + 10px bottom)
-  so the track + badge fill the interior neatly.
+  On small screens (iPhone, cell=26) the grid is shorter than the buttons,
+  so the formula would go negative. max() clamps to a sensible minimum that
+  always fits the track + badge without overflowing.
 */
 .seqFaderPanel{
-  width: var(--instBtnSize);
-  height: calc(
-    (var(--cell, 46px) * 8 + var(--gap, 4px) * 7)
-    - (var(--instBtnSize) * 4 + var(--instGap) * 3)
-    - var(--instGap)          /* the margin-top we added above */
+  width: 58px;
+  box-sizing: border-box;
+  height: max(
+    90px,       /* minimum: always fits badge + a short track */
+    calc(
+      (var(--cell, 46px) * 8 + var(--gap, 4px) * 7)
+      - (58px * 4 + var(--instGap) * 3)
+      - 24px
+      - 8px
+    )
   );
   border-radius: 18px;
   border: 4px solid #1d1d1d;
   background: #ffffff;
   box-shadow: 0 8px 0 rgba(0,0,0,0.07);
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* top padding = a little breathing room; bottom padding = space for badge */
   padding: 10px 4px 8px;
   position: relative;
+  overflow: visible;
 }
 
 /* ── track area — fills all space above the badge ────────────────────────── */
