@@ -93,9 +93,9 @@ html.stageScaled #page{
 
 html.js-loading #page{ visibility:hidden; }
 html.js-ready #page{ visibility:visible; }
-/* Suppress layout transitions until fully settled — prevents jump-to-position glitch */
-html:not(.layout-settled) #rightCol,
-html:not(.layout-settled) #contentWrap{
+/* Suppress transitions during initial load — only animate post-settle adjustments */
+html.js-loading #rightCol,
+html.js-loading #contentWrap{
   transition: none !important;
 }
 
@@ -262,6 +262,7 @@ body.loggedIn #robotLogo{
       will-change: transform;
       position: relative;
       z-index: 2;
+      transition: transform 80ms linear;
     }
 
     #controls{
@@ -739,6 +740,7 @@ body.loggedIn #robotLogo{
       flex: 0 0 auto;
       transform: translateY(calc(-1 * var(--rightLift)));
       will-change: transform;
+      transition: transform 80ms linear;
     }
 
     #tempoControls{
@@ -1715,7 +1717,12 @@ function fitToViewport(){
 
   const controlsRect = controlsEl.getBoundingClientRect();
   const mainRect = mainLayoutEl.getBoundingClientRect();
-  document.documentElement.style.setProperty("--rightLift", Math.max(0, Math.round(mainRect.top - controlsRect.top)) + "px");
+  const __newRightLift = Math.max(0, Math.round(mainRect.top - controlsRect.top));
+  const __oldRightLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rightLift')) || 0;
+  if(__newRightLift !== __oldRightLift){
+    console.log('[LIFT] --rightLift', __oldRightLift, '->', __newRightLift, 'mainRect.top='+mainRect.top.toFixed(1), 'controlsRect.top='+controlsRect.top.toFixed(1), 'pageVisible='+!document.documentElement.classList.contains('js-loading'), (new Error()).stack.split('\n')[2]);
+  }
+  document.documentElement.style.setProperty("--rightLift", __newRightLift + "px");
 
   const playBtn = controlsEl.querySelector(".bigBtn");
   const contentWrap = document.getElementById('contentWrap');
