@@ -6,7 +6,7 @@
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
     // Safety net: never allow a permanent blank screen if something goes wrong.
-    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
+    setTimeout(() => document.documentElement.classList.remove('js-loading'), 1500);
   </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
@@ -93,6 +93,11 @@ html.stageScaled #page{
 
 html.js-loading #page{ visibility:hidden; }
 html.js-ready #page{ visibility:visible; }
+/* Suppress layout transitions until fully settled — prevents jump-to-position glitch */
+html:not(.layout-settled) #rightCol,
+html:not(.layout-settled) #contentWrap{
+  transition: none !important;
+}
 
 /* --- Tablet landscape scale mode: NO scrolling, stage is positioned + scaled to fit horizontally --- */
 html.tabletScaled, html.tabletScaled body{
@@ -3216,11 +3221,14 @@ function importGridFromDataUrl(dataUrl){
     // First pass with the latest VisualViewport values
     try{ __ksSyncViewportVars(); }catch(e){}
     try{ fitToViewport(); }catch(e){}
+    // Second pass before reveal — ensures rightLift/contentLift are correct
+    // before the page becomes visible, eliminating the flash-to-position glitch.
+    try{ fitToViewport(); }catch(e){}
 
     root.classList.remove('js-loading');
     root.classList.add('js-ready');
 
-    // Double-pass: re-run after visibility changes are actually painted
+    // Final pass after paint to catch any font/scroll offset settling
     requestAnimationFrame(() => {
       try{ fitToViewport(); }catch(e){}
       try{ scheduleLayout(); }catch(e){}
@@ -3407,7 +3415,11 @@ setInstrument("piano");
   // Two-pass layout: compute once, then again after paint/fonts to avoid misalignment when opened in a small window.
   requestAnimationFrame(() => {
     fitToViewport(); positionRobotLogo();
-    requestAnimationFrame(() => { fitToViewport(); positionRobotLogo();  });
+    requestAnimationFrame(() => {
+      fitToViewport(); positionRobotLogo();
+      // Mark layout as settled — re-enables any CSS transitions on rightCol/contentWrap
+      document.documentElement.classList.add('layout-settled');
+    });
   });
 }
 
