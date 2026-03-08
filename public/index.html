@@ -757,6 +757,8 @@ body.loggedIn #robotLogo{
       flex: 0 0 auto;
       transform: translateY(calc(-1 * var(--rightLift)));
       will-change: transform;
+      /* Fixed height = grid height so fader can flex to fill remaining space */
+      height: calc(var(--cell) * 8 + var(--gap) * 7);
     }
 
     #tempoControls{
@@ -3737,33 +3739,25 @@ window.KidSequencer = {
 /* -------------------- MASTER VOLUME FADER (UI ONLY) -------------------- */
     :host{ --instBtnSize: 58px; --instGap: 10px; }
 
+    /* seqFaderRow = the custom element's inner wrapper; host fills rightCol */
+    :host{
+      display: flex !important;
+      flex: 1 1 0 !important;
+      min-height: 0 !important;
+      overflow: hidden;
+    }
     .seqFaderRow{
       width: 100%;
       display:flex;
       justify-content:center;
-      /* NO margin-top: #rightCol gap:12px already spaces us from instButtons */
+      align-items: stretch;
     }
 
     .seqFaderPanel{
-      width: 58px;           /* exact match to instBtn — border-box */
+      width: 58px;
       box-sizing: border-box;
-      /*
-        Height fills from the gap below instButtons to the grid bottom edge.
-          grid height  = cell*8 + gap*7
-          buttons      = 58px*4 + 10px*3 = 262px
-          rightCol gaps= 12px (tempo→inst) + 12px (inst→fader) = 24px
-          box-shadow   = 8px drop (subtract so it stays flush with grid bottom)
-        Clamped to min 90px so it never collapses on small iPhone screens.
-      */
-      height: max(
-        90px,
-        calc(
-          (var(--cell) * 8 + var(--gap) * 7)
-          - (58px * 4 + var(--instGap) * 3)
-          - 24px
-          - 8px
-        )
-      );
+      flex: 1 1 0;   /* fill the height given by the host */
+      min-height: 0;
       border-radius: 18px;
       border: 4px solid #1d1d1d;
       background:#ffffff;
@@ -3773,7 +3767,7 @@ window.KidSequencer = {
       align-items:center;
       padding: 10px 4px 8px;
       position: relative;
-      overflow: visible;
+      overflow: hidden;
     }
 
     .seqTrackArea{
