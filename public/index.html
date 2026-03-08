@@ -3741,10 +3741,10 @@ window.KidSequencer = {
       width: 100%;
       position: relative;
       display:flex;
-      align-items:flex-end;
-      justify-content:center; /* center the fader itself */
-      margin-top: 6px;
-      padding-bottom: 2px;
+      align-items:flex-start;
+      justify-content:center;
+      /* margin-top matches instGap so spacing above fader = spacing between buttons */
+      margin-top: var(--instGap);
     }
 
     .seqFaderPanel{
@@ -3757,13 +3757,22 @@ window.KidSequencer = {
       flex-direction: column;
       align-items:center;
       justify-content:flex-start;
-      padding: 6px 4px 8px;
+      padding: 6px 4px 6px;
+      /* Panel height = remaining grid height after 4 buttons + 3 gaps + this margin-top.
+         Badge (26px) + its margin (5px) + panel padding-bottom (6px) = 37px headroom,
+         so track area gets the rest and badge stays inside the border. */
+      height: calc(
+        (var(--cell) * 8 + var(--gap) * 7)
+        - (var(--instBtnSize) * 4 + var(--instGap) * 3)
+        - var(--instGap)
+      );
     }
 
     .seqTrackArea{
       position: relative;
-      /* Much shorter, while still ending at grid bottom */
-      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 70px);
+      /* Track fills panel minus badge space at bottom */
+      flex: 1 1 0;
+      min-height: 0;
       width: var(--instBtnSize);
       display:flex;
       align-items:center;
