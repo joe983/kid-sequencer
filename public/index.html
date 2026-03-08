@@ -3225,23 +3225,14 @@ function importGridFromDataUrl(dataUrl){
     try{ window.scrollTo(0, 0); }catch(e){}
     try{ if(viewportEl){ viewportEl.scrollTop = 0; viewportEl.scrollLeft = 0; } }catch(e){}
 
-    // First pass with the latest VisualViewport values
+    // Sync viewport vars only — do NOT call fitToViewport() here.
+    // layoutPass already computed the correct rightLift. Calling fitToViewport()
+    // again after scrollTo(0,0) shifts getBoundingClientRect measurements and
+    // produces a wrong rightLift value that causes a visible jump on reveal.
     try{ __ksSyncViewportVars(); }catch(e){}
-    try{ fitToViewport(); }catch(e){}
-    // Second pass before reveal — ensures rightLift/contentLift are correct
-    // before the page becomes visible, eliminating the flash-to-position glitch.
-    try{ fitToViewport(); }catch(e){}
 
     root.classList.remove('js-loading');
     root.classList.add('js-ready');
-
-    // Final pass after paint to catch any font/scroll offset settling
-    requestAnimationFrame(() => {
-      try{ fitToViewport(); }catch(e){}
-      try{ scheduleLayout(); }catch(e){}
-      // One last safety pass for slow iOS UI settling
-      setTimeout(() => { try{ scheduleLayout(); }catch(e){} }, 150);
-    });
   }
 
   let __stabilityRaf = 0;
