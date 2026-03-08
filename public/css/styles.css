@@ -994,8 +994,7 @@ body.loggedIn #toolsLoginArea{ display:block; }
     body.loggedIn /* Logout button */
 
 
-    /* --- MASTER VOLUME FADER (moved to Shadow DOM component) --- */
-    :root{ --rightW: 150px; }
+    /* --- MASTER VOLUME FADER (Shadow DOM component — no extra column width needed) --- */
 
 LAYOUT DEBUG MODE -------------------- */
     /* Enable by adding ?debug=1 to the URL (e.g., /?debug=1) */
