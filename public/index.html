@@ -124,7 +124,7 @@ html.tabletScaled #page{
       --rightW: 110px;
       --rightLift: 0px;
       --titleInset: 0px;
-      --contentLift: 92px;
+      --contentLift: 73px;
       --toolsLift: 18px;
 
       --wiggleDeg: 1.2deg;
@@ -520,7 +520,7 @@ body.loggedIn #robotLogo{
     .drumStatus{
       font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
       font-weight: 900;
-      font-size: 12px;
+      font-size: 14px;
       opacity: 0.78;
       color:#1f2a44;
       line-height: 1;
@@ -1785,6 +1785,18 @@ function fitToViewport(){
     const delta = Math.round(playCenter - titleCenter);
     let newLift = Math.round(currentLift + delta);
     newLift = Math.max(0, Math.min(260, newLift));
+    // Never lift contentWrap so high that controls disappear behind browser toolbar.
+    // Measure where contentWrap naturally sits (before transform), then cap the lift
+    // so its top stays at least MIN_TOP px below the viewport top.
+    const MIN_TOP = 14;
+    const cwEl = document.getElementById('contentWrap');
+    if(cwEl){
+      const currentTranslate = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--contentLift')) || 0;
+      const cwRect = cwEl.getBoundingClientRect();
+      const cwNaturalTop = cwRect.top + currentTranslate; // undo current transform
+      const maxLift = Math.round(cwNaturalTop - MIN_TOP);
+      newLift = Math.min(newLift, Math.max(0, maxLift));
+    }
     document.documentElement.style.setProperty("--contentLift", newLift + "px");
   }
 }
@@ -3741,10 +3753,10 @@ window.KidSequencer = {
       width: 100%;
       position: relative;
       display:flex;
-      align-items:flex-start;
-      justify-content:center;
-      /* margin-top matches instGap so spacing above fader = spacing between buttons */
-      margin-top: var(--instGap);
+      align-items:flex-end;
+      justify-content:center; /* center the fader itself */
+      margin-top: 6px;
+      padding-bottom: 2px;
     }
 
     .seqFaderPanel{
@@ -3752,27 +3764,18 @@ window.KidSequencer = {
       border-radius: 18px;
       border: 3px solid #1d1d1d;
       background:#ffffff;
-      box-shadow: 0 6px 0 rgba(0,0,0,0.05);
+      box-shadow: none;
       display:flex;
       flex-direction: column;
       align-items:center;
       justify-content:flex-start;
-      padding: 6px 4px 6px;
-      /* Panel height = remaining grid height after 4 buttons + 3 gaps + this margin-top.
-         Badge (26px) + its margin (5px) + panel padding-bottom (6px) = 37px headroom,
-         so track area gets the rest and badge stays inside the border. */
-      height: calc(
-        (var(--cell) * 8 + var(--gap) * 7)
-        - (var(--instBtnSize) * 4 + var(--instGap) * 3)
-        - var(--instGap)
-      );
+      padding: 6px 4px 8px;
     }
 
     .seqTrackArea{
       position: relative;
-      /* Track fills panel minus badge space at bottom */
-      flex: 1 1 0;
-      min-height: 0;
+      /* Much shorter, while still ending at grid bottom */
+      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 88px);
       width: var(--instBtnSize);
       display:flex;
       align-items:center;
@@ -3879,8 +3882,8 @@ window.KidSequencer = {
     .seqBadge{
       flex: 0 0 auto;
       margin-top: 5px;
-      width: 26px;
-      height: 26px;
+      width: 29px;
+      height: 29px;
       border-radius: 50%;
       border: 2px solid rgba(29,29,29,0.15);
       background: #eef3ff;
@@ -3892,7 +3895,7 @@ window.KidSequencer = {
     .seqBadge .num{
       font-family: "Fredoka","Trebuchet MS", Arial, sans-serif;
       font-weight: 900;
-      font-size: 12px;
+      font-size: 14px;
       color: #1f2a44;
       line-height: 1;
       letter-spacing: -0.5px;
@@ -3948,10 +3951,9 @@ window.KidSequencer = {
                   <div class="seqKnobStripe"></div>
                 </div>
               </div>
-            </div>
-
-            <div class="seqBadge" aria-label="Volume level">
-              <span class="num" id="seqVolNum">10</span>
+              <div class="seqBadge" aria-label="Volume level">
+                <span class="num" id="seqVolNum">10</span>
+              </div>
             </div>
           </div>
 `;
