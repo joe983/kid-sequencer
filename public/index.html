@@ -1,24 +1,41 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <script>
-
+<script>
     // Prevent first-paint layout flash: hide stage briefly until layout stabilizes.
     document.documentElement.classList.add('js-loading');
     // Safety net: never allow a permanent blank screen if something goes wrong.
     setTimeout(() => document.documentElement.classList.remove('js-loading'), 1200);
-  
   </script>
-  <meta charset="utf-8"/>
-  <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
-  <title>Kid Sequencer</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="css/styles.css"/>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<title>Kid Sequencer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
-
+<script>
+    // Safety: remove any legacy rotate/sideways prompt overlays (older cached HTML/CSS versions)
+    (function(){
+      try{
+        const el = document.getElementById('rotatePrompt');
+        if(el) el.remove();
+        const legacy = ['turn your device sideways', 'turn your device', 'rotate your device'];
+        const nodes = Array.from(document.querySelectorAll('body *'));
+        for(const n of nodes){
+          const t = (n && n.textContent) ? n.textContent.toLowerCase().trim() : '';
+          if(!t) continue;
+          if(legacy.some(s => t.includes(s))){
+            // Hide rather than remove to avoid layout reflow surprises
+            n.style.display = 'none';
+          }
+        }
+      }catch(e){}
+    })();
+  </script>
 <div aria-hidden="true" id="debug-info"></div>
 <div id="viewport">
 <div id="page">
@@ -26,9 +43,7 @@
 
 </div>
 <div aria-hidden="true" id="robotLogo">
-<div class="robotClip">
-<img src="images/robot.svg" alt="Kid Sequencer robot" width="718" height="591" style="width:100%;height:100%;display:block;"/>
-</div>
+<div class="robotClip"><img src="images/robot.svg" alt="" width="718" height="591" style="width:100%;height:100%;display:block;"/></div>
 </div>
 <div id="contentWrap">
 <div id="controls">
@@ -126,26 +141,7 @@
 <div class="modalHint">Tip: line the grid up inside the dashed box.</div>
 </div>
 </div>
-
-</div>
-
-<!-- iOS silent-mode workaround: hidden looping silent video.
-       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
-<video id="iosSilentVideo" loop="" playsinline="" preload="auto" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;" webkit-playsinline="">
-<source src="silent.mp4" type="video/mp4"/>
-</video>
-
-<!-- standalone utility scripts -->
-<script src="js/legacy-cleanup.js"></script>
-<script src="js/volume-fader.js"></script>
-<script src="js/tap-feedback.js"></script>
-<script src="js/drag-pan.js"></script>
-<script src="js/debug.js"></script>
-<script type="module" src="js/firebase-auth.js"></script>
-
-<!-- main sequencer app (inline — untouched from original) -->
 <script>
-
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
 // Layout + behavior are unchanged; we only add structure + a small public API.
@@ -2442,8 +2438,27 @@ window.KidSequencer = {
 
 })();
 /* OPTION A ORGANISATION END */
-
 </script>
+<script type="module" src="js/firebase-auth.js"></script>
+<script src="js/legacy-cleanup.js"></script>
+<script src="js/debug.js"></script>
+</div>
+<script src="js/drag-pan.js"></script>
+<style>
+  body.can-pan{ cursor: grab; }
+  body.dragging-pan{ cursor: grabbing; }
+</style>
+<script src="js/volume-fader.js"></script>
+<!-- iOS silent-mode workaround: hidden looping silent video.
+       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
+<video id="iosSilentVideo" loop="" playsinline="" preload="auto" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;" webkit-playsinline="">
+<source src="silent.mp4" type="video/mp4"/>
+</video>
+
+<script src="js/tap-feedback.js"></script>
+
+
 
 </body>
 </html>
+<!-- AUTH HARDENING NOT INSERTED: getAuth(app) not found -->
