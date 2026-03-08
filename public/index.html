@@ -3413,20 +3413,15 @@ root.classList.add('stageScaled');
 
 
 function init(){
-  if (window.scheduleLayout) window.scheduleLayout();
-setInstrument("piano");
+  setInstrument("piano");
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
-  if (window.scheduleLayout) { requestAnimationFrame(window.scheduleLayout); setTimeout(window.scheduleLayout, 120); }
-
-  // Two-pass layout: compute once, then again after paint/fonts to avoid misalignment when opened in a small window.
+  // Layout is handled by the layout system (scheduleLayout/layoutPass).
+  // Do NOT call fitToViewport() here — competing calls cause rightLift to flip-flop
+  // between two values while the page is visible, causing a visible jump.
+  // Mark as settled after one RAF so transitions re-enable cleanly.
   requestAnimationFrame(() => {
-    fitToViewport(); positionRobotLogo();
-    requestAnimationFrame(() => {
-      fitToViewport(); positionRobotLogo();
-      // Mark layout as settled — re-enables any CSS transitions on rightCol/contentWrap
-      document.documentElement.classList.add('layout-settled');
-    });
+    document.documentElement.classList.add('layout-settled');
   });
 }
 
