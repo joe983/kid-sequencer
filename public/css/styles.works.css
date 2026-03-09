@@ -1080,12 +1080,3 @@ LAYOUT DEBUG MODE -------------------- */
 /* drag-to-pan cursors */
 body.can-pan{ cursor: grab; }
   body.dragging-pan{ cursor: grabbing; }
-
-/* --- Rules migrated from inline HTML <style> --- */
-#robotLogo svg, #robotLogo img{ width:100%; height:100%; display:block; }
-
-/* Suppress transitions during initial load */
-html.js-loading #rightCol,
-html.js-loading #contentWrap{
-  transition: none !important;
-}
