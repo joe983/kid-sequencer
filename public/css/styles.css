@@ -786,6 +786,10 @@ body.loggedIn #robotLogo{
       width: 58px;
     }
 
+    #masterVolUI{
+      filter: drop-shadow(0px 8px 0px rgba(0,0,0,0.07));
+    }
+
     .instBtn{
       width: 58px;
       height: 58px;
