@@ -2008,7 +2008,7 @@ function incrementGuestScans(){
 function showScanLimitModal(){
   if(!scanLimitModalEl) scanLimitModalEl = document.getElementById("scanLimitModal");
   if(!scanLimitModalEl) return;
-  scanLimitModalEl.style.display = "block";
+  scanLimitModalEl.style.display = "flex";
   scanLimitModalEl.setAttribute("aria-hidden", "false");
   // Two rAFs so Safari/Edge see the initial translateX(110%) state before transitioning
   requestAnimationFrame(() => {
@@ -3117,8 +3117,8 @@ window.KidSequencer = {
 <div class="scanLimitScansLeft">Resets every Monday</div>
 </div>
 <div class="modalBtns">
-<a class="bigBtn" href="login.html">Register / Login</a>
-<button class="bigBtn" onclick="closeScanLimitModal()">Close</button>
+<a class="bigBtn" href="login.html?mode=register">Register</a>
+<a class="bigBtn" href="login.html">Login</a>
 </div>
 </div>
 
