@@ -1512,7 +1512,7 @@ function redrawAllNotes(){
 
 function createNoteBlock(r, note){
   const block = document.createElement("div");
-  block.className = "noteBlock";
+  block.className = "noteBlock placing";
   block.dataset.id = String(note.id);
 
   const left = note.start * (CELL + GAP);
