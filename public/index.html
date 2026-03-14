@@ -70,6 +70,11 @@
 <rect fill="currentColor" height="4" opacity="0.45" rx="0.5" width="2" x="12" y="4"></rect>
 <rect fill="white" height="7" opacity="0.75" rx="1" width="12" x="6" y="13"></rect>
 </svg></span></button>
+<button aria-label="Load" class="bigBtn iconBtn" id="loadBtn" onclick="loadFromCloud()" title="Load saved tune"><span class="icon loadIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
+<path d="M8 17H6.5a3.5 3.5 0 0 1-.5-7 5 5 0 0 1 9.9-1 3 3 0 0 1 2.1 5H16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<line stroke="currentColor" stroke-linecap="round" stroke-width="2" x1="12" x2="12" y1="12" y2="21"/>
+<polyline fill="none" points="8,17 12,21 16,17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
+</svg></span></button>
 </div>
 <div id="mainLayout">
 <div id="tools"><div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
@@ -228,7 +233,7 @@ const toolSteps = [
 let selectedSteps = 1;
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
-let isPaid = false;
+var isPaid = false;
 try{ isPaid = sessionStorage.getItem("kidseq_tier") === "paid"; }catch(e){}
 
 /* -------------------- CLOSE TAB/WINDOW LOGOUT (but NOT reload) -------------------- */
@@ -510,6 +515,9 @@ updateLoginLinks();
 })();
 
 function applyLockState(){
+  // Re-read tier from sessionStorage so async auth updates are picked up immediately
+  // Only trust the stored tier if the user is actually logged in
+  try{ isPaid = isLoggedIn && sessionStorage.getItem('kidseq_tier') === 'paid'; }catch(e){}
   const locked = !isLoggedIn;
   const robotLogoEl = document.getElementById("robotLogo");
   if(robotLogoEl) robotLogoEl.style.display = "flex";
@@ -546,9 +554,11 @@ function applyLockState(){
     }
   }
 
-  // Save button: only active for paid tier
+  // Save + Load buttons: only active for paid tier
   const saveBtnEl = document.getElementById("saveBtn");
   if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
+  const loadBtnEl = document.getElementById("loadBtn");
+  if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
@@ -580,7 +590,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[btnStrings, btnSynth, document.getElementById("cameraBtn"), document.getElementById("saveBtn")].forEach(bindLockedNudge);
+[btnStrings, btnSynth, document.getElementById("cameraBtn"), document.getElementById("saveBtn"), document.getElementById("loadBtn")].forEach(bindLockedNudge);
 
 /* Prime audio */
 function primeAudioOnce(){
@@ -2070,11 +2080,12 @@ let _saveToastTimer = null;
 function showSaveToast(state){
   const el = document.getElementById("saveToast");
   if(!el) return;
-  const msgs = { saving:"Saving…", saved:"Saved ✓", error:"Couldn't save", upgrade:"Upgrade to save tunes" };
+  const msgs = { saving:"Saving…", saved:"Saved ✓", error:"Couldn't save", upgrade:"Save & load with a paid account",
+                 loading:"Loading…", loaded:"Loaded ✓", empty:"Nothing saved yet" };
   el.textContent = msgs[state] || state;
   el.className = "saveToast show " + state;
   clearTimeout(_saveToastTimer);
-  if(state !== "saving"){
+  if(state !== "saving" && state !== "loading"){
     _saveToastTimer = setTimeout(() => { el.className = "saveToast"; }, 2400);
   }
 }
@@ -2088,7 +2099,11 @@ async function saveToCloud(){
   showSaveToast("saving");
   try{
     const { auth, db } = await import("./js/firebase-init.js");
-    const user = auth.currentUser;
+    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+    // auth.currentUser may be null during Firebase init — wait for it to resolve
+    const user = auth.currentUser || await new Promise(resolve => {
+      const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
+    });
     if(!user){ showSaveToast("error"); return; }
     const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
     await setDoc(doc(db, "users", user.uid, "sequences", "autosave"), {
@@ -2098,7 +2113,7 @@ async function saveToCloud(){
       drumStyle,
       drumsMuted,
       selectedSteps,
-      notesByRow: notesByRow.map(row => row.map(n => ({ start: n.start, len: n.len })))
+      notesByRow: notesByRow.flatMap((row, r) => row.map(n => ({ row: r, start: n.start, len: n.len })))
     });
     showSaveToast("saved");
   }catch(e){
@@ -2107,6 +2122,78 @@ async function saveToCloud(){
   }
 }
 window.saveToCloud = saveToCloud;
+
+/* -------------------- CLOUD LOAD -------------------- */
+async function loadFromCloud(){
+  if(!isPaid){
+    if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
+    else { showSaveToast("upgrade"); }
+    return;
+  }
+  showSaveToast("loading");
+  try{
+    const { auth, db } = await import("./js/firebase-init.js");
+    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+    const user = auth.currentUser || await new Promise(resolve => {
+      const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
+    });
+    if(!user){ showSaveToast("error"); return; }
+
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const snap = await getDoc(doc(db, "users", user.uid, "sequences", "autosave"));
+    if(!snap.exists()){ showSaveToast("empty"); return; }
+
+    const data = snap.data();
+
+    // Stop playback before replacing state
+    try{ stop(); }catch(e){}
+    pushUndo();
+
+    // Restore tempo
+    if(typeof data.tempo === "number") requestTempo(data.tempo);
+
+    // Restore instrument
+    if(data.instrument) setInstrument(data.instrument);
+
+    // Restore note length (selected steps)
+    if(typeof data.selectedSteps === "number"){
+      selectedSteps = data.selectedSteps;
+      buildTools();
+    }
+
+    // Restore drum state: map saved drumStyle + drumsMuted → activeDrumStyle
+    if(data.drumsMuted === true){
+      activeDrumStyle = null;
+    } else if(data.drumStyle === "dnb"){
+      activeDrumStyle = "dnb";
+    } else {
+      activeDrumStyle = "techno";
+    }
+    syncAudioAndUI();
+
+    // Restore notes — saved as flat [{row, start, len}]
+    notesByRow = Array.from({length: rows}, () => []);
+    occ        = Array.from({length: rows}, () => Array(cols).fill(null));
+    nextId     = 1;
+    if(Array.isArray(data.notesByRow)){
+      for(const n of data.notesByRow){
+        const r = n.row;
+        if(typeof r === "number" && r >= 0 && r < rows &&
+           typeof n.start === "number" && typeof n.len === "number" &&
+           n.start >= 0 && n.start + n.len <= cols){
+          placeNote(r, n.start, n.len);
+        }
+      }
+    }
+    redrawAllNotes();
+
+    showSaveToast("loaded");
+  }catch(e){
+    console.error("[Load]", e);
+    showSaveToast("error");
+  }
+}
+window.loadFromCloud = loadFromCloud;
 
 function updateCameraBtnState(){
   const btn = document.getElementById("cameraBtn");
@@ -2628,13 +2715,13 @@ window.KidSequencer = {
           const snap = await getDoc(doc(db, 'users', user.uid));
           const tier = snap.exists() ? (snap.data().tier || 'registered') : 'registered';
           try{ sessionStorage.setItem('kidseq_tier', tier); }catch(e){}
-          isPaid = (tier === 'paid');
-          applyLockState();
+          window.isPaid = (tier === 'paid');
+          window.KidSequencer?.UI?.applyLockState?.();
         }catch(e){
           console.warn('[Auth] Tier check failed (non-fatal):', e.message);
         }
       }else{
-        isPaid = false;
+        window.isPaid = false;
         try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
         try{ sessionStorage.removeItem('kidseq_tier'); }catch(e){}
       }

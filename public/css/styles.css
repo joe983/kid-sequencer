@@ -815,9 +815,11 @@ body.loggedIn #robotLogo{
 
 
 
-    /* Save icon colour */
+    /* Save / Load icon colours */
     .bigBtn .saveIcon{ color: #111111; }
     .bigBtn .saveIcon svg{ width: var(--bigIconSize); height: var(--bigIconSize); }
+    .bigBtn .loadIcon{ color: #111111; }
+    .bigBtn .loadIcon svg{ width: var(--bigIconSize); height: var(--bigIconSize); }
 
     /* Save toast — centred pill that slides up briefly */
     #saveToast{
@@ -842,8 +844,10 @@ body.loggedIn #robotLogo{
     }
     #saveToast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
     #saveToast.saved{ background: #18b118; }
+    #saveToast.loaded{ background: #18b118; }
     #saveToast.error{ background: #e02b2b; }
     #saveToast.upgrade{ background: #f4a800; color: #1d1d1d; }
+    #saveToast.empty{ background: #f4a800; color: #1d1d1d; }
 
     /* Camera scan modal */
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
