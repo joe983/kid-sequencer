@@ -142,6 +142,23 @@
 </div>
 </div>
 
+<!-- Scan limit panel — inside #viewport, outside #page, uses position:absolute so no Safari body-overflow quirk -->
+<div aria-hidden="true" aria-label="Scan limit reached" id="scanLimitModal" role="dialog">
+<div class="modalHeader">
+<div class="modalTitle">Weekly limit reached</div>
+<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
+</div>
+<div class="scanLimitBody">
+<div class="scanLimitIcon">📷</div>
+<p class="scanLimitMsg">Unlock more scans and extra features.</p>
+<div class="scanLimitScansLeft">Resets every Monday</div>
+</div>
+<div class="modalBtns">
+<a class="bigBtn" href="login.html?mode=register">Unlock</a>
+<a class="bigBtn" href="login.html">Login</a>
+</div>
+</div>
+
 <script>
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
@@ -2031,6 +2048,16 @@ function closeScanLimitModal(){
 window.closeScanLimitModal = closeScanLimitModal;
 window.showScanLimitModal  = showScanLimitModal;
 
+function updateCameraBtnState(){
+  const btn = document.getElementById("cameraBtn");
+  if(!btn) return;
+  const exhausted = !isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT;
+  btn.classList.toggle("scanLimitReached", exhausted);
+  btn.setAttribute("aria-disabled", exhausted ? "true" : "false");
+}
+// Run on load and after each scan
+document.addEventListener("DOMContentLoaded", updateCameraBtnState);
+
 async function openCameraModal(){
   if(!isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT){
     showScanLimitModal();
@@ -2124,7 +2151,7 @@ function camImport(){
     camCapture();
     if(!camCapturedDataUrl) return;
   }
-  if(!isLoggedIn) incrementGuestScans();
+  if(!isLoggedIn){ incrementGuestScans(); updateCameraBtnState(); }
   importGridFromDataUrl(camCapturedDataUrl);
   closeCameraModal();
 }
@@ -3105,22 +3132,6 @@ window.KidSequencer = {
 </script>
 
 
-<!-- Scan limit panel — direct child of body so position:fixed is always viewport-relative -->
-<div aria-hidden="true" aria-label="Scan limit reached" id="scanLimitModal" role="dialog">
-<div class="modalHeader">
-<div class="modalTitle">Weekly limit reached</div>
-<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
-</div>
-<div class="scanLimitBody">
-<div class="scanLimitIcon">📷</div>
-<p class="scanLimitMsg">You've used all <strong>6 free scans</strong> this week.<br>Register for more scans and extra features!</p>
-<div class="scanLimitScansLeft">Resets every Monday</div>
-</div>
-<div class="modalBtns">
-<a class="bigBtn" href="login.html?mode=register">Register</a>
-<a class="bigBtn" href="login.html">Login</a>
-</div>
-</div>
 
 </body>
 </html>
