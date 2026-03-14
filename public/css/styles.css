@@ -819,32 +819,34 @@ body.loggedIn #robotLogo{
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
 
-    /* Scan limit slide-in panel — inside #viewport (position:absolute avoids Safari body-overflow quirk) */
+    /* Scan limit slide-in panel — compact auto-height, inside #viewport outside #page */
     #scanLimitModal{
       display: none; /* JS sets to flex */
       flex-direction: column;
       position: absolute;
-      top: 0;
-      bottom: 0;
+      top: 8px;
       right: 0;
-      width: min(260px, 88vw);
+      width: min(190px, 80vw);
       z-index: 10001;
       transform: translateX(110%);
-      transition: transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      border: 4px solid #1d1d1d;
+      transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      border: 3px solid #1d1d1d;
       border-right: none;
-      border-radius: 18px 0 0 18px;
+      border-radius: 12px 0 0 12px;
       background: #fff;
-      box-shadow: -6px 8px 0 rgba(0,0,0,0.12);
+      box-shadow: -4px 5px 0 rgba(0,0,0,0.10);
       overflow: hidden;
     }
     #scanLimitModal.show{ transform: translateX(0); }
-    .scanLimitBody{ flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding: 10px 12px; text-align:center; }
-    .scanLimitIcon{ font-size: 32px; margin-bottom: 8px; }
-    .scanLimitMsg{ font-weight: 800; font-size: 12px; color: #1f2a44; line-height: 1.4; margin: 0 0 6px; }
-    .scanLimitScansLeft{ font-size: 10px; font-weight: 700; opacity: 0.55; }
-    #scanLimitModal .modalBtns{ flex-direction: column; padding: 10px 12px 14px; gap: 8px; }
-    #scanLimitModal .bigBtn{ width: 100%; text-align: center; box-sizing: border-box; justify-content: center; }
+    #scanLimitModal .modalHeader{ padding: 7px 8px; border-bottom-width: 3px; }
+    #scanLimitModal .modalTitle{ font-size: 12px; }
+    #scanLimitModal .modalClose{ width: 28px; height: 28px; font-size: 13px; border-radius: 7px; border-width: 3px; box-shadow: 0 3px 0 rgba(0,0,0,0.07); }
+    .scanLimitBody{ padding: 8px 10px 6px; text-align:center; }
+    .scanLimitIcon{ font-size: 22px; margin-bottom: 5px; }
+    .scanLimitMsg{ font-weight: 800; font-size: 11px; color: #1f2a44; line-height: 1.4; margin: 0 0 4px; }
+    .scanLimitScansLeft{ font-size: 9px; font-weight: 700; opacity: 0.55; }
+    #scanLimitModal .modalBtns{ padding: 6px 8px 9px; }
+    #scanLimitModal .bigBtn{ width: 100%; text-align: center; box-sizing: border-box; justify-content: center; font-size: 12px; padding: 7px 10px; }
     /* Camera button greyed when guest scan limit reached */
     #cameraBtn.scanLimitReached{ opacity: 0.35; filter: grayscale(1); cursor: not-allowed; }
     #cameraBtn.scanLimitReached:hover{ transform: none; box-shadow: none; }
