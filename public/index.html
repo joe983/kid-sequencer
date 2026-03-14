@@ -100,10 +100,10 @@
 </div>
 </div>
 <div id="rightCol">
-<div class="locked" id="tempoControls">
-<button aria-disabled="true" id="tempoUpBtn" onclick="tempoUp()">▲</button>
-<div aria-disabled="true" id="tempoBox">120</div>
-<button aria-disabled="true" id="tempoDownBtn" onclick="tempoDown()">▼</button>
+<div id="tempoControls">
+<button id="tempoUpBtn" onclick="tempoUp()">▲</button>
+<div id="tempoBox">120</div>
+<button id="tempoDownBtn" onclick="tempoDown()">▼</button>
 </div>
 <div id="instButtons">
 <div class="instBtn" id="btnPiano" title="Piano / Organ">🎹</div>
@@ -327,7 +327,6 @@ const toolsEl = document.getElementById("tools");
 const toolsListEl = document.getElementById("toolsList");
 const toolLoginBtnEl = document.getElementById("toolLoginBtn");
 
-const tempoControlsEl = document.getElementById("tempoControls");
 const tempoUpBtnEl = document.getElementById("tempoUpBtn");
 const tempoDownBtnEl = document.getElementById("tempoDownBtn");
 const instButtonsEl = document.getElementById("instButtons");
@@ -349,8 +348,8 @@ const drumStatusEl  = document.getElementById("drumStatus");
 const drumStyleTechEl = document.getElementById("drumStyleTech");
 const drumStyleDnBEl  = document.getElementById("drumStyleDnB");
 
-btnPiano.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("piano"); };
-btnTrumpet.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("trumpet"); };
+btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
+btnTrumpet.onclick = () => { ensureAudioRunning(); setInstrument("trumpet"); };
 btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
 btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
 
@@ -500,7 +499,6 @@ function applyLockState(){
 
   const instWasLocked = !!(instButtonsEl && instButtonsEl.classList.contains("locked"));
 
-  if(tempoControlsEl) tempoControlsEl.classList.toggle("locked", locked);
   if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
   if(instButtonsEl && instWasLocked && !locked){
     instButtonsEl.classList.add("justUnlocked");
@@ -550,11 +548,8 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 bindLockedNudge(cameraBtnEl);
-bindLockedNudge(tempoUpBtnEl);
-bindLockedNudge(tempoDownBtnEl);
-bindLockedNudge(tempoBox);
 
-[btnPiano, btnTrumpet, btnStrings, btnSynth].forEach(bindLockedNudge);
+[btnStrings, btnSynth].forEach(bindLockedNudge);
 
 /* Prime audio */
 function primeAudioOnce(){
@@ -1967,13 +1962,11 @@ function requestTempo(newTempo){
   setPlayheadWobbleFromTempo(tempo);
 }
 function tempoUp(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
-const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  const base = (pendingTempo !== null) ? pendingTempo : tempo;
   requestTempo(base + 5);
 }
 function tempoDown(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
-const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  const base = (pendingTempo !== null) ? pendingTempo : tempo;
   requestTempo(base - 5);
 }
 

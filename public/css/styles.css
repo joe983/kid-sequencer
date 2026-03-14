@@ -969,13 +969,15 @@ body.loggedIn #toolsLoginArea{ display:block; }
   cursor: not-allowed;
 }
 
-/* Allow Piano to look enabled on landing page, even in locked (guest) mode */
-#instButtons.locked #btnPiano{
+/* Allow Piano + Trumpet to look enabled in guest (locked) mode */
+#instButtons.locked #btnPiano,
+#instButtons.locked #btnTrumpet{
   opacity: 1;
   filter: none;
   cursor: pointer;
 }
-#instButtons.locked #btnPiano:hover{ transform: translateY(-1px); }
+#instButtons.locked #btnPiano:hover,
+#instButtons.locked #btnTrumpet:hover{ transform: translateY(-1px); }
 
 #instButtons.locked .instBtn:hover{ transform: none; }
 
