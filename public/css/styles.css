@@ -818,6 +818,14 @@ body.loggedIn #robotLogo{
     /* Camera scan modal */
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
+
+    /* Scan limit modal */
+    #scanLimitModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10001; background: rgba(0,0,0,0.55); padding: 18px; box-sizing: border-box; }
+    #scanLimitModal.show{ display:flex; }
+    .scanLimitBody{ padding: 24px 20px 10px; text-align:center; }
+    .scanLimitIcon{ font-size: 48px; margin-bottom: 12px; }
+    .scanLimitMsg{ font-weight: 800; font-size: 15px; color: #1f2a44; line-height: 1.5; margin: 0 0 10px; }
+    .scanLimitScansLeft{ font-size: 12px; font-weight: 700; opacity: 0.55; margin-bottom: 4px; }
     .modalCard{ width: min(620px, var(--stageW)); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 9px 0 rgba(0,0,0,0.12); overflow:hidden; }
     .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
     .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }

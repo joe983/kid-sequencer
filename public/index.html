@@ -141,6 +141,24 @@
 <div class="modalHint">Tip: line the grid up inside the dashed box.</div>
 </div>
 </div>
+
+<div aria-hidden="true" id="scanLimitModal">
+<div aria-label="Scan limit reached" aria-modal="true" class="modalCard" role="dialog">
+<div class="modalHeader">
+<div class="modalTitle">Weekly limit reached</div>
+<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
+</div>
+<div class="scanLimitBody">
+<div class="scanLimitIcon">📷</div>
+<p class="scanLimitMsg">You've used all <strong>6 free scans</strong> this week.<br>Register for more scans and extra features!</p>
+<div class="scanLimitScansLeft">Resets every Monday</div>
+</div>
+<div class="modalBtns">
+<a class="bigBtn" href="login.html">Register / Login</a>
+<button class="bigBtn" onclick="closeScanLimitModal()">Close</button>
+</div>
+</div>
+</div>
 <script>
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
@@ -1984,8 +2002,43 @@ const camModalEl = document.getElementById("camModal");
 const camVideoEl = document.getElementById("camVideo");
 const camCanvasEl = document.getElementById("camCanvas");
 const camPreviewEl = document.getElementById("camPreview");
+const scanLimitModalEl = document.getElementById("scanLimitModal");
+
+/* ---- Guest scan counter (localStorage, resets each Monday) ---- */
+const GUEST_SCAN_LIMIT = 6;
+function _scanWeekKey(){
+  const d = new Date();
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1));
+  return 'kidseq_scans_' + mon.toISOString().slice(0, 10);
+}
+function guestScansThisWeek(){
+  try{ return parseInt(localStorage.getItem(_scanWeekKey()) || '0', 10); }
+  catch(e){ return 0; }
+}
+function incrementGuestScans(){
+  try{
+    const k = _scanWeekKey();
+    localStorage.setItem(k, String((parseInt(localStorage.getItem(k) || '0', 10)) + 1));
+  }catch(e){}
+}
+function showScanLimitModal(){
+  if(!scanLimitModalEl) return;
+  scanLimitModalEl.classList.add("show");
+  scanLimitModalEl.setAttribute("aria-hidden", "false");
+}
+function closeScanLimitModal(){
+  if(!scanLimitModalEl) return;
+  scanLimitModalEl.classList.remove("show");
+  scanLimitModalEl.setAttribute("aria-hidden", "true");
+}
+window.closeScanLimitModal = closeScanLimitModal;
 
 async function openCameraModal(){
+  if(!isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT){
+    showScanLimitModal();
+    return;
+  }
   try{
     if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
       alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
@@ -2074,6 +2127,7 @@ function camImport(){
     camCapture();
     if(!camCapturedDataUrl) return;
   }
+  if(!isLoggedIn) incrementGuestScans();
   importGridFromDataUrl(camCapturedDataUrl);
   closeCameraModal();
 }
