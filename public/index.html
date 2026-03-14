@@ -335,8 +335,6 @@ const controlsEl = document.getElementById("controls");
 const mainLayoutEl = document.getElementById("mainLayout");
 const titleBoxEl = document.getElementById("titleBox");
 
-const cameraBtnEl = document.getElementById("cameraBtn");
-
 const btnPiano   = document.getElementById("btnPiano");
 const btnTrumpet = document.getElementById("btnTrumpet");
 const btnStrings = document.getElementById("btnStrings");
@@ -504,7 +502,6 @@ function applyLockState(){
     instButtonsEl.classList.add("justUnlocked");
     setTimeout(()=>instButtonsEl.classList.remove("justUnlocked"), 700);
   }
-  if(cameraBtnEl) cameraBtnEl.classList.toggle("locked", locked);
   document.body.classList.toggle("loggedIn", isLoggedIn);
 
   // Swap Login -> Logout (bright red) when signed in
@@ -547,7 +544,6 @@ function logout(){
   updateLoginLinks();
 }
 /* Bind hover nudges for locked groups */
-bindLockedNudge(cameraBtnEl);
 
 [btnStrings, btnSynth].forEach(bindLockedNudge);
 
@@ -1990,7 +1986,6 @@ const camCanvasEl = document.getElementById("camCanvas");
 const camPreviewEl = document.getElementById("camPreview");
 
 async function openCameraModal(){
-  if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; }
   try{
     if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
       alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
