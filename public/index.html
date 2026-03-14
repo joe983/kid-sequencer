@@ -172,6 +172,34 @@
 <!-- Save toast — position:fixed, sits above everything -->
 <div aria-live="polite" id="saveToast"></div>
 
+<!-- Save name modal -->
+<div aria-hidden="true" id="saveNameModal">
+  <div aria-labelledby="saveNameTitle" aria-modal="true" class="modalCard saveNameCard" role="dialog">
+    <div class="modalHeader">
+      <div class="modalTitle" id="saveNameTitle">Name this tune</div>
+      <button aria-label="Close" class="modalClose" onclick="closeSaveNameModal()">×</button>
+    </div>
+    <div class="saveNameBody">
+      <input autocomplete="off" autocorrect="off" class="saveNameInput" id="saveNameInput" maxlength="30" placeholder="My Tune" spellcheck="false" type="text"/>
+    </div>
+    <div class="modalBtns">
+      <button class="bigBtn" onclick="closeSaveNameModal()">Cancel</button>
+      <button class="bigBtn saveConfirmBtn" id="saveConfirmBtn" onclick="confirmSaveName()">Save ✓</button>
+    </div>
+  </div>
+</div>
+
+<!-- Load sheet — slides up from bottom -->
+<div aria-hidden="true" id="loadSheet">
+  <div aria-labelledby="loadSheetTitle" aria-modal="true" id="loadSheetInner" role="dialog">
+    <div class="loadSheetHeader">
+      <div class="modalTitle" id="loadSheetTitle">My Tunes</div>
+      <button aria-label="Close" class="modalClose" onclick="closeLoadSheet()">×</button>
+    </div>
+    <div id="loadSheetList"></div>
+  </div>
+</div>
+
 <script>
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
@@ -2090,110 +2118,192 @@ function showSaveToast(state){
   }
 }
 
-async function saveToCloud(){
+/* ---- helpers shared by save + load ---- */
+function _slugify(name){
+  return name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)||'my-tune';
+}
+async function _getFirebaseUser(){
+  const { auth } = await import("./js/firebase-init.js");
+  if(auth.currentUser) return auth.currentUser;
+  const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+  return new Promise(resolve => { const u = onAuthStateChanged(auth, user => { u(); resolve(user); }); });
+}
+function _applySequenceData(d){
+  try{ stop(); }catch(e){}
+  pushUndo();
+  if(typeof d.tempo === "number") requestTempo(d.tempo);
+  if(d.instrument) setInstrument(d.instrument);
+  if(typeof d.selectedSteps === "number"){ selectedSteps = d.selectedSteps; buildTools(); }
+  activeDrumStyle = d.drumsMuted ? null : (d.drumStyle === "dnb" ? "dnb" : "techno");
+  syncAudioAndUI();
+  notesByRow = Array.from({length: rows}, () => []);
+  occ        = Array.from({length: rows}, () => Array(cols).fill(null));
+  nextId     = 1;
+  if(Array.isArray(d.notesByRow)){
+    for(const n of d.notesByRow){
+      if(typeof n.row==="number" && n.row>=0 && n.row<rows &&
+         typeof n.start==="number" && typeof n.len==="number" &&
+         n.start>=0 && n.start+n.len<=cols) placeNote(n.row, n.start, n.len);
+    }
+  }
+  redrawAllNotes();
+}
+function _formatSavedAt(ts){
+  if(!ts?.seconds) return '';
+  const d = new Date(ts.seconds*1000), now = new Date(), diff = now-d;
+  if(diff < 60000)      return 'Just now';
+  if(diff < 3600000)    return Math.floor(diff/60000)+'m ago';
+  if(diff < 86400000)   return Math.floor(diff/3600000)+'h ago';
+  if(diff < 604800000)  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  return d.toLocaleDateString(undefined,{day:'numeric',month:'short'});
+}
+
+/* -------------------- CLOUD SAVE -------------------- */
+let _lastSaveName = '';
+
+function saveToCloud(){
   if(!isPaid){
     if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
     else { showSaveToast("upgrade"); }
     return;
   }
+  // Open name modal
+  const modal = document.getElementById('saveNameModal');
+  const input = document.getElementById('saveNameInput');
+  if(!modal||!input) return;
+  input.value = _lastSaveName || '';
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+  setTimeout(()=>{ input.focus(); input.select(); }, 80);
+}
+function closeSaveNameModal(){
+  const modal = document.getElementById('saveNameModal');
+  if(!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+}
+async function confirmSaveName(){
+  const input = document.getElementById('saveNameInput');
+  const name  = (input?.value||'').trim() || 'My Tune';
+  _lastSaveName = name;
+  closeSaveNameModal();
   showSaveToast("saving");
   try{
-    const { auth, db } = await import("./js/firebase-init.js");
-    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
-    // auth.currentUser may be null during Firebase init — wait for it to resolve
-    const user = auth.currentUser || await new Promise(resolve => {
-      const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
-    });
+    const user = await _getFirebaseUser();
     if(!user){ showSaveToast("error"); return; }
+    const { db } = await import("./js/firebase-init.js");
     const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-    await setDoc(doc(db, "users", user.uid, "sequences", "autosave"), {
-      savedAt: serverTimestamp(),
-      tempo,
-      instrument,
-      drumStyle,
-      drumsMuted,
-      selectedSteps,
-      notesByRow: notesByRow.flatMap((row, r) => row.map(n => ({ row: r, start: n.start, len: n.len })))
+    await setDoc(doc(db,"users",user.uid,"sequences",_slugify(name)),{
+      name, savedAt: serverTimestamp(),
+      tempo, instrument, drumStyle, drumsMuted, selectedSteps,
+      notesByRow: notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})))
     });
     showSaveToast("saved");
-  }catch(e){
-    console.error("[Save]", e);
-    showSaveToast("error");
-  }
+  }catch(e){ console.error("[Save]",e); showSaveToast("error"); }
 }
-window.saveToCloud = saveToCloud;
+window.saveToCloud       = saveToCloud;
+window.closeSaveNameModal= closeSaveNameModal;
+window.confirmSaveName   = confirmSaveName;
 
 /* -------------------- CLOUD LOAD -------------------- */
-async function loadFromCloud(){
+let _deleteConfirmId = null;
+
+function loadFromCloud(){
   if(!isPaid){
     if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
     else { showSaveToast("upgrade"); }
     return;
   }
-  showSaveToast("loading");
-  try{
-    const { auth, db } = await import("./js/firebase-init.js");
-    const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
-    const user = auth.currentUser || await new Promise(resolve => {
-      const unsub = onAuthStateChanged(auth, u => { unsub(); resolve(u); });
-    });
-    if(!user){ showSaveToast("error"); return; }
-
-    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-    const snap = await getDoc(doc(db, "users", user.uid, "sequences", "autosave"));
-    if(!snap.exists()){ showSaveToast("empty"); return; }
-
-    const data = snap.data();
-
-    // Stop playback before replacing state
-    try{ stop(); }catch(e){}
-    pushUndo();
-
-    // Restore tempo
-    if(typeof data.tempo === "number") requestTempo(data.tempo);
-
-    // Restore instrument
-    if(data.instrument) setInstrument(data.instrument);
-
-    // Restore note length (selected steps)
-    if(typeof data.selectedSteps === "number"){
-      selectedSteps = data.selectedSteps;
-      buildTools();
-    }
-
-    // Restore drum state: map saved drumStyle + drumsMuted → activeDrumStyle
-    if(data.drumsMuted === true){
-      activeDrumStyle = null;
-    } else if(data.drumStyle === "dnb"){
-      activeDrumStyle = "dnb";
-    } else {
-      activeDrumStyle = "techno";
-    }
-    syncAudioAndUI();
-
-    // Restore notes — saved as flat [{row, start, len}]
-    notesByRow = Array.from({length: rows}, () => []);
-    occ        = Array.from({length: rows}, () => Array(cols).fill(null));
-    nextId     = 1;
-    if(Array.isArray(data.notesByRow)){
-      for(const n of data.notesByRow){
-        const r = n.row;
-        if(typeof r === "number" && r >= 0 && r < rows &&
-           typeof n.start === "number" && typeof n.len === "number" &&
-           n.start >= 0 && n.start + n.len <= cols){
-          placeNote(r, n.start, n.len);
-        }
-      }
-    }
-    redrawAllNotes();
-
-    showSaveToast("loaded");
-  }catch(e){
-    console.error("[Load]", e);
-    showSaveToast("error");
-  }
+  openLoadSheet();
 }
-window.loadFromCloud = loadFromCloud;
+async function openLoadSheet(){
+  const sheet = document.getElementById('loadSheet');
+  const list  = document.getElementById('loadSheetList');
+  if(!sheet||!list) return;
+  _deleteConfirmId = null;
+  list.innerHTML = '<div class="loadSheetEmpty">Loading…</div>';
+  sheet.classList.add('show');
+  sheet.setAttribute('aria-hidden','false');
+  try{
+    const user = await _getFirebaseUser();
+    if(!user){ list.innerHTML='<div class="loadSheetEmpty">Not signed in</div>'; return; }
+    const { db } = await import("./js/firebase-init.js");
+    const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const snap = await getDocs(collection(db,"users",user.uid,"sequences"));
+    const seqs = [];
+    snap.forEach(d => seqs.push({id:d.id,...d.data()}));
+    seqs.sort((a,b)=>(b.savedAt?.seconds||0)-(a.savedAt?.seconds||0));
+    _renderLoadList(seqs);
+  }catch(e){ console.error("[Load]",e); list.innerHTML='<div class="loadSheetEmpty">Couldn\'t load — try again</div>'; }
+}
+function _renderLoadList(seqs){
+  const list = document.getElementById('loadSheetList');
+  if(!list) return;
+  if(!seqs.length){ list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>'; return; }
+  list.innerHTML='';
+  seqs.forEach(seq => {
+    const row = document.createElement('div');
+    row.className='loadRow'; row.dataset.id=seq.id;
+    row.innerHTML=`
+      <div class="loadRowInfo">
+        <div class="loadRowName">${seq.name||seq.id}</div>
+        <div class="loadRowDate">${_formatSavedAt(seq.savedAt)}</div>
+      </div>
+      <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>`;
+    row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
+      closeLoadSheet();
+      _applySequenceData(seq);
+      showSaveToast("loaded");
+    });
+    row.querySelector('.loadRowDelete').addEventListener('click', e=>{
+      e.stopPropagation();
+      if(_deleteConfirmId===seq.id){
+        _deleteConfirmId=null;
+        _deleteSequence(seq.id, row);
+      } else {
+        // Reset any previously pending row
+        document.querySelectorAll('.loadRowDelete.confirming').forEach(b=>{
+          b.classList.remove('confirming'); b.textContent='🗑️';
+        });
+        _deleteConfirmId=seq.id;
+        const btn=row.querySelector('.loadRowDelete');
+        btn.classList.add('confirming'); btn.textContent='✓';
+        setTimeout(()=>{
+          if(_deleteConfirmId===seq.id){
+            btn.classList.remove('confirming'); btn.textContent='🗑️'; _deleteConfirmId=null;
+          }
+        },3000);
+      }
+    });
+    list.appendChild(row);
+  });
+}
+async function _deleteSequence(id, row){
+  try{
+    const user = await _getFirebaseUser();
+    if(!user) return;
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, deleteDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    await deleteDoc(doc(db,"users",user.uid,"sequences",id));
+    // Animate row out
+    row.style.cssText=`height:${row.offsetHeight}px;overflow:hidden;transition:height 200ms ease,opacity 200ms ease`;
+    requestAnimationFrame(()=>{ row.style.height='0'; row.style.opacity='0'; });
+    setTimeout(()=>{
+      row.remove();
+      const list=document.getElementById('loadSheetList');
+      if(list&&!list.querySelector('.loadRow')) list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>';
+    },220);
+  }catch(e){ console.error("[Delete]",e); }
+}
+function closeLoadSheet(){
+  const sheet=document.getElementById('loadSheet');
+  if(!sheet) return;
+  sheet.classList.remove('show');
+  sheet.setAttribute('aria-hidden','true');
+  _deleteConfirmId=null;
+}
+window.loadFromCloud  = loadFromCloud;
+window.closeLoadSheet = closeLoadSheet;
 
 function updateCameraBtnState(){
   const btn = document.getElementById("cameraBtn");
@@ -2204,6 +2314,30 @@ function updateCameraBtnState(){
 }
 // Run on load and after each scan
 document.addEventListener("DOMContentLoaded", updateCameraBtnState);
+
+// Save name modal: Enter = confirm, Escape = cancel; load sheet: Escape = close
+document.addEventListener("DOMContentLoaded", () => {
+  const inp = document.getElementById("saveNameInput");
+  if(inp){
+    inp.addEventListener("keydown", e => {
+      if(e.key === "Enter")  { e.preventDefault(); confirmSaveName(); }
+      if(e.key === "Escape") { e.preventDefault(); closeSaveNameModal(); }
+    });
+  }
+  document.addEventListener("keydown", e => {
+    if(e.key === "Escape"){
+      const sheet = document.getElementById("loadSheet");
+      if(sheet && sheet.classList.contains("show")) closeLoadSheet();
+    }
+  });
+  // Tap backdrop to dismiss save modal or load sheet
+  document.getElementById("saveNameModal")?.addEventListener("click", e => {
+    if(e.target.id === "saveNameModal") closeSaveNameModal();
+  });
+  document.getElementById("loadSheet")?.addEventListener("click", e => {
+    if(e.target.id === "loadSheet") closeLoadSheet();
+  });
+});
 
 async function openCameraModal(){
   if(!isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT){
