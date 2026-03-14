@@ -819,14 +819,16 @@ body.loggedIn #robotLogo{
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
 
-    /* Scan limit slide-in panel — compact auto-height, inside #viewport outside #page */
+    /* Scan limit slide-in panel — position:fixed so it always anchors to the screen edge,
+       regardless of scroll containers, stageScaled transforms, or safe-area padding on #viewport */
     #scanLimitModal{
       display: none; /* JS sets to flex */
       flex-direction: column;
-      position: absolute;
-      top: 8px;
+      position: fixed;
+      top: 8px; /* fallback for browsers without env() */
+      top: calc(env(safe-area-inset-top, 0px) + 8px); /* clears iPhone status bar */
       right: 0;
-      width: min(190px, 80vw);
+      width: 190px;
       z-index: 10001;
       transform: translateX(110%);
       transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
