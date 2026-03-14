@@ -820,10 +820,6 @@ body.loggedIn #robotLogo{
     #camModal.show{ display:flex; }
 
     /* Scan limit slide-in panel */
-    @keyframes scanLimitSlideIn{
-      from{ transform: translateX(110%); }
-      to{   transform: translateX(0);    }
-    }
     #scanLimitModal{
       display: none;
       position: fixed;
@@ -831,6 +827,8 @@ body.loggedIn #robotLogo{
       right: 0;
       width: min(300px, 88vw);
       z-index: 10001;
+      transform: translateX(110%);
+      transition: transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94);
       border: 4px solid #1d1d1d;
       border-right: none;
       border-radius: 18px 0 0 18px;
@@ -838,10 +836,7 @@ body.loggedIn #robotLogo{
       box-shadow: -6px 8px 0 rgba(0,0,0,0.12);
       overflow: hidden;
     }
-    #scanLimitModal.show{
-      display: block;
-      animation: scanLimitSlideIn 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-    }
+    #scanLimitModal.show{ transform: translateX(0); }
     .scanLimitBody{ padding: 20px 16px 10px; text-align:center; }
     .scanLimitIcon{ font-size: 42px; margin-bottom: 10px; }
     .scanLimitMsg{ font-weight: 800; font-size: 14px; color: #1f2a44; line-height: 1.5; margin: 0 0 8px; }

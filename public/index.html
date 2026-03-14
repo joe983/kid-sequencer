@@ -2007,13 +2007,26 @@ function incrementGuestScans(){
 }
 function showScanLimitModal(){
   if(!scanLimitModalEl) return;
-  scanLimitModalEl.classList.add("show");
+  // Step 1: make it display:block so browser has a rendered frame to transition FROM
+  scanLimitModalEl.style.display = "block";
   scanLimitModalEl.setAttribute("aria-hidden", "false");
+  // Step 2: two rAFs so Safari/Edge actually see the initial translateX(110%) state
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      scanLimitModalEl.classList.add("show");
+    });
+  });
 }
 function closeScanLimitModal(){
   if(!scanLimitModalEl) return;
   scanLimitModalEl.classList.remove("show");
   scanLimitModalEl.setAttribute("aria-hidden", "true");
+  // Hide after transition completes (320ms)
+  setTimeout(() => {
+    if(!scanLimitModalEl.classList.contains("show")){
+      scanLimitModalEl.style.display = "none";
+    }
+  }, 350);
 }
 window.closeScanLimitModal = closeScanLimitModal;
 
