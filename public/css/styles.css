@@ -608,6 +608,7 @@ body.loggedIn #robotLogo{
       border-radius: 12px;
       transition: transform 90ms ease;
       touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
     .cell:hover{ transform: scale(1.02); }
 
@@ -630,6 +631,7 @@ body.loggedIn #robotLogo{
       transform-origin:center center;
       touch-action: manipulation;
       overflow:hidden; /* needed for candy-bar overlay */
+      -webkit-tap-highlight-color: transparent;
     }
 
     /* Candy-bar inner bevel (cartoony) */

@@ -1510,33 +1510,47 @@ function redrawAllNotes(){
   for(let r=0;r<rows;r++) redrawRowNotes(r);
 }
 
+function createNoteBlock(r, note){
+  const block = document.createElement("div");
+  block.className = "noteBlock";
+  block.dataset.id = String(note.id);
+
+  const left = note.start * (CELL + GAP);
+  const width = note.len * CELL + (note.len - 1) * GAP;
+
+  block.style.left = `${left}px`;
+  block.style.top = `0px`;
+  block.style.width = `${width}px`;
+  block.style.background = rowColors[r];
+
+  block.onmousedown = (e) => e.preventDefault();
+
+  block.onclick = (e) => {
+    e.stopPropagation();
+    pushUndo();
+    deleteNoteById(r, note.id);
+    redrawRowNotes(r);
+  };
+
+  return block;
+}
+
 function redrawRowNotes(r){
   const layer = noteLayerEls[r];
-  layer.innerHTML = "";
+  const domBlocks = Array.from(layer.querySelectorAll('.noteBlock'));
+  const domIds = new Set(domBlocks.map(b => b.dataset.id));
+  const modelIds = new Set(notesByRow[r].map(n => String(n.id)));
 
+  // Remove DOM blocks no longer in the model
+  for(const block of domBlocks){
+    if(!modelIds.has(block.dataset.id)) block.remove();
+  }
+
+  // Append blocks for notes not yet in the DOM
   for(const note of notesByRow[r]){
-    const block = document.createElement("div");
-    block.className = "noteBlock";
-    block.dataset.id = String(note.id);
-
-    const left = note.start * (CELL + GAP);
-    const width = note.len * CELL + (note.len - 1) * GAP;
-
-    block.style.left = `${left}px`;
-    block.style.top = `0px`;
-    block.style.width = `${width}px`;
-    block.style.background = rowColors[r];
-
-    block.onmousedown = (e) => e.preventDefault();
-
-    block.onclick = (e) => {
-      e.stopPropagation();
-      pushUndo();
-      deleteNoteById(r, note.id);
-      redrawRowNotes(r);
-    };
-
-    layer.appendChild(block);
+    if(!domIds.has(String(note.id))){
+      layer.appendChild(createNoteBlock(r, note));
+    }
   }
 }
 
