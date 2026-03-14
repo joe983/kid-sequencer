@@ -142,21 +142,6 @@
 </div>
 </div>
 
-<div aria-hidden="true" aria-label="Scan limit reached" id="scanLimitModal" role="dialog">
-<div class="modalHeader">
-<div class="modalTitle">Weekly limit reached</div>
-<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
-</div>
-<div class="scanLimitBody">
-<div class="scanLimitIcon">📷</div>
-<p class="scanLimitMsg">You've used all <strong>6 free scans</strong> this week.<br>Register for more scans and extra features!</p>
-<div class="scanLimitScansLeft">Resets every Monday</div>
-</div>
-<div class="modalBtns">
-<a class="bigBtn" href="login.html">Register / Login</a>
-<button class="bigBtn" onclick="closeScanLimitModal()">Close</button>
-</div>
-</div>
 <script>
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
@@ -3106,6 +3091,22 @@ window.KidSequencer = {
 </script>
 
 
+<!-- Scan limit panel — direct child of body so position:fixed is always viewport-relative -->
+<div aria-hidden="true" aria-label="Scan limit reached" id="scanLimitModal" role="dialog">
+<div class="modalHeader">
+<div class="modalTitle">Weekly limit reached</div>
+<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
+</div>
+<div class="scanLimitBody">
+<div class="scanLimitIcon">📷</div>
+<p class="scanLimitMsg">You've used all <strong>6 free scans</strong> this week.<br>Register for more scans and extra features!</p>
+<div class="scanLimitScansLeft">Resets every Monday</div>
+</div>
+<div class="modalBtns">
+<a class="bigBtn" href="login.html">Register / Login</a>
+<button class="bigBtn" onclick="closeScanLimitModal()">Close</button>
+</div>
+</div>
 
 </body>
 </html>
