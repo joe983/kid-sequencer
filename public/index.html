@@ -64,6 +64,12 @@
 <circle cx="12" cy="14" fill="#ffffff" opacity="0.9" r="4"></circle>
 <circle cx="12" cy="14" fill="currentColor" opacity="0.75" r="2.2"></circle>
 </svg></span></button>
+<button aria-label="Save" class="bigBtn iconBtn" id="saveBtn" onclick="saveToCloud()" title="Save tune"><span class="icon saveIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
+<path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z" fill="currentColor"></path>
+<polyline fill="white" opacity="0.85" points="9,3 9,9 15,9 15,3"></polyline>
+<rect fill="currentColor" height="4" opacity="0.45" rx="0.5" width="2" x="12" y="4"></rect>
+<rect fill="white" height="7" opacity="0.75" rx="1" width="12" x="6" y="13"></rect>
+</svg></span></button>
 </div>
 <div id="mainLayout">
 <div id="tools"><div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
@@ -158,6 +164,9 @@
 </div>
 </div>
 
+<!-- Save toast — position:fixed, sits above everything -->
+<div aria-live="polite" id="saveToast"></div>
+
 <script>
 /* OPTION A ORGANISATION START */
 // This file is intentionally single-file, but the JS is grouped into logical modules.
@@ -219,6 +228,8 @@ const toolSteps = [
 let selectedSteps = 1;
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
+let isPaid = false;
+try{ isPaid = sessionStorage.getItem("kidseq_tier") === "paid"; }catch(e){}
 
 /* -------------------- CLOSE TAB/WINDOW LOGOUT (but NOT reload) -------------------- */
 (function(){
@@ -534,12 +545,17 @@ function applyLockState(){
       toolLoginBtnEl.setAttribute("href", "login.html");
     }
   }
+
+  // Save button: only active for paid tier
+  const saveBtnEl = document.getElementById("saveBtn");
+  if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
 // Ensure the correct state when the browser restores the page from cache
 window.addEventListener('pageshow', () => {
   try{ isLoggedIn = sessionStorage.getItem('kidseq_logged_in') === '1'; }catch(e){ isLoggedIn = false; }
+  try{ isPaid = sessionStorage.getItem('kidseq_tier') === 'paid'; }catch(e){ isPaid = false; }
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
 });
@@ -551,8 +567,10 @@ function logout(){
   try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_email'); }catch(e){}
   try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+  try{ sessionStorage.removeItem('kidseq_tier'); }catch(e){}
 
   isLoggedIn = false;
+  isPaid = false;
   try{ stop(); }catch(e){}
 
   // Restore the locked/landing UI immediately
@@ -562,7 +580,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[btnStrings, btnSynth, document.getElementById("cameraBtn")].forEach(bindLockedNudge);
+[btnStrings, btnSynth, document.getElementById("cameraBtn"), document.getElementById("saveBtn")].forEach(bindLockedNudge);
 
 /* Prime audio */
 function primeAudioOnce(){
@@ -2047,6 +2065,49 @@ function closeScanLimitModal(){
 window.closeScanLimitModal = closeScanLimitModal;
 window.showScanLimitModal  = showScanLimitModal;
 
+/* -------------------- CLOUD SAVE -------------------- */
+let _saveToastTimer = null;
+function showSaveToast(state){
+  const el = document.getElementById("saveToast");
+  if(!el) return;
+  const msgs = { saving:"Saving…", saved:"Saved ✓", error:"Couldn't save", upgrade:"Upgrade to save tunes" };
+  el.textContent = msgs[state] || state;
+  el.className = "saveToast show " + state;
+  clearTimeout(_saveToastTimer);
+  if(state !== "saving"){
+    _saveToastTimer = setTimeout(() => { el.className = "saveToast"; }, 2400);
+  }
+}
+
+async function saveToCloud(){
+  if(!isPaid){
+    if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
+    else { showSaveToast("upgrade"); }
+    return;
+  }
+  showSaveToast("saving");
+  try{
+    const { auth, db } = await import("./js/firebase-init.js");
+    const user = auth.currentUser;
+    if(!user){ showSaveToast("error"); return; }
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    await setDoc(doc(db, "users", user.uid, "sequences", "autosave"), {
+      savedAt: serverTimestamp(),
+      tempo,
+      instrument,
+      drumStyle,
+      drumsMuted,
+      selectedSteps,
+      notesByRow: notesByRow.map(row => row.map(n => ({ start: n.start, len: n.len })))
+    });
+    showSaveToast("saved");
+  }catch(e){
+    console.error("[Save]", e);
+    showSaveToast("error");
+  }
+}
+window.saveToCloud = saveToCloud;
+
 function updateCameraBtnState(){
   const btn = document.getElementById("cameraBtn");
   if(!btn) return;
@@ -2556,10 +2617,27 @@ window.KidSequencer = {
 
     const { onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js');
 
-    onAuthStateChanged(auth, (user) => {
-      // Keep this lightweight and non-blocking.
-      // Your existing UI/login flow can read sessionStorage flags as before.
+    onAuthStateChanged(auth, async (user) => {
       console.log('[Auth] User:', user ? user.email : 'none');
+      if(user){
+        try{ sessionStorage.setItem('kidseq_user_uid', user.uid); }catch(e){}
+        // Check paid tier from Firestore users/{uid}.tier
+        try{
+          const { db } = await import('./js/firebase-init.js');
+          const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js');
+          const snap = await getDoc(doc(db, 'users', user.uid));
+          const tier = snap.exists() ? (snap.data().tier || 'registered') : 'registered';
+          try{ sessionStorage.setItem('kidseq_tier', tier); }catch(e){}
+          isPaid = (tier === 'paid');
+          applyLockState();
+        }catch(e){
+          console.warn('[Auth] Tier check failed (non-fatal):', e.message);
+        }
+      }else{
+        isPaid = false;
+        try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
+        try{ sessionStorage.removeItem('kidseq_tier'); }catch(e){}
+      }
     });
   }catch(e){
     console.warn('[Auth] Firebase disabled (non-fatal):', e);
