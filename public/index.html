@@ -1985,7 +1985,7 @@ const camModalEl = document.getElementById("camModal");
 const camVideoEl = document.getElementById("camVideo");
 const camCanvasEl = document.getElementById("camCanvas");
 const camPreviewEl = document.getElementById("camPreview");
-const scanLimitModalEl = document.getElementById("scanLimitModal");
+let scanLimitModalEl = null; // lazily resolved — element lives after the scripts
 
 /* ---- Guest scan counter (localStorage, resets each Monday) ---- */
 const GUEST_SCAN_LIMIT = 6;
@@ -2006,11 +2006,11 @@ function incrementGuestScans(){
   }catch(e){}
 }
 function showScanLimitModal(){
+  if(!scanLimitModalEl) scanLimitModalEl = document.getElementById("scanLimitModal");
   if(!scanLimitModalEl) return;
-  // Step 1: make it display:block so browser has a rendered frame to transition FROM
   scanLimitModalEl.style.display = "block";
   scanLimitModalEl.setAttribute("aria-hidden", "false");
-  // Step 2: two rAFs so Safari/Edge actually see the initial translateX(110%) state
+  // Two rAFs so Safari/Edge see the initial translateX(110%) state before transitioning
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       scanLimitModalEl.classList.add("show");
@@ -2018,10 +2018,10 @@ function showScanLimitModal(){
   });
 }
 function closeScanLimitModal(){
+  if(!scanLimitModalEl) scanLimitModalEl = document.getElementById("scanLimitModal");
   if(!scanLimitModalEl) return;
   scanLimitModalEl.classList.remove("show");
   scanLimitModalEl.setAttribute("aria-hidden", "true");
-  // Hide after transition completes (320ms)
   setTimeout(() => {
     if(!scanLimitModalEl.classList.contains("show")){
       scanLimitModalEl.style.display = "none";
