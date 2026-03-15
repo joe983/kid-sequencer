@@ -815,9 +815,160 @@ body.loggedIn #robotLogo{
 
 
 
+    /* Save / Load icon colours */
+    .bigBtn .saveIcon{ color: #111111; }
+    .bigBtn .saveIcon svg{ width: var(--bigIconSize); height: var(--bigIconSize); }
+    .bigBtn .loadIcon{ color: #111111; }
+    .bigBtn .loadIcon svg{ width: var(--bigIconSize); height: var(--bigIconSize); }
+
+    /* Save toast — centred pill that slides up briefly */
+    #saveToast{
+      position: fixed;
+      bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+      left: 50%;
+      transform: translateX(-50%) translateY(10px);
+      opacity: 0;
+      transition: opacity 200ms ease, transform 200ms ease;
+      background: #1d1d1d;
+      color: #fff;
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: 14px;
+      padding: 9px 22px;
+      border-radius: 30px;
+      pointer-events: none;
+      z-index: 20000;
+      white-space: nowrap;
+      border: 3px solid rgba(255,255,255,0.12);
+      box-shadow: 0 6px 0 rgba(0,0,0,0.12);
+    }
+    #saveToast.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+    #saveToast.saved{ background: #18b118; }
+    #saveToast.loaded{ background: #18b118; }
+    #saveToast.error{ background: #e02b2b; }
+    #saveToast.upgrade{ background: #f4a800; color: #1d1d1d; }
+    #saveToast.empty{ background: #f4a800; color: #1d1d1d; }
+
+    /* ---- Save name modal ---- */
+    #saveNameModal{
+      position: fixed; inset: 0; z-index: 16000;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box;
+    }
+    #saveNameModal.show{ display: flex; }
+    .saveNameCard{ width: min(360px, 100%); }
+    .saveNameBody{ padding: 14px 14px 4px; }
+    .saveNameInput{
+      width: 100%; box-sizing: border-box;
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS",Arial,sans-serif;
+      font-weight: 900; font-size: 18px; color: #1f2a44;
+      border: 4px solid #1d1d1d; border-radius: 12px;
+      padding: 10px 14px; outline: none;
+      background: #f5f7ff;
+      box-shadow: 0 4px 0 rgba(0,0,0,0.08);
+    }
+    .saveNameInput:focus{ border-color: #3da9ff; background: #fff; }
+    .saveConfirmBtn{ background: #18b118; color: #fff; border-color: #0e7a0e; box-shadow: 0 6px 0 #0a560a; }
+    .saveConfirmBtn:hover{ background: #15a015; }
+    .saveConfirmBtn:active{ transform: translateY(3px); box-shadow: 0 3px 0 #0a560a; }
+
+    /* ---- Load sheet — slides up from bottom ---- */
+    #loadSheet{
+      position: fixed; inset: 0; z-index: 16000;
+      display: none; align-items: flex-end; justify-content: center;
+      background: rgba(0,0,0,0.45);
+    }
+    #loadSheet.show{ display: flex; }
+    #loadSheetInner{
+      width: 100%; max-width: 640px;
+      background: #fff;
+      border: 4px solid #1d1d1d;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -6px 0 rgba(0,0,0,0.10);
+      display: flex; flex-direction: column; overflow: hidden;
+      transform: translateY(100%);
+      transition: transform 300ms cubic-bezier(0.32,0.72,0,1);
+    }
+    #loadSheet.show #loadSheetInner{ transform: translateY(0); }
+    .loadSheetHeader{
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 4px solid #1d1d1d; flex-shrink: 0;
+    }
+    /* Exactly 5 rows visible (each row ~66px); scrolls if more */
+    #loadSheetList{
+      overflow-y: auto; max-height: 330px;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Clear end-of-list: bottom padding so last item doesn't sit flush */
+    #loadSheetList::after{
+      content: ''; display: block; height: 10px;
+    }
+    .loadRow{
+      display: flex; align-items: center; gap: 10px;
+      padding: 13px 14px; border-bottom: 3px solid #e8eaf0;
+      cursor: pointer; transition: background 100ms;
+    }
+    .loadRow:last-child{ border-bottom: 3px solid #e8eaf0; }
+    .loadRow:active{ background: #f0f4ff; }
+    .loadRowInfo{ flex: 1; min-width: 0; cursor: pointer; }
+    .loadRowName{
+      font-family: "Comic Sans MS","Comic Sans","Trebuchet MS",Arial,sans-serif;
+      font-weight: 900; font-size: 16px; color: #1f2a44;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .loadRowDate{ font-size: 11px; font-weight: 700; opacity: 0.45; margin-top: 2px; }
+    .loadRowDelete{
+      width: 38px; height: 38px; flex-shrink: 0;
+      border: 3px solid #1d1d1d; border-radius: 10px;
+      background: #fff; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.08);
+      transition: background 150ms, border-color 150ms, color 150ms;
+    }
+    .loadRowDelete.confirming{ background: #e02b2b; border-color: #a01c1c; color: #fff; font-size: 18px; }
+    .loadSheetEmpty{
+      padding: 36px 20px; text-align: center;
+      font-weight: 900; font-size: 15px; opacity: 0.4;
+    }
+
     /* Camera scan modal */
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
+
+    /* Scan limit slide-in panel — position:fixed so it always anchors to the screen edge,
+       regardless of scroll containers, stageScaled transforms, or safe-area padding on #viewport */
+    #scanLimitModal{
+      display: none; /* JS sets to flex */
+      flex-direction: column;
+      position: fixed;
+      top: 8px; /* fallback for browsers without env() */
+      top: calc(env(safe-area-inset-top, 0px) + 8px); /* clears iPhone status bar */
+      right: 0;
+      width: 190px;
+      z-index: 10001;
+      transform: translateX(110%);
+      transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      border: 3px solid #1d1d1d;
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      background: #fff;
+      box-shadow: -4px 5px 0 rgba(0,0,0,0.10);
+      overflow: hidden;
+    }
+    #scanLimitModal.show{ transform: translateX(0); }
+    #scanLimitModal .modalHeader{ padding: 7px 8px; border-bottom-width: 3px; }
+    #scanLimitModal .modalTitle{ font-size: 12px; }
+    #scanLimitModal .modalClose{ width: 28px; height: 28px; font-size: 13px; border-radius: 7px; border-width: 3px; box-shadow: 0 3px 0 rgba(0,0,0,0.07); }
+    .scanLimitBody{ padding: 8px 10px 6px; text-align:center; }
+    .scanLimitIcon{ font-size: 22px; margin-bottom: 5px; }
+    .scanLimitMsg{ font-weight: 800; font-size: 11px; color: #1f2a44; line-height: 1.4; margin: 0 0 4px; }
+    .scanLimitScansLeft{ font-size: 9px; font-weight: 700; opacity: 0.55; }
+    #scanLimitModal .modalBtns{ padding: 6px 8px 9px; }
+    #scanLimitModal .bigBtn{ width: 100%; text-align: center; box-sizing: border-box; justify-content: center; font-size: 12px; padding: 7px 10px; }
+    /* Camera button greyed when guest scan limit reached */
+    #cameraBtn.scanLimitReached{ opacity: 0.35; filter: grayscale(1); cursor: not-allowed; }
+    #cameraBtn.scanLimitReached:hover{ transform: none; box-shadow: none; }
+
     .modalCard{ width: min(620px, var(--stageW)); background:#fff; border: 4px solid #1d1d1d; border-radius: 18px; box-shadow: 0 9px 0 rgba(0,0,0,0.12); overflow:hidden; }
     .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
     .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }
@@ -969,13 +1120,15 @@ body.loggedIn #toolsLoginArea{ display:block; }
   cursor: not-allowed;
 }
 
-/* Allow Piano to look enabled on landing page, even in locked (guest) mode */
-#instButtons.locked #btnPiano{
+/* Allow Piano + Trumpet to look enabled in guest (locked) mode */
+#instButtons.locked #btnPiano,
+#instButtons.locked #btnTrumpet{
   opacity: 1;
   filter: none;
   cursor: pointer;
 }
-#instButtons.locked #btnPiano:hover{ transform: translateY(-1px); }
+#instButtons.locked #btnPiano:hover,
+#instButtons.locked #btnTrumpet:hover{ transform: translateY(-1px); }
 
 #instButtons.locked .instBtn:hover{ transform: none; }
 
