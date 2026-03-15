@@ -637,9 +637,11 @@ window.addEventListener("pointerdown", () => {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
 }, { passive: true });
 
-/* Spacebar start/stop */
+/* Spacebar start/stop — skip when user is typing in an input */
 window.addEventListener("keydown", (e) => {
   if (e.code !== "Space") return;
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
   e.preventDefault();
   if (timer || startTimeout) stop();
   else play();
