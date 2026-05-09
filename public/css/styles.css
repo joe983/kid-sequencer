@@ -232,11 +232,10 @@ body.loggedIn #robotLogo{
     }
     #titleBox .titleLine + .titleLine{ margin-top: 4px; }
 
-    /* Login/Logout pill lives in the topBar but is taken OUT of flex flow so
-       it can sit between the Print button and the tempo controls.
-       JS (syncTopBarLoginPosition) sets the `left` offset based on the live
-       Print and tempo rects — using `left` instead of `right` so the
-       --centerPad change to topBar's padding doesn't mis-place it. */
+    /* Login/Logout sits in the topBar, taken OUT of flex flow so it can be
+       absolutely positioned. JS (syncTopBarLoginPosition) sets the `left`
+       offset to anchor its right edge to the sequencer's right edge.
+       Same height + corner radius as the transport buttons next to it. */
     #topBar .topBarLoginWrap{
       position: absolute !important;
       top: 50%;
@@ -244,18 +243,17 @@ body.loggedIn #robotLogo{
       left: 0; /* default; overridden by syncTopBarLoginPosition */
       display: flex !important;
       align-items: center;
-      height: 64px !important;
+      height: 58px !important;
       width: auto !important;
       z-index: 4;
     }
     #topBar .topBarLoginWrap .loginBtn{
       width: auto !important;
       min-width: 0;
-      height: 64px !important;
-      padding: 0 30px !important;
-      font-size: 20px;
-      /* Pill shape — fully rounded ends (radius = half of height) */
-      border-radius: 32px !important;
+      height: 58px !important;
+      padding: 0 22px !important;
+      font-size: 18px;
+      border-radius: 16px !important;
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       box-sizing: border-box;
     }

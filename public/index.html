@@ -784,24 +784,19 @@ function fitToViewport(){
   syncTopBarLoginPosition();
 }
 
-// Centres the absolutely-positioned login pill horizontally between the
-// Print button's right edge and the tempo-up button's left edge.
-// `left` is measured from the containing block's padding-box LEFT edge
-// (= topBar's border-inside edge), so just subtract topBar's viewport x.
+// Anchors the absolutely-positioned login button so its RIGHT edge aligns
+// with the right edge of #sequencerShell (the visible grid). `left` is
+// measured from the containing block's padding-box left edge, which equals
+// topBar's border-inside edge — so we just subtract topBar's viewport x.
 function syncTopBarLoginPosition(){
   const login = document.getElementById('loginCtaWrap');
-  const print = document.getElementById('printBtn');
-  const tempoUp = document.getElementById('tempoUpBtn')
-    || document.getElementById('tempoControls')
-    || document.getElementById('rightCol');
+  const seq = document.getElementById('sequencerShell');
   const topBar = document.getElementById('topBar');
-  if(!login || !print || !tempoUp || !topBar) return;
-  const printRect = print.getBoundingClientRect();
-  const tempoRect = tempoUp.getBoundingClientRect();
+  if(!login || !seq || !topBar) return;
+  const sRect = seq.getBoundingClientRect();
   const bRect = topBar.getBoundingClientRect();
   const loginW = login.offsetWidth;
-  const center = (printRect.right + tempoRect.left) / 2;
-  const desiredLeft = center - loginW / 2;
+  const desiredLeft = sRect.right - loginW;
   const leftOffset = Math.round(desiredLeft - bRect.left);
   login.style.left = leftOffset + 'px';
   login.style.right = '';
