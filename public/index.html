@@ -721,7 +721,10 @@ function fitToViewport(){
   // pinned to the circle size so the title box, circles, and column edge all
   // share the same x-axis.
   let toolW = 124;
-  let rightW = Math.min(115, Math.max(96, Math.floor(vw * 0.16)));
+  // Right column hugs its 58px-wide controls (tempo, instruments, volume) so
+  // the gap from the grid's right edge mirrors the gap from the circle column
+  // on the left (~14px from mainLayout's flex gap).
+  let rightW = 58;
 
   const outerPadding = 24;
   const gaps = 14 * 2;
@@ -783,6 +786,47 @@ function syncTopBarLoginPosition(){
   const bRect = topBar.getBoundingClientRect();
   const offset = Math.max(0, Math.round(bRect.right - sRect.right));
   login.style.right = offset + 'px';
+}
+
+// Slides the transport-controls cluster right so its right edge (the Print
+// button) aligns with the right edge of the 3rd-from-right cell in the grid.
+// Then re-centres the robot so it sits equidistantly between the title box
+// and the play button. Must run AFTER buildGrid() has rendered the cells.
+function syncTopBarLayout(){
+  const robot = document.getElementById('robotLogo');
+  const controls = document.getElementById('controls');
+  const titleBox = document.getElementById('titleBox');
+  const sequencer = document.getElementById('sequencer');
+  if(!robot || !controls || !titleBox || !sequencer) return;
+
+  // Find the 3rd-from-right cell in the first row.
+  const firstRow = sequencer.querySelector('.rowWrap');
+  if(!firstRow) return;
+  const rowCells = firstRow.querySelectorAll('.cell');
+  if(rowCells.length < 3) return;
+  const targetCell = rowCells[rowCells.length - 3];
+
+  const targetRight = targetCell.getBoundingClientRect().right;
+  const titleRect = titleBox.getBoundingClientRect();
+
+  // Reset existing margins so offsetWidth is accurate.
+  robot.style.marginLeft = '';
+  robot.style.marginRight = '';
+
+  const ctrlW = controls.offsetWidth;
+  const robotW = robot.offsetWidth;
+  const desiredCtrlLeft = targetRight - ctrlW;
+
+  // Equidistant midpoint between title's right edge and play's left edge.
+  const desiredRobotLeft = (titleRect.right + desiredCtrlLeft) / 2 - robotW / 2;
+
+  // topBar uses CSS `gap: 10px` between flex items; margins stack on top.
+  const topBarGap = 10;
+  const marginLeft = Math.max(0, Math.round(desiredRobotLeft - titleRect.right - topBarGap));
+  const marginRight = Math.max(0, Math.round(desiredCtrlLeft - desiredRobotLeft - robotW - topBarGap));
+
+  robot.style.marginLeft = marginLeft + 'px';
+  robot.style.marginRight = marginRight + 'px';
 }
 function positionRobotLogo(){
   // Robot now lives inline as a flex item in #topBar — its size and position are
@@ -2584,6 +2628,9 @@ root.classList.add('stageScaled');
       fitToViewport();
       buildGrid();
       positionRobotLogo();
+      // Cell rects only become valid AFTER buildGrid renders rows.
+      syncTopBarLayout();
+      syncTopBarLoginPosition();
     }catch(e){
       console.error('layoutPass failed', e);
     }
@@ -2690,6 +2737,8 @@ window.KidSequencer = {
   UI: {
     fitToViewport,
     positionRobotLogo,
+    syncTopBarLayout,
+    syncTopBarLoginPosition,
     updateTempoBox,
     updateLoginLinks,
     applyLockState,

@@ -113,7 +113,7 @@ html.tabletScaled #page{
       /* Left tools column width — matches the circle button size below so the
          title box, the circles, and the column edge all share the same x-axis. */
       --toolW: 124px;
-      --rightW: 110px;
+      --rightW: 58px;
       --rightLift: 0px;
       --titleInset: 0px;
       --contentLift: 0px;
@@ -836,9 +836,9 @@ body.loggedIn #robotLogo{
     #tempoControls button:hover{ transform: translateY(-1px); }
 
     #tempoBox{
-      width:74px;
+      width:58px;
       text-align:center;
-      font-size:22px;
+      font-size:20px;
       border: 4px solid #1d1d1d;
       background:#ffffff;
       padding: 12px 0;
@@ -847,6 +847,7 @@ body.loggedIn #robotLogo{
       color:#1f2a44;
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       user-select:none;
+      box-sizing: border-box;
     }
 
     #instButtons{
