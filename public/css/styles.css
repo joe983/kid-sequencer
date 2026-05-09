@@ -158,6 +158,7 @@ body.loggedIn #robotLogo{
       position: relative;
       z-index: 2;
           box-sizing: border-box;
+      margin: 0 auto; /* centre the stage in the viewport on wide screens */
     }
 
     /* Top bar is now a single horizontal action row:
@@ -245,14 +246,14 @@ body.loggedIn #robotLogo{
       right: calc(14px + var(--centerPad, 0px)); /* fallback until JS positions */
       display: flex !important;
       align-items: center;
-      height: 58px !important;
+      height: 66px !important;
       width: auto !important;
       z-index: 4;
     }
     #topBar .topBarLoginWrap .loginBtn{
       width: auto !important;
       min-width: 0;
-      height: 58px !important;
+      height: 66px !important;
       padding: 0 22px !important;
       font-size: 18px;
       border-radius: 16px !important;
@@ -1169,7 +1170,7 @@ body.loggedIn #toolsLoginArea{ display:block; }
 #loginCtaWrap{
   position: relative;
   width: 100%;
-  height: 58px;
+  height: 66px;
   display: block;
 }
 #loginCtaWrap .loginBtn{
