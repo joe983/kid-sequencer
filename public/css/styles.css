@@ -6,8 +6,10 @@
   --undoIconSize: 30px;
   --cameraIconSize: 34px;
 
-  /* Note-length tool circles: kid-sized chunky buttons in left column */
-  --toolBtnSize: 118px;
+  /* Note-length tool circles: kid-sized chunky buttons in left column.
+     Sized so the bottom edge of the bottom circle aligns with the
+     bottom of the sequencer/drum grid (5×size + 4×gap ≈ shell height). */
+  --toolBtnSize: 124px;
 
   --toolSymbolSizeDefault: 64px;
   --toolSymbolSizeBig: 78px;
@@ -108,7 +110,9 @@ html.tabletScaled #page{
     :root{
       --cell: 46px;
       --gap: 4px;
-      --toolW: 168px;
+      /* Left tools column width — matches the circle button size below so the
+         title box, the circles, and the column edge all share the same x-axis. */
+      --toolW: 124px;
       --rightW: 110px;
       --rightLift: 0px;
       --titleInset: 0px;
@@ -156,8 +160,10 @@ body.loggedIn #robotLogo{
           box-sizing: border-box;
     }
 
-    /* Top bar is now a single horizontal action row:
-       [ Title ]  ←spacer→  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ] */
+    /* Top bar is now a single horizontal action row, packed to the LEFT:
+       [ Title | Login ]  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ][ Print ]  ←spacer→
+       The trailing flex spacer eats the remaining width so the cluster never
+       drifts over the right-side tempo column. */
     #topBar{
       pointer-events:auto;
       height: 92px;
@@ -167,17 +173,18 @@ body.loggedIn #robotLogo{
       z-index: 3;
       display:flex;
       align-items:center;
-      gap: 12px;
+      gap: 10px;
     }
 
     #topBar .topBarSpacer{
       flex: 1 1 auto;
-      min-width: 12px;
+      min-width: 0;
     }
 
+    /* Title box sits flush left, sized to match the tools column below it. */
     #titleBox{
       flex: 0 0 auto;
-      width: 252px;
+      width: var(--toolW);
       height: 64px;
       border-radius: 18px;
       border: 4px solid #1d1d1d;
@@ -197,19 +204,49 @@ body.loggedIn #robotLogo{
       line-height: 1;
     }
 
+    /* "Kid" / "Sequencer" stacked on two lines so the title can sit in a
+       narrow column-width box and still read as a chunky logo. */
     #titleBox .titleText{
       font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
       font-weight: 900;
-      font-size: 28px;
-      letter-spacing: 0.6px;
       color:#1f2a44;
-      white-space:nowrap;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
       line-height: 1;
-      padding: 0; margin: 0;
-      transform: translateY(-0.5px);
+      padding: 0;
+      margin: 0;
       text-shadow:
         0 2px 0 rgba(255,255,255,0.9),
         0 5px 0 rgba(0,0,0,0.08);
+    }
+    #titleBox .titleLine{
+      display:block;
+      font-size: 20px;
+      letter-spacing: 0.4px;
+      line-height: 1;
+    }
+    #titleBox .titleLine + .titleLine{ margin-top: 4px; }
+
+    /* Login/Logout button now lives in the topBar (right of the title box).
+       Sized to fit the text instead of stretching to a full column. */
+    #topBar .topBarLoginWrap{
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      height: 64px;
+      width: auto;
+      position: relative;
+    }
+    #topBar .topBarLoginWrap .loginBtn{
+      width: auto;
+      min-width: 0;
+      height: 64px;
+      padding: 0 22px;
+      font-size: 20px;
+      border-radius: 18px;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
     }
 
     #robotLogo{
@@ -350,7 +387,10 @@ body.loggedIn #robotLogo{
     #mainLayout{
       flex: 1;
       display:flex;
-      justify-content:center;
+      /* Pack columns from the LEFT so the tools column lines up with the
+         left edge of the title box above it. The right column then sits
+         right-of-sequencer with empty space beyond if any. */
+      justify-content:flex-start;
       align-items:flex-start;
       gap: 14px;
       padding: 0 14px 12px;
