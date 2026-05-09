@@ -247,12 +247,16 @@ const HALF_NOTE_SVG = `
 
 
 
+/* Whole note: original 120×220 viewBox preserved (so the rendered notehead
+   stays the same size as before). The path itself is moved to y=110 — the
+   exact vertical centre of the viewBox — so it sits dead-centre inside the
+   circular tool button. */
 const WHOLE_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 115 100 100" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
   <path fill="#000" fill-rule="evenodd"
-        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
-           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
-        transform="rotate(-18 55 165)"/>
+        d="M 55 110 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 112 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 110)"/>
 </svg>
 `;
 
