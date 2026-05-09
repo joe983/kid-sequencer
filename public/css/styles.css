@@ -248,9 +248,10 @@ body.loggedIn #robotLogo{
       width: auto;
       min-width: 0;
       height: 64px;
-      padding: 0 22px;
+      padding: 0 26px;
       font-size: 20px;
-      border-radius: 18px;
+      /* Pill shape — fully rounded ends */
+      border-radius: 9999px;
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
     }
 

@@ -775,21 +775,30 @@ function fitToViewport(){
   syncTopBarLoginPosition();
 }
 
-// Aligns the absolutely-positioned login pill in #topBar so its right edge
-// matches the right edge of #sequencerShell (the visible grid).
+// Centres the absolutely-positioned login pill horizontally between the
+// Print button's right edge and the tempo-up button's left edge.
 function syncTopBarLoginPosition(){
   const login = document.getElementById('loginCtaWrap');
-  const seq = document.getElementById('sequencerShell');
+  const print = document.getElementById('printBtn');
+  const tempoUp = document.getElementById('tempoUpBtn')
+    || document.getElementById('tempoControls')
+    || document.getElementById('rightCol');
   const topBar = document.getElementById('topBar');
-  if(!login || !seq || !topBar) return;
-  const sRect = seq.getBoundingClientRect();
+  if(!login || !print || !tempoUp || !topBar) return;
+  const printRect = print.getBoundingClientRect();
+  const tempoRect = tempoUp.getBoundingClientRect();
   const bRect = topBar.getBoundingClientRect();
-  const offset = Math.max(0, Math.round(bRect.right - sRect.right));
+  const loginW = login.offsetWidth;
+  const center = (printRect.right + tempoRect.left) / 2;
+  const desiredLeft = center - loginW / 2;
+  // Convert to `right` offset relative to the topBar's right border.
+  const offset = Math.max(0, Math.round(bRect.right - desiredLeft - loginW));
   login.style.right = offset + 'px';
 }
 
 // Slides the transport-controls cluster right so its right edge (the Print
-// button) aligns with the right edge of the 3rd-from-right cell in the grid.
+// button) aligns with the right edge of the 4th-from-right cell in the grid
+// (a slight inset from the far right so it doesn't crowd the right column).
 // Then re-centres the robot so it sits equidistantly between the title box
 // and the play button. Must run AFTER buildGrid() has rendered the cells.
 function syncTopBarLayout(){
@@ -799,12 +808,12 @@ function syncTopBarLayout(){
   const sequencer = document.getElementById('sequencer');
   if(!robot || !controls || !titleBox || !sequencer) return;
 
-  // Find the 3rd-from-right cell in the first row.
+  // Find the 4th-from-right cell in the first row.
   const firstRow = sequencer.querySelector('.rowWrap');
   if(!firstRow) return;
   const rowCells = firstRow.querySelectorAll('.cell');
-  if(rowCells.length < 3) return;
-  const targetCell = rowCells[rowCells.length - 3];
+  if(rowCells.length < 4) return;
+  const targetCell = rowCells[rowCells.length - 4];
 
   const targetRight = targetCell.getBoundingClientRect().right;
   const titleRect = titleBox.getBoundingClientRect();
