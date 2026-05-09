@@ -246,14 +246,14 @@ body.loggedIn #robotLogo{
       right: calc(14px + var(--centerPad, 0px)); /* fallback until JS positions */
       display: flex !important;
       align-items: center;
-      height: 66px !important;
+      height: 58px !important;
       width: auto !important;
       z-index: 4;
     }
     #topBar .topBarLoginWrap .loginBtn{
       width: auto !important;
       min-width: 0;
-      height: 66px !important;
+      height: 58px !important;
       padding: 0 22px !important;
       font-size: 18px;
       border-radius: 16px !important;
@@ -1170,7 +1170,7 @@ body.loggedIn #toolsLoginArea{ display:block; }
 #loginCtaWrap{
   position: relative;
   width: 100%;
-  height: 66px;
+  height: 58px;
   display: block;
 }
 #loginCtaWrap .loginBtn{
