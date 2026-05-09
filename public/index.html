@@ -748,6 +748,15 @@ function fitToViewport(){
   document.documentElement.style.setProperty("--cell", cell + "px");
   CELL = cell;
 
+  // Centre the whole layout horizontally in the stage.
+  // Compute the natural content width (tools + gap + sequencer + gap + rightCol)
+  // and add equal padding on each side so the row sits in the middle.
+  const seqShellW = cols * cell + (cols - 1) * GAP + 32; // 12 padding × 2 + 4 border × 2
+  const totalContentW = toolW + 14 + seqShellW + 14 + rightW;
+  const stageInner = vw - 28; // minus the default 14px padding on each side
+  const centerPadPx = Math.max(0, Math.round((stageInner - totalContentW) / 2));
+  document.documentElement.style.setProperty("--centerPad", centerPadPx + "px");
+
   let __titleInsetPx = 0;
   // The title box is now part of the left column (#tools). Only compute an inset
   // when the title is in the top header bar (legacy layout).
@@ -777,6 +786,8 @@ function fitToViewport(){
 
 // Centres the absolutely-positioned login pill horizontally between the
 // Print button's right edge and the tempo-up button's left edge.
+// `left` is measured from the containing block's padding-box LEFT edge
+// (= topBar's border-inside edge), so just subtract topBar's viewport x.
 function syncTopBarLoginPosition(){
   const login = document.getElementById('loginCtaWrap');
   const print = document.getElementById('printBtn');
@@ -791,9 +802,9 @@ function syncTopBarLoginPosition(){
   const loginW = login.offsetWidth;
   const center = (printRect.right + tempoRect.left) / 2;
   const desiredLeft = center - loginW / 2;
-  // Convert to `right` offset relative to the topBar's right border.
-  const offset = Math.max(0, Math.round(bRect.right - desiredLeft - loginW));
-  login.style.right = offset + 'px';
+  const leftOffset = Math.round(desiredLeft - bRect.left);
+  login.style.left = leftOffset + 'px';
+  login.style.right = '';
 }
 
 // Slides the transport-controls cluster right so its right edge (the Print

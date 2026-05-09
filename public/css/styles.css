@@ -163,12 +163,14 @@ body.loggedIn #robotLogo{
     /* Top bar is now a single horizontal action row:
        [ Title ]  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ][ Print ]  ←spacer→
        The trailing spacer eats the remaining width. The login pill is taken
-       out of flow and absolutely positioned so its right edge aligns with the
-       right edge of the sequencer grid (synced from JS). */
+       out of flow and absolutely positioned (via JS) horizontally between the
+       Print button and the tempo-up button.
+       --centerPad is computed in fitToViewport so the whole layout sits
+       horizontally centred in the stage. */
     #topBar{
       pointer-events:auto;
       height: 92px;
-      padding: 14px 14px 8px;
+      padding: 14px calc(14px + var(--centerPad, 0px)) 8px;
       box-sizing:border-box;
       position: relative;
       z-index: 3;
@@ -231,28 +233,31 @@ body.loggedIn #robotLogo{
     #titleBox .titleLine + .titleLine{ margin-top: 4px; }
 
     /* Login/Logout pill lives in the topBar but is taken OUT of flex flow so
-       it can sit on the far right with its right edge aligned to the grid's
-       right edge. JS sets the `right` offset based on the live sequencer rect. */
+       it can sit between the Print button and the tempo controls.
+       JS (syncTopBarLoginPosition) sets the `left` offset based on the live
+       Print and tempo rects — using `left` instead of `right` so the
+       --centerPad change to topBar's padding doesn't mis-place it. */
     #topBar .topBarLoginWrap{
-      position: absolute;
+      position: absolute !important;
       top: 50%;
       transform: translateY(-50%);
-      right: 14px; /* default; overridden by syncTopBarLoginPosition */
-      display: flex;
+      left: 0; /* default; overridden by syncTopBarLoginPosition */
+      display: flex !important;
       align-items: center;
-      height: 64px;
-      width: auto;
+      height: 64px !important;
+      width: auto !important;
       z-index: 4;
     }
     #topBar .topBarLoginWrap .loginBtn{
-      width: auto;
+      width: auto !important;
       min-width: 0;
-      height: 64px;
-      padding: 0 26px;
+      height: 64px !important;
+      padding: 0 30px !important;
       font-size: 20px;
-      /* Pill shape — fully rounded ends */
-      border-radius: 9999px;
+      /* Pill shape — fully rounded ends (radius = half of height) */
+      border-radius: 32px !important;
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+      box-sizing: border-box;
     }
 
     #robotLogo{
@@ -393,13 +398,12 @@ body.loggedIn #robotLogo{
     #mainLayout{
       flex: 1;
       display:flex;
-      /* Pack columns from the LEFT so the tools column lines up with the
-         left edge of the title box above it. The right column then sits
-         right-of-sequencer with empty space beyond if any. */
+      /* Pack columns from the LEFT — the centring offset is achieved by the
+         shared --centerPad in the side padding (kept in sync with #topBar). */
       justify-content:flex-start;
       align-items:flex-start;
       gap: 14px;
-      padding: 0 14px 12px;
+      padding: 0 calc(14px + var(--centerPad, 0px)) 12px;
       box-sizing:border-box;
     }
 
