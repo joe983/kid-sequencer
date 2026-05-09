@@ -38,14 +38,13 @@
 <div id="viewport">
 <div id="page">
 <div id="topBar">
-
-</div>
+<div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+<div class="topBarSpacer" aria-hidden="true"></div>
 <div aria-hidden="true" id="robotLogo">
 <div class="robotClip">
 <img src="images/robot.svg" alt="" width="718" height="591" draggable="false">
 </div>
 </div>
-<div id="contentWrap">
 <div id="controls">
 <button aria-label="Play" class="bigBtn iconBtn" onclick="play()" title="Play"><span class="icon playIcon"><svg aria-hidden="true" viewbox="0 0 24 24"><polygon fill="currentColor" points="8,5 20,12 8,19"></polygon></svg></span></button>
 <button aria-label="Stop" class="bigBtn iconBtn" onclick="stop()" title="Stop"><span class="icon stopIcon"><svg aria-hidden="true" viewbox="0 0 24 24"><rect fill="currentColor" height="12" rx="1.5" width="12" x="6.5" y="6.5"></rect></svg></span></button>
@@ -76,8 +75,10 @@
 <polyline fill="none" points="8,17 12,21 16,17" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
 </svg></span></button>
 </div>
+</div>
+<div id="contentWrap">
 <div id="mainLayout">
-<div id="tools"><div id="titleBox"><div class="titleText">Kid Sequencer</div></div>
+<div id="tools">
 <div id="toolsList"></div>
 <div id="toolsLoginArea">
 <div aria-label="Login to unlock" id="loginCtaWrap">
@@ -702,12 +703,13 @@ function __ksSyncViewportVars(){
 function fitToViewport(){
   const { stageW: vw, stageH: vh } = __ksStageSize();
 
-  const headerH = 92;
-  const controlsH = 70;
+  const headerH = 92;          // #topBar contains the title, robot, AND controls
+  const controlsH = 0;         // controls no longer occupy a separate row
   const vMargins = 24;
   const gridExtra = 20;
 
-  let toolW = Math.min(210, Math.max(150, Math.floor(vw * 0.27)));
+  // Left tools column hosts circular note-length buttons (~118px) — narrower than the old layout.
+  let toolW = Math.min(168, Math.max(150, Math.floor(vw * 0.18)));
   let rightW = Math.min(115, Math.max(96, Math.floor(vw * 0.16)));
 
   const outerPadding = 24;
@@ -751,107 +753,19 @@ function fitToViewport(){
   }
   document.documentElement.style.setProperty("--rightLift", __newRightLift + "px");
 
-  const playBtn = controlsEl.querySelector(".bigBtn");
-  const contentWrap = document.getElementById('contentWrap');
-  const titleInsideContent = !!(contentWrap && titleBoxEl && contentWrap.contains(titleBoxEl));
-
-  // IMPORTANT:
-  // The --contentLift system was designed for the original layout where the title lived in #topBar
-  // (outside #contentWrap). If the title is moved into the left column, lifting #contentWrap lifts
-  // BOTH the title and the controls, so the relative delta never changes and the lift can "run away".
-  if (playBtn && !titleInsideContent) {
-    const currentLift = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--contentLift")) || 0;
-
-    const playRect  = playBtn.getBoundingClientRect();
-    const titleRect = titleBoxEl.getBoundingClientRect();
-
-    const playCenter  = playRect.top  + playRect.height / 2;
-    const titleCenter = titleRect.top + titleRect.height / 2;
-
-    const delta = Math.round(playCenter - titleCenter);
-    let newLift = Math.round(currentLift + delta);
-    newLift = Math.max(0, Math.min(260, newLift));
-    // Never lift contentWrap so high that controls disappear behind browser toolbar.
-    // Measure where contentWrap naturally sits (before transform), then cap the lift
-    // so its top stays at least MIN_TOP px below the viewport top.
-    const MIN_TOP = 14;
-    const cwEl = document.getElementById('contentWrap');
-    if(cwEl){
-      const currentTranslate = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--contentLift')) || 0;
-      const cwRect = cwEl.getBoundingClientRect();
-      const cwNaturalTop = cwRect.top + currentTranslate; // undo current transform
-      const maxLift = Math.round(cwNaturalTop - MIN_TOP);
-      newLift = Math.min(newLift, Math.max(0, maxLift));
-    }
-    document.documentElement.style.setProperty("--contentLift", newLift + "px");
-  }
+  // New layout: title, robot, and controls all live inside #topBar on the same row.
+  // No contentLift adjustment is needed (and computing one against a same-row title
+  // produces a zero/runaway delta, so we just pin it to 0).
+  document.documentElement.style.setProperty("--contentLift", "0px");
 }
 function positionRobotLogo(){
+  // Robot now lives inline as a flex item in #topBar — its size and position are
+  // determined entirely by CSS. Clear any stale absolute positioning that older
+  // versions of this function may have written to the element's inline style.
   const logo = document.getElementById('robotLogo');
-  const toolsList = document.getElementById('toolsList');
-  const loginWrap = document.getElementById('loginCtaWrap');
-  const seqWrap = document.getElementById('sequencerWrapper') || document.getElementById('sequencer');
-  const page = document.getElementById('page');
-  const root = document.documentElement;
-  if(!logo || !toolsList || !seqWrap || !page) return;
-
-  // When the stage is scaled we apply a transform on #page. We must compute positions in the *page*
-  // coordinate system (unscaled), not viewport coordinates.
-  const isScaled = root.classList.contains('stageScaled') || root.classList.contains('tabletScaled');
-  const prevTransform = isScaled ? page.style.transform : null;
-  if(isScaled) page.style.transform = '';
-
-  const pageRect = page.getBoundingClientRect();
-  const toolsRect = toolsList.getBoundingClientRect();
-  const gridRect  = seqWrap.getBoundingClientRect();
-
-  // Convert viewport rects -> page-local coords
-  const tools = {
-    left: toolsRect.left - pageRect.left,
-    top: toolsRect.top - pageRect.top,
-    width: toolsRect.width,
-    height: toolsRect.height,
-    bottom: toolsRect.bottom - pageRect.top
-  };
-  const grid = {
-    bottom: gridRect.bottom - pageRect.top
-  };
-
-  // Desired size (px) from CSS variable
-  const desired = Math.round((parseFloat(getComputedStyle(document.body).getPropertyValue('--robotSize')) || 180));
-
-  // Anchor: always keep it below the note-length buttons.
-  let topMin = tools.bottom + 18;
-
-  // If the Login button exists and is visible, keep it below that too.
-  if(loginWrap){
-    const r = loginWrap.getBoundingClientRect();
-    if(r.width > 0 && r.height > 0){
-      const rBottom = r.bottom - pageRect.top;
-      topMin = Math.max(topMin, rBottom + 28);
-    }
-  }
-
-  // Align the badge to the bottom of the grid (but never above topMin)
-  const bottom = grid.bottom;
-  const nudgeY = 6;
-
-  const avail = Math.floor(bottom - topMin);
-  if (avail < 40) { if(isScaled) page.style.transform = prevTransform; return; }
-
-  // Use the CSS-defined size (do not resize dynamically — requested behavior).
-  // We still *position* the logo, but we leave width/height/padding alone.
-  const cssSize = parseFloat(getComputedStyle(logo).width);
-  const size = Number.isFinite(cssSize) && cssSize > 0 ? cssSize : Math.max(40, Math.min(desired, avail));
-  // Center horizontally to the note-length tool column (page-local)
-  const xCenter = tools.left + tools.width / 2;
-
-  // Prefer aligning bottom to the grid; clamp to topMin
-  const top = Math.round(bottom - size + nudgeY);
-  logo.style.left = Math.round(xCenter - size/2) + 'px';
-  logo.style.top  = Math.max(Math.round(topMin), top) + 'px';
-
-  if(isScaled) page.style.transform = prevTransform;
+  if(!logo) return;
+  if(logo.style.left) logo.style.left = '';
+  if(logo.style.top) logo.style.top = '';
 }
 
 
@@ -1253,10 +1167,10 @@ function getAudio(){
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-    
+
     window.audioCtx = audioCtx;
 masterGain = audioCtx.createGain();
-    
+
     window.masterGain = masterGain;
 masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
 
@@ -1400,7 +1314,10 @@ function setInstrument(name){
   all.forEach(b => { if(b !== selected) b.classList.add("notSelected"); });
 }
 
-/* -------------------- TOOLS UI -------------------- */
+/* -------------------- TOOLS UI --------------------
+   Tool buttons in the left column are big, kid-friendly circles.
+   Each circle shows ONLY the musical-notation glyph for its note length —
+   no progress bar, no text label. */
 function buildTools(){
   if(!toolsListEl) return;
   toolsListEl.innerHTML = "";
@@ -1408,6 +1325,9 @@ function buildTools(){
   toolSteps.forEach((t) => {
     const tool = document.createElement("div");
     tool.className = "tool";
+    tool.setAttribute("role", "button");
+    tool.setAttribute("aria-label", t.label + " note");
+    tool.setAttribute("title", t.label + " note");
 
     const isLocked = (!isLoggedIn) && LOCKED_STEPS.has(t.steps);
     if(isLocked){
@@ -1423,36 +1343,9 @@ function buildTools(){
       sym.textContent = t.symbol;
     }
 
-    const barWrap = document.createElement("div");
-    barWrap.className = "toolBarWrap";
-
-    const bar = document.createElement("div");
-    bar.className = "toolBar";
-    bar.style.setProperty("--fill", (t.steps / 16).toFixed(4));
-    bar.style.setProperty("--divs", String(t.divs));
-
-    const fill = document.createElement("div");
-    fill.className = "toolBarFill";
-
-    const divs = document.createElement("div");
-    divs.className = "toolBarDivs";
-    if(t.steps === 16) divs.style.display = "none";
-
-    bar.appendChild(fill);
-    bar.appendChild(divs);
-
-    const lab = document.createElement("div");
-    lab.className = "toolLabel";
-    lab.textContent = t.label;
-    if(t.steps === 16) lab.classList.add("comicWhole");
-
-    barWrap.appendChild(bar);
-    barWrap.appendChild(lab);
-
     tool.appendChild(sym);
-    tool.appendChild(barWrap);
 
-        if(isLocked){
+    if(isLocked){
       bindLockedNudge(tool);
     }
     tool.onclick = () => {
@@ -3063,7 +2956,7 @@ window.KidSequencer = {
       overflow: visible;
     }
 
-    
+
     .seqTrack:before{
       content:"";
       position:absolute;
@@ -3097,7 +2990,7 @@ window.KidSequencer = {
       background:#0f0f0f;
       border-radius: 2px;
     }
-    
+
     .seqIncTicks .t:first-of-type,
     .seqIncTicks .t:last-of-type{ visibility:hidden; }
 
@@ -3172,7 +3065,7 @@ window.KidSequencer = {
       letter-spacing: -0.5px;
     }
 
-  
+
     .seqTrackArea{ position: relative; }
     .seqVolRange{
       position:absolute;
@@ -3197,7 +3090,7 @@ window.KidSequencer = {
               <div class="seqTrackArea" id="seqTrackArea">
                 <div class="seqTrack"></div>
 
-                
+
                 <input id="seqVolRange" class="seqVolRange" type="range" min="0" max="10" step="0.01" value="10" aria-label="Master volume" />
 <div class="seqIncTicks" aria-hidden="true">
                   <div class="t"></div>

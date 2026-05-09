@@ -6,24 +6,27 @@
   --undoIconSize: 30px;
   --cameraIconSize: 34px;
 
-  --toolSymbolSizeDefault: 32px;
-  --toolSymbolSizeBig: 40px;
-  --toolSymbolSizeNormal: 34px;
-  --toolSymbolSizeSixteenth: 38px;
+  /* Note-length tool circles: kid-sized chunky buttons in left column */
+  --toolBtnSize: 118px;
+
+  --toolSymbolSizeDefault: 64px;
+  --toolSymbolSizeBig: 78px;
+  --toolSymbolSizeNormal: 70px;
+  --toolSymbolSizeSixteenth: 72px;
 
   /* 8th note uses an SVG */
-  --toolSymbolSizeEighth: 36px;
-  --eighthSvgSize: 36px;
-  --eighthNudgeX: -2px;
-  --eighthNudgeY: -2px;
+  --toolSymbolSizeEighth: 64px;
+  --eighthSvgSize: 70px;
+  --eighthNudgeX: 0px;
+  --eighthNudgeY: 0px;
 
   /* half note uses an SVG */
-  --halfSvgSize: 33px;
+  --halfSvgSize: 70px;
   --halfNudgeX: 0px;
   --halfNudgeY: 0px;
 
   /* whole note uses an SVG */
-  --wholeSvgSize: 46px;
+  --wholeSvgSize: 86px;
   --wholeNudgeX: 0px;
   --wholeNudgeY: -10px;
 
@@ -60,7 +63,7 @@ html, body {
 html.stageScaled, html.stageScaled body{
   overflow: hidden !important;
 }
-html.stageScaled{ --toolsLift: 12px; }
+html.stageScaled{ --toolsLift: 0px; }
 html.stageScaled #viewport{
   overflow: hidden !important;
   touch-action: none; /* prevent swipe scrolling while scaled */
@@ -105,18 +108,18 @@ html.tabletScaled #page{
     :root{
       --cell: 46px;
       --gap: 4px;
-      --toolW: 210px;
+      --toolW: 168px;
       --rightW: 110px;
       --rightLift: 0px;
       --titleInset: 0px;
-      --contentLift: 73px;
-      --toolsLift: 18px;
+      --contentLift: 0px;
+      --toolsLift: 0px;
 
       --wiggleDeg: 1.2deg;
       --wiggleScale: 0.01;
 
-      /* Robot badge size */
-      --robotSizeLanding: 143px;
+      /* Robot badge — now lives inline in #topBar at button height */
+      --robotSizeLanding: 64px;
       --robotSize: var(--robotSizeLanding);
     }
 
@@ -153,22 +156,33 @@ body.loggedIn #robotLogo{
           box-sizing: border-box;
     }
 
+    /* Top bar is now a single horizontal action row:
+       [ Title ]  ←spacer→  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ] */
     #topBar{
-      pointer-events:none;
+      pointer-events:auto;
       height: 92px;
-      padding: 8px 14px 0;
+      padding: 14px 14px 8px;
       box-sizing:border-box;
       position: relative;
       z-index: 3;
+      display:flex;
+      align-items:center;
+      gap: 12px;
+    }
+
+    #topBar .topBarSpacer{
+      flex: 1 1 auto;
+      min-width: 12px;
     }
 
     #titleBox{
-      width: 100%;
-      height: 58px;
-      border-radius: 16px;
+      flex: 0 0 auto;
+      width: 252px;
+      height: 64px;
+      border-radius: 18px;
       border: 4px solid #1d1d1d;
       background:#ffffff;
-      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       box-sizing:border-box;
 
       display:flex;
@@ -196,64 +210,60 @@ body.loggedIn #robotLogo{
       text-shadow:
         0 2px 0 rgba(255,255,255,0.9),
         0 5px 0 rgba(0,0,0,0.08);
-    
-    /* When title box is placed inside the left tools column, it must behave like a normal in-flow element */
-    #tools #titleBox{
-      position: relative;
-      left: auto;
-      top: auto;
-      width: 100%;
-      max-width: none;
-      margin: 0 0 10px 0;
-      pointer-events: none;
     }
-}
 
     #robotLogo{
-      position: absolute;
-      left: 0;
-      top: 0;
+      position: relative;
+      flex: 0 0 auto;
       width: var(--robotSize);
       height: var(--robotSize);
-      padding: 8px;
+      padding: 5px;
       box-sizing: border-box;
       border-radius: 50%;
       border: 4px solid #1d1d1d;
       background:#ffffff;
-      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
+      box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       display:flex;
       align-items:center;
       justify-content:center;
       pointer-events:none;
-      z-index: 0;
+      z-index: 1;
       opacity: 1;
+      overflow: hidden;
     }
     #robotLogo .robotClip{
       width: 100%;
       height: 100%;
-      border-radius: 18px;
+      border-radius: 50%;
       overflow: hidden;
       display:flex;
       align-items:center;
       justify-content:center;
     }
-    #robotLogo svg{ width:100%; height:100%; display:block; }
+    #robotLogo svg, #robotLogo img{
+      width: 124%;
+      height: 124%;
+      object-fit: contain;
+      display:block;
+      transform: translateY(2%);
+    }
 
 
-    /* Everything except the title gets lifted together */
+    /* Title now lives in #topBar alongside the controls — no extra lift needed */
     #contentWrap{
-      transform: translateY(calc(-1 * var(--contentLift)));
-      will-change: transform;
+      transform: none;
+      will-change: auto;
       position: relative;
       z-index: 2;
     }
 
+    /* Controls live inside #topBar, right-aligned next to the robot */
     #controls{
       display:flex;
-      justify-content:center;
       align-items:center;
       gap: 10px;
-      margin: 6px 0 8px;
+      margin: 0;
+      flex: 0 0 auto;
       flex-wrap: nowrap;
     }
     #controls .bigBtn{ margin: 0; }
@@ -351,45 +361,57 @@ body.loggedIn #robotLogo{
       width: var(--toolW);
       display:flex;
       flex-direction:column;
-      gap: 10px;
+      align-items:center;
+      gap: 14px;
       flex: 0 0 auto;
       position: relative;
       top: calc(-1 * var(--toolsLift));
     }
 
+    /* Note-length tool buttons: large, kid-friendly circles.
+       Only the musical-notation glyph appears on each circle — no bars, no labels. */
     .tool{
-      width: 100%;
-      height: 58px;
+      width: var(--toolBtnSize);
+      height: var(--toolBtnSize);
       border: 4px solid #1d1d1d;
       background: #ffffff;
       cursor:pointer;
       display:flex;
       align-items:center;
-      padding: 8px 10px;
-      border-radius: 16px;
+      justify-content:center;
+      padding: 0;
+      border-radius: 50%;
       box-sizing: border-box;
-      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
+      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
       transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
       touch-action: manipulation;
+      flex: 0 0 auto;
+      overflow: hidden;
     }
     .tool:hover{
       transform: translateY(-1px);
-      box-shadow: 0 9px 0 rgba(0,0,0,0.07);
+      box-shadow: 0 10px 0 rgba(0,0,0,0.08);
       background:#fbfdff;
+    }
+    .tool:active{
+      transform: translateY(2px);
+      box-shadow: 0 6px 0 rgba(0,0,0,0.07);
     }
     .tool.selected{
       background:#eaf2ff;
-      box-shadow: 0 9px 0 rgba(0,0,0,0.10);
+      box-shadow: 0 10px 0 rgba(0,0,0,0.12);
     }
 
+    /* The musical-notation glyph is the only thing on a circular tool button.
+       It fills the circle (minus border + a touch of breathing room). */
     .toolSymbol{
-      width: 48px;
+      width: 100%;
       height: 100%;
       display:flex;
       align-items:center;
       justify-content:center;
       font-weight: 900;
-      margin-right: 8px;
+      margin: 0;
       color:#1d1d1d;
       text-shadow: 0 1px 0 rgba(255,255,255,0.8);
       font-size: var(--toolSymbolSizeDefault);
@@ -401,6 +423,9 @@ body.loggedIn #robotLogo{
     .toolSymbol.normal{ font-size: var(--toolSymbolSizeNormal); }
     .toolSymbol.sixteenth{ font-size: var(--toolSymbolSizeSixteenth); }
     .toolSymbol.eighth{ font-size: var(--toolSymbolSizeEighth); }
+
+    /* Bars & labels are no longer rendered on tool buttons (kept for any legacy markup) */
+    .toolBarWrap, .toolLabel{ display: none !important; }
 
     .toolBarWrap{
       flex: 1;
@@ -1238,8 +1263,9 @@ LAYOUT DEBUG MODE -------------------- */
 body.can-pan{ cursor: grab; }
   body.dragging-pan{ cursor: grabbing; }
 
-/* --- Rules migrated from inline HTML <style> --- */
-#robotLogo svg, #robotLogo img{ width:100%; height:100%; display:block; }
+/* --- Rules migrated from inline HTML <style> ---
+   (sizing handled by the #robotLogo block above; keeping display:block as a safety net) */
+#robotLogo svg, #robotLogo img{ display:block; }
 
 /* Suppress transitions during initial load */
 html.js-loading #rightCol,
