@@ -27,10 +27,10 @@
   --halfNudgeX: 0px;
   --halfNudgeY: 0px;
 
-  /* whole note uses an SVG */
+  /* whole note uses an SVG (fully centered — no nudge) */
   --wholeSvgSize: 86px;
   --wholeNudgeX: 0px;
-  --wholeNudgeY: -10px;
+  --wholeNudgeY: 0px;
 
   --instEmojiSize: 34px;
 
@@ -160,10 +160,11 @@ body.loggedIn #robotLogo{
           box-sizing: border-box;
     }
 
-    /* Top bar is now a single horizontal action row, packed to the LEFT:
-       [ Title | Login ]  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ][ Print ]  ←spacer→
-       The trailing flex spacer eats the remaining width so the cluster never
-       drifts over the right-side tempo column. */
+    /* Top bar is now a single horizontal action row:
+       [ Title ]  [ Robot ]  [ Play ][ Stop ][ Clear ][ Undo ][ Scan ][ Save ][ Load ][ Print ]  ←spacer→
+       The trailing spacer eats the remaining width. The login pill is taken
+       out of flow and absolutely positioned so its right edge aligns with the
+       right edge of the sequencer grid (synced from JS). */
     #topBar{
       pointer-events:auto;
       height: 92px;
@@ -229,15 +230,19 @@ body.loggedIn #robotLogo{
     }
     #titleBox .titleLine + .titleLine{ margin-top: 4px; }
 
-    /* Login/Logout button now lives in the topBar (right of the title box).
-       Sized to fit the text instead of stretching to a full column. */
+    /* Login/Logout pill lives in the topBar but is taken OUT of flex flow so
+       it can sit on the far right with its right edge aligned to the grid's
+       right edge. JS sets the `right` offset based on the live sequencer rect. */
     #topBar .topBarLoginWrap{
-      flex: 0 0 auto;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      right: 14px; /* default; overridden by syncTopBarLoginPosition */
       display: flex;
       align-items: center;
       height: 64px;
       width: auto;
-      position: relative;
+      z-index: 4;
     }
     #topBar .topBarLoginWrap .loginBtn{
       width: auto;

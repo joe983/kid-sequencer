@@ -39,9 +39,6 @@
 <div id="page">
 <div id="topBar">
 <div id="titleBox"><div class="titleText"><span class="titleLine">Kid</span><span class="titleLine">Sequencer</span></div></div>
-<div class="topBarLoginWrap" id="loginCtaWrap" aria-label="Login to unlock">
-<a class="loginBtn loginLink" href="login.html" id="toolLoginBtn">Login</a>
-</div>
 <div aria-hidden="true" id="robotLogo">
 <div class="robotClip">
 <img src="images/robot.svg" alt="" width="718" height="591" draggable="false">
@@ -86,6 +83,9 @@
 </svg></span></button>
 </div>
 <div class="topBarSpacer" aria-hidden="true"></div>
+<div class="topBarLoginWrap" id="loginCtaWrap" aria-label="Login to unlock">
+<a class="loginBtn loginLink" href="login.html" id="toolLoginBtn">Login</a>
+</div>
 </div>
 <div id="contentWrap">
 <div id="mainLayout">
@@ -248,7 +248,7 @@ const HALF_NOTE_SVG = `
 
 
 const WHOLE_NOTE_SVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="5 115 100 100" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
   <path fill="#000" fill-rule="evenodd"
         d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
            M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
@@ -303,7 +303,10 @@ try{ isPaid = sessionStorage.getItem("kidseq_tier") === "paid"; }catch(e){}
   });
 })();
 
-const LOCKED_STEPS = new Set([4,8,16]);
+// Per design: every note-length, instrument, and transport button is usable
+// without login. Auth-gated server actions (cloud save/load) still gate
+// themselves inside their handlers; we just don't grey them out anymore.
+const LOCKED_STEPS = new Set();
 
 /* -------------------- STATE -------------------- */
 let notesByRow = Array.from({length: rows}, () => []);
@@ -566,13 +569,10 @@ function applyLockState(){
   // Rebuild tool buttons so their locked state updates on login/logout.
   try{ buildTools(); }catch(e){}
 
-  const instWasLocked = !!(instButtonsEl && instButtonsEl.classList.contains("locked"));
-
-  if(instButtonsEl) instButtonsEl.classList.toggle("locked", locked);
-  if(instButtonsEl && instWasLocked && !locked){
-    instButtonsEl.classList.add("justUnlocked");
-    setTimeout(()=>instButtonsEl.classList.remove("justUnlocked"), 700);
-  }
+  // Per design: keep every button visually active regardless of auth state.
+  // The instrument cluster, save, and load no longer get the locked treatment;
+  // their click handlers still gate the actual cloud writes by auth/tier.
+  if(instButtonsEl) instButtonsEl.classList.remove("locked", "justUnlocked");
   document.body.classList.toggle("loggedIn", isLoggedIn);
 
   // Swap Login -> Logout (bright red) when signed in
@@ -589,11 +589,10 @@ function applyLockState(){
     }
   }
 
-  // Save + Load buttons: only active for paid tier
   const saveBtnEl = document.getElementById("saveBtn");
-  if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
+  if(saveBtnEl) saveBtnEl.classList.remove("locked");
   const loadBtnEl = document.getElementById("loadBtn");
-  if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
+  if(loadBtnEl) loadBtnEl.classList.remove("locked");
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
@@ -752,16 +751,34 @@ function fitToViewport(){
   }
   document.documentElement.style.setProperty("--titleInset", __titleInsetPx + "px");
 
-  // Controls are now inside #topBar, on the same row as the title and robot.
-  // The legacy --rightLift trick was meant to align the right column with a
-  // controls row that sat *below* the topBar. With the new layout, that delta
-  // would yank rightCol up into the topBar — so we pin the lift to 0.
-  document.documentElement.style.setProperty("--rightLift", "0px");
+  // Pull the right column up so its top aligns with the controls row in the
+  // top bar (matches the original layout where rightCol visually shared the
+  // same row as the play/stop buttons).
+  const controlsRect = controlsEl.getBoundingClientRect();
+  const mainRect = mainLayoutEl.getBoundingClientRect();
+  const __newRightLift = Math.max(0, Math.round(mainRect.top - controlsRect.top));
+  document.documentElement.style.setProperty("--rightLift", __newRightLift + "px");
 
   // New layout: title, robot, and controls all live inside #topBar on the same row.
   // No contentLift adjustment is needed (and computing one against a same-row title
   // produces a zero/runaway delta, so we just pin it to 0).
   document.documentElement.style.setProperty("--contentLift", "0px");
+
+  // Pin the login pill to the right edge of the sequencer grid.
+  syncTopBarLoginPosition();
+}
+
+// Aligns the absolutely-positioned login pill in #topBar so its right edge
+// matches the right edge of #sequencerShell (the visible grid).
+function syncTopBarLoginPosition(){
+  const login = document.getElementById('loginCtaWrap');
+  const seq = document.getElementById('sequencerShell');
+  const topBar = document.getElementById('topBar');
+  if(!login || !seq || !topBar) return;
+  const sRect = seq.getBoundingClientRect();
+  const bRect = topBar.getBoundingClientRect();
+  const offset = Math.max(0, Math.round(bRect.right - sRect.right));
+  login.style.right = offset + 'px';
 }
 function positionRobotLogo(){
   // Robot now lives inline as a flex item in #topBar — its size and position are
