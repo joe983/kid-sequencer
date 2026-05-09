@@ -234,13 +234,15 @@ body.loggedIn #robotLogo{
 
     /* Login/Logout sits in the topBar, taken OUT of flex flow so it can be
        absolutely positioned. JS (syncTopBarLoginPosition) sets the `left`
-       offset to anchor its right edge to the sequencer's right edge.
-       Same height + corner radius as the transport buttons next to it. */
+       offset to centre it equidistant between Print and Tempo-Up.
+       CSS default uses right:0 so the button is visible on the right side
+       even before JS runs; the JS clears `right` and sets `left`. */
     #topBar .topBarLoginWrap{
       position: absolute !important;
       top: 50%;
       transform: translateY(-50%);
-      left: 0; /* default; overridden by syncTopBarLoginPosition */
+      left: auto;
+      right: calc(14px + var(--centerPad, 0px)); /* fallback until JS positions */
       display: flex !important;
       align-items: center;
       height: 58px !important;

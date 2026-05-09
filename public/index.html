@@ -784,22 +784,28 @@ function fitToViewport(){
   syncTopBarLoginPosition();
 }
 
-// Anchors the absolutely-positioned login button so its RIGHT edge aligns
-// with the right edge of #sequencerShell (the visible grid). `left` is
-// measured from the containing block's padding-box left edge, which equals
-// topBar's border-inside edge — so we just subtract topBar's viewport x.
+// Centres the login button equidistant between the Print button's right
+// edge and the Tempo-Up button's left edge.  Both elements may live in
+// different containers (topBar vs rightCol) so we use viewport coords and
+// translate back into topBar's coordinate space for the `left` offset.
 function syncTopBarLoginPosition(){
   const login = document.getElementById('loginCtaWrap');
-  const seq = document.getElementById('sequencerShell');
+  const printBtn = document.getElementById('printBtn');
+  const tempoUp = document.getElementById('tempoUpBtn');
   const topBar = document.getElementById('topBar');
-  if(!login || !seq || !topBar) return;
-  const sRect = seq.getBoundingClientRect();
+  if(!login || !printBtn || !tempoUp || !topBar) return;
+
+  const printRect = printBtn.getBoundingClientRect();
+  const tempoRect = tempoUp.getBoundingClientRect();
   const bRect = topBar.getBoundingClientRect();
   const loginW = login.offsetWidth;
-  const desiredLeft = sRect.right - loginW;
+
+  // Midpoint of the gap between print's right edge and tempo-up's left edge
+  const center = (printRect.right + tempoRect.left) / 2;
+  const desiredLeft = center - loginW / 2;
   const leftOffset = Math.round(desiredLeft - bRect.left);
   login.style.left = leftOffset + 'px';
-  login.style.right = '';
+  login.style.right = 'auto';
 }
 
 // Slides the transport-controls cluster right so its right edge (the Print
@@ -2521,6 +2527,20 @@ function importGridFromDataUrl(dataUrl){
 
     root.classList.remove('js-loading');
     root.classList.add('js-ready');
+
+    // Final login-position sync — the button is absolutely positioned and
+    // needs correct coords that are only reliable once the page is revealed
+    // and fully laid out.  Run inside a transform-sandwich so the rects are
+    // in unscaled coordinates.
+    try{
+      const pg = document.getElementById('page');
+      const prev = pg.style.transform;
+      pg.style.transform = '';
+      if(window.KidSequencer && window.KidSequencer.UI){
+        window.KidSequencer.UI.syncTopBarLoginPosition();
+      }
+      pg.style.transform = prev;
+    }catch(e){}
   }
 
   let __stabilityRaf = 0;
