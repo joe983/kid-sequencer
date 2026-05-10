@@ -848,6 +848,7 @@ body.loggedIn #robotLogo{
     #saveToast.error{ background: #e02b2b; }
     #saveToast.upgrade{ background: #f4a800; color: #1d1d1d; }
     #saveToast.empty{ background: #f4a800; color: #1d1d1d; }
+    #saveToast.qr{ background: #18b118; }
 
     /* ---- Save name modal ---- */
     #saveNameModal{
@@ -932,7 +933,7 @@ body.loggedIn #robotLogo{
     }
 
     /* Camera scan modal */
-    #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 18px; box-sizing: border-box; }
+    #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 10px; box-sizing: border-box; }
     #camModal.show{ display:flex; }
 
     /* Scan limit slide-in panel — position:fixed so it always anchors to the screen edge,
@@ -973,15 +974,86 @@ body.loggedIn #robotLogo{
     .modalHeader{ display:flex; align-items:center; justify-content:space-between; padding: 10px 12px; border-bottom: 4px solid #1d1d1d; }
     .modalTitle{ font-weight: 900; color:#1f2a44; font-size: 16px; }
     .modalClose{ width:46px; height:46px; border-radius: 14px; border: 4px solid #1d1d1d; background:#fff; cursor:pointer; font-weight: 900; font-size: 18px; box-shadow: 0 8px 0 rgba(0,0,0,0.07); }
-    .camStage{ position: relative; aspect-ratio: 4 / 3; background:#111; }
+    /* Camera modal — desktop default: vertical stack */
+    .camModalCard{ width: min(620px, calc(100vw - 20px)); display:flex; flex-direction:column; overflow:hidden; }
+
+    /* Mode selector bar */
+    .camModeBar{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:4px solid #1d1d1d; flex-shrink:0; }
+    .camModeBtn{ width:42px; height:42px; border:3px solid #ccc; border-radius:10px; background:#f5f5f5; display:flex; align-items:center; justify-content:center; cursor:pointer; color:#555; transition:background 0.15s,border-color 0.15s,color 0.15s; flex-shrink:0; padding:0; }
+    .camModeBtn svg{ width:20px; height:20px; }
+    .camModeBtn.active{ background:#1d1d1d; border-color:#1d1d1d; color:#fff; }
+    .camModeLabel{ font-size:12px; font-weight:800; color:#1f2a44; opacity:0.6; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; margin-left:2px; }
+    .camModeSpacer{ flex:1; }
+    .camModalClose{ width:42px!important; height:42px!important; border-radius:10px!important; border-width:3px!important; font-size:17px!important; box-shadow:0 4px 0 rgba(0,0,0,0.07)!important; flex-shrink:0; }
+
+    /* Desktop: stage above (golden ratio), action buttons row below */
+    .camBody{ display:flex; flex-direction:column; gap:10px; padding:10px; }
+    .camStage{ position:relative; background:#111; border-radius:10px; overflow:hidden; aspect-ratio:1.618; width:100%; }
     #camVideo, #camPreview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
     #camPreview{ display:none; }
-    .camOverlay{ position:absolute; inset:10px; border: 4px dashed rgba(255,255,255,0.75); border-radius: 14px; pointer-events:none; }
-    .camOverlay::before{ content:""; position:absolute; inset:0; background-image:
+    .camActions{ display:flex; flex-direction:row; justify-content:center; gap:10px; }
+    .camActionBtn{ padding:10px 22px; font-size:13px; font-weight:800; border:3px solid #1d1d1d; border-radius:10px; background:#fff; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,0.10); transition:transform 0.08s,box-shadow 0.08s; text-align:center; line-height:1.3; font-family:inherit; }
+    .camActionBtn:active{ transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,0.10); }
+    #camUseBtn:disabled{ opacity:0.38; cursor:not-allowed; pointer-events:none; }
+    @keyframes camUsePulse{
+      0%,100%{ box-shadow:0 4px 0 rgba(0,0,0,0.10); }
+      50%{ box-shadow:0 4px 0 rgba(0,0,0,0.10), 0 0 0 7px rgba(38,212,90,0.35); }
+    }
+    .cam-use-pulse{ animation:camUsePulse 0.9s ease-in-out infinite; }
+    .camActionClose{ background:#f5f5f5; border-color:#aaa; color:#666; box-shadow:0 3px 0 rgba(0,0,0,0.07); }
+
+    /* Landscape phones only */
+    @media (max-height:500px) and (orientation:landscape){
+      /* Align card from the TOP of the overlay — prevents mode bar disappearing behind browser chrome */
+      #camModal{ align-items:flex-start; padding:8px; }
+      /* Card: JS sets exact height via window.innerHeight; CSS gives initial estimate */
+      /* (100svh = small viewport height = visible area; falls back to 100vh for older Safari) */
+      .camModalCard{ height:calc(100vh - 16px); height:calc(100svh - 16px); width:min(620px, calc(100vw - 16px)); }
+      /* Very compact mode bar */
+      .camModeBar{ padding:2px 8px; gap:4px; border-bottom-width:2px; }
+      .camModeBtn{ width:26px; height:26px; border-radius:6px; border-width:2px; }
+      .camModeBtn svg{ width:13px; height:13px; }
+      .camModeLabel{ font-size:9px; letter-spacing:0.1px; }
+      .camModalClose{ width:26px!important; height:26px!important; border-radius:6px!important; border-width:2px!important; font-size:13px!important; box-shadow:0 2px 0 rgba(0,0,0,0.07)!important; }
+      /* Body: side-by-side, centred, compact padding so stage gets maximum height */
+      .camBody{ flex-direction:row; align-items:center; justify-content:center; gap:8px; padding:6px 10px; flex:1; min-height:0; }
+      /* JS sets height/width on .camStage — CSS just removes the aspect-ratio constraint */
+      .camStage{ flex:none; aspect-ratio:unset; border-radius:8px; }
+      /* Action buttons: vertical stack, fixed width, symmetrical */
+      .camActions{ flex-direction:column; justify-content:center; align-items:stretch; gap:6px; width:64px; flex-shrink:0; }
+      .camActionBtn{ padding:8px 4px; font-size:11px; text-align:center; border-radius:8px; }
+    }
+
+    /* Overlay: hidden by default (camera mode = plain viewfinder) */
+    .camOverlay{ position:absolute; inset:0; pointer-events:none; display:none; }
+
+    /* Overlay: sheet scan — dashed border + grid lines */
+    .camOverlay.mode-sheet{ display:block; inset:10px; border:4px dashed rgba(255,255,255,0.75); border-radius:14px; }
+    .camOverlay.mode-sheet::before{ content:""; position:absolute; inset:0; background-image:
       repeating-linear-gradient(to right, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 16))),
       repeating-linear-gradient(to bottom, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 1px, rgba(255,255,255,0) 1px, rgba(255,255,255,0) calc((100% / 8)));
-      border-radius: 10px;
+      border-radius:10px;
     }
+
+    /* Overlay: QR scan — faint centred viewfinder with corner brackets + crosshair */
+    .camOverlay.mode-qr{ display:block; inset:0; }
+    .camOverlay.mode-qr::before{ content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:54%; height:54%;
+      background:
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) top left    / 18% 3px no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) top left    / 3px 18% no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) top right   / 18% 3px no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) top right   / 3px 18% no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) bottom left / 18% 3px no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) bottom left / 3px 18% no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) bottom right/ 18% 3px no-repeat,
+        linear-gradient(rgba(255,255,255,0.7),rgba(255,255,255,0.7)) bottom right/ 3px 18% no-repeat;
+    }
+    .camOverlay.mode-qr::after{ content:""; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:54%; height:54%;
+      background:
+        linear-gradient(rgba(255,255,255,0.18),rgba(255,255,255,0.18)) center / 1px 100% no-repeat,
+        linear-gradient(rgba(255,255,255,0.18),rgba(255,255,255,0.18)) center / 100% 1px no-repeat;
+    }
+
     .modalBtns{ display:flex; gap: 10px; justify-content:center; padding: 12px; }
     .modalHint{ padding: 0 14px 14px; text-align:center; font-weight: 800; opacity: 0.75; font-size: 12px; }
 

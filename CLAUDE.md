@@ -119,13 +119,14 @@ node serve.js   # → http://localhost:3000
 
 ---
 
-## What's been built (as of 2026-03-15, after PR #1 merged)
+## What's been built (as of 2026-03-15, after PR #1 merged + camera modal overhaul)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
 3. **Guest tier** — tempo, piano/trumpet, camera unlocked for guests; 6 scans/week cap with slide-in limit panel
 4. **Cloud save/load** — paid tier only; named save slots; slide-up load sheet with delete; Firestore storage
 5. **Scan limit panel** — fixed for Safari, Edge, iPhone (position:fixed, safe-area-inset)
+6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix (see section below)
 
 ---
 
@@ -139,6 +140,48 @@ node serve.js   # → http://localhost:3000
 
 ---
 
+## Camera modal — architecture (as of 2026-03-15)
+
+### HTML structure
+```
+#camModal  (overlay, position:fixed inset:0)
+  .modalCard.camModalCard
+    .camModeBar          ← Camera / QR / Sheet buttons + label + × close
+    .camBody             ← flex row in landscape, flex col on desktop
+      .camStage          ← video + preview img + .camOverlay
+      .camActions        ← Capture / Use buttons
+    .modalHint           ← "Tip:" text, only visible in sheet mode
+```
+
+### Mode switching
+`setCamMode(mode)` — exported to `window.setCamMode`. Toggles `.active` on mode buttons, updates label text, sets `camOverlay.className` to `'camOverlay'` + optionally `' mode-sheet'` or `' mode-qr'`. Uses plain class toggling (NOT data-attribute selectors — unreliable cross-browser). `camHint` shown only in sheet mode.
+
+### Overlays (CSS class-based)
+- `.camOverlay` — hidden by default (camera mode = plain viewfinder)
+- `.camOverlay.mode-sheet` — dashed border + grid lines (16×8 repeating-linear-gradient)
+- `.camOverlay.mode-qr` — centred crosshair + corner brackets via `::before`/`::after`
+
+### Landscape iPhone fix — CRITICAL
+**Problem:** `100vh` in Safari iOS = layout viewport height (bars collapsed), but `window.innerHeight` = visual viewport (below browser chrome). Using `100vh` for sizing makes the stage enormous; centering the card with `align-items:center` pushes the mode bar behind the browser chrome.
+
+**Solution (in `_sizeCamStageForLandscape()`):**
+1. Detect landscape phone: `innerWidth > innerHeight && innerHeight <= 500`
+2. Set `card.style.height = (window.innerHeight - 16) + 'px'` — uses visual viewport
+3. `stageH = cardH − modeBar.offsetHeight − 12` (body padding 6px×2)
+4. `stageW = stageH × 1.618` — golden ratio, capped by `card.clientWidth − 92` to avoid overflow
+5. Set stage `height` + `width` inline
+
+**CSS overlay in landscape:** `#camModal` uses `align-items: flex-start` (not center!) so the card anchors to the **top** of the visible viewport. `100svh` (Safari 15.4+) / `100vh` fallback gives initial card height until JS corrects it in the first double-rAF.
+
+**Wiring:**
+- `openCameraModal()` → `requestAnimationFrame(() => requestAnimationFrame(() => _sizeCamStageForLandscape()))` + `window.addEventListener('resize', _sizeCamStageForLandscape)`
+- `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
+
+### CSS cache busting
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=6`).
+
+---
+
 ## Things to watch out for
 
 - `isLoggedIn` is an **implicit global** (assigned without `let/var/const` in non-strict IIFE — lands on `window`)
@@ -146,3 +189,5 @@ node serve.js   # → http://localhost:3000
 - Always test on iPhone Safari — positioning bugs tend to appear there first
 - Firestore rejects nested arrays — flatten before writing, reconstruct after reading
 - The load sheet list max-height is `330px` ≈ 5 rows × 66px; adjust if row height changes
+- **iOS Safari viewport units:** `100vh` ≠ `window.innerHeight` when browser bars are visible. Use `window.innerHeight` in JS for anything that needs to fit in the visible area. Use `100svh` in CSS as a better estimate (Safari 15.4+).
+- **Camera modal deploy:** always deploy from the **worktree** directory, not the repo root. The worktree path is printed when the worktree is created.
