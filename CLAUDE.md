@@ -8,26 +8,14 @@ A browser-based music sequencer for kids. Users place notes on a grid, pick an i
 
 ---
 
-## Active worktree — ALL work happens here
+## Worktree workflow
 
-**Path:** `C:\Users\Joe_C\Documents\kid-sequencer-repo\.claude\worktrees\quizzical-darwin`
-**Branch:** `claude/quizzical-darwin`
-
-> ⚠️ **CRITICAL — read before doing anything else.**
-> Every edit, every deploy, every test must happen inside this worktree.
-> Do **NOT** create a new worktree at the start of a session. Do **NOT** work from the repo root. Do **NOT** work from `main`.
-> A new worktree should only be created if a task is explicitly long-lived and isolated enough to warrant one — and even then, it must branch from `claude/quizzical-darwin`, not from `main`.
-> If Claude Code has auto-created a new worktree for the current session, **ignore it** and make all changes in `quizzical-darwin` instead.
-
-This is the most up-to-date working branch. It contains the camera modal overhaul, QR-to-sequence feature, and all audio engine fixes — none of which are in `main`. Always deploy and test from this directory.
+Each Claude Code session creates a fresh worktree on a `claude/<name>` branch from `main`. Work in whichever worktree is active for your session — check `git branch` and the path the system tells you. All features are in `main` now; there is no single long-lived feature branch.
 
 ```bash
-# Deploy from the worktree (not repo root)
-cd C:\Users\Joe_C\Documents\kid-sequencer-repo\.claude\worktrees\quizzical-darwin
+# Deploy from whatever worktree you're in
 firebase hosting:channel:deploy preview
 ```
-
-For new features, continue work directly in `quizzical-darwin`. Only create a new worktree if the user explicitly asks for one or the task is a large independent experiment.
 
 ---
 
@@ -109,7 +97,6 @@ Tier is stored in Firestore `users/{uid}.tier` and mirrored to `sessionStorage['
 
 ```bash
 # Preview channel (default — use this unless told otherwise)
-# Run from the active worktree directory (quizzical-darwin)
 firebase hosting:channel:deploy preview
 # → https://kid-sequencer--preview-h1j9zyru.web.app  (expires ~7 days, redeploy to refresh)
 
@@ -125,12 +112,8 @@ firebase deploy --only hosting
 ## Dev workflow
 
 ```bash
-# Local preview (run from quizzical-darwin)
+# Local preview
 node serve.js   # → http://localhost:3000
-
-# All new work: edit files directly in quizzical-darwin
-# Do NOT create a new worktree unless the user explicitly requests it
-# Main branch is always deployable but is significantly behind quizzical-darwin
 ```
 
 ---
@@ -140,13 +123,12 @@ node serve.js   # → http://localhost:3000
 - Remote: https://github.com/joe983/kid-sequencer
 - `gh` CLI is at: `C:\Program Files\GitHub CLI\gh.exe`
 - Default branch: `main`
-- Active feature branch: `claude/quizzical-darwin`
 - Single-person project — push directly to `main`, no PRs
-- Claude works on feature branches (`claude/…`) but merges directly (no PR review needed)
+- Claude works on feature branches (`claude/…`) and merges directly (no PR review needed)
 
 ---
 
-## What's been built (as of 2026-05-10)
+## What's been built (as of 2026-05-10, updated session 2026-05-10)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
@@ -159,11 +141,10 @@ node serve.js   # → http://localhost:3000
 9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
 10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar; `syncTopBarLayout()` aligns transport cluster to grid; `syncTopBarLoginPosition()` centres login equidistant between Print and Tempo-Up
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
-12. **16 rhythm buttons** — Techno + Drum 'n' Bass + 14 greyed-out "?" placeholders in a single row, evenly spaced (`space-evenly`), 44×44px each
+12. **Drum panel: two sub-boxes** — `#drumPanel` contains `.drumBox.rhythmBox` (Techno, DnB, 4 "?" placeholders) + `.drumBox.soundsBox` (`#instButtons`: Piano, Trumpet, Strings, Synth, 2 "?" placeholders). Buttons 56×56px. Each box has a `.drumBoxLabel` header.
 13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
-14. **Note click-to-delete fix** — note blocks are `pointer-events:none`; clicks pass through to cells
-15. **Audio ducking fix & volume normalization** — master compressor retuned from brick-wall (-20dB/20:1) to gentle safety limiter; LEVEL constants rebalanced so all instruments hit equal effective dry peak; organ/synth filters softened to reduce abrasiveness when layered
-16. **Dynamic compressor** — compressor settings switch per step based on note count: ≤3 notes get gentle compression (threshold -4dB, ratio 3:1), 4+ notes get firm limiting (threshold -10dB, ratio 8:1, knee 8dB); transitions via `setTargetAtTime` with 15ms time constant
+14. **Note click-to-delete fix** — note blocks are now `pointer-events:none`; all clicks pass through to cells where `onCellClick` handles both placement and deletion reliably
+15. **Potentiometer knobs** — 3 decorative knobs (Echo, Filter, Speed) in `#potRow` inside `#rightCol`, above the volume fader. Non-functional; to be wired to audio effects later.
 
 ---
 
@@ -268,80 +249,6 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 
 ---
 
-## Camera modal — architecture (as of 2026-03-15)
-
-### HTML structure
-```
-#camModal  (overlay, position:fixed inset:0)
-  .modalCard.camModalCard
-    .camModeBar          ← Camera / QR / Sheet buttons + label + × close
-    .camBody             ← flex row in landscape, flex col on desktop
-      .camStage          ← video + preview img + .camOverlay
-      .camActions        ← Capture / Use buttons
-    .modalHint           ← "Tip:" text, only visible in sheet mode
-```
-
-### Mode switching
-`setCamMode(mode)` — exported to `window.setCamMode`. Toggles `.active` on mode buttons, updates label text, sets `camOverlay.className` to `'camOverlay'` + optionally `' mode-sheet'` or `' mode-qr'`. Uses plain class toggling (NOT data-attribute selectors — unreliable cross-browser). `camHint` shown only in sheet mode.
-
-### Overlays (CSS class-based)
-- `.camOverlay` — hidden by default (camera mode = plain viewfinder)
-- `.camOverlay.mode-sheet` — dashed border + grid lines (16×8 repeating-linear-gradient)
-- `.camOverlay.mode-qr` — centred crosshair + corner brackets via `::before`/`::after`
-
-### Landscape iPhone fix — CRITICAL
-**Problem:** `100vh` in Safari iOS = layout viewport height (bars collapsed), but `window.innerHeight` = visual viewport (below browser chrome). Using `100vh` for sizing makes the stage enormous; centering the card with `align-items:center` pushes the mode bar behind the browser chrome.
-
-**Solution (in `_sizeCamStageForLandscape()`):**
-1. Detect landscape phone: `innerWidth > innerHeight && innerHeight <= 500`
-2. Set `card.style.height = (window.innerHeight - 16) + 'px'` — uses visual viewport
-3. `stageH = cardH − modeBar.offsetHeight − 12` (body padding 6px×2)
-4. `stageW = stageH × 1.618` — golden ratio, capped by `card.clientWidth − 92` to avoid overflow
-5. Set stage `height` + `width` inline
-
-**CSS overlay in landscape:** `#camModal` uses `align-items: flex-start` (not center!) so the card anchors to the **top** of the visible viewport. `100svh` (Safari 15.4+) / `100vh` fallback gives initial card height until JS corrects it in the first double-rAF.
-
-**Wiring:**
-- `openCameraModal()` → `requestAnimationFrame(() => requestAnimationFrame(() => _sizeCamStageForLandscape()))` + `window.addEventListener('resize', _sizeCamStageForLandscape)`
-- `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
-
-### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=6`).
-
----
-
-## Audio engine — architecture
-
-### Signal chain
-```
-Instruments → per-instrument reverb bus (dry/wet split) → masterGain (0.65) → masterComp → audioCtx.destination
-Drums → drumBus (0.70) → masterGain → masterComp → audioCtx.destination
-```
-
-### Dynamic compressor (`_compDense` flag)
-The master compressor switches settings per sequencer step based on note count:
-- **≤3 notes (gentle):** threshold -4 dB, ratio 3:1, knee 14 dB — nearly transparent
-- **4+ notes (dense):** threshold -10 dB, ratio 8:1, knee 8 dB — firm limiting
-- Transitions use `setTargetAtTime(value, now, 0.015)` for smooth 15ms ramps
-- `_compDense` tracks current state to avoid redundant updates
-- State persists across stop/start — only changes when a step with different density plays
-
-### Instrument LEVEL constants
-```js
-const LEVEL = { piano: 0.40, trumpet: 0.77, strings: 0.86, synth: 0.34 };
-```
-Calibrated so all instruments hit ~0.25 effective dry peak per note (accounting for envelope peaks and bus dry gains). Organ (piano) and synth are lower because they have denser harmonic content that stacks aggressively.
-
-### Key audio parameters
-- `AUDIO_AHEAD_S = 0.010` — 10ms lookahead for all scheduled audio
-- `masterGain = 0.65` — provides headroom for stacking
-- `drumBus = 0.70` — drums slightly below melodic instruments
-- Kick peak: `0.80 * vel` — reduced from 1.10 to prevent compressor hammering
-- Organ LP: 3200 Hz (Q 0.5) — lowered from 4200 to reduce abrasiveness when layered
-- Synth LP: 2200→1500 Hz (Q 0.5) — lowered from 2600→1800, Q from 0.9 to reduce harshness
-
----
-
 ## Things to watch out for
 
 - `isLoggedIn` is an **implicit global** (assigned without `let/var/const` in non-strict IIFE — lands on `window`)
@@ -353,7 +260,6 @@ Calibrated so all instruments hit ~0.25 effective dry peak per note (accounting 
 - **Note blocks are `pointer-events: none`** — `.noteBlock` elements are purely visual. All click/tap interactions go through to `.cell` elements, where `onCellClick` handles both placement and deletion via `occ[r][c]`. Do not add click handlers to note blocks.
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
-- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`. The QR scan loop guards with `typeof jsQR === 'function'`.
-- **Do NOT revert compressor to static settings** — the dynamic per-step switching is deliberate. Static aggressive settings cause audible ducking/pumping on sustained notes.
-- **Do NOT raise organ/synth filter cutoffs** — they were specifically lowered to reduce abrasiveness when multiple notes are layered. Brass and strings sound good at current settings.
-- **`taperGain` multiplier must match `masterGain` default** — currently both are 0.65. If you change one, change the other, plus the reset value in `stopAllAudioNow()`.
+- **`#instButtons` is now inside `#drumPanel`** (not `#rightCol`). It's in `.drumBox.soundsBox`. The `#instButtons.locked` CSS rules still work via ID selectors. `instButtonsEl` JS reference still valid.
+- **`#potRow` in `#rightCol`** — 3 `.potKnob` elements with `.potBody` + `.potIndicator` + `.potLabel`. Non-functional (no JS wired yet). Will control audio effects when connected.
+- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.

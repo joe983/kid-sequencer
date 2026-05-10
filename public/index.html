@@ -98,6 +98,8 @@
 <div id="sequencer"></div>
 </div>
 <div aria-label="Drum controls" id="drumPanel">
+<div class="drumBox rhythmBox">
+<div class="drumBoxLabel">Rhythms</div>
 <div id="drumControls">
 <button aria-pressed="false" class="drumMiniBtn muted" id="drumMuteBtn" title="Unmute drums">🔇</button>
 <div aria-label="Drum style" class="drumStyleGroup" role="group">
@@ -117,16 +119,20 @@
 <button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
 <button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
 <button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
-<button class="drumStyleBtn drumStylePlaceholder" disabled aria-hidden="true" title="Coming soon">?</button>
+</div>
+</div>
+</div>
+<div class="drumBox soundsBox">
+<div class="drumBoxLabel">Sounds</div>
+<div id="instButtons">
+<div class="instBtn" id="btnPiano" title="Piano / Organ">🎹</div>
+<div class="instBtn" id="btnTrumpet" title="Trumpet">🎺</div>
+<div class="instBtn" id="btnStrings" title="Space">🌌</div>
+<div class="instBtn" id="btnSynth" title="Synth"><svg aria-hidden="true" class="waveIcon" viewbox="0 0 120 70">
+<polyline fill="none" points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40" stroke="#1f6bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></polyline>
+</svg></div>
+<div class="instBtn soundPlaceholder" aria-hidden="true" title="Coming soon">?</div>
+<div class="instBtn soundPlaceholder" aria-hidden="true" title="Coming soon">?</div>
 </div>
 </div>
 </div>
@@ -137,14 +143,18 @@
 <div id="tempoBox">120</div>
 <button id="tempoDownBtn" onclick="tempoDown()">▼</button>
 </div>
-<div id="instButtons">
-<div class="instBtn" id="btnPiano" title="Piano / Organ">🎹</div>
-<div class="instBtn" id="btnTrumpet" title="Trumpet">🎺</div>
-<div class="instBtn" id="btnStrings" title="Space">🌌</div>
-<div class="instBtn" id="btnSynth" title="Synth">
-<svg aria-hidden="true" class="waveIcon" viewbox="0 0 120 70">
-<polyline fill="none" points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40" stroke="#1f6bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></polyline>
-</svg>
+<div id="potRow">
+<div class="potKnob">
+<div class="potBody"><div class="potIndicator"></div></div>
+<div class="potLabel">Echo</div>
+</div>
+<div class="potKnob">
+<div class="potBody"><div class="potIndicator"></div></div>
+<div class="potLabel">Filter</div>
+</div>
+<div class="potKnob">
+<div class="potBody"><div class="potIndicator"></div></div>
+<div class="potLabel">Speed</div>
 </div>
 </div>
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
