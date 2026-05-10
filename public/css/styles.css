@@ -714,8 +714,7 @@ body.loggedIn #robotLogo{
       border: 4px solid rgba(0,0,0,0.92);
       box-sizing:border-box;
       border-radius: 14px;
-      pointer-events:auto;
-      cursor:pointer;
+      pointer-events:none;
       box-shadow: 0 8px 0 rgba(0,0,0,0.08);
       transform-origin:center center;
       touch-action: manipulation;

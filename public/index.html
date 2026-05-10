@@ -1591,14 +1591,8 @@ function redrawRowNotes(r){
     block.style.width = `${width}px`;
     block.style.background = rowColors[r];
 
-    block.onmousedown = (e) => e.preventDefault();
-
-    block.onclick = (e) => {
-      e.stopPropagation();
-      pushUndo();
-      deleteNoteById(r, note.id);
-      redrawRowNotes(r);
-    };
+    // Note blocks are pointer-events:none — clicks pass through to the
+    // underlying .cell, where onCellClick handles deletion via occ[r][c].
 
     layer.appendChild(block);
   }
