@@ -8,26 +8,14 @@ A browser-based music sequencer for kids. Users place notes on a grid, pick an i
 
 ---
 
-## Active worktree — ALL work happens here
+## Worktree workflow
 
-**Path:** `C:\Users\Joe_C\Documents\kid-sequencer-repo\.claude\worktrees\quizzical-darwin`
-**Branch:** `claude/quizzical-darwin`
-
-> ⚠️ **CRITICAL — read before doing anything else.**
-> Every edit, every deploy, every test must happen inside this worktree.
-> Do **NOT** create a new worktree at the start of a session. Do **NOT** work from the repo root. Do **NOT** work from `main`.
-> A new worktree should only be created if a task is explicitly long-lived and isolated enough to warrant one — and even then, it must branch from `claude/quizzical-darwin`, not from `main`.
-> If Claude Code has auto-created a new worktree for the current session, **ignore it** and make all changes in `quizzical-darwin` instead.
-
-This is the most up-to-date working branch. It contains the camera modal overhaul, QR-to-sequence feature, and all audio engine fixes — none of which are in `main`. Always deploy and test from this directory.
+Each Claude Code session creates a fresh worktree on a `claude/<name>` branch from `main`. Work in whichever worktree is active for your session — check `git branch` and the path the system tells you. All features are in `main` now; there is no single long-lived feature branch.
 
 ```bash
-# Deploy from the worktree (not repo root)
-cd C:\Users\Joe_C\Documents\kid-sequencer-repo\.claude\worktrees\quizzical-darwin
+# Deploy from whatever worktree you're in
 firebase hosting:channel:deploy preview
 ```
-
-For new features, continue work directly in `quizzical-darwin`. Only create a new worktree if the user explicitly asks for one or the task is a large independent experiment.
 
 ---
 
@@ -109,7 +97,6 @@ Tier is stored in Firestore `users/{uid}.tier` and mirrored to `sessionStorage['
 
 ```bash
 # Preview channel (default — use this unless told otherwise)
-# Run from the active worktree directory (quizzical-darwin)
 firebase hosting:channel:deploy preview
 # → https://kid-sequencer--preview-h1j9zyru.web.app  (expires ~7 days, redeploy to refresh)
 
@@ -125,12 +112,8 @@ firebase deploy --only hosting
 ## Dev workflow
 
 ```bash
-# Local preview (run from quizzical-darwin)
+# Local preview
 node serve.js   # → http://localhost:3000
-
-# All new work: edit files directly in quizzical-darwin
-# Do NOT create a new worktree unless the user explicitly requests it
-# Main branch is always deployable but is significantly behind quizzical-darwin
 ```
 
 ---
@@ -140,28 +123,28 @@ node serve.js   # → http://localhost:3000
 - Remote: https://github.com/joe983/kid-sequencer
 - `gh` CLI is at: `C:\Program Files\GitHub CLI\gh.exe`
 - Default branch: `main`
-- Active feature branch: `claude/quizzical-darwin`
 - Single-person project — push directly to `main`, no PRs
-- Claude works on feature branches (`claude/…`) but merges directly (no PR review needed)
+- Claude works on feature branches (`claude/…`) and merges directly (no PR review needed)
 
 ---
 
-## What's been built (as of 2026-05-10)
+## What's been built (as of 2026-05-10, updated session 2026-05-10)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
 3. **Guest tier** — tempo, piano/trumpet, camera unlocked for guests; 6 scans/week cap with slide-in limit panel
 4. **Cloud save/load** — paid tier only; named save slots; slide-up load sheet with delete; Firestore storage
 5. **Scan limit panel** — fixed for Safari, Edge, iPhone (position:fixed, safe-area-inset)
-6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix (in `quizzical-darwin`, not yet in `main`)
-7. **QR-to-sequence** — live QR scan loop, greyed Use button until code detected, toast notification, pulse animation, `qrToSequence()` algorithm (C4–C5 scale, multiplicative hash + LCG, melodic contour bias) (in `quizzical-darwin`, not yet in `main`)
-8. **Audio engine timing fixes** — self-correcting sequencer timer + audio lookahead (in `quizzical-darwin`, not yet in `main`)
+6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix
+7. **QR-to-sequence** — live QR scan loop, greyed Use button until code detected, toast notification, pulse animation, `qrToSequence()` algorithm (C4–C5 scale, multiplicative hash + LCG, melodic contour bias)
+8. **Audio engine timing fixes** — self-correcting sequencer timer + audio lookahead
 9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
 10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar; `syncTopBarLayout()` aligns transport cluster to grid; `syncTopBarLoginPosition()` centres login equidistant between Print and Tempo-Up
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
-12. **16 rhythm buttons** — Techno + Drum 'n' Bass + 14 greyed-out "?" placeholders in a single row, evenly spaced (`space-evenly`), 44×44px each
+12. **Drum panel: two sub-boxes** — `#drumPanel` contains `.drumBox.rhythmBox` (Techno, DnB, 4 "?" placeholders) + `.drumBox.soundsBox` (`#instButtons`: Piano, Trumpet, Strings, Synth, 2 "?" placeholders). Buttons 56×56px. Each box has a `.drumBoxLabel` header.
 13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
 14. **Note click-to-delete fix** — note blocks are now `pointer-events:none`; all clicks pass through to cells where `onCellClick` handles both placement and deletion reliably
+15. **Potentiometer knobs** — 3 decorative knobs (Echo, Filter, Speed) in `#potRow` inside `#rightCol`, above the volume fader. Non-functional; to be wired to audio effects later.
 
 ---
 
@@ -277,6 +260,6 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Note blocks are `pointer-events: none`** — `.noteBlock` elements are purely visual. All click/tap interactions go through to `.cell` elements, where `onCellClick` handles both placement and deletion via `occ[r][c]`. Do not add click handlers to note blocks.
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
-- **Always deploy from the active worktree** (`quizzical-darwin`), not the repo root — the repo root (`main`) is missing the camera overhaul, QR feature, and audio engine fixes.
-- **Never start a new worktree by default** — work directly in `quizzical-darwin`. New worktrees cause edits to be made in the wrong place (based on stale `main`) and result in features being lost.
-- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`. The QR scan loop guards with `typeof jsQR === 'function'` is not needed in quizzical-darwin (it's always present) but keep it if moving code around.
+- **`#instButtons` is now inside `#drumPanel`** (not `#rightCol`). It's in `.drumBox.soundsBox`. The `#instButtons.locked` CSS rules still work via ID selectors. `instButtonsEl` JS reference still valid.
+- **`#potRow` in `#rightCol`** — 3 `.potKnob` elements with `.potBody` + `.potIndicator` + `.potLabel`. Non-functional (no JS wired yet). Will control audio effects when connected.
+- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
