@@ -161,7 +161,9 @@ node serve.js   # → http://localhost:3000
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
 12. **16 rhythm buttons** — Techno + Drum 'n' Bass + 14 greyed-out "?" placeholders in a single row, evenly spaced (`space-evenly`), 44×44px each
 13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
-14. **Note click-to-delete fix** — note blocks are now `pointer-events:none`; all clicks pass through to cells where `onCellClick` handles both placement and deletion reliably
+14. **Note click-to-delete fix** — note blocks are `pointer-events:none`; clicks pass through to cells
+15. **Audio ducking fix & volume normalization** — master compressor retuned from brick-wall (-20dB/20:1) to gentle safety limiter; LEVEL constants rebalanced so all instruments hit equal effective dry peak; organ/synth filters softened to reduce abrasiveness when layered
+16. **Dynamic compressor** — compressor settings switch per step based on note count: ≤3 notes get gentle compression (threshold -4dB, ratio 3:1), 4+ notes get firm limiting (threshold -10dB, ratio 8:1, knee 8dB); transitions via `setTargetAtTime` with 15ms time constant
 
 ---
 
@@ -308,6 +310,38 @@ The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that change
 
 ---
 
+## Audio engine — architecture
+
+### Signal chain
+```
+Instruments → per-instrument reverb bus (dry/wet split) → masterGain (0.65) → masterComp → audioCtx.destination
+Drums → drumBus (0.70) → masterGain → masterComp → audioCtx.destination
+```
+
+### Dynamic compressor (`_compDense` flag)
+The master compressor switches settings per sequencer step based on note count:
+- **≤3 notes (gentle):** threshold -4 dB, ratio 3:1, knee 14 dB — nearly transparent
+- **4+ notes (dense):** threshold -10 dB, ratio 8:1, knee 8 dB — firm limiting
+- Transitions use `setTargetAtTime(value, now, 0.015)` for smooth 15ms ramps
+- `_compDense` tracks current state to avoid redundant updates
+- State persists across stop/start — only changes when a step with different density plays
+
+### Instrument LEVEL constants
+```js
+const LEVEL = { piano: 0.40, trumpet: 0.77, strings: 0.86, synth: 0.34 };
+```
+Calibrated so all instruments hit ~0.25 effective dry peak per note (accounting for envelope peaks and bus dry gains). Organ (piano) and synth are lower because they have denser harmonic content that stacks aggressively.
+
+### Key audio parameters
+- `AUDIO_AHEAD_S = 0.010` — 10ms lookahead for all scheduled audio
+- `masterGain = 0.65` — provides headroom for stacking
+- `drumBus = 0.70` — drums slightly below melodic instruments
+- Kick peak: `0.80 * vel` — reduced from 1.10 to prevent compressor hammering
+- Organ LP: 3200 Hz (Q 0.5) — lowered from 4200 to reduce abrasiveness when layered
+- Synth LP: 2200→1500 Hz (Q 0.5) — lowered from 2600→1800, Q from 0.9 to reduce harshness
+
+---
+
 ## Things to watch out for
 
 - `isLoggedIn` is an **implicit global** (assigned without `let/var/const` in non-strict IIFE — lands on `window`)
@@ -319,4 +353,7 @@ The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that change
 - **Note blocks are `pointer-events: none`** — `.noteBlock` elements are purely visual. All click/tap interactions go through to `.cell` elements, where `onCellClick` handles both placement and deletion via `occ[r][c]`. Do not add click handlers to note blocks.
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
-- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`. The QR scan loop guards with `typeof jsQR === 'function'` is not needed in quizzical-darwin (it's always present) but keep it if moving code around.
+- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`. The QR scan loop guards with `typeof jsQR === 'function'`.
+- **Do NOT revert compressor to static settings** — the dynamic per-step switching is deliberate. Static aggressive settings cause audible ducking/pumping on sustained notes.
+- **Do NOT raise organ/synth filter cutoffs** — they were specifically lowered to reduce abrasiveness when multiple notes are layered. Brass and strings sound good at current settings.
+- **`taperGain` multiplier must match `masterGain` default** — currently both are 0.65. If you change one, change the other, plus the reset value in `stopAllAudioNow()`.
