@@ -146,7 +146,7 @@
 <div class="potBody"><div class="potIndicator"></div></div>
 <div class="potLabel">Echo</div>
 </div>
-<div class="potKnob">
+<div class="potKnob" id="filterPot">
 <div class="potBody"><div class="potIndicator"></div></div>
 <div class="potLabel">Filter</div>
 </div>
@@ -352,6 +352,12 @@ let delaySend = null;
 let delayNode = null;
 let delayFeedback = null;
 let echoAmount = 0;
+
+let melodicMaster = null;
+let moogFilter1 = null;
+let moogFilter2 = null;
+let moogSaturator = null;
+let filterAmount = 1;
 
 let startTimeout = null;
 let audioPrimed = false;
@@ -1303,7 +1309,34 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     masterGain.connect(masterComp);
     masterComp.connect(audioCtx.destination);
 
-    bus = makeInstrumentBuses(audioCtx, masterGain);
+    // Melodic master → Moog filter chain → masterGain
+    melodicMaster = audioCtx.createGain();
+
+    moogFilter1 = audioCtx.createBiquadFilter();
+    moogFilter1.type = "lowpass";
+    moogFilter1.frequency.setValueAtTime(20000, audioCtx.currentTime);
+    moogFilter1.Q.setValueAtTime(2.5, audioCtx.currentTime);
+
+    moogFilter2 = audioCtx.createBiquadFilter();
+    moogFilter2.type = "lowpass";
+    moogFilter2.frequency.setValueAtTime(20000, audioCtx.currentTime);
+    moogFilter2.Q.setValueAtTime(2.5, audioCtx.currentTime);
+
+    const satCurve = new Float32Array(256);
+    for(let i = 0; i < 256; i++){
+      const x = (i / 128) - 1;
+      satCurve[i] = Math.tanh(x * 1.5);
+    }
+    moogSaturator = audioCtx.createWaveShaper();
+    moogSaturator.curve = satCurve;
+    moogSaturator.oversample = "2x";
+
+    melodicMaster.connect(moogFilter1);
+    moogFilter1.connect(moogFilter2);
+    moogFilter2.connect(moogSaturator);
+    moogSaturator.connect(masterGain);
+
+    bus = makeInstrumentBuses(audioCtx, melodicMaster);
 
     // Delay effect (Echo pot) — melodic instruments only
     delaySend = audioCtx.createGain();
@@ -1318,14 +1351,14 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     delaySend.connect(delayNode);
     delayNode.connect(delayFeedback);
     delayFeedback.connect(delayNode);
-    delayNode.connect(masterGain);
+    delayNode.connect(melodicMaster);
 
     bus.piano.input.connect(delaySend);
     bus.trumpet.input.connect(delaySend);
     bus.strings.input.connect(delaySend);
     bus.synth.input.connect(delaySend);
 
-    // Drums: dedicated bus (starts muted)
+    // Drums: dedicated bus (bypasses filter, straight to masterGain)
     drumBus = audioCtx.createGain();
     drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.70, audioCtx.currentTime);
     drumBus.connect(masterGain);
@@ -1447,6 +1480,14 @@ function dottedEighthSec(){
 function syncDelayTime(){
   if(!delayNode) return;
   delayNode.delayTime.setTargetAtTime(dottedEighthSec(), audioCtx.currentTime, 0.02);
+}
+
+function syncFilterCutoff(){
+  if(!moogFilter1) return;
+  const cutoff = 80 * Math.pow(250, filterAmount);
+  const t = audioCtx.currentTime;
+  moogFilter1.frequency.setTargetAtTime(cutoff, t, 0.015);
+  moogFilter2.frequency.setTargetAtTime(cutoff, t, 0.015);
 }
 
 /* -------------------- INSTRUMENT UI -------------------- */
@@ -2824,6 +2865,42 @@ root.classList.add('stageScaled');
   body.addEventListener("pointercancel", function(){ dragging = false; });
 
   setRotation(MIN_DEG);
+})();
+
+(function setupFilterPot(){
+  const pot = document.getElementById("filterPot");
+  if(!pot) return;
+  const body = pot.querySelector(".potBody");
+  const MIN_DEG = -135, MAX_DEG = 135;
+  let currentDeg = MAX_DEG;
+  let dragging = false;
+  let startY = 0, startDeg = 0;
+
+  function setRotation(deg){
+    currentDeg = Math.max(MIN_DEG, Math.min(MAX_DEG, deg));
+    body.style.transform = "rotate(" + currentDeg + "deg)";
+    filterAmount = (currentDeg - MIN_DEG) / (MAX_DEG - MIN_DEG);
+    syncFilterCutoff();
+  }
+
+  body.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    dragging = true;
+    startY = e.clientY;
+    startDeg = currentDeg;
+    body.setPointerCapture(e.pointerId);
+  });
+
+  body.addEventListener("pointermove", function(e){
+    if(!dragging) return;
+    const dy = startY - e.clientY;
+    setRotation(startDeg + dy * 1.5);
+  });
+
+  body.addEventListener("pointerup", function(){ dragging = false; });
+  body.addEventListener("pointercancel", function(){ dragging = false; });
+
+  setRotation(MAX_DEG);
 })();
 
 function init(){
