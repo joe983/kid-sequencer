@@ -554,13 +554,37 @@ body.loggedIn #robotLogo{
       border-radius: 16px;
       background:#ffffff;
       box-shadow: 0 8px 0 rgba(0,0,0,0.06);
-      padding: 8px 10px;
+      padding: 10px;
       box-sizing:border-box;
       display:flex;
-      align-items:center;
+      align-items:stretch;
       justify-content: flex-start;
       gap: 10px;
       user-select:none;
+      min-height: 104px;
+    }
+
+    .drumBox{
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 3px solid rgba(29,29,29,0.10);
+      border-radius: 12px;
+      padding: 8px 10px 10px;
+      background: rgba(0,0,0,0.02);
+      min-width: 0;
+    }
+
+    .drumBoxLabel{
+      font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: #1f2a44;
+      opacity: 0.45;
+      line-height: 1;
     }
 
     #drumLeft{
@@ -593,7 +617,6 @@ body.loggedIn #robotLogo{
       align-items:center;
       justify-content: flex-start;
       gap: 10px;
-      flex-wrap: wrap;
     }
 
     .drumMiniBtn{
@@ -634,8 +657,8 @@ body.loggedIn #robotLogo{
     .drumStyleGroup{ display:flex; flex-wrap: nowrap; justify-content:space-evenly; width:100%; }
 
     .drumStyleBtn{
-      width: 44px;
-      height: 44px;
+      width: 56px;
+      height: 56px;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -871,9 +894,12 @@ body.loggedIn #robotLogo{
 
     #instButtons{
       display:flex;
-      flex-direction:column;
-      gap: 10px;
-      width: 58px;
+      flex-direction:row;
+      gap: 6px;
+      width: 100%;
+      justify-content: space-evenly;
+      flex-wrap: wrap;
+      align-items: center;
     }
 
     #masterVolUI{
@@ -881,8 +907,8 @@ body.loggedIn #robotLogo{
     }
 
     .instBtn{
-      width: 58px;
-      height: 58px;
+      width: 56px;
+      height: 56px;
       border-radius: 16px;
       border: 4px solid #1d1d1d;
       background:#ffffff;
@@ -903,7 +929,73 @@ body.loggedIn #robotLogo{
 
     .waveIcon{ width: 46px; height: 28px; display:block; }
 
+    /* Placeholder sound buttons in sounds box */
+    .soundPlaceholder{
+      opacity: 0.28;
+      cursor: not-allowed;
+      font-family: "Fredoka", "Comic Sans MS", sans-serif;
+      font-weight: 700;
+      font-size: 18px;
+      color: #999;
+      background: #f0f0f0 !important;
+      pointer-events: none;
+    }
+    .soundPlaceholder:hover{ transform: none !important; }
 
+    /* -------------------- POTENTIOMETERS -------------------- */
+    #potRow{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .potKnob{
+      width: 58px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .potBody{
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: 4px solid #1d1d1d;
+      background: radial-gradient(circle at 38% 32%, #ffffff 0%, #d8d8d8 100%);
+      box-shadow: 0 6px 0 rgba(0,0,0,0.08), inset 0 2px 4px rgba(255,255,255,0.75), inset 0 -2px 3px rgba(0,0,0,0.12);
+      position: relative;
+      cursor: pointer;
+      transition: transform 80ms ease;
+      box-sizing: border-box;
+    }
+    .potBody:hover{ transform: scale(1.06); }
+    .potBody:active{ transform: scale(0.97); }
+
+    .potIndicator{
+      position: absolute;
+      width: 4px;
+      height: 14px;
+      background: #1d1d1d;
+      border-radius: 2px;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .potLabel{
+      font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
+      font-weight: 700;
+      font-size: 10px;
+      color: #1f2a44;
+      opacity: 0.5;
+      text-align: center;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+    }
 
     /* Save / Load icon colours */
     .bigBtn .saveIcon{ color: #111111; }
