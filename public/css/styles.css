@@ -631,11 +631,11 @@ body.loggedIn #robotLogo{
       flex: 0 0 0;
     }
 
-    .drumStyleGroup{ display:flex; gap: 8px; flex-wrap: wrap; justify-content:flex-start; }
+    .drumStyleGroup{ display:flex; flex-wrap: nowrap; justify-content:space-evenly; width:100%; }
 
     .drumStyleBtn{
-      width: 56px;
-      height: 56px;
+      width: 44px;
+      height: 44px;
       display:flex;
       align-items:center;
       justify-content:center;
@@ -658,7 +658,7 @@ body.loggedIn #robotLogo{
       cursor: not-allowed;
       font-family: "Fredoka", "Comic Sans MS", sans-serif;
       font-weight: 700;
-      font-size: 22px;
+      font-size: 18px;
       color: #999;
       background: #f0f0f0;
     }
