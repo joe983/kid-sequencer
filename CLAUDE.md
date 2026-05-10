@@ -23,7 +23,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3000 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=7)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=8)
   js/firebase-init.js ← Firebase config + exports (auth, db)
 firebase.json         ← hosting config
 firestore.rules       ← Firestore security rules
@@ -263,3 +263,5 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **`#instButtons` is now inside `#drumPanel`** (not `#rightCol`). It's in `.drumBox.soundsBox`. The `#instButtons.locked` CSS rules still work via ID selectors. `instButtonsEl` JS reference still valid.
 - **`#potRow` in `#rightCol`** — 3 `.potKnob` elements with `.potBody` + `.potIndicator` + `.potLabel`. Non-functional (no JS wired yet). Will control audio effects when connected.
 - **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
+- **CDN caching on `kid-sequencer.com`** — the custom domain has aggressive caching. Always bump `?v=N` in the CSS `<link>` when changing styles.css. HTML can also cache — verify on `kid-sequencer.web.app` or incognito after deploy.
+- **Always verify before deploying to production** — fetch origin, check for divergence, deploy to preview channel first, visually confirm, THEN deploy prod.
