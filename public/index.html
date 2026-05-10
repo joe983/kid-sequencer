@@ -142,7 +142,7 @@
 <button id="tempoDownBtn" onclick="tempoDown()">▼</button>
 </div>
 <div id="potRow">
-<div class="potKnob">
+<div class="potKnob" id="echoPot">
 <div class="potBody"><div class="potIndicator"></div></div>
 <div class="potLabel">Echo</div>
 </div>
@@ -347,6 +347,11 @@ let timer = null;
 let masterGain = null;
 let masterComp = null;
 let _compDense = false;
+
+let delaySend = null;
+let delayNode = null;
+let delayFeedback = null;
+let echoAmount = 0;
 
 let startTimeout = null;
 let audioPrimed = false;
@@ -1300,6 +1305,26 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
 
     bus = makeInstrumentBuses(audioCtx, masterGain);
 
+    // Delay effect (Echo pot) — melodic instruments only
+    delaySend = audioCtx.createGain();
+    delaySend.gain.setValueAtTime(0, audioCtx.currentTime);
+
+    delayNode = audioCtx.createDelay(2.0);
+    delayNode.delayTime.setValueAtTime(dottedEighthSec(), audioCtx.currentTime);
+
+    delayFeedback = audioCtx.createGain();
+    delayFeedback.gain.setValueAtTime(0.35, audioCtx.currentTime);
+
+    delaySend.connect(delayNode);
+    delayNode.connect(delayFeedback);
+    delayFeedback.connect(delayNode);
+    delayNode.connect(masterGain);
+
+    bus.piano.input.connect(delaySend);
+    bus.trumpet.input.connect(delaySend);
+    bus.strings.input.connect(delaySend);
+    bus.synth.input.connect(delaySend);
+
     // Drums: dedicated bus (starts muted)
     drumBus = audioCtx.createGain();
     drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.70, audioCtx.currentTime);
@@ -1413,6 +1438,15 @@ function stopAllAudioNow(){
 
 function stepDurationSec(){
   return (60 / tempo) / 4;
+}
+
+function dottedEighthSec(){
+  return stepDurationSec() * 3;
+}
+
+function syncDelayTime(){
+  if(!delayNode) return;
+  delayNode.delayTime.setTargetAtTime(dottedEighthSec(), audioCtx.currentTime, 0.02);
 }
 
 /* -------------------- INSTRUMENT UI -------------------- */
@@ -2003,6 +2037,7 @@ function startSequencer(){
       pendingTempo = null;
       updateTempoBox();
       setPlayheadWobbleFromTempo(tempo);
+      syncDelayTime();
       restartInterval(stepDurationSec() * 1000);
     }
   }
@@ -2050,6 +2085,7 @@ function requestTempo(newTempo){
   pendingTempo = null;
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
+  syncDelayTime();
 }
 function tempoUp(){
   const base = (pendingTempo !== null) ? pendingTempo : tempo;
@@ -2748,6 +2784,47 @@ root.classList.add('stageScaled');
   }, { passive: false });
 })();
 
+
+/* -------------------- POT KNOB INTERACTION -------------------- */
+(function setupEchoPot(){
+  const pot = document.getElementById("echoPot");
+  if(!pot) return;
+  const body = pot.querySelector(".potBody");
+  const indicator = pot.querySelector(".potIndicator");
+  const MIN_DEG = -135, MAX_DEG = 135;
+  let currentDeg = MIN_DEG;
+  let dragging = false;
+  let startY = 0, startDeg = 0;
+
+  function setRotation(deg){
+    currentDeg = Math.max(MIN_DEG, Math.min(MAX_DEG, deg));
+    body.style.transform = "rotate(" + currentDeg + "deg)";
+    const t = (currentDeg - MIN_DEG) / (MAX_DEG - MIN_DEG);
+    echoAmount = t;
+    if(delaySend){
+      delaySend.gain.setTargetAtTime(t * 0.5, audioCtx.currentTime, 0.015);
+    }
+  }
+
+  body.addEventListener("pointerdown", function(e){
+    e.preventDefault();
+    dragging = true;
+    startY = e.clientY;
+    startDeg = currentDeg;
+    body.setPointerCapture(e.pointerId);
+  });
+
+  body.addEventListener("pointermove", function(e){
+    if(!dragging) return;
+    const dy = startY - e.clientY;
+    setRotation(startDeg + dy * 1.5);
+  });
+
+  body.addEventListener("pointerup", function(){ dragging = false; });
+  body.addEventListener("pointercancel", function(){ dragging = false; });
+
+  setRotation(MIN_DEG);
+})();
 
 function init(){
   setInstrument("piano");
