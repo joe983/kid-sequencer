@@ -153,9 +153,9 @@ node serve.js   # → http://localhost:3000
 3. **Guest tier** — tempo, piano/trumpet, camera unlocked for guests; 6 scans/week cap with slide-in limit panel
 4. **Cloud save/load** — paid tier only; named save slots; slide-up load sheet with delete; Firestore storage
 5. **Scan limit panel** — fixed for Safari, Edge, iPhone (position:fixed, safe-area-inset)
-6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix (in `quizzical-darwin`, not yet in `main`)
-7. **QR-to-sequence** — live QR scan loop, greyed Use button until code detected, toast notification, pulse animation, `qrToSequence()` algorithm (C4–C5 scale, multiplicative hash + LCG, melodic contour bias) (in `quizzical-darwin`, not yet in `main`)
-8. **Audio engine timing fixes** — self-correcting sequencer timer + audio lookahead (in `quizzical-darwin`, not yet in `main`)
+6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix
+7. **QR-to-sequence** — live QR scan loop, greyed Use button until code detected, toast notification, pulse animation, `qrToSequence()` algorithm (C4–C5 scale, multiplicative hash + LCG, melodic contour bias)
+8. **Audio engine timing fixes** — self-correcting sequencer timer + audio lookahead
 9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
 10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar; `syncTopBarLayout()` aligns transport cluster to grid; `syncTopBarLoginPosition()` centres login equidistant between Print and Tempo-Up
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
@@ -266,6 +266,48 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 
 ---
 
+## Camera modal — architecture (as of 2026-03-15)
+
+### HTML structure
+```
+#camModal  (overlay, position:fixed inset:0)
+  .modalCard.camModalCard
+    .camModeBar          ← Camera / QR / Sheet buttons + label + × close
+    .camBody             ← flex row in landscape, flex col on desktop
+      .camStage          ← video + preview img + .camOverlay
+      .camActions        ← Capture / Use buttons
+    .modalHint           ← "Tip:" text, only visible in sheet mode
+```
+
+### Mode switching
+`setCamMode(mode)` — exported to `window.setCamMode`. Toggles `.active` on mode buttons, updates label text, sets `camOverlay.className` to `'camOverlay'` + optionally `' mode-sheet'` or `' mode-qr'`. Uses plain class toggling (NOT data-attribute selectors — unreliable cross-browser). `camHint` shown only in sheet mode.
+
+### Overlays (CSS class-based)
+- `.camOverlay` — hidden by default (camera mode = plain viewfinder)
+- `.camOverlay.mode-sheet` — dashed border + grid lines (16×8 repeating-linear-gradient)
+- `.camOverlay.mode-qr` — centred crosshair + corner brackets via `::before`/`::after`
+
+### Landscape iPhone fix — CRITICAL
+**Problem:** `100vh` in Safari iOS = layout viewport height (bars collapsed), but `window.innerHeight` = visual viewport (below browser chrome). Using `100vh` for sizing makes the stage enormous; centering the card with `align-items:center` pushes the mode bar behind the browser chrome.
+
+**Solution (in `_sizeCamStageForLandscape()`):**
+1. Detect landscape phone: `innerWidth > innerHeight && innerHeight <= 500`
+2. Set `card.style.height = (window.innerHeight - 16) + 'px'` — uses visual viewport
+3. `stageH = cardH − modeBar.offsetHeight − 12` (body padding 6px×2)
+4. `stageW = stageH × 1.618` — golden ratio, capped by `card.clientWidth − 92` to avoid overflow
+5. Set stage `height` + `width` inline
+
+**CSS overlay in landscape:** `#camModal` uses `align-items: flex-start` (not center!) so the card anchors to the **top** of the visible viewport. `100svh` (Safari 15.4+) / `100vh` fallback gives initial card height until JS corrects it in the first double-rAF.
+
+**Wiring:**
+- `openCameraModal()` → `requestAnimationFrame(() => requestAnimationFrame(() => _sizeCamStageForLandscape()))` + `window.addEventListener('resize', _sizeCamStageForLandscape)`
+- `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
+
+### CSS cache busting
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=6`).
+
+---
+
 ## Things to watch out for
 
 - `isLoggedIn` is an **implicit global** (assigned without `let/var/const` in non-strict IIFE — lands on `window`)
@@ -277,6 +319,4 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Note blocks are `pointer-events: none`** — `.noteBlock` elements are purely visual. All click/tap interactions go through to `.cell` elements, where `onCellClick` handles both placement and deletion via `occ[r][c]`. Do not add click handlers to note blocks.
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
-- **Always deploy from the active worktree** (`quizzical-darwin`), not the repo root — the repo root (`main`) is missing the camera overhaul, QR feature, and audio engine fixes.
-- **Never start a new worktree by default** — work directly in `quizzical-darwin`. New worktrees cause edits to be made in the wrong place (based on stale `main`) and result in features being lost.
 - **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`. The QR scan loop guards with `typeof jsQR === 'function'` is not needed in quizzical-darwin (it's always present) but keep it if moving code around.

@@ -379,10 +379,10 @@ const DRUM_PATTERNS = {
 };
 
 const LEVEL = {
-  piano:   0.60,
-  trumpet: 1.18,
-  strings: 1.30,
-  synth:   0.55
+  piano:   0.50,
+  trumpet: 0.77,
+  strings: 0.86,
+  synth:   0.44
 };
 
 /* Undo history (max 10 user actions) */
@@ -467,7 +467,7 @@ function setDrumsMuted(m){
   // If audio is running, fade the drum bus smoothly
   if(audioCtx && drumBus){
     const now = audioCtx.currentTime;
-    const target = drumsMuted ? 0.0001 : 0.92;
+    const target = drumsMuted ? 0.0001 : 0.70;
     try{
       drumBus.gain.cancelScheduledValues(now);
       drumBus.gain.setValueAtTime(drumBus.gain.value, now);
@@ -926,7 +926,7 @@ function playKick(at, vel=1){
   osc.frequency.exponentialRampToValueAtTime(48, at + 0.135);
 
   // Envelope
-  const peak = 1.10 * vel;
+  const peak = 0.80 * vel;
   g.gain.setValueAtTime(0.0001, at);
   g.gain.exponentialRampToValueAtTime(peak, at + 0.003);
   g.gain.exponentialRampToValueAtTime(0.0001, at + 0.17);
@@ -1229,7 +1229,7 @@ function makeInstrumentBuses(ctx, masterOut){
   }
 
   return {
-    piano:   buildBus(pianoIR,   0.72, 0.46),
+    piano:   buildBus(pianoIR,   0.72, 0.28),
     trumpet: buildBus(trumpetIR, 0.90, 0.12),
     strings: buildBus(stringsIR, 0.76, 0.32),
     synth:   buildBus(synthIR,   0.92, 0.12)
@@ -1277,14 +1277,14 @@ function getAudio(){
 masterGain = audioCtx.createGain();
 
     window.masterGain = masterGain;
-masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
+masterGain.gain.setValueAtTime(0.7, audioCtx.currentTime);
 
     masterComp = audioCtx.createDynamicsCompressor();
-    masterComp.threshold.setValueAtTime(-18, audioCtx.currentTime);
-    masterComp.knee.setValueAtTime(18, audioCtx.currentTime);
-    masterComp.ratio.setValueAtTime(3.4, audioCtx.currentTime);
-    masterComp.attack.setValueAtTime(0.004, audioCtx.currentTime);
-    masterComp.release.setValueAtTime(0.12, audioCtx.currentTime);
+    masterComp.threshold.setValueAtTime(-6, audioCtx.currentTime);
+    masterComp.knee.setValueAtTime(12, audioCtx.currentTime);
+    masterComp.ratio.setValueAtTime(4, audioCtx.currentTime);
+    masterComp.attack.setValueAtTime(0.003, audioCtx.currentTime);
+    masterComp.release.setValueAtTime(0.25, audioCtx.currentTime);
 
     masterGain.connect(masterComp);
     masterComp.connect(audioCtx.destination);
@@ -1293,7 +1293,7 @@ masterGain.gain.setValueAtTime(1, audioCtx.currentTime);
 
     // Drums: dedicated bus (starts muted)
     drumBus = audioCtx.createGain();
-    drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.92, audioCtx.currentTime);
+    drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.70, audioCtx.currentTime);
     drumBus.connect(masterGain);
 
     // Shared noise buffer for hats/snare/claps
@@ -1399,7 +1399,7 @@ function stopAllAudioNow(){
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(masterGain.gain.value, now);
   masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
-  masterGain.gain.setValueAtTime(1, now + 0.03);
+  masterGain.gain.setValueAtTime(0.7, now + 0.03);
 }
 
 function stepDurationSec(){
@@ -3197,7 +3197,7 @@ window.KidSequencer = {
         }catch(_){}
       }
       // DJ equal-power taper: midpoint = 50% loudness, not 25%
-      function taperGain(t){ return t <= 0 ? 0 : t * t; }
+      function taperGain(t){ return t <= 0 ? 0 : t * t * 0.7; }
       // 8ms ramp eliminates crackle on fast fader moves
       const _RAMP = 0.008;
       function setMasterGain(t){
