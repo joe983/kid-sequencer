@@ -379,10 +379,10 @@ const DRUM_PATTERNS = {
 };
 
 const LEVEL = {
-  piano:   0.50,
+  piano:   0.40,
   trumpet: 0.77,
   strings: 0.86,
-  synth:   0.44
+  synth:   0.34
 };
 
 /* Undo history (max 10 user actions) */
@@ -1695,8 +1695,8 @@ function playPiano(freq, steps){
 
   const lp = audioCtx.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.setValueAtTime(4200, now);
-  lp.Q.setValueAtTime(0.6, now);
+  lp.frequency.setValueAtTime(3200, now);
+  lp.Q.setValueAtTime(0.5, now);
 
   mix.connect(hp);
   hp.connect(lp);
@@ -1864,9 +1864,9 @@ function playSynth(freq, steps){
 
   const lp = audioCtx.createBiquadFilter();
   lp.type = "lowpass";
-  lp.frequency.setValueAtTime(2600, now);
-  lp.frequency.exponentialRampToValueAtTime(1800, now + 0.10);
-  lp.Q.setValueAtTime(0.9, now);
+  lp.frequency.setValueAtTime(2200, now);
+  lp.frequency.exponentialRampToValueAtTime(1500, now + 0.10);
+  lp.Q.setValueAtTime(0.5, now);
 
   osc.connect(lp);
   lp.connect(env);
