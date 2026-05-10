@@ -1277,12 +1277,12 @@ function getAudio(){
 masterGain = audioCtx.createGain();
 
     window.masterGain = masterGain;
-masterGain.gain.setValueAtTime(0.7, audioCtx.currentTime);
+masterGain.gain.setValueAtTime(0.55, audioCtx.currentTime);
 
     masterComp = audioCtx.createDynamicsCompressor();
-    masterComp.threshold.setValueAtTime(-6, audioCtx.currentTime);
-    masterComp.knee.setValueAtTime(12, audioCtx.currentTime);
-    masterComp.ratio.setValueAtTime(4, audioCtx.currentTime);
+    masterComp.threshold.setValueAtTime(-8, audioCtx.currentTime);
+    masterComp.knee.setValueAtTime(10, audioCtx.currentTime);
+    masterComp.ratio.setValueAtTime(6, audioCtx.currentTime);
     masterComp.attack.setValueAtTime(0.003, audioCtx.currentTime);
     masterComp.release.setValueAtTime(0.25, audioCtx.currentTime);
 
@@ -1399,7 +1399,7 @@ function stopAllAudioNow(){
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(masterGain.gain.value, now);
   masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
-  masterGain.gain.setValueAtTime(0.7, now + 0.03);
+  masterGain.gain.setValueAtTime(0.55, now + 0.03);
 }
 
 function stepDurationSec(){
@@ -3197,7 +3197,7 @@ window.KidSequencer = {
         }catch(_){}
       }
       // DJ equal-power taper: midpoint = 50% loudness, not 25%
-      function taperGain(t){ return t <= 0 ? 0 : t * t * 0.7; }
+      function taperGain(t){ return t <= 0 ? 0 : t * t * 0.55; }
       // 8ms ramp eliminates crackle on fast fader moves
       const _RAMP = 0.008;
       function setMasterGain(t){
