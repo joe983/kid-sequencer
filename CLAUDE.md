@@ -119,14 +119,24 @@ node serve.js   # → http://localhost:3000
 
 ---
 
-## What's been built (as of 2026-03-15, after PR #1 merged + camera modal overhaul)
+## What's been built (as of 2026-05-10)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
 3. **Guest tier** — tempo, piano/trumpet, camera unlocked for guests; 6 scans/week cap with slide-in limit panel
 4. **Cloud save/load** — paid tier only; named save slots; slide-up load sheet with delete; Firestore storage
 5. **Scan limit panel** — fixed for Safari, Edge, iPhone (position:fixed, safe-area-inset)
-6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix (see section below)
+6. **Camera modal overhaul** — mode bar (Camera / QR / Sheet Scan), landscape iPhone fix
+7. **QR-to-sequence** — live QR scan loop, greyed Use button until code detected, toast notification, pulse animation, `qrToSequence()` algorithm (C4–C5 scale, multiplicative hash + LCG, melodic contour bias)
+8. **Audio engine timing fixes** — self-correcting sequencer timer + audio lookahead
+9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
+10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar
+11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
+12. **16 rhythm buttons** — Techno + Drum 'n' Bass + 14 greyed-out "?" placeholders in a single row
+13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
+14. **Note click-to-delete fix** — note blocks are `pointer-events:none`; clicks pass through to cells
+15. **Audio ducking fix & volume normalization** — master compressor retuned from brick-wall (-20dB/20:1) to gentle safety limiter; LEVEL constants rebalanced so all instruments hit equal effective dry peak; organ/synth filters softened to reduce abrasiveness when layered
+16. **Dynamic compressor** — compressor settings switch per step based on note count: ≤3 notes get gentle compression (threshold -4dB, ratio 3:1), 4+ notes get firm limiting (threshold -10dB, ratio 8:1, knee 8dB); transitions via `setTargetAtTime` with 15ms time constant
 
 ---
 
@@ -182,6 +192,38 @@ The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that change
 
 ---
 
+## Audio engine — architecture
+
+### Signal chain
+```
+Instruments → per-instrument reverb bus (dry/wet split) → masterGain (0.65) → masterComp → audioCtx.destination
+Drums → drumBus (0.70) → masterGain → masterComp → audioCtx.destination
+```
+
+### Dynamic compressor (`_compDense` flag)
+The master compressor switches settings per sequencer step based on note count:
+- **≤3 notes (gentle):** threshold -4 dB, ratio 3:1, knee 14 dB — nearly transparent
+- **4+ notes (dense):** threshold -10 dB, ratio 8:1, knee 8 dB — firm limiting
+- Transitions use `setTargetAtTime(value, now, 0.015)` for smooth 15ms ramps
+- `_compDense` tracks current state to avoid redundant updates
+- State persists across stop/start — only changes when a step with different density plays
+
+### Instrument LEVEL constants
+```js
+const LEVEL = { piano: 0.40, trumpet: 0.77, strings: 0.86, synth: 0.34 };
+```
+Calibrated so all instruments hit ~0.25 effective dry peak per note (accounting for envelope peaks and bus dry gains). Organ (piano) and synth are lower because they have denser harmonic content that stacks aggressively.
+
+### Key audio parameters
+- `AUDIO_AHEAD_S = 0.010` — 10ms lookahead for all scheduled audio
+- `masterGain = 0.65` — provides headroom for stacking
+- `drumBus = 0.70` — drums slightly below melodic instruments
+- Kick peak: `0.80 * vel` — reduced from 1.10 to prevent compressor hammering
+- Organ LP: 3200 Hz (Q 0.5) — lowered from 4200 to reduce abrasiveness when layered
+- Synth LP: 2200→1500 Hz (Q 0.5) — lowered from 2600→1800, Q from 0.9 to reduce harshness
+
+---
+
 ## Things to watch out for
 
 - `isLoggedIn` is an **implicit global** (assigned without `let/var/const` in non-strict IIFE — lands on `window`)
@@ -190,4 +232,8 @@ The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that change
 - Firestore rejects nested arrays — flatten before writing, reconstruct after reading
 - The load sheet list max-height is `330px` ≈ 5 rows × 66px; adjust if row height changes
 - **iOS Safari viewport units:** `100vh` ≠ `window.innerHeight` when browser bars are visible. Use `window.innerHeight` in JS for anything that needs to fit in the visible area. Use `100svh` in CSS as a better estimate (Safari 15.4+).
-- **Camera modal deploy:** always deploy from the **worktree** directory, not the repo root. The worktree path is printed when the worktree is created.
+- **Note blocks are `pointer-events: none`** — `.noteBlock` elements are purely visual. All click/tap interactions go through to `.cell` elements, where `onCellClick` handles both placement and deletion via `occ[r][c]`.
+- **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll.
+- **Do NOT revert compressor to static settings** — the dynamic per-step switching is deliberate. Static aggressive settings cause audible ducking/pumping on sustained notes.
+- **Do NOT raise organ/synth filter cutoffs** — they were specifically lowered to reduce abrasiveness when multiple notes are layered. Brass and strings sound good at current settings.
+- **`taperGain` multiplier must match `masterGain` default** — currently both are 0.65. If you change one, change the other, plus the reset value in `stopAllAudioNow()`.
