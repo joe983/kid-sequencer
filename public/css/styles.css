@@ -1325,9 +1325,7 @@ LAYOUT DEBUG MODE -------------------- */
   height: var(--wholeSvgSize);
 }
 
-/* drag-to-pan cursors */
-body.can-pan{ cursor: grab; }
-  body.dragging-pan{ cursor: grabbing; }
+/* drag-to-pan removed */
 
 /* --- Rules migrated from inline HTML <style> ---
    (sizing handled by the #robotLogo block above; keeping display:block as a safety net) */
