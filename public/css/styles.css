@@ -550,18 +550,16 @@ body.loggedIn #robotLogo{
     #drumPanel{
       margin-top: 10px;
       width: calc(var(--cell) * 16 + var(--gap) * 15);
-      border: 4px solid #1d1d1d;
-      border-radius: 16px;
-      background:#ffffff;
-      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
-      padding: 10px;
+      border: none;
+      background: none;
+      box-shadow: none;
+      padding: 0;
       box-sizing:border-box;
       display:flex;
       align-items:stretch;
       justify-content: flex-start;
       gap: 10px;
       user-select:none;
-      min-height: 104px;
     }
 
     .drumBox{
@@ -569,10 +567,11 @@ body.loggedIn #robotLogo{
       display: flex;
       flex-direction: column;
       gap: 0;
-      border: 3px solid rgba(29,29,29,0.10);
-      border-radius: 12px;
+      border: 4px solid #1d1d1d;
+      border-radius: 16px;
       padding: 10px;
-      background: rgba(0,0,0,0.02);
+      background: #ffffff;
+      box-shadow: 0 8px 0 rgba(0,0,0,0.06);
       min-width: 0;
       justify-content: center;
     }
