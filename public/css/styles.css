@@ -651,6 +651,20 @@ body.loggedIn #robotLogo{
     .drumStyleBtn:active{ transform: translateY(0); }
     .drumStyleBtn.selected{ background:#eaf2ff; }
 
+    /* Placeholder rhythm buttons — greyed out "?" slots for future rhythms */
+    .drumStyleBtn.drumStylePlaceholder{
+      opacity: 0.3;
+      filter: grayscale(1);
+      cursor: not-allowed;
+      font-family: "Fredoka", "Comic Sans MS", sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: #999;
+      background: #f0f0f0;
+    }
+    .drumStyleBtn.drumStylePlaceholder:hover{ transform: none; }
+    .drumStyleBtn.drumStylePlaceholder:active{ transform: none; }
+
     .drumIcon{
       width: 82%;
       height: 82%;
