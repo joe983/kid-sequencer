@@ -980,14 +980,12 @@ body.loggedIn #robotLogo{
 
     .potHint{
       position: absolute;
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 16px;
-      color: rgba(0,0,0,0.35);
+      top: 0;
+      left: 0;
+      width: 76px;
+      height: 76px;
       pointer-events: none;
       user-select: none;
-      line-height: 1;
     }
 
     /* Save / Load icon colours */
