@@ -2054,14 +2054,7 @@ function startSequencer(){
       }
     }
 
-    const reductionDb = voicesActive <= 2 ? 0
-      : voicesActive === 3 ? -3
-      : voicesActive === 4 ? -6
-      : voicesActive === 5 ? -9
-      : voicesActive === 6 ? -12
-      : voicesActive === 7 ? -14
-      : -16;
-    const gain = Math.pow(10, reductionDb / 20);
+    const gain = voicesActive <= 2 ? 1 : Math.sqrt(2 / voicesActive);
     melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
 
     for(const { r, note } of stepNotes){
