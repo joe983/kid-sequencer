@@ -1315,12 +1315,12 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     moogFilter1 = audioCtx.createBiquadFilter();
     moogFilter1.type = "lowpass";
     moogFilter1.frequency.setValueAtTime(20000, audioCtx.currentTime);
-    moogFilter1.Q.setValueAtTime(2.5, audioCtx.currentTime);
+    moogFilter1.Q.setValueAtTime(1.5, audioCtx.currentTime);
 
     moogFilter2 = audioCtx.createBiquadFilter();
     moogFilter2.type = "lowpass";
     moogFilter2.frequency.setValueAtTime(20000, audioCtx.currentTime);
-    moogFilter2.Q.setValueAtTime(2.5, audioCtx.currentTime);
+    moogFilter2.Q.setValueAtTime(1.5, audioCtx.currentTime);
 
     const satCurve = new Float32Array(256);
     for(let i = 0; i < 256; i++){
@@ -1484,7 +1484,8 @@ function syncDelayTime(){
 
 function syncFilterCutoff(){
   if(!moogFilter1) return;
-  const cutoff = 80 * Math.pow(250, filterAmount);
+  const shaped = Math.pow(filterAmount, 1.5);
+  const cutoff = 80 * Math.pow(250, shaped);
   const t = audioCtx.currentTime;
   moogFilter1.frequency.setTargetAtTime(cutoff, t, 0.015);
   moogFilter2.frequency.setTargetAtTime(cutoff, t, 0.015);
