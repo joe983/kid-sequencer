@@ -2065,22 +2065,6 @@ function startSequencer(){
       }
     }
 
-    const dense = noteCount > 3;
-    if(dense !== _compDense){
-      _compDense = dense;
-      const t = audioCtx.currentTime;
-      const tc = 0.015;
-      if(dense){
-        masterComp.threshold.setTargetAtTime(-10, t, tc);
-        masterComp.ratio.setTargetAtTime(8, t, tc);
-        masterComp.knee.setTargetAtTime(8, t, tc);
-      } else {
-        masterComp.threshold.setTargetAtTime(-4, t, tc);
-        masterComp.ratio.setTargetAtTime(3, t, tc);
-        masterComp.knee.setTargetAtTime(14, t, tc);
-      }
-    }
-
     // Drums (runs in time with the sequencer)
     playDrumsAtStep(step);
 
