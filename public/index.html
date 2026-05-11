@@ -1485,7 +1485,7 @@ function syncDelayTime(){
 
 function syncFilterCutoff(){
   if(!moogFilter1) return;
-  const shaped = Math.pow(filterAmount, 1.5);
+  const shaped = Math.pow(filterAmount, 2.5);
   const cutoff = 80 * Math.pow(250, shaped);
   const t = audioCtx.currentTime;
   moogFilter1.frequency.setTargetAtTime(cutoff, t, 0.015);
