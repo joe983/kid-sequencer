@@ -23,7 +23,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3000 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=8)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=9)
   js/firebase-init.js ← Firebase config + exports (auth, db)
 firebase.json         ← hosting config
 firestore.rules       ← Firestore security rules
@@ -128,7 +128,7 @@ node serve.js   # → http://localhost:3000
 
 ---
 
-## What's been built (as of 2026-05-10, updated session 2026-05-10)
+## What's been built (as of 2026-05-11, updated session 2026-05-11)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
@@ -141,10 +141,13 @@ node serve.js   # → http://localhost:3000
 9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
 10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar; `syncTopBarLayout()` aligns transport cluster to grid; `syncTopBarLoginPosition()` centres login equidistant between Print and Tempo-Up
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
-12. **Drum panel: two sub-boxes** — `#drumPanel` contains `.drumBox.rhythmBox` (Techno, DnB, 4 "?" placeholders) + `.drumBox.soundsBox` (`#instButtons`: Piano, Trumpet, Strings, Synth, 2 "?" placeholders). Buttons 56×56px. Each box has a `.drumBoxLabel` header.
+12. **Drum panel: two standalone boxes** — `.drumBox.rhythmBox` (Techno, DnB, 4 "?" placeholders) + `.drumBox.soundsBox` (`#instButtons`: Piano, Trumpet, Strings, Synth, 2 "?" placeholders). Buttons 62×62px. No outer wrapper box, no box labels. `#drumPanel` is a transparent flex container.
 13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
 14. **Note click-to-delete fix** — note blocks are now `pointer-events:none`; all clicks pass through to cells where `onCellClick` handles both placement and deletion reliably
-15. **Potentiometer knobs** — 3 decorative knobs (Echo, Filter, Speed) in `#potRow` inside `#rightCol`, above the volume fader. Non-functional; to be wired to audio effects later.
+15. **Potentiometer knobs** — 3 knobs (Echo, Filter, Speed) in `#potRow` inside `#rightCol`, above the volume fader. 58px diameter (matches `--rightW`). Echo and Filter are functional; Speed is decorative.
+16. **Echo pot (delay effect)** — tempo-synced dotted-eighth delay on melodic instruments only. `delaySend` → `delayNode` → `delayFeedback` (0.35) loop → `melodicMaster`. Drag up to increase wet mix (0–50%). Delay time auto-syncs via `syncDelayTime()` on tempo change.
+17. **Filter pot (Moog-style lowpass)** — two cascaded BiquadFilters (24dB/oct) + tanh waveshaper for transistor ladder saturation. Q=1.5 per stage. Exponential cutoff 200Hz–20kHz. Knob starts at max (wide open), drag down to close. Melodic instruments only; delay also routes through filter.
+18. **Voice gain reduction** — `melodicMaster.gain` scales by `1/sqrt(n)` where n = number of voices actively sounding at each step. Only counts notes the playhead has actually triggered (`_triggeredNotes` Set). Replaced the old `_compDense` compressor toggling.
 
 ---
 
@@ -261,7 +264,10 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
 - **`#instButtons` is now inside `#drumPanel`** (not `#rightCol`). It's in `.drumBox.soundsBox`. The `#instButtons.locked` CSS rules still work via ID selectors. `instButtonsEl` JS reference still valid.
-- **`#potRow` in `#rightCol`** — 3 `.potKnob` elements with `.potBody` + `.potIndicator` + `.potLabel`. Non-functional (no JS wired yet). Will control audio effects when connected.
+- **`#potRow` in `#rightCol`** — 3 `.potKnob` elements (`#echoPot`, `#filterPot`, and Speed) with `.potBody` + `.potIndicator` + `.potLabel`. Echo and Filter have drag-to-rotate interaction (pointer events, 270° sweep). The JS sets inline `transform: rotate()` on `.potBody`, which overrides CSS hover/active rules.
+- **`melodicMaster` node** — gain node between instrument buses and `masterGain`. The filter chain and delay output both route through it. Drums bypass via `drumBus` → `masterGain` directly.
+- **`_triggeredNotes` Set** — tracks note IDs the playhead has actually played. Used for voice count gain reduction. Cleared on `stop()`. Notes placed on the grid don't affect gain until the playhead reaches them.
+- **`_compDense` is unused** — the old compressor density toggling was removed. The static compressor settings remain; dynamic level control is handled by `melodicMaster.gain` scaling.
 - **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
 - **CDN caching on `kid-sequencer.com`** — the custom domain has aggressive caching. Always bump `?v=N` in the CSS `<link>` when changing styles.css. HTML can also cache — verify on `kid-sequencer.web.app` or incognito after deploy.
 - **Always verify before deploying to production** — fetch origin, check for divergence, deploy to preview channel first, visually confirm, THEN deploy prod.
