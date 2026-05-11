@@ -2036,20 +2036,32 @@ function startSequencer(){
       firstTick = false;
     }
 
-    let noteCount = 0;
+    const stepNotes = [];
     for(let r=0;r<rows;r++){
       const note = notesByRow[r].find(n => n.start === step);
-      if(note){
-        noteCount++;
-        playInstrument(freqs[r], note.len);
+      if(note) stepNotes.push({ r, note });
+    }
 
-        const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
-        if(block){
-          setBlockPulseVars(block);
-          block.classList.remove("playing");
-          void block.offsetWidth;
-          block.classList.add("playing");
-        }
+    const noteCount = stepNotes.length;
+    const reductionDb = noteCount <= 2 ? 0
+      : noteCount === 3 ? -2
+      : noteCount === 4 ? -5
+      : noteCount === 5 ? -8
+      : noteCount === 6 ? -11
+      : noteCount === 7 ? -14
+      : -17;
+    const gain = Math.pow(10, reductionDb / 20);
+    melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
+
+    for(const { r, note } of stepNotes){
+      playInstrument(freqs[r], note.len);
+
+      const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
+      if(block){
+        setBlockPulseVars(block);
+        block.classList.remove("playing");
+        void block.offsetWidth;
+        block.classList.add("playing");
       }
     }
 
