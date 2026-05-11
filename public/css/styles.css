@@ -940,21 +940,21 @@ body.loggedIn #robotLogo{
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 14px;
       width: 100%;
     }
 
     .potKnob{
-      width: 58px;
+      width: 76px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
+      position: relative;
     }
 
     .potBody{
-      width: 58px;
-      height: 58px;
+      width: 76px;
+      height: 76px;
       border-radius: 50%;
       border: 4px solid #1d1d1d;
       background: radial-gradient(circle at 38% 32%, #ffffff 0%, #d8d8d8 100%);
@@ -970,23 +970,23 @@ body.loggedIn #robotLogo{
     .potIndicator{
       position: absolute;
       width: 4px;
-      height: 16px;
+      height: 20px;
       background: #1d1d1d;
       border-radius: 2px;
-      top: 7px;
+      top: 9px;
       left: 50%;
       transform: translateX(-50%);
     }
 
-    .potLabel{
-      font-family: "Fredoka", "Comic Sans MS","Trebuchet MS", Arial, sans-serif;
-      font-weight: 700;
-      font-size: 10px;
-      color: #1f2a44;
-      opacity: 0.5;
-      text-align: center;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    .potHint{
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+      color: rgba(0,0,0,0.35);
+      pointer-events: none;
+      user-select: none;
       line-height: 1;
     }
 
