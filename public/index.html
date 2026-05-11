@@ -347,6 +347,7 @@ let timer = null;
 let masterGain = null;
 let masterComp = null;
 let _compDense = false;
+const _triggeredNotes = new Set();
 
 let delaySend = null;
 let delayNode = null;
@@ -2042,18 +2043,24 @@ function startSequencer(){
       if(note) stepNotes.push({ r, note });
     }
 
-    let voicesActive = 0;
-    for(let r=0;r<rows;r++){
-      for(const n of notesByRow[r]){
+    for(const { note } of stepNotes) _triggeredNotes.add(note.id);
+
+    for(const id of _triggeredNotes){
+      let found = false;
+      for(let r=0;r<rows;r++){
+        const n = notesByRow[r].find(x => x.id === id);
+        if(!n) continue;
         const end = (n.start + n.len) % cols;
         const wraps = n.start + n.len > cols;
-        const sounding = wraps
+        const still = wraps
           ? (step >= n.start || step < end)
           : (step >= n.start && step < n.start + n.len);
-        if(sounding) voicesActive++;
+        if(still){ found = true; break; }
       }
+      if(!found) _triggeredNotes.delete(id);
     }
 
+    const voicesActive = _triggeredNotes.size;
     const gain = voicesActive <= 1 ? 1 : 1 / Math.sqrt(voicesActive);
     melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
 
@@ -2097,6 +2104,7 @@ function startSequencer(){
 }
 
 function stop(){
+  _triggeredNotes.clear();
   if(timer){
     clearInterval(timer);
     timer = null;
