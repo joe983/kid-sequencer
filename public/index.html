@@ -2044,12 +2044,12 @@ function startSequencer(){
 
     const noteCount = stepNotes.length;
     const reductionDb = noteCount <= 2 ? 0
-      : noteCount === 3 ? -2
-      : noteCount === 4 ? -5
-      : noteCount === 5 ? -8
-      : noteCount === 6 ? -11
-      : noteCount === 7 ? -14
-      : -17;
+      : noteCount === 3 ? -5
+      : noteCount === 4 ? -10
+      : noteCount === 5 ? -15
+      : noteCount === 6 ? -19
+      : noteCount === 7 ? -23
+      : -26;
     const gain = Math.pow(10, reductionDb / 20);
     melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
 
