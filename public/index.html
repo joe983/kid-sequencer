@@ -2042,14 +2042,25 @@ function startSequencer(){
       if(note) stepNotes.push({ r, note });
     }
 
-    const noteCount = stepNotes.length;
-    const reductionDb = noteCount <= 2 ? 0
-      : noteCount === 3 ? -5
-      : noteCount === 4 ? -10
-      : noteCount === 5 ? -15
-      : noteCount === 6 ? -19
-      : noteCount === 7 ? -23
-      : -26;
+    let voicesActive = 0;
+    for(let r=0;r<rows;r++){
+      for(const n of notesByRow[r]){
+        const end = (n.start + n.len) % cols;
+        const wraps = n.start + n.len > cols;
+        const sounding = wraps
+          ? (step >= n.start || step < end)
+          : (step >= n.start && step < n.start + n.len);
+        if(sounding) voicesActive++;
+      }
+    }
+
+    const reductionDb = voicesActive <= 2 ? 0
+      : voicesActive === 3 ? -3
+      : voicesActive === 4 ? -6
+      : voicesActive === 5 ? -9
+      : voicesActive === 6 ? -12
+      : voicesActive === 7 ? -14
+      : -16;
     const gain = Math.pow(10, reductionDb / 20);
     melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
 
