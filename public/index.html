@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=12">
+<link rel="stylesheet" href="css/styles.css?v=13">
 </head>
 <body>
 <script>
@@ -144,19 +144,9 @@
 <div id="potRow">
 <div class="potKnob" id="echoPot">
 <div class="potBody"><div class="potIndicator"></div></div>
-<svg class="potHint" viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
-<defs><marker id="aCW" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5 Z" fill="#ffd93d" stroke="#1d1d1d" stroke-width="1" stroke-linejoin="round"/></marker></defs>
-<path d="M19,49 A22,22,0,1,1,57,49" fill="none" stroke="#1d1d1d" stroke-width="5.5" stroke-linecap="round"/>
-<path d="M19,49 A22,22,0,1,1,57,49" fill="none" stroke="#ffd93d" stroke-width="3.5" stroke-linecap="round" marker-end="url(#aCW)"/>
-</svg>
 </div>
 <div class="potKnob" id="filterPot">
 <div class="potBody"><div class="potIndicator"></div></div>
-<svg class="potHint" viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
-<defs><marker id="aCCW" markerWidth="8" markerHeight="8" refX="6.5" refY="4" orient="auto"><path d="M0,0.5 L7,4 L0,7.5 Z" fill="#ffd93d" stroke="#1d1d1d" stroke-width="1" stroke-linejoin="round"/></marker></defs>
-<path d="M57,49 A22,22,0,1,0,19,49" fill="none" stroke="#1d1d1d" stroke-width="5.5" stroke-linecap="round"/>
-<path d="M57,49 A22,22,0,1,0,19,49" fill="none" stroke="#ffd93d" stroke-width="3.5" stroke-linecap="round" marker-end="url(#aCCW)"/>
-</svg>
 </div>
 </div>
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
@@ -2861,6 +2851,7 @@ root.classList.add('stageScaled');
 
   body.addEventListener("pointerdown", function(e){
     e.preventDefault();
+    document.body.classList.add("potTouched");
     dragging = true;
     startY = e.clientY;
     startDeg = currentDeg;
@@ -2897,6 +2888,7 @@ root.classList.add('stageScaled');
 
   body.addEventListener("pointerdown", function(e){
     e.preventDefault();
+    document.body.classList.add("potTouched");
     dragging = true;
     startY = e.clientY;
     startDeg = currentDeg;

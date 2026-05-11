@@ -977,14 +977,33 @@ body.loggedIn #robotLogo{
       transform: translateX(-50%);
     }
 
-    .potHint{
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 76px;
-      height: 76px;
-      pointer-events: none;
-      user-select: none;
+    /* Idle "nudge" — periodic two-bounce hop that says "I move!"
+       Vertical axis previews the drag gesture; stops permanently on first touch.
+       Staggered between the two knobs so they alternate attention. */
+    @keyframes potNudge {
+      0%   { transform: translateY(0); }
+      6%   { transform: translateY(-7px); }
+      12%  { transform: translateY(0); }
+      17%  { transform: translateY(-3px); }
+      22%  { transform: translateY(0); }
+      100% { transform: translateY(0); }
+    }
+
+    #potRow .potKnob{
+      animation: potNudge 5s ease-in-out infinite;
+      will-change: transform;
+    }
+    #potRow #filterPot{
+      animation-delay: 2.5s;
+    }
+    #potRow .potKnob:hover{
+      animation-play-state: paused;
+    }
+    body.potTouched #potRow .potKnob{
+      animation: none;
+    }
+    @media (prefers-reduced-motion: reduce){
+      #potRow .potKnob{ animation: none; }
     }
 
     /* Save / Load icon colours */
