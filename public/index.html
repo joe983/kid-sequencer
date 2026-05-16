@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=13">
+<link rel="stylesheet" href="css/styles.css?v=14">
 </head>
 <body>
 <script>
@@ -84,7 +84,7 @@
 </div>
 <div class="topBarSpacer" aria-hidden="true"></div>
 <div class="topBarLoginWrap" id="loginCtaWrap" aria-label="Login to unlock">
-<a class="loginBtn loginLink" href="login.html" id="toolLoginBtn">Login</a>
+<button class="loginBtn" id="toolLoginBtn" onclick="handleLoginBtn()">Login</button>
 </div>
 </div>
 <div id="contentWrap">
@@ -202,24 +202,102 @@
 </div>
 </div>
 
-<!-- Scan limit panel — inside #viewport, outside #page, uses position:absolute so no Safari body-overflow quirk -->
-<div aria-hidden="true" aria-label="Scan limit reached" id="scanLimitModal" role="dialog">
-<div class="modalHeader">
-<div class="modalTitle">Weekly limit reached</div>
-<button aria-label="Close" class="modalClose" onclick="closeScanLimitModal()">×</button>
-</div>
-<div class="scanLimitBody">
-<div class="scanLimitIcon">📷</div>
-<p class="scanLimitMsg">Unlock more scans and extra features.</p>
-<div class="scanLimitScansLeft">Resets every Monday</div>
-</div>
-<div class="modalBtns">
-<a class="bigBtn" href="login.html">Unlock</a>
-</div>
-</div>
-
 <!-- Save toast — position:fixed, sits above everything -->
 <div aria-live="polite" id="saveToast"></div>
+
+<!-- Upgrade / Auth modal -->
+<div id="upgradeModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="upgradeModalTitle">
+  <div class="upgradeCard">
+
+    <!-- View: Marketing (default) -->
+    <div class="upgradeView" id="upgradeMarketingView">
+      <div class="upgradeHeader">
+        <div class="upgradeLogo" aria-hidden="true">🎵</div>
+        <h2 id="upgradeModalTitle" class="upgradeTitle">Make Music</h2>
+        <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
+      </div>
+      <div class="tierGrid">
+        <div class="tierCard" id="tierCardGuest">
+          <div class="tierName">Guest</div>
+          <div class="tierPrice">Free</div>
+          <ul class="tierFeatures">
+            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">Camera scan</li>
+            <li class="feat-no">Print</li>
+            <li class="feat-no">Save</li>
+            <li class="feat-no">Load</li>
+          </ul>
+          <div class="tierCta tierCta-ghost">You're here</div>
+        </div>
+        <div class="tierCard" id="tierCardMember">
+          <div class="tierName">Member</div>
+          <div class="tierPrice">Free</div>
+          <ul class="tierFeatures">
+            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">Camera scan</li>
+            <li class="feat-yes">Print</li>
+            <li class="feat-no">Save</li>
+            <li class="feat-no">Load</li>
+          </ul>
+          <button class="tierCta tierCta-member" onclick="showUpgradeView('register')">Sign up free</button>
+        </div>
+        <div class="tierCard tierCard-pro" id="tierCardPro">
+          <div class="tierBadge">Best</div>
+          <div class="tierName">Pro</div>
+          <div class="tierPrice">£1.99<span>/mo</span></div>
+          <ul class="tierFeatures">
+            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">Camera scan</li>
+            <li class="feat-yes">Print</li>
+            <li class="feat-yes">Save</li>
+            <li class="feat-yes">Load</li>
+          </ul>
+          <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
+        </div>
+      </div>
+      <div class="upgradeFooter">
+        Already have an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
+      </div>
+    </div>
+
+    <!-- View: Login -->
+    <div class="upgradeView upgradeView-hidden" id="upgradeLoginView">
+      <div class="upgradeHeader">
+        <button class="upgradeBack" aria-label="Back" onclick="showUpgradeView('marketing')">←</button>
+        <h2 class="upgradeTitle">Log in</h2>
+        <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
+      </div>
+      <div class="authForm">
+        <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        <div class="authStatus" id="loginStatus"></div>
+        <button class="authSubmit" id="loginSubmit" onclick="doLogin()">Log in</button>
+      </div>
+      <div class="upgradeFooter">
+        New here? <button class="upgradeTextBtn" onclick="showUpgradeView('register')">Create account</button>
+      </div>
+    </div>
+
+    <!-- View: Register -->
+    <div class="upgradeView upgradeView-hidden" id="upgradeRegisterView">
+      <div class="upgradeHeader">
+        <button class="upgradeBack" aria-label="Back" onclick="showUpgradeView('marketing')">←</button>
+        <h2 class="upgradeTitle">Create account</h2>
+        <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
+      </div>
+      <div class="authForm">
+        <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" />
+        <input id="registerPassword" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" />
+        <div class="authStatus" id="registerStatus"></div>
+        <button class="authSubmit" id="registerSubmit" onclick="doRegister()">Create account</button>
+      </div>
+      <div class="upgradeFooter">
+        Already have an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- Save name modal -->
 <div aria-hidden="true" id="saveNameModal">
@@ -546,10 +624,10 @@ const DRUM_STYLE_BUTTONS = () => ({
 
 btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
 btnTrumpet.onclick = () => { ensureAudioRunning(); setInstrument("trumpet"); };
-btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
-btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
-if(btnBass)  btnBass.onclick  = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("bass"); };
-if(btnBells) btnBells.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("bells"); };
+btnStrings.onclick = () => { ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { ensureAudioRunning(); setInstrument("synth"); };
+if(btnBass)  btnBass.onclick  = () => { ensureAudioRunning(); setInstrument("bass"); };
+if(btnBells) btnBells.onclick = () => { ensureAudioRunning(); setInstrument("bells"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -658,26 +736,10 @@ function bindLockedNudge(el){
   el.addEventListener("pointerdown", () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); } }, { passive:true });
 }
 
-/* Make login links return to this page */
-function updateLoginLinks(){
-  const current = (location.pathname.split("/").pop() || "index.html");
-  document.querySelectorAll("a.loginLink").forEach(a => {
-    a.href = "login.html?return=" + encodeURIComponent(current);
-  });
+function handleLoginBtn(){
+  if(isLoggedIn){ logout(); } else { openUpgradeModal('login'); }
 }
-updateLoginLinks();
-
-// Make the header Login button act as Logout when signed in
-(function(){
-  const btn = document.getElementById("toolLoginBtn");
-  if(!btn) return;
-  btn.addEventListener("click", (e) => {
-    if(isLoggedIn){
-      e.preventDefault();
-      logout();
-    }
-  });
-})();
+window.handleLoginBtn = handleLoginBtn;
 
 function applyLockState(){
   // Re-read tier from sessionStorage so async auth updates are picked up immediately
@@ -705,21 +767,16 @@ function applyLockState(){
   // Swap Login -> Logout (bright red) when signed in
   const toolLoginBtnEl = document.getElementById("toolLoginBtn");
   if(toolLoginBtnEl){
-    if(isLoggedIn){
-      toolLoginBtnEl.textContent = "Logout";
-      toolLoginBtnEl.classList.add("logout");
-      toolLoginBtnEl.setAttribute("href", "#");
-    }else{
-      toolLoginBtnEl.textContent = "Login";
-      toolLoginBtnEl.classList.remove("logout");
-      toolLoginBtnEl.setAttribute("href", "login.html");
-    }
+    toolLoginBtnEl.textContent = isLoggedIn ? "Logout" : "Login";
+    toolLoginBtnEl.classList.toggle("logout", isLoggedIn);
   }
 
+  const printBtnEl = document.getElementById("printBtn");
+  if(printBtnEl) printBtnEl.classList.toggle("locked", !isLoggedIn);
   const saveBtnEl = document.getElementById("saveBtn");
-  if(saveBtnEl) saveBtnEl.classList.remove("locked");
+  if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
   const loadBtnEl = document.getElementById("loadBtn");
-  if(loadBtnEl) loadBtnEl.classList.remove("locked");
+  if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
@@ -747,11 +804,183 @@ function logout(){
   // Restore the locked/landing UI immediately
   if(loginCtaWrapEl) loginCtaWrapEl.classList.remove('pulsing');
   applyLockState();
-  updateLoginLinks();
 }
 /* Bind hover nudges for locked groups */
 
-[btnStrings, btnSynth, btnBass, btnBells, document.getElementById("cameraBtn"), document.getElementById("saveBtn"), document.getElementById("loadBtn")].forEach(bindLockedNudge);
+[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn")].forEach(bindLockedNudge);
+
+/* -------- UPGRADE MODAL -------- */
+let _upgradePath = null;
+
+function openUpgradeModal(path){
+  _upgradePath = path || null;
+  const modal = document.getElementById('upgradeModal');
+  if(!modal) return;
+  _markCurrentTierCard();
+  if(isLoggedIn && !isPaid){ _highlightProCard(); }
+  showUpgradeView('marketing');
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+}
+
+function closeUpgradeModal(){
+  const modal = document.getElementById('upgradeModal');
+  if(!modal) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+  _upgradePath = null;
+  ['loginEmail','loginPassword','registerEmail','registerPassword'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  ['loginStatus','registerStatus'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.textContent = '';
+  });
+  const sub = document.getElementById('subscribeBtn');
+  if(sub){ sub.disabled = false; sub.textContent = 'Subscribe'; }
+}
+window.closeUpgradeModal = closeUpgradeModal;
+
+function showUpgradeView(view){
+  const viewMap = { marketing:'upgradeMarketingView', login:'upgradeLoginView', register:'upgradeRegisterView' };
+  Object.values(viewMap).forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle('upgradeView-hidden', id !== viewMap[view]);
+  });
+}
+window.showUpgradeView = showUpgradeView;
+window.openUpgradeModal = openUpgradeModal;
+
+function _markCurrentTierCard(){
+  document.getElementById('tierCardGuest')?.classList.toggle('tierCard-current', !isLoggedIn);
+  document.getElementById('tierCardMember')?.classList.toggle('tierCard-current', isLoggedIn && !isPaid);
+  document.getElementById('tierCardPro')?.classList.toggle('tierCard-current', isPaid);
+  const memberCta = document.querySelector('.tierCta-member');
+  if(memberCta) memberCta.style.display = isLoggedIn ? 'none' : '';
+  const guestCta = document.querySelector('.tierCta-ghost');
+  if(guestCta) guestCta.textContent = isLoggedIn ? 'Current plan' : "You're here";
+}
+
+function _highlightProCard(){
+  document.getElementById('tierCardPro')?.classList.add('tierCard-highlight');
+}
+
+async function handleSubscribeCta(){
+  if(!isLoggedIn){
+    _upgradePath = 'subscribe';
+    showUpgradeView('register');
+    return;
+  }
+  await _startStripeCheckout();
+}
+window.handleSubscribeCta = handleSubscribeCta;
+
+async function _startStripeCheckout(){
+  const btn = document.getElementById('subscribeBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    const fns = getFunctions(app, 'europe-west1');
+    const createSession = httpsCallable(fns, 'createCheckoutSession');
+    const result = await createSession({ returnUrl: window.location.origin + '/?subscribed=1' });
+    window.location.href = result.data.url;
+  }catch(e){
+    console.error('[Stripe]', e);
+    if(btn){ btn.disabled = false; btn.textContent = 'Subscribe'; }
+    showSaveToast('error');
+  }
+}
+
+async function doLogin(){
+  const email    = (document.getElementById('loginEmail')?.value || '').trim();
+  const password = document.getElementById('loginPassword')?.value || '';
+  const statusEl = document.getElementById('loginStatus');
+  const btn      = document.getElementById('loginSubmit');
+  if(!email || !password){ if(statusEl) statusEl.textContent = 'Enter email and password'; return; }
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = '';
+  try{
+    const { auth } = await import("./js/firebase-init.js");
+    const { signInWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+    await signInWithEmailAndPassword(auth, email, password);
+    isLoggedIn = true;
+    try{ sessionStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+    applyLockState();
+    closeUpgradeModal();
+  }catch(e){
+    if(statusEl) statusEl.textContent = _authErrorMsg(e.code);
+    if(btn) btn.disabled = false;
+  }
+}
+window.doLogin = doLogin;
+
+async function doRegister(){
+  const email    = (document.getElementById('registerEmail')?.value || '').trim();
+  const password = document.getElementById('registerPassword')?.value || '';
+  const statusEl = document.getElementById('registerStatus');
+  const btn      = document.getElementById('registerSubmit');
+  if(!email || !password){ if(statusEl) statusEl.textContent = 'Enter email and password'; return; }
+  if(password.length < 6){ if(statusEl) statusEl.textContent = 'Password must be at least 6 characters'; return; }
+  if(btn) btn.disabled = true;
+  if(statusEl) statusEl.textContent = '';
+  try{
+    const { auth } = await import("./js/firebase-init.js");
+    const { createUserWithEmailAndPassword } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+    await createUserWithEmailAndPassword(auth, email, password);
+    isLoggedIn = true;
+    try{ sessionStorage.setItem('kidseq_logged_in','1'); }catch(e){}
+    applyLockState();
+    const path = _upgradePath;
+    closeUpgradeModal();
+    if(path === 'subscribe' || path === 'save' || path === 'load'){
+      await _startStripeCheckout();
+    }
+  }catch(e){
+    if(statusEl) statusEl.textContent = _authErrorMsg(e.code);
+    if(btn) btn.disabled = false;
+  }
+}
+window.doRegister = doRegister;
+
+function _authErrorMsg(code){
+  const map = {
+    'auth/invalid-email':        'Invalid email address',
+    'auth/user-not-found':       'No account with that email',
+    'auth/wrong-password':       'Incorrect password',
+    'auth/email-already-in-use': 'Email already registered — log in instead',
+    'auth/weak-password':        'Password too short (min 6 characters)',
+    'auth/too-many-requests':    'Too many attempts — try again later',
+    'auth/invalid-credential':   'Incorrect email or password',
+  };
+  return map[code] || 'Something went wrong — try again';
+}
+
+/* Handle ?subscribed=1 redirect back from Stripe */
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  if(!params.has('subscribed')) return;
+  window.history.replaceState({}, '', window.location.pathname);
+  let attempts = 0;
+  const poll = setInterval(async () => {
+    attempts++;
+    try{
+      const { auth } = await import("./js/firebase-init.js");
+      const { db }   = await import("./js/firebase-init.js");
+      const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+      const user = auth.currentUser;
+      if(!user){ clearInterval(poll); return; }
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if(snap.data()?.tier === 'paid'){
+        clearInterval(poll);
+        try{ sessionStorage.setItem('kidseq_tier','paid'); }catch(e){}
+        isPaid = true;
+        applyLockState();
+        showSaveToast('proactivated');
+      }
+    }catch(e){}
+    if(attempts >= 10) clearInterval(poll);
+  }, 1500);
+})();
 
 /* Prime audio */
 function primeAudioOnce(){
@@ -2479,51 +2708,6 @@ const camModalEl = document.getElementById("camModal");
 const camVideoEl = document.getElementById("camVideo");
 const camCanvasEl = document.getElementById("camCanvas");
 const camPreviewEl = document.getElementById("camPreview");
-let scanLimitModalEl = null; // lazily resolved — element lives after the scripts
-
-/* ---- Guest scan counter (localStorage, resets each Monday) ---- */
-const GUEST_SCAN_LIMIT = 6;
-function _scanWeekKey(){
-  const d = new Date();
-  const mon = new Date(d);
-  mon.setDate(d.getDate() - (d.getDay() === 0 ? 6 : d.getDay() - 1));
-  return 'kidseq_scans_' + mon.toISOString().slice(0, 10);
-}
-function guestScansThisWeek(){
-  try{ return parseInt(localStorage.getItem(_scanWeekKey()) || '0', 10); }
-  catch(e){ return 0; }
-}
-function incrementGuestScans(){
-  try{
-    const k = _scanWeekKey();
-    localStorage.setItem(k, String((parseInt(localStorage.getItem(k) || '0', 10)) + 1));
-  }catch(e){}
-}
-function showScanLimitModal(){
-  if(!scanLimitModalEl) scanLimitModalEl = document.getElementById("scanLimitModal");
-  if(!scanLimitModalEl) return;
-  scanLimitModalEl.style.display = "flex";
-  scanLimitModalEl.setAttribute("aria-hidden", "false");
-  // Two rAFs so Safari/Edge see the initial translateX(110%) state before transitioning
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      scanLimitModalEl.classList.add("show");
-    });
-  });
-}
-function closeScanLimitModal(){
-  if(!scanLimitModalEl) scanLimitModalEl = document.getElementById("scanLimitModal");
-  if(!scanLimitModalEl) return;
-  scanLimitModalEl.classList.remove("show");
-  scanLimitModalEl.setAttribute("aria-hidden", "true");
-  setTimeout(() => {
-    if(!scanLimitModalEl.classList.contains("show")){
-      scanLimitModalEl.style.display = "none";
-    }
-  }, 350);
-}
-window.closeScanLimitModal = closeScanLimitModal;
-window.showScanLimitModal  = showScanLimitModal;
 
 /* -------------------- CLOUD SAVE -------------------- */
 let _saveToastTimer = null;
@@ -2531,7 +2715,8 @@ function showSaveToast(state){
   const el = document.getElementById("saveToast");
   if(!el) return;
   const msgs = { saving:"Saving…", saved:"Saved ✓", error:"Couldn't save", upgrade:"Save & load with a paid account",
-                 loading:"Loading…", loaded:"Loaded ✓", empty:"Nothing saved yet" };
+                 loading:"Loading…", loaded:"Loaded ✓", empty:"Nothing saved yet",
+                 proactivated:"You're Pro! Save your tunes now." };
   el.textContent = msgs[state] || state;
   el.className = "saveToast show " + state;
   clearTimeout(_saveToastTimer);
@@ -2584,11 +2769,7 @@ function _formatSavedAt(ts){
 let _lastSaveName = '';
 
 function saveToCloud(){
-  if(!isPaid){
-    if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
-    else { showSaveToast("upgrade"); }
-    return;
-  }
+  if(!isPaid){ openUpgradeModal('save'); return; }
   // Open name modal
   const modal = document.getElementById('saveNameModal');
   const input = document.getElementById('saveNameInput');
@@ -2631,11 +2812,7 @@ window.confirmSaveName   = confirmSaveName;
 let _deleteConfirmId = null;
 
 function loadFromCloud(){
-  if(!isPaid){
-    if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); }
-    else { showSaveToast("upgrade"); }
-    return;
-  }
+  if(!isPaid){ openUpgradeModal('load'); return; }
   openLoadSheet();
 }
 async function openLoadSheet(){
@@ -2727,16 +2904,6 @@ function closeLoadSheet(){
 window.loadFromCloud  = loadFromCloud;
 window.closeLoadSheet = closeLoadSheet;
 
-function updateCameraBtnState(){
-  const btn = document.getElementById("cameraBtn");
-  if(!btn) return;
-  const exhausted = !isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT;
-  btn.classList.toggle("scanLimitReached", exhausted);
-  btn.setAttribute("aria-disabled", exhausted ? "true" : "false");
-}
-// Run on load and after each scan
-document.addEventListener("DOMContentLoaded", updateCameraBtnState);
-
 // Save name modal: Enter = confirm, Escape = cancel; load sheet: Escape = close
 document.addEventListener("DOMContentLoaded", () => {
   const inp = document.getElementById("saveNameInput");
@@ -2762,10 +2929,6 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 async function openCameraModal(){
-  if(!isLoggedIn && guestScansThisWeek() >= GUEST_SCAN_LIMIT){
-    showScanLimitModal();
-    return;
-  }
   try{
     if(!camModalEl || !camVideoEl || !camCanvasEl || !camPreviewEl){
       alert("Camera UI is missing in the HTML (camModal/camVideo/camCanvas/camPreview).\nIf you edited the file, make sure that block still exists.");
@@ -2854,7 +3017,6 @@ function camImport(){
     camCapture();
     if(!camCapturedDataUrl) return;
   }
-  if(!isLoggedIn){ incrementGuestScans(); updateCameraBtnState(); }
   importGridFromDataUrl(camCapturedDataUrl);
   closeCameraModal();
 }
@@ -3270,6 +3432,7 @@ window.logout = logout;
 // Print button: hand off to the browser's print dialog. Stops audio first
 // so the page is in a clean state when the user prints.
 function printSheet(){
+  if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }
@@ -3290,7 +3453,6 @@ window.KidSequencer = {
     syncTopBarLayout,
     syncTopBarLoginPosition,
     updateTempoBox,
-    updateLoginLinks,
     applyLockState,
     showLockNudge,
     hideLockNudgeSoon,
@@ -3369,7 +3531,9 @@ window.KidSequencer = {
     onAuthStateChanged(auth, async (user) => {
       console.log('[Auth] User:', user ? user.email : 'none');
       if(user){
+        try{ sessionStorage.setItem('kidseq_logged_in', '1'); }catch(e){}
         try{ sessionStorage.setItem('kidseq_user_uid', user.uid); }catch(e){}
+        isLoggedIn = true;
         // Check paid tier from Firestore users/{uid}.tier
         try{
           const { db } = await import('./js/firebase-init.js');
@@ -3383,7 +3547,9 @@ window.KidSequencer = {
           console.warn('[Auth] Tier check failed (non-fatal):', e.message);
         }
       }else{
+        isLoggedIn = false;
         window.isPaid = false;
+        try{ sessionStorage.removeItem('kidseq_logged_in'); }catch(e){}
         try{ sessionStorage.removeItem('kidseq_user_uid'); }catch(e){}
         try{ sessionStorage.removeItem('kidseq_tier'); }catch(e){}
       }
