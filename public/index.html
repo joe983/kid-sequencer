@@ -458,7 +458,7 @@ const LEVEL = {
   strings: 0.86,
   synth:   0.34,
   bass:    0.62,
-  bells:   0.46
+  bells:   0.22
 };
 
 /* Undo history (max 10 user actions) */
@@ -1461,7 +1461,7 @@ function makeInstrumentBuses(ctx, masterOut){
     strings: buildBus(stringsIR, 0.76, 0.32),
     synth:   buildBus(synthIR,   0.92, 0.12),
     bass:    buildBus(bassIR,    0.94, 0.08),
-    bells:   buildBus(bellsIR,   0.55, 0.45)
+    bells:   buildBus(bellsIR,   0.78, 0.22)
   };
 }
 
@@ -1566,6 +1566,8 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     bus.trumpet.input.connect(delaySend);
     bus.strings.input.connect(delaySend);
     bus.synth.input.connect(delaySend);
+    bus.bass.input.connect(delaySend);
+    bus.bells.input.connect(delaySend);
 
     // Drums: dedicated bus (bypasses filter, straight to masterGain)
     drumBus = audioCtx.createGain();
@@ -2232,56 +2234,46 @@ function playBass(freq, steps){
 }
 
 function playBells(freq, steps){
-  // FM synthesis glockenspiel: sine carrier modulated by a sine at an
-  // inharmonic ratio. High initial mod index decays quickly, giving the
-  // characteristic "ting → shimmer" of a struck metal bar.
+  // Additive glockenspiel: fundamental + a few near-harmonic partials,
+  // each with its own decay. Higher partials fade faster — that's what
+  // gives the "ting then shimmer" without the clangy mid-range that
+  // high-index FM creates.
   const now = audioCtx.currentTime;
-  const hold = steps * stepDurationSec();
-  // Bells decay naturally; release length doesn't really change the sound
-  const naturalDecay = 1.6;
-  const stopAt = now + Math.max(hold, 0.1) + naturalDecay + 0.10;
-
-  const env = audioCtx.createGain();
-  env.gain.setValueAtTime(0.0001, now);
-  env.gain.exponentialRampToValueAtTime(1.0, now + 0.003);
-  env.gain.exponentialRampToValueAtTime(0.001, now + naturalDecay);
 
   const level = audioCtx.createGain();
   level.gain.setValueAtTime(LEVEL.bells, now);
-  env.connect(level);
-
-  // Carrier
-  const carrier = audioCtx.createOscillator();
-  carrier.type = "sine";
-  carrier.frequency.setValueAtTime(freq, now);
-
-  // Modulator at an inharmonic ratio (3.5:1) for bell-like timbre
-  const modulator = audioCtx.createOscillator();
-  modulator.type = "sine";
-  modulator.frequency.setValueAtTime(freq * 3.5, now);
-
-  // Mod index: peaks at the attack, decays fast (the "metallic ting")
-  const modGain = audioCtx.createGain();
-  modGain.gain.setValueAtTime(freq * 4.5, now);
-  modGain.gain.exponentialRampToValueAtTime(freq * 0.15, now + 0.35);
-
-  modulator.connect(modGain);
-  modGain.connect(carrier.frequency);
-
-  // Light highpass so the lowest bells still sparkle
-  const hp = audioCtx.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.setValueAtTime(200, now);
-  hp.Q.setValueAtTime(0.5, now);
-
-  carrier.connect(hp);
-  hp.connect(env);
-
   level.connect(bus.bells.input);
 
-  trackNode(carrier); trackNode(modulator);
-  carrier.start(now); modulator.start(now);
-  carrier.stop(stopAt); modulator.stop(stopAt);
+  // Glockenspiel-ish partial structure. Slight inharmonicity on the
+  // higher partials gives bell character without making it clangy.
+  const partials = [
+    { mult: 1.00, amp: 0.55, decay: 1.6 },  // fundamental — carries the pitch
+    { mult: 2.00, amp: 0.30, decay: 0.9 },  // clean octave body
+    { mult: 2.78, amp: 0.16, decay: 0.6 },  // bell-mode shimmer
+    { mult: 5.42, amp: 0.08, decay: 0.35 }, // sparkle
+    { mult: 8.95, amp: 0.04, decay: 0.22 }  // air / very top
+  ];
+
+  for(const p of partials){
+    const f = freq * p.mult;
+    if(f > 18000) continue;  // skip partials above audible range
+
+    const o = audioCtx.createOscillator();
+    o.type = "sine";
+    o.frequency.setValueAtTime(f, now);
+
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(p.amp, now + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + p.decay);
+
+    o.connect(g);
+    g.connect(level);
+
+    trackNode(o);
+    o.start(now);
+    o.stop(now + p.decay + 0.05);
+  }
 }
 
 function playInstrument(freq, steps){
@@ -2291,7 +2283,7 @@ function playInstrument(freq, steps){
   if(instrument === "trumpet") return playTrumpet(freq, steps);
   if(instrument === "strings") return playStrings(freq, steps);
   if(instrument === "bass")    return playBass (freq * 0.25, steps); // 2 octaves down -> C2-C3
-  if(instrument === "bells")   return playBells(freq * 2,    steps); // 1 octave up   -> C5-C6
+  if(instrument === "bells")   return playBells(freq * 4,    steps); // 2 octaves up  -> C6-C7
   return playSynth(freq, steps);
 }
 
