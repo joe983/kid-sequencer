@@ -23,7 +23,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3000 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=9)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=13)
   js/firebase-init.js ← Firebase config + exports (auth, db)
 firebase.json         ← hosting config
 firestore.rules       ← Firestore security rules
@@ -83,7 +83,7 @@ users/{uid}/
 |---|---|---|---|
 | Tempo | ✅ | ✅ | ✅ |
 | Piano / Trumpet | ✅ | ✅ | ✅ |
-| Strings / Synth | 🔒 | 🔒 | ✅ |
+| Strings / Synth / Bass / Bells | 🔒 | 🔒 | ✅ |
 | Camera scan | ✅ (6/week) | ✅ | ✅ |
 | Cloud save/load | 🔒 | 🔒 | ✅ |
 
@@ -128,7 +128,7 @@ node serve.js   # → http://localhost:3000
 
 ---
 
-## What's been built (as of 2026-05-11, updated session 2026-05-11)
+## What's been built (as of 2026-05-16, updated session 2026-05-16)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
@@ -141,13 +141,17 @@ node serve.js   # → http://localhost:3000
 9. **Circular note-length buttons** — left column buttons refactored from rectangles to large 124px circles showing only the musical symbol; all note lengths unlocked for all tiers
 10. **Top bar layout refactor** — robot mascot, login/logout, and print button moved into the top bar; `syncTopBarLayout()` aligns transport cluster to grid; `syncTopBarLoginPosition()` centres login equidistant between Print and Tempo-Up
 11. **Page centering** — `--centerPad` CSS variable computed in `fitToViewport()` and applied to topBar + mainLayout padding; `margin: 0 auto` on `#page` for wide screens
-12. **Drum panel: two standalone boxes** — `.drumBox.rhythmBox` (Techno, DnB, 4 "?" placeholders) + `.drumBox.soundsBox` (`#instButtons`: Piano, Trumpet, Strings, Synth, 2 "?" placeholders). Buttons 62×62px. No outer wrapper box, no box labels. `#drumPanel` is a transparent flex container.
+12. **Drum panel: two standalone boxes** — both fully populated, no placeholders. `.drumBox.rhythmBox` has 6 rhythm style buttons (Techno, DnB, Funk, UK Drill, Hip Hop, Reggaeton). `.drumBox.soundsBox` (`#instButtons`) has 6 instrument buttons (Piano, Trumpet, Strings, Synth, Bass, Bells). Buttons 62×62px. No outer wrapper box, no box labels. `#drumPanel` is a transparent flex container.
 13. **Drag-to-pan removed** — viewport pan handler deleted; fixed stage doesn't need scrolling
 14. **Note click-to-delete fix** — note blocks are now `pointer-events:none`; all clicks pass through to cells where `onCellClick` handles both placement and deletion reliably
-15. **Potentiometer knobs** — 3 knobs (Echo, Filter, Speed) in `#potRow` inside `#rightCol`, above the volume fader. 58px diameter (matches `--rightW`). Echo and Filter are functional; Speed is decorative.
-16. **Echo pot (delay effect)** — tempo-synced dotted-eighth delay on melodic instruments only. `delaySend` → `delayNode` → `delayFeedback` (0.35) loop → `melodicMaster`. Drag up to increase wet mix (0–50%). Delay time auto-syncs via `syncDelayTime()` on tempo change.
+15. **Potentiometer knobs** — 2 knobs (Echo, Filter) in `#potRow` inside `#rightCol`, above the volume fader. 76px diameter (overflows the 58px `--rightW` column by ~9px each side — `#rightCol` doesn't clip). Flat white fill, no gradient or inset shadows. Both are functional.
+16. **Echo pot (delay effect)** — tempo-synced dotted-eighth delay on melodic instruments only. `delaySend` → `delayNode` → `delayFeedback` (0.35) loop → `melodicMaster`. Drag up to increase wet mix (0–50%). Delay time auto-syncs via `syncDelayTime()` on tempo change. Every melodic bus must be wired in explicitly — see gotcha below.
 17. **Filter pot (Moog-style lowpass)** — two cascaded BiquadFilters (24dB/oct) + tanh waveshaper for transistor ladder saturation. Q=1.5 per stage. Exponential cutoff 200Hz–20kHz. Knob starts at max (wide open), drag down to close. Melodic instruments only; delay also routes through filter.
 18. **Voice gain reduction** — `melodicMaster.gain` scales by `1/sqrt(n)` where n = number of voices actively sounding at each step. Only counts notes the playhead has actually triggered (`_triggeredNotes` Set). Replaced the old `_compDense` compressor toggling.
+19. **Pot affordance — idle nudge animation** — `.potKnob` runs a vertical two-bounce hop (`@keyframes potNudge`, 5s cycle, ease-in-out, infinite). `#filterPot` has `animation-delay: 2.5s` so the two knobs alternate. Hover pauses (`:hover { animation-play-state: paused }`); first `pointerdown` on either pot adds `body.potTouched` which ends both animations for the session. Honors `prefers-reduced-motion`. Tells kids the knobs are interactive without putting static glyphs on the face.
+20. **6 rhythm styles + 9 drum voices** — DRUM_PATTERNS now contains `techhouse`, `dnb`, `funk`, `drill`, `hiphop`, `reggaeton`. New synth voices added alongside the existing kick/snare/clap/hatC/hatO: `playRim` (woody triangle + bright noise click), `playCowbell` (two squares at 800/540 Hz through a 2.4-Q bandpass), `playShaker` (noise bandpassed at 7.6 kHz, slow attack), `playSub` (sine sweep 58→40 Hz, ~450ms tail — the deep 808 layer for drill; pitch slide not implemented yet). `playDrumsAtStep` is now a generic dispatcher — any voice key present in the pattern gets triggered.
+21. **Unified rhythm icons + tooltip removal** — all six rhythm buttons share the same simple vector-silhouette aesthetic (24×24 viewBox, solid black fills, optional single stroke arc). Replaced the two ~600 KB base64-PNG icons for Techno and DnB with vector speaker and headphones SVGs. All `title="..."` attributes and `<title>...</title>` SVG elements stripped from the six style buttons (aria-label kept for screen readers). HTML dropped ~1.2 MB.
+22. **Bass + Bells instruments** — `playBass` is a Moog-style synth: sawtooth + sub-octave triangle through a resonant lowpass (Q=4.5) with a fast-decaying filter envelope, plus mild tanh saturation. Plays 2 octaves below the grid (`freq * 0.25`, range C2–C3). Bus: 94% dry / 8% wet, short IR. `playBells` is additive synthesis: sine partials at near-glockenspiel ratios (1, 2, 2.78, 5.42, 8.95) with each partial getting its own exponential decay envelope (higher partials fade faster). Plays 2 octaves above the grid (`freq * 4`, range C6–C7). Bus: 78% dry / 22% wet, long IR. Both routed through `delaySend` so the Echo pot affects them. Both gated behind login like Strings/Synth.
 
 ---
 
@@ -158,7 +162,7 @@ node serve.js   # → http://localhost:3000
 - **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `qr`. Auto-dismiss after 2.4s.
 - **Undo stack:** `pushUndo()` before state changes; `undo()` to restore
 - **Spacebar:** plays/stops sequencer; skips if `document.activeElement` is INPUT or TEXTAREA
-- **Rhythm placeholders:** 14 greyed-out `?` buttons (`drumStylePlaceholder` class) — `opacity:0.3`, disabled, `aria-hidden`. Will become real buttons as rhythms are added.
+- **Idle nudge affordance:** for controls kids might not realise are interactive, a periodic non-positional animation on the parent element, stopped permanently on first interaction by adding a body class (`body.potTouched`). Prefer motion over static decoration on small targets — multiple static-glyph attempts on the pots looked terrible at this size.
 
 ---
 
@@ -218,7 +222,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=7`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=13`).
 
 ---
 
@@ -264,8 +268,12 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **No viewport panning** — the drag-to-pan handler was removed. The fixed stage doesn't scroll. Do not re-add `body.can-pan` or `body.dragging-pan` cursor styles.
 - **`syncTopBarLoginPosition()`** — centres login button equidistant between Print and Tempo-Up using `getBoundingClientRect()`. Uses a transform sandwich in `__reveal()` (temporarily removes page scale to measure, then restores). Do not anchor login to the sequencer right edge.
 - **`#instButtons` is now inside `#drumPanel`** (not `#rightCol`). It's in `.drumBox.soundsBox`. The `#instButtons.locked` CSS rules still work via ID selectors. `instButtonsEl` JS reference still valid.
-- **`#potRow` in `#rightCol`** — 3 `.potKnob` elements (`#echoPot`, `#filterPot`, and Speed) with `.potBody` + `.potIndicator` + `.potLabel`. Echo and Filter have drag-to-rotate interaction (pointer events, 270° sweep). The JS sets inline `transform: rotate()` on `.potBody`, which overrides CSS hover/active rules.
+- **`#potRow` in `#rightCol`** — 2 `.potKnob` elements (`#echoPot`, `#filterPot`). Each wraps `.potBody` + `.potIndicator`. The JS sets inline `transform: rotate()` on `.potBody`, which overrides CSS hover/active rules. The idle nudge animation lives on the `.potKnob` parent, so it doesn't conflict with the body rotation. `body.potTouched` (set on first pointerdown of either pot) disables the nudge for the session.
 - **`melodicMaster` node** — gain node between instrument buses and `masterGain`. The filter chain and delay output both route through it. Drums bypass via `drumBus` → `masterGain` directly.
+- **`delaySend` wiring is explicit per bus** — when adding a melodic instrument, you must connect its bus input to `delaySend` (search `bus.piano.input.connect(delaySend)`). Forgetting this means the Echo pot has no effect on that instrument — that's how Bass shipped broken initially. The list lives ~line 1565.
+- **Adding a rhythm style** = pattern entry in `DRUM_PATTERNS` + button in `.rhythmBox` + element ref + entry in `DRUM_STYLE_AUDIO` (UI key → audio key) + entry in `DRUM_STYLE_UI` (audio key → UI key, used by cloud load) + entry in `DRUM_STYLE_BUTTONS()` + click handler calling `handleDrumClick(uiKey)`.
+- **Adding a drum voice** = `play*` function + a one-line dispatch in `playDrumsAtStep` (`if(pat.foo && pat.foo[s]) playFoo(t, pat.foo[s]);`) + the voice key in whichever DRUM_PATTERNS entries need it. The dispatcher is generic — voices not present in a pattern are simply skipped.
+- **Adding a melodic instrument** = `LEVEL` entry + bus in `makeInstrumentBuses` return object + IR in same function + `play*` function + dispatch in `playInstrument` (apply octave shift here if needed) + button in `.soundsBox` + element ref + entry in `setInstrument`'s `all` array and `map` object + click handler + `bindLockedNudge` if locked + **wire its bus input into `delaySend`**.
 - **`_triggeredNotes` Set** — tracks note IDs the playhead has actually played. Used for voice count gain reduction. Cleared on `stop()`. Notes placed on the grid don't affect gain until the playhead reaches them.
 - **`_compDense` is unused** — the old compressor density toggling was removed. The static compressor settings remain; dynamic level control is handled by `melodicMaster.gain` scaling.
 - **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
