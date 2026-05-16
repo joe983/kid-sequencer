@@ -155,8 +155,8 @@
 <div class="instBtn" id="btnSynth" title="Synth"><svg aria-hidden="true" class="waveIcon" viewbox="0 0 120 70">
 <polyline fill="none" points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40" stroke="#1f6bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></polyline>
 </svg></div>
-<div class="instBtn soundPlaceholder" aria-hidden="true" title="Coming soon">?</div>
-<div class="instBtn soundPlaceholder" aria-hidden="true" title="Coming soon">?</div>
+<div class="instBtn" id="btnBass" aria-label="Bass">🎸</div>
+<div class="instBtn" id="btnBells" aria-label="Bells">🔔</div>
 </div>
 </div>
 </div>
@@ -456,7 +456,9 @@ const LEVEL = {
   piano:   0.40,
   trumpet: 0.77,
   strings: 0.86,
-  synth:   0.34
+  synth:   0.34,
+  bass:    0.62,
+  bells:   0.46
 };
 
 /* Undo history (max 10 user actions) */
@@ -502,6 +504,8 @@ const btnPiano   = document.getElementById("btnPiano");
 const btnTrumpet = document.getElementById("btnTrumpet");
 const btnStrings = document.getElementById("btnStrings");
 const btnSynth   = document.getElementById("btnSynth");
+const btnBass    = document.getElementById("btnBass");
+const btnBells   = document.getElementById("btnBells");
 
 /* Drums UI */
 const drumMuteBtnEl = document.getElementById("drumMuteBtn");
@@ -544,6 +548,8 @@ btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
 btnTrumpet.onclick = () => { ensureAudioRunning(); setInstrument("trumpet"); };
 btnStrings.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("strings"); };
 btnSynth.onclick   = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("synth"); };
+if(btnBass)  btnBass.onclick  = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("bass"); };
+if(btnBells) btnBells.onclick = () => { if(!isLoggedIn){ showLockNudge(); hideLockNudgeSoon(900); return; } ensureAudioRunning(); setInstrument("bells"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -745,7 +751,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[btnStrings, btnSynth, document.getElementById("cameraBtn"), document.getElementById("saveBtn"), document.getElementById("loadBtn")].forEach(bindLockedNudge);
+[btnStrings, btnSynth, btnBass, btnBells, document.getElementById("cameraBtn"), document.getElementById("saveBtn"), document.getElementById("loadBtn")].forEach(bindLockedNudge);
 
 /* Prime audio */
 function primeAudioOnce(){
@@ -1424,6 +1430,8 @@ function makeInstrumentBuses(ctx, masterOut){
   const trumpetIR = makeHallImpulse(ctx, 0.70, 2.0);
   const stringsIR = makeHallImpulse(ctx, 1.30, 2.5);
   const synthIR   = makeHallImpulse(ctx, 0.45, 2.0);
+  const bassIR    = makeHallImpulse(ctx, 0.30, 1.6);  // bass stays mostly dry
+  const bellsIR   = makeHallImpulse(ctx, 2.10, 2.6);  // long shimmery tail
 
   function buildBus(ir, dryAmt, wetAmt){
     const input = ctx.createGain();
@@ -1451,7 +1459,9 @@ function makeInstrumentBuses(ctx, masterOut){
     piano:   buildBus(pianoIR,   0.72, 0.28),
     trumpet: buildBus(trumpetIR, 0.90, 0.12),
     strings: buildBus(stringsIR, 0.76, 0.32),
-    synth:   buildBus(synthIR,   0.92, 0.12)
+    synth:   buildBus(synthIR,   0.92, 0.12),
+    bass:    buildBus(bassIR,    0.94, 0.08),
+    bells:   buildBus(bellsIR,   0.55, 0.45)
   };
 }
 
@@ -1693,13 +1703,13 @@ function syncFilterCutoff(){
 function setInstrument(name){
   instrument = name;
 
-  const all = [btnPiano, btnTrumpet, btnStrings, btnSynth];
-  all.forEach(b => { b.classList.remove("selected","notSelected"); });
+  const all = [btnPiano, btnTrumpet, btnStrings, btnSynth, btnBass, btnBells];
+  all.forEach(b => { if(b) b.classList.remove("selected","notSelected"); });
 
-  const map = { piano: btnPiano, trumpet: btnTrumpet, strings: btnStrings, synth: btnSynth };
+  const map = { piano: btnPiano, trumpet: btnTrumpet, strings: btnStrings, synth: btnSynth, bass: btnBass, bells: btnBells };
   const selected = map[name];
-  selected.classList.add("selected");
-  all.forEach(b => { if(b !== selected) b.classList.add("notSelected"); });
+  if(selected) selected.classList.add("selected");
+  all.forEach(b => { if(b && b !== selected) b.classList.add("notSelected"); });
 }
 
 /* -------------------- TOOLS UI --------------------
@@ -2160,12 +2170,128 @@ function playSynth(freq, steps){
   osc.stop(stopAt);
 }
 
+function playBass(freq, steps){
+  // Moog-style synth bass: sawtooth + sub-octave triangle through a
+  // resonant lowpass with a fast-decaying filter envelope.
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  const release = Math.min(0.20, Math.max(0.08, hold * 0.10));
+  const stopAt = now + hold + release + 0.10;
+
+  const env = audioCtx.createGain();
+  scheduleEnvelope(env, now, hold, 0.005, 0.85, 0.58, release, 0.04);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.bass, now);
+  env.connect(level);
+
+  // Main saw
+  const o1 = audioCtx.createOscillator();
+  o1.type = "sawtooth";
+  o1.frequency.setValueAtTime(freq, now);
+
+  // Sub-octave triangle for body
+  const sub = audioCtx.createOscillator();
+  sub.type = "triangle";
+  sub.frequency.setValueAtTime(freq * 0.5, now);
+
+  const g1 = audioCtx.createGain();
+  g1.gain.setValueAtTime(0.55, now);
+  const gs = audioCtx.createGain();
+  gs.gain.setValueAtTime(0.34, now);
+
+  // Resonant lowpass — opens wide on attack, closes back fast for that "bouncy" feel
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  const cutoffPeak = Math.min(2800, Math.max(600, freq * 9));
+  const cutoffRest = Math.max(180, freq * 2.4);
+  lp.frequency.setValueAtTime(cutoffPeak, now);
+  lp.frequency.exponentialRampToValueAtTime(cutoffRest, now + 0.18);
+  lp.Q.setValueAtTime(4.5, now);
+
+  // Mild tanh saturation for growl
+  const shaper = audioCtx.createWaveShaper();
+  shaper.oversample = "2x";
+  const N = 256, curve = new Float32Array(N), amt = 1.6;
+  for(let i=0;i<N;i++){
+    const x = (i / (N - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amt * x);
+  }
+  shaper.curve = curve;
+
+  o1.connect(g1); sub.connect(gs);
+  g1.connect(lp); gs.connect(lp);
+  lp.connect(shaper);
+  shaper.connect(env);
+
+  level.connect(bus.bass.input);
+
+  trackNode(o1); trackNode(sub);
+  o1.start(now); sub.start(now);
+  o1.stop(stopAt); sub.stop(stopAt);
+}
+
+function playBells(freq, steps){
+  // FM synthesis glockenspiel: sine carrier modulated by a sine at an
+  // inharmonic ratio. High initial mod index decays quickly, giving the
+  // characteristic "ting → shimmer" of a struck metal bar.
+  const now = audioCtx.currentTime;
+  const hold = steps * stepDurationSec();
+  // Bells decay naturally; release length doesn't really change the sound
+  const naturalDecay = 1.6;
+  const stopAt = now + Math.max(hold, 0.1) + naturalDecay + 0.10;
+
+  const env = audioCtx.createGain();
+  env.gain.setValueAtTime(0.0001, now);
+  env.gain.exponentialRampToValueAtTime(1.0, now + 0.003);
+  env.gain.exponentialRampToValueAtTime(0.001, now + naturalDecay);
+
+  const level = audioCtx.createGain();
+  level.gain.setValueAtTime(LEVEL.bells, now);
+  env.connect(level);
+
+  // Carrier
+  const carrier = audioCtx.createOscillator();
+  carrier.type = "sine";
+  carrier.frequency.setValueAtTime(freq, now);
+
+  // Modulator at an inharmonic ratio (3.5:1) for bell-like timbre
+  const modulator = audioCtx.createOscillator();
+  modulator.type = "sine";
+  modulator.frequency.setValueAtTime(freq * 3.5, now);
+
+  // Mod index: peaks at the attack, decays fast (the "metallic ting")
+  const modGain = audioCtx.createGain();
+  modGain.gain.setValueAtTime(freq * 4.5, now);
+  modGain.gain.exponentialRampToValueAtTime(freq * 0.15, now + 0.35);
+
+  modulator.connect(modGain);
+  modGain.connect(carrier.frequency);
+
+  // Light highpass so the lowest bells still sparkle
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(200, now);
+  hp.Q.setValueAtTime(0.5, now);
+
+  carrier.connect(hp);
+  hp.connect(env);
+
+  level.connect(bus.bells.input);
+
+  trackNode(carrier); trackNode(modulator);
+  carrier.start(now); modulator.start(now);
+  carrier.stop(stopAt); modulator.stop(stopAt);
+}
+
 function playInstrument(freq, steps){
   lastAudioActivityAt = performance.now();
 
   if(instrument === "piano")   return playPiano(freq, steps);
   if(instrument === "trumpet") return playTrumpet(freq, steps);
   if(instrument === "strings") return playStrings(freq, steps);
+  if(instrument === "bass")    return playBass (freq * 0.25, steps); // 2 octaves down -> C2-C3
+  if(instrument === "bells")   return playBells(freq * 2,    steps); // 1 octave up   -> C5-C6
   return playSynth(freq, steps);
 }
 
