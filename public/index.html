@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=14">
+<link rel="stylesheet" href="css/styles.css?v=15">
 </head>
 <body>
 <script>
@@ -221,11 +221,11 @@
           <div class="tierName">Guest</div>
           <div class="tierPrice">Free</div>
           <ul class="tierFeatures">
-            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">4 instruments</li>
+            <li class="feat-yes">4 rhythm styles</li>
             <li class="feat-yes">Camera scan</li>
             <li class="feat-no">Print</li>
-            <li class="feat-no">Save</li>
-            <li class="feat-no">Load</li>
+            <li class="feat-no">Save &amp; Load</li>
           </ul>
           <div class="tierCta tierCta-ghost">You're here</div>
         </div>
@@ -233,11 +233,11 @@
           <div class="tierName">Member</div>
           <div class="tierPrice">Free</div>
           <ul class="tierFeatures">
-            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">All 6 instruments</li>
+            <li class="feat-yes">All 6 rhythms</li>
             <li class="feat-yes">Camera scan</li>
             <li class="feat-yes">Print</li>
-            <li class="feat-no">Save</li>
-            <li class="feat-no">Load</li>
+            <li class="feat-no">Save &amp; Load</li>
           </ul>
           <button class="tierCta tierCta-member" onclick="showUpgradeView('register')">Sign up free</button>
         </div>
@@ -246,11 +246,11 @@
           <div class="tierName">Pro</div>
           <div class="tierPrice">£1.99<span>/mo</span></div>
           <ul class="tierFeatures">
-            <li class="feat-yes">All instruments</li>
+            <li class="feat-yes">All 6 instruments</li>
+            <li class="feat-yes">All 6 rhythms</li>
             <li class="feat-yes">Camera scan</li>
             <li class="feat-yes">Print</li>
-            <li class="feat-yes">Save</li>
-            <li class="feat-yes">Load</li>
+            <li class="feat-yes">Save &amp; Load</li>
           </ul>
           <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
         </div>
@@ -624,10 +624,10 @@ const DRUM_STYLE_BUTTONS = () => ({
 
 btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
 btnTrumpet.onclick = () => { ensureAudioRunning(); setInstrument("trumpet"); };
-btnStrings.onclick = () => { ensureAudioRunning(); setInstrument("strings"); };
+btnStrings.onclick = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } ensureAudioRunning(); setInstrument("strings"); };
 btnSynth.onclick   = () => { ensureAudioRunning(); setInstrument("synth"); };
 if(btnBass)  btnBass.onclick  = () => { ensureAudioRunning(); setInstrument("bass"); };
-if(btnBells) btnBells.onclick = () => { ensureAudioRunning(); setInstrument("bells"); };
+if(btnBells) btnBells.onclick = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } ensureAudioRunning(); setInstrument("bells"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -706,8 +706,8 @@ function handleDrumClick(clickedStyle){
 if(drumStyleTechEl)      drumStyleTechEl.onclick      = () => handleDrumClick("techno");
 if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => handleDrumClick("dnb");
 if(drumStyleFunkEl)      drumStyleFunkEl.onclick      = () => handleDrumClick("funk");
-if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => handleDrumClick("drill");
-if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => handleDrumClick("hiphop");
+if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("drill"); };
+if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("hiphop"); };
 if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => handleDrumClick("reggaeton");
 
 // Init: Techno selected by default (unmuted state), but actual sound will only start after first user gesture.
@@ -777,6 +777,16 @@ function applyLockState(){
   if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
   const loadBtnEl = document.getElementById("loadBtn");
   if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
+
+  // Member-tier locks: 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
+  // show as "?" placeholders until the user registers.
+  const memberLocked = !isLoggedIn;
+  [
+    document.getElementById("btnStrings"),
+    document.getElementById("btnBells"),
+    document.getElementById("drumStyleDrill"),
+    document.getElementById("drumStyleHipHop"),
+  ].forEach(el => { if(el) el.classList.toggle("locked-member", memberLocked); });
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
@@ -817,7 +827,23 @@ function openUpgradeModal(path){
   const modal = document.getElementById('upgradeModal');
   if(!modal) return;
   _markCurrentTierCard();
-  if(isLoggedIn && !isPaid){ _highlightProCard(); }
+  if(path === 'member' && !isLoggedIn){
+    document.getElementById('tierCardMember')?.classList.add('tierCard-highlight');
+  } else if(isLoggedIn && !isPaid){
+    _highlightProCard();
+  }
+  // Contextual title based on what triggered the modal
+  const titleEl = document.getElementById('upgradeModalTitle');
+  if(titleEl){
+    const titles = {
+      member: 'Unlock more sounds',
+      print:  'Print your tune',
+      save:   'Save your tune',
+      load:   'Load a saved tune',
+      login:  'Welcome back'
+    };
+    titleEl.textContent = titles[path] || 'Make Music';
+  }
   showUpgradeView('marketing');
   modal.classList.add('show');
   modal.setAttribute('aria-hidden','false');
@@ -829,6 +855,9 @@ function closeUpgradeModal(){
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden','true');
   _upgradePath = null;
+  ['tierCardGuest','tierCardMember','tierCardPro'].forEach(id => {
+    document.getElementById(id)?.classList.remove('tierCard-highlight');
+  });
   ['loginEmail','loginPassword','registerEmail','registerPassword'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });

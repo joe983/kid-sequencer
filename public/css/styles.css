@@ -1513,6 +1513,68 @@ html.js-loading #contentWrap{
 }
 
 /* ============================================================
+   MEMBER-LOCKED BUTTONS — "?" placeholder shown to guests
+   Used on 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
+   ============================================================ */
+.locked-member {
+  position: relative;
+  cursor: pointer !important;
+  background: repeating-linear-gradient(
+    45deg,
+    #f0f0f0,
+    #f0f0f0 6px,
+    #e6e6e6 6px,
+    #e6e6e6 12px
+  ) !important;
+  overflow: hidden;
+  transition: transform 0.12s ease, background 0.18s ease;
+}
+.locked-member > *,
+.locked-member > svg {
+  visibility: hidden !important;
+}
+.locked-member::after {
+  content: "?";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+  font-size: 34px;
+  font-weight: 900;
+  color: #1d1d1d;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.10);
+  pointer-events: none;
+  z-index: 2;
+  animation: lockedMemberPulse 2.4s ease-in-out infinite;
+}
+.locked-member:hover {
+  transform: translateY(-2px) rotate(-1deg);
+  background: repeating-linear-gradient(
+    45deg,
+    #fff6c0,
+    #fff6c0 6px,
+    #ffe45c 6px,
+    #ffe45c 12px
+  ) !important;
+}
+.locked-member:hover::after {
+  animation: lockedMemberWiggle 0.35s ease-in-out;
+}
+@keyframes lockedMemberPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+@keyframes lockedMemberWiggle {
+  0%   { transform: rotate(0) scale(1); }
+  25%  { transform: rotate(-12deg) scale(1.15); }
+  50%  { transform: rotate(10deg) scale(1.15); }
+  75%  { transform: rotate(-6deg) scale(1.12); }
+  100% { transform: rotate(0) scale(1.1); }
+}
+
+/* ============================================================
    UPGRADE / AUTH MODAL
    Aesthetic: bold toy-packaging — thick shadows, sticker badge,
    satisfying press-down CTAs, spring card entry.
