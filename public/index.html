@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=19">
+<link rel="stylesheet" href="css/styles.css?v=20">
 </head>
 <body>
 <script>
@@ -35,6 +35,7 @@
     })();
   </script>
 <div aria-hidden="true" id="debug-info"></div>
+<div id="printSheet" aria-hidden="true"></div>
 <div id="viewport">
 <div id="page">
 <div id="topBar">
@@ -3493,11 +3494,30 @@ window.tempoUp = tempoUp;
 window.tempoDown = tempoDown;
 window.logout = logout;
 
+// Builds the blank A4 colouring-in worksheet (rows x cols outlined squares,
+// no instrument colours) the first time it's needed. @media print rules in
+// styles.css hide everything else and blow this grid up to fill the page.
+function buildPrintWorksheet(){
+  const sheet = document.getElementById('printSheet');
+  if(!sheet || sheet.childElementCount) return;
+  sheet.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  sheet.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  sheet.style.aspectRatio = `${cols} / ${rows}`;
+  for(let r=0; r<rows; r++){
+    for(let c=0; c<cols; c++){
+      const cell = document.createElement('div');
+      cell.className = 'printCell';
+      sheet.appendChild(cell);
+    }
+  }
+}
+
 // Print button: hand off to the browser's print dialog. Stops audio first
 // so the page is in a clean state when the user prints.
 function printSheet(){
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
+  try{ buildPrintWorksheet(); }catch(e){ console.warn('worksheet build failed', e); }
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }
 window.printSheet = printSheet;
