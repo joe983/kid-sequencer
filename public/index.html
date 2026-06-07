@@ -439,7 +439,16 @@ let occ = Array.from({length: rows}, () => Array(cols).fill(null));
 
 let audioCtx = null;
 let tempo = 120;
-let pendingTempo = null;
+// Tempo ramp state — when the user adjusts tempo while playing, we ease the
+// current `tempo` toward `_tempoTarget` over `_TEMPO_RAMP_MS` via rAF rather
+// than snapping (which used to jerk at the start of the loop because the old
+// code queued the change to step 0). _tempoTarget === null means no ramp in
+// flight. _tempoRampFrom is the tempo at the moment the click landed.
+let _tempoTarget = null;
+let _tempoRampFrom = 120;
+let _tempoRampStart = 0;
+let _tempoRampRAF = null;
+const _TEMPO_RAMP_MS = 350;
 let step = 0;
 let timer = null;
 
@@ -2692,15 +2701,15 @@ function startSequencer(){
     step = (step + 1) % cols;
     stepCount++;
 
-    if(step === 0 && pendingTempo !== null){
-      tempo = pendingTempo;
-      pendingTempo = null;
-      updateTempoBox();
-      setPlayheadWobbleFromTempo(tempo);
-      syncDelayTime();
-      // Reset the timing origin so drift correction restarts cleanly at the new tempo.
+    // If a tempo ramp is in flight, re-anchor the self-correcting timer
+    // each tick so the freshly-eased interval is honoured straight from
+    // "now" rather than chased from a stale origin (which would produce
+    // a tiny step lag that compounds across the ramp). During a ramp we
+    // briefly trade drift correction for responsive interval tracking;
+    // once the ramp ends, drift correction is back in full effect.
+    if(_tempoTarget !== null){
       seqStartTime = performance.now();
-      stepCount = 0;
+      stepCount = 1;
     }
 
     // Schedule the next tick at its exact expected absolute time (drift-free).
@@ -2729,29 +2738,65 @@ function stop(){
 }
 
 /* -------------------- TEMPO -------------------- */
+// Tempo box shows the TARGET while a ramp is in flight (so the click feels
+// immediate), and the actual rounded tempo when stable.
 function updateTempoBox(){
-  tempoBox.textContent = (pendingTempo !== null) ? pendingTempo : tempo;
+  tempoBox.textContent = (_tempoTarget !== null) ? _tempoTarget : Math.round(tempo);
 }
+
+// rAF loop that eases `tempo` from `_tempoRampFrom` to `_tempoTarget` over
+// `_TEMPO_RAMP_MS`, ease-out quad. On every frame it also updates the
+// playhead-wobble CSS var and the delay-time AudioParam so the visual and
+// echo stay in sync with the audible step rate. The sequencer tick() reads
+// `tempo` directly each tick, and re-anchors its self-correcting timer when
+// a ramp is in flight (see startSequencer).
+function _stepTempoRamp(){
+  if(_tempoTarget === null){ _tempoRampRAF = null; return; }
+  const now = performance.now();
+  const t = Math.min(1, (now - _tempoRampStart) / _TEMPO_RAMP_MS);
+  const k = 1 - (1 - t) * (1 - t); // ease-out quad
+  tempo = _tempoRampFrom + (_tempoTarget - _tempoRampFrom) * k;
+  setPlayheadWobbleFromTempo(tempo);
+  syncDelayTime();
+  if(t >= 1){
+    tempo = _tempoTarget;
+    _tempoTarget = null;
+    _tempoRampRAF = null;
+    updateTempoBox();
+    return;
+  }
+  _tempoRampRAF = requestAnimationFrame(_stepTempoRamp);
+}
+
 function requestTempo(newTempo){
   newTempo = Math.max(40, Math.min(200, newTempo));
   if(timer){
-    pendingTempo = newTempo;
+    // Playing — ease into the new tempo. Anchor from the CURRENT tempo
+    // (which may itself be mid-ramp) so successive clicks chain smoothly
+    // rather than snapping back to a stale start value.
+    _tempoRampFrom = tempo;
+    _tempoTarget = newTempo;
+    _tempoRampStart = performance.now();
     updateTempoBox();
-    setPlayheadWobbleFromTempo(pendingTempo);
+    if(_tempoRampRAF === null){
+      _tempoRampRAF = requestAnimationFrame(_stepTempoRamp);
+    }
     return;
   }
+  // Not playing — nothing audible, snap immediately and cancel any in-flight ramp.
+  if(_tempoRampRAF !== null){ cancelAnimationFrame(_tempoRampRAF); _tempoRampRAF = null; }
+  _tempoTarget = null;
   tempo = newTempo;
-  pendingTempo = null;
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
   syncDelayTime();
 }
 function tempoUp(){
-  const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  const base = (_tempoTarget !== null) ? _tempoTarget : Math.round(tempo);
   requestTempo(base + 5);
 }
 function tempoDown(){
-  const base = (pendingTempo !== null) ? pendingTempo : tempo;
+  const base = (_tempoTarget !== null) ? _tempoTarget : Math.round(tempo);
   requestTempo(base - 5);
 }
 
