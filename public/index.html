@@ -1314,7 +1314,7 @@ function playKick(at, vel=1){
 
   // Mild saturation to make it feel punchier
   const shaper = ctx.createWaveShaper();
-  shaper.oversample = "4x";
+  shaper.oversample = "2x";
   const N = 256;
   const curve = new Float32Array(N);
   const amt = 2.0;
@@ -1672,7 +1672,7 @@ function playDrumsAtStep(s){
   const swing = (drumStyle === "techhouse") ? 0.08 : 0.0;
   const offs = ((drumStyle === "techhouse") && (s % 2 === 1)) ? (stepDur * swing) : 0;
 
-  const t = audioCtx.currentTime + 0.002 + offs;
+  const t = audioCtx.currentTime + AUDIO_AHEAD_S + offs;
 
   // Generic voice dispatch — any pattern can include any subset of these tracks
   if(pat.kick    && pat.kick[s])    playKick      (t, pat.kick[s]);
@@ -2200,8 +2200,14 @@ function scheduleEnvelope(g, now, hold, attack, peak, sustain, release, decay1){
 }
 
 /* -------------------- INSTRUMENTS -------------------- */
+// Small lookahead so notes are scheduled slightly in the future, giving the audio
+// render thread time to prepare newly-created nodes before they must output —
+// prevents glitches when many voices fire on one step. Do NOT schedule at
+// audioCtx.currentTime exactly.
+const AUDIO_AHEAD_S = 0.010;
+
 function playPiano(freq, steps){
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
   const hold = steps * stepDurationSec();
 
   const release = Math.min(0.32, Math.max(0.16, hold * 0.12));
@@ -2292,7 +2298,7 @@ function playPiano(freq, steps){
 }
 
 function playTrumpet(freq, steps){
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
   const hold = steps * stepDurationSec();
   const release = Math.min(0.16, Math.max(0.09, hold * 0.08));
   const stopAt = now + hold + release + 0.10;
@@ -2344,7 +2350,7 @@ function playTrumpet(freq, steps){
 }
 
 function playStrings(freq, steps){
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
   const hold = steps * stepDurationSec();
 
   const padHold = Math.max(hold, 0.22);
@@ -2423,7 +2429,7 @@ function playStrings(freq, steps){
 }
 
 function playSynth(freq, steps){
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
   const hold = steps * stepDurationSec();
   const release = Math.min(0.18, Math.max(0.10, hold * 0.08));
   const stopAt = now + hold + release + 0.12;
@@ -2457,7 +2463,7 @@ function playSynth(freq, steps){
 function playBass(freq, steps){
   // Moog-style synth bass: sawtooth + sub-octave triangle through a
   // resonant lowpass with a fast-decaying filter envelope.
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
   const hold = steps * stepDurationSec();
   const release = Math.min(0.20, Math.max(0.08, hold * 0.10));
   const stopAt = now + hold + release + 0.10;
@@ -2520,7 +2526,7 @@ function playBells(freq, steps){
   // each with its own decay. Higher partials fade faster — that's what
   // gives the "ting then shimmer" without the clangy mid-range that
   // high-index FM creates.
-  const now = audioCtx.currentTime;
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
 
   const level = audioCtx.createGain();
   level.gain.setValueAtTime(LEVEL.bells, now);
@@ -2625,6 +2631,12 @@ function setBlockPulseVars(el){
 
 function startSequencer(){
   let firstTick = true;
+  // Self-correcting timer: schedule each tick at an absolute time relative to a
+  // fixed origin (seqStartTime + stepCount*interval), NOT "now + interval". This
+  // cancels drift from heavy ticks (many nodes/DOM) that setInterval accumulates
+  // — with setInterval the tempo sags ~5–8% under load. Do NOT revert to setInterval.
+  let seqStartTime = performance.now();
+  let stepCount = 0;
 
   function tick(){
     movePlayheadToStep(step);
@@ -2677,6 +2689,7 @@ function startSequencer(){
     playDrumsAtStep(step);
 
     step = (step + 1) % cols;
+    stepCount++;
 
     if(step === 0 && pendingTempo !== null){
       tempo = pendingTempo;
@@ -2684,26 +2697,24 @@ function startSequencer(){
       updateTempoBox();
       setPlayheadWobbleFromTempo(tempo);
       syncDelayTime();
-      restartInterval(stepDurationSec() * 1000);
+      // Reset the timing origin so drift correction restarts cleanly at the new tempo.
+      seqStartTime = performance.now();
+      stepCount = 0;
     }
-  }
 
-  function restartInterval(intervalMs){
-    if(timer){
-      clearInterval(timer);
-      timer = null;
-    }
-    timer = setInterval(tick, intervalMs);
+    // Schedule the next tick at its exact expected absolute time (drift-free).
+    const intervalMs = stepDurationSec() * 1000;
+    const nextAt = seqStartTime + stepCount * intervalMs;
+    timer = setTimeout(tick, Math.max(0, nextAt - performance.now()));
   }
 
   tick();
-  restartInterval(stepDurationSec() * 1000);
 }
 
 function stop(){
   _triggeredNotes.clear();
   if(timer){
-    clearInterval(timer);
+    clearTimeout(timer);
     timer = null;
   }
   if(startTimeout){
