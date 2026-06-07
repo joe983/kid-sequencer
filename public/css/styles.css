@@ -1989,3 +1989,31 @@ html.js-loading #contentWrap{
   .upgradeTitle { font-size: 18px; }
   .tierPrice { font-size: 22px; }
 }
+
+/* ---- Printable colouring-in worksheet ----
+   #printSheet is built once (buildPrintWorksheet) as a blank rows x cols
+   grid of outlined squares — no instrument colours, no notes — so kids can
+   colour squares by hand and scan the sheet back in via the camera's
+   sheet-scan crop (which expects a plain rows x cols grid of cells). It's
+   invisible on screen; @media print hides the whole app and blows this grid
+   up to fill an A4 landscape page (landscape gives bigger cells than portrait
+   for a 16:8 grid). */
+#printSheet { display: none; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+
+  body > *:not(#printSheet) { display: none !important; }
+
+  #printSheet {
+    display: grid !important;
+    width: 100%;
+    background: #ffffff;
+  }
+
+  #printSheet .printCell {
+    border: 2px solid #000000;
+    box-sizing: border-box;
+    background: #ffffff;
+  }
+}
