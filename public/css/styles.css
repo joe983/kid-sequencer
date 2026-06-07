@@ -2136,11 +2136,16 @@ html.js-loading #contentWrap{
 .learning-mode #saveBtn,
 .learning-mode #loadBtn,
 .learning-mode #printBtn,
-.learning-mode #loginCtaWrap { display: none !important; }
+.learning-mode #loginCtaWrap,
+.learning-mode #tempoControls,        /* tempo +/- removed entirely */
+.learning-mode #potRow { display: none !important; }  /* echo + filter pots removed entirely */
 
-/* Pots: present but inactive — stop the idle nudge and block dragging. */
-.learning-mode #potRow .potKnob { animation: none !important; }
-.learning-mode #potRow .potBody { pointer-events: none; opacity: 0.55; cursor: default; }
+/* Only the volume fader remains in the right column. Drop the lift that pulls
+   the column up to the top-bar controls row, so the fader's top aligns with the
+   grid top, and size its track to the top two grid rows so it lines up with the
+   first two squares. */
+.learning-mode #rightCol { transform: none !important; }
+.learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * 2 + var(--gap)); }
 
 /* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
    requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).

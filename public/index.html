@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=24">
+<link rel="stylesheet" href="css/styles.css?v=25">
 </head>
 <body>
 <script>
@@ -3945,8 +3945,10 @@ window.KidSequencer = {
 
     .seqTrackArea{
       position: relative;
-      /* Much shorter, while still ending at grid bottom */
-      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 88px);
+      /* Much shorter, while still ending at grid bottom. A learning level can
+         override the height via --faderTrackH (set on the host) — e.g. to span
+         only the top two grid rows. */
+      height: var(--faderTrackH, calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 88px));
       width: var(--instBtnSize);
       display:flex;
       align-items:center;
