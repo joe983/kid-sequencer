@@ -22,10 +22,14 @@ firebase hosting:channel:deploy preview
 ## Repo layout
 ```
 public/
-  index.html          ← entire app (HTML + inline CSS + inline JS ~3000 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=13)
+  index.html          ← entire app (HTML + inline CSS + inline JS ~3500 lines)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=17)
   js/firebase-init.js ← Firebase config + exports (auth, db)
-firebase.json         ← hosting config
+  login.html          ← deprecated; redirects to index.html (auth now inline)
+functions/
+  index.js            ← Cloud Functions: createCheckoutSession + stripeWebhook
+  package.json        ← Node 20; deps: firebase-admin, firebase-functions, stripe
+firebase.json         ← hosting + functions config
 firestore.rules       ← Firestore security rules
 serve.js              ← local static server (node serve.js → localhost:3000)
 ```
@@ -77,19 +81,24 @@ users/{uid}/
 
 ---
 
-## Tier system
+## Tier system (redesigned 2026-05-17)
 
-| Feature | Guest (not logged in) | Free (logged in) | Paid |
+| Feature | Guest (not logged in) | Member (free, logged in) | Pro (£1.99/mo) |
 |---|---|---|---|
-| Tempo | ✅ | ✅ | ✅ |
-| Piano / Trumpet | ✅ | ✅ | ✅ |
-| Strings / Synth / Bass / Bells | 🔒 | 🔒 | ✅ |
-| Camera scan | ✅ (6/week) | ✅ | ✅ |
-| Cloud save/load | 🔒 | 🔒 | ✅ |
+| Tempo, play, sequencer | ✅ | ✅ | ✅ |
+| Piano, Trumpet, Synth, Bass | ✅ | ✅ | ✅ |
+| Strings, Bells (positions 5–6) | 🔒 (?) | ✅ | ✅ |
+| Camera scan (unlimited, no cap) | ✅ | ✅ | ✅ |
+| Techno, DnB, Funk, Reggaeton | ✅ | ✅ | ✅ |
+| UK Drill, Hip Hop (positions 5–6) | 🔒 (?) | ✅ | ✅ |
+| Print | 🔒 | ✅ | ✅ |
+| Save / Load (cloud) | 🔒 | 🔒 | ✅ |
 
-Scan limit: tracked in `localStorage` (`kidseq_scan_week`, `kidseq_scan_count`). Resets each Monday.
+Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to `sessionStorage['kidseq_tier']` by the auth module.
 
-Tier is stored in Firestore `users/{uid}.tier` and mirrored to `sessionStorage['kidseq_tier']` by the auth module.
+**Scan cap removed** — camera is unlimited for all tiers. Old localStorage keys `kidseq_scans_*` are stale, can be cleared.
+
+**Member-locked instrument/rhythm buttons** show a striped `?` overlay (see `.locked-member` CSS class). `applyLockState()` toggles `locked-member` onto `btnStrings`, `btnBells`, `drumStyleDrill`, `drumStyleHipHop` when `!isLoggedIn`. Click handlers on locked buttons call `openUpgradeModal('member')`.
 
 ---
 
@@ -128,7 +137,7 @@ node serve.js   # → http://localhost:3000
 
 ---
 
-## What's been built (as of 2026-05-16, updated session 2026-05-16)
+## What's been built (as of 2026-05-17, updated session 2026-05-17)
 
 1. **Core sequencer** — grid, play/stop, tempo, multiple instruments, drums
 2. **Firebase auth** — login/register modal, persistent sessions
@@ -151,15 +160,21 @@ node serve.js   # → http://localhost:3000
 19. **Pot affordance — idle nudge animation** — `.potKnob` runs a vertical two-bounce hop (`@keyframes potNudge`, 5s cycle, ease-in-out, infinite). `#filterPot` has `animation-delay: 2.5s` so the two knobs alternate. Hover pauses (`:hover { animation-play-state: paused }`); first `pointerdown` on either pot adds `body.potTouched` which ends both animations for the session. Honors `prefers-reduced-motion`. Tells kids the knobs are interactive without putting static glyphs on the face.
 20. **6 rhythm styles + 9 drum voices** — DRUM_PATTERNS now contains `techhouse`, `dnb`, `funk`, `drill`, `hiphop`, `reggaeton`. New synth voices added alongside the existing kick/snare/clap/hatC/hatO: `playRim` (woody triangle + bright noise click), `playCowbell` (two squares at 800/540 Hz through a 2.4-Q bandpass), `playShaker` (noise bandpassed at 7.6 kHz, slow attack), `playSub` (sine sweep 58→40 Hz, ~450ms tail — the deep 808 layer for drill; pitch slide not implemented yet). `playDrumsAtStep` is now a generic dispatcher — any voice key present in the pattern gets triggered.
 21. **Unified rhythm icons + tooltip removal** — all six rhythm buttons share the same simple vector-silhouette aesthetic (24×24 viewBox, solid black fills, optional single stroke arc). Replaced the two ~600 KB base64-PNG icons for Techno and DnB with vector speaker and headphones SVGs. All `title="..."` attributes and `<title>...</title>` SVG elements stripped from the six style buttons (aria-label kept for screen readers). HTML dropped ~1.2 MB.
-22. **Bass + Bells instruments** — `playBass` is a Moog-style synth: sawtooth + sub-octave triangle through a resonant lowpass (Q=4.5) with a fast-decaying filter envelope, plus mild tanh saturation. Plays 2 octaves below the grid (`freq * 0.25`, range C2–C3). Bus: 94% dry / 8% wet, short IR. `playBells` is additive synthesis: sine partials at near-glockenspiel ratios (1, 2, 2.78, 5.42, 8.95) with each partial getting its own exponential decay envelope (higher partials fade faster). Plays 2 octaves above the grid (`freq * 4`, range C6–C7). Bus: 78% dry / 22% wet, long IR. Both routed through `delaySend` so the Echo pot affects them. Both gated behind login like Strings/Synth.
+22. **Bass + Bells instruments** — `playBass` is a Moog-style synth: sawtooth + sub-octave triangle through a resonant lowpass (Q=4.5) with a fast-decaying filter envelope, plus mild tanh saturation. Plays 2 octaves below the grid (`freq * 0.25`, range C2–C3). Bus: 94% dry / 8% wet, short IR. `playBells` is additive synthesis: sine partials at near-glockenspiel ratios (1, 2, 2.78, 5.42, 8.95) with each partial getting its own exponential decay envelope (higher partials fade faster). Plays 2 octaves above the grid (`freq * 4`, range C6–C7). Bus: 78% dry / 22% wet, long IR. Both routed through `delaySend` so the Echo pot affects them.
+23. **Tier system redesigned** (Guest / Member / Pro) — see Tier table above. All 6 instruments are reachable in the row (Piano, Trumpet, Synth, Bass, Strings, Bells); Strings + Bells positions 5–6 show `?` overlay for guests. Same for rhythms (Drill + Hip Hop at positions 5–6). Camera scan cap removed entirely. Tier is `free` or `paid` in Firestore.
+24. **Inline upgrade/auth modal** (`#upgradeModal`) — replaces `login.html` redirect. 3 views (marketing / login / register) with smooth transitions. Marketing view shows 3 tier cards with `?v=N`-style aesthetic: thick shadows, sticker `Best` badge on Pro card, spring entry animation, staggered card reveals, press-down CTAs. Triggered by clicking any locked control (print/save/load/member-locked instrument or rhythm) or the topbar Login button. Inline Firebase auth via `doLogin()` / `doRegister()` — no page redirect.
+25. **Stripe Checkout subscription** (£1.99/mo) — Firebase Cloud Function `createCheckoutSession` (HTTPS callable, `europe-west1`) creates the Stripe session and returns the URL. App redirects to Stripe-hosted checkout. `stripeWebhook` function listens for `checkout.session.completed` → writes `users/{uid}.tier = 'paid'` via Admin SDK, and `customer.subscription.deleted` → `tier = 'free'`. After payment, Stripe redirects back to `/?subscribed=1`; frontend polls Firestore until tier flips, then shows `proactivated` toast.
+26. **`.locked-member` button overlay** — visible "?" placeholder for guest-tier-locked instrument and rhythm buttons. Uses `::before` (striped diagonal cover, z-index:1) + `::after` ("?" centered, z-index:2). Hover wiggle + colour shift to yellow. Idle pulse animation (2.4s). Crucially: must use `::before` to cover content because the original buttons hold their icons as **text nodes** (emoji like 🌌🔔) which the `> *` selector can't hide.
 
 ---
 
 ## Key UX patterns in the codebase
 
-- **Locked button nudge:** `.locked` class on buttons; `bindLockedNudge()` adds a wiggle + shows login CTA on tap
+- **Locked button nudge:** `.locked` class on buttons; `bindLockedNudge()` adds a wiggle + opens upgrade modal on tap. Applied to print/save/load buttons.
+- **Member-locked overlay:** `.locked-member` class on guest-gated instrument/rhythm buttons. Uses `::before` (striped cover) + `::after` ("?") — see gotcha below about text-node visibility.
+- **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'login'|'subscribe'`. Path determines which CTA is highlighted and where the post-register flow continues to.
 - **Slide-up sheet:** `transform: translateY(100%)` → `translateY(0)` with `cubic-bezier(0.32,0.72,0,1)`
-- **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `qr`. Auto-dismiss after 2.4s.
+- **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `qr`, `proactivated`. Auto-dismiss after 2.4s.
 - **Undo stack:** `pushUndo()` before state changes; `undo()` to restore
 - **Spacebar:** plays/stops sequencer; skips if `document.activeElement` is INPUT or TEXTAREA
 - **Idle nudge affordance:** for controls kids might not realise are interactive, a periodic non-positional animation on the parent element, stopped permanently on first interaction by adding a body class (`body.potTouched`). Prefer motion over static decoration on small targets — multiple static-glyph attempts on the pots looked terrible at this size.
@@ -222,7 +237,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=13`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=17`).
 
 ---
 
@@ -279,3 +294,10 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
 - **CDN caching on `kid-sequencer.com`** — the custom domain has aggressive caching. Always bump `?v=N` in the CSS `<link>` when changing styles.css. HTML can also cache — verify on `kid-sequencer.web.app` or incognito after deploy.
 - **Always verify before deploying to production** — fetch origin, check for divergence, deploy to preview channel first, visually confirm, THEN deploy prod.
+- **Z-index stacking contexts:** `#topBar` has `z-index:3` (position:relative) and `#contentWrap` has `z-index:5` (position:relative). They're sibling stacking contexts on `<body>`. The lifted `#rightCol` (translateY by `--rightLift`) puts the tempo-up button into topBar's Y range — without contentWrap > topBar, topBar covers it and clicks don't land. Keep contentWrap's z-index above topBar's. Tempo-down was always clickable because it sits below the lifted overlap zone. (This is exactly why `tempoUp()` "didn't work" after the tier redesign.)
+- **`::before` for opaque overlays** — when masking a button that contains text/emoji (not just child elements), the `> *` selector does NOT match text nodes. `.locked-member` uses `::before` (z-index:1, opaque striped background) to cover everything, with `::after` (z-index:2) rendering the "?". Setting `color: transparent` on the parent would also work but interferes with `::after` color inheritance.
+- **Firebase preview URLs rotate** — `firebase hosting:channel:deploy preview` may return a different `--preview-<hash>.web.app` URL between runs. Always copy the URL from the latest deploy output. The previous URL 404s once rotated. Production URL is stable.
+- **Stripe Cloud Functions setup is incomplete** — `functions/index.js` ships but requires (1) Stripe account + Product/Price created (£1.99/mo recurring), (2) Firebase Blaze plan, (3) `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` set via `firebase functions:secrets:set`, (4) `firebase deploy --only functions`, (5) Stripe Dashboard webhook endpoint pointing at `https://europe-west1-kid-sequencer.cloudfunctions.net/stripeWebhook` for `checkout.session.completed` + `customer.subscription.deleted`. Until these are done, the Subscribe button errors out.
+- **Tempo arrow buttons** — `#tempoControls button` uses `display:flex; align-items:center; justify-content:center; line-height:1; font-family: Arial` to keep `▲`/`▼` glyphs centred. Explicit `color: #1d1d1d` because browser default for `<button>` text is system-blue on some platforms. `-webkit-appearance: none` strips native styling. Don't revert.
+- **Instrument and rhythm button order matters** — Strings and Bells live at positions 5–6 (rightmost) in `#instButtons` because they become `?` placeholders for guests; same for Drill and Hip Hop in `.rhythmBox`. Visual gating only works if locked items are at the END of the row. Don't reorder without re-examining `applyLockState()`.
+- **`functions/` directory is committed** — but `functions/node_modules/` is gitignored. Run `npm install` in `functions/` before deploying Cloud Functions.
