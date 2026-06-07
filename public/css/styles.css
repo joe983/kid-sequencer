@@ -303,7 +303,9 @@ body.loggedIn #robotLogo{
       transform: none;
       will-change: auto;
       position: relative;
-      z-index: 2;
+      /* Must be ABOVE #topBar (z-index:3) so the lifted #rightCol's tempo
+         controls are clickable where they visually overlap the topBar. */
+      z-index: 5;
     }
 
     /* Controls live inside #topBar, right-aligned next to the robot */
@@ -1531,21 +1533,27 @@ html.js-loading #contentWrap{
    Used on 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
    ============================================================ */
 .locked-member {
-  position: relative;
+  position: relative !important;
   cursor: pointer !important;
+  overflow: hidden;
+  transition: transform 0.12s ease;
+}
+/* Opaque cover sits ABOVE the button's own text/emoji/svg content */
+.locked-member::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   background: repeating-linear-gradient(
     45deg,
     #f0f0f0,
     #f0f0f0 6px,
     #e6e6e6 6px,
     #e6e6e6 12px
-  ) !important;
-  overflow: hidden;
-  transition: transform 0.12s ease, background 0.18s ease;
-}
-.locked-member > *,
-.locked-member > svg {
-  visibility: hidden !important;
+  );
+  z-index: 1;
+  pointer-events: none;
+  transition: background 0.18s ease;
+  border-radius: inherit;
 }
 .locked-member::after {
   content: "?";
@@ -1565,13 +1573,15 @@ html.js-loading #contentWrap{
 }
 .locked-member:hover {
   transform: translateY(-2px) rotate(-1deg);
+}
+.locked-member:hover::before {
   background: repeating-linear-gradient(
     45deg,
     #fff6c0,
     #fff6c0 6px,
     #ffe45c 6px,
     #ffe45c 12px
-  ) !important;
+  );
 }
 .locked-member:hover::after {
   animation: lockedMemberWiggle 0.35s ease-in-out;
