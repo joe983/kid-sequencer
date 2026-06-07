@@ -1016,7 +1016,11 @@ body.loggedIn #robotLogo{
 
     .potIndicator{
       position: absolute;
-      width: 4px;
+      /* Wider than it looks here on purpose: the page is rendered at a
+         responsive scale (often 0.2-0.3x on phones), so a thin 4px line
+         shrinks to well under 1px and disappears under anti-aliasing.
+         7px keeps it visibly a line even at the smallest scale. */
+      width: 7px;
       height: 20px;
       background: #1d1d1d;
       border-radius: 2px;
@@ -1950,6 +1954,11 @@ html.js-loading #contentWrap{
   transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
   outline: none;
   box-shadow: 0 3px 0 #1d1d1d;
+  /* Override the global `*{ caret-color: transparent }` (added to kill stray
+     focus-ring artifacts on buttons/divs) — these are real text fields, and
+     kids need the blinking text caret as the standard "you're typing here"
+     cue, on top of the existing yellow focus-ring highlight. */
+  caret-color: #1d1d1d;
 }
 .authForm input:focus {
   border-color: #1d1d1d;
@@ -2001,7 +2010,12 @@ html.js-loading #contentWrap{
 #printSheet { display: none; }
 
 @media print {
-  @page { size: A4 landscape; margin: 10mm; }
+  /* Grid is 16:8 (2:1) — always width-constrained on A4 landscape (the
+     content-area aspect ratio is ~1.46:1, well under 2:1), so cell size is
+     governed entirely by the horizontal margin. Shrinking it to 5mm (vs the
+     10mm used vertically, where there's no payoff) buys ~4% bigger cells
+     without risking clipping on typical printers' non-printable edges. */
+  @page { size: A4 landscape; margin: 10mm 5mm; }
 
   body > *:not(#printSheet) { display: none !important; }
 

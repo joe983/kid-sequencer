@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=20">
+<link rel="stylesheet" href="css/styles.css?v=21">
 </head>
 <body>
 <script>
@@ -3784,7 +3784,11 @@ window.KidSequencer = {
       left:50%;
       top:0;
       transform: translateX(-50%);
-      width: 3px; /* thin central line */
+      /* Wider than "thin line" implies on purpose: #page renders at a
+         responsive scale (often 0.2-0.3x on phones), so 3px shrinks to
+         well under 1px and disappears under anti-aliasing. 7px keeps it
+         visibly a line even at the smallest scale — see .potIndicator. */
+      width: 7px;
       height: 100%;
       border-radius: 999px;
       background:#0f0f0f;
