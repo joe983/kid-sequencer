@@ -2125,3 +2125,19 @@ html.js-loading #contentWrap{
     box-sizing: border-box;
   }
 }
+
+/* ---- Scaffolded learning levels (?level=N) ----
+   <html> gets `.learning-mode` (set in the IIFE) when a LEARN_LEVEL is active.
+   These scaled-back pages strip the bottom instrument/rhythm panel and the
+   topbar's camera/save/load/print/login, and neutralise the effect pots
+   (kept visible but inert). Everything else is the normal sequencer. */
+.learning-mode #drumPanel,            /* both the instrument (.soundsBox) and rhythm (.rhythmBox) rows */
+.learning-mode #cameraBtn,
+.learning-mode #saveBtn,
+.learning-mode #loadBtn,
+.learning-mode #printBtn,
+.learning-mode #loginCtaWrap { display: none !important; }
+
+/* Pots: present but inactive — stop the idle nudge and block dragging. */
+.learning-mode #potRow .potKnob { animation: none !important; }
+.learning-mode #potRow .potBody { pointer-events: none; opacity: 0.55; cursor: default; }
