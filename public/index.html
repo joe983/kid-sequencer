@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=18">
+<link rel="stylesheet" href="css/styles.css?v=19">
 </head>
 <body>
 <script>
@@ -2130,27 +2130,48 @@ function redrawAllNotes(){
   for(let r=0;r<rows;r++) redrawRowNotes(r);
 }
 
+function applyNoteGeometry(block, r, note){
+  const left = note.start * (CELL + GAP);
+  const width = note.len * CELL + (note.len - 1) * GAP;
+  block.style.left = `${left}px`;
+  block.style.top = `0px`;
+  block.style.width = `${width}px`;
+  block.style.background = rowColors[r];
+}
+
+function createNoteBlock(r, note){
+  const block = document.createElement("div");
+  block.className = "noteBlock placing";
+  block.dataset.id = String(note.id);
+  applyNoteGeometry(block, r, note);
+  // Note blocks are pointer-events:none — clicks pass through to the
+  // underlying .cell, where onCellClick handles deletion via occ[r][c].
+  // Drop the entrance class once the (touch-only) animation finishes so it
+  // can't clash with the `.playing` swell later.
+  block.addEventListener("animationend", () => block.classList.remove("placing"), { once: true });
+  return block;
+}
+
+// Diff against the existing DOM instead of wiping innerHTML. Wiping destroyed and
+// recreated every block on each redraw, which flashed on mobile when placing a note
+// (Safari repaints the whole layer). Now only changed blocks are touched.
 function redrawRowNotes(r){
   const layer = noteLayerEls[r];
-  layer.innerHTML = "";
+  const existing = new Map();
+  for(const block of layer.querySelectorAll(".noteBlock")) existing.set(block.dataset.id, block);
+  const modelIds = new Set(notesByRow[r].map(n => String(n.id)));
 
+  // Remove blocks no longer in the model.
+  for(const [id, block] of existing){
+    if(!modelIds.has(id)) block.remove();
+  }
+
+  // Reuse blocks that persist (just refresh geometry); create+animate new ones.
   for(const note of notesByRow[r]){
-    const block = document.createElement("div");
-    block.className = "noteBlock";
-    block.dataset.id = String(note.id);
-
-    const left = note.start * (CELL + GAP);
-    const width = note.len * CELL + (note.len - 1) * GAP;
-
-    block.style.left = `${left}px`;
-    block.style.top = `0px`;
-    block.style.width = `${width}px`;
-    block.style.background = rowColors[r];
-
-    // Note blocks are pointer-events:none — clicks pass through to the
-    // underlying .cell, where onCellClick handles deletion via occ[r][c].
-
-    layer.appendChild(block);
+    const id = String(note.id);
+    const block = existing.get(id);
+    if(block) applyNoteGeometry(block, r, note);
+    else layer.appendChild(createNoteBlock(r, note));
   }
 }
 

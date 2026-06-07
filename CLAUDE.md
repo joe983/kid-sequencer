@@ -23,7 +23,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3500 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=18)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=19)
   js/firebase-init.js ← Firebase config + exports (auth, db)
   login.html          ← deprecated; redirects to index.html (auth now inline)
 functions/
@@ -172,6 +172,7 @@ node serve.js   # → http://localhost:3000
 25. **Stripe Checkout subscription** (£1.99/mo) — Firebase Cloud Function `createCheckoutSession` (HTTPS callable, `europe-west1`) creates the Stripe session and returns the URL. App redirects to Stripe-hosted checkout. `stripeWebhook` function listens for `checkout.session.completed` → writes `users/{uid}.tier = 'paid'` via Admin SDK, and `customer.subscription.deleted` → `tier = 'free'`. After payment, Stripe redirects back to `/?subscribed=1`; frontend polls Firestore until tier flips, then shows `proactivated` toast.
 26. **`.locked-member` button overlay** — visible "?" placeholder for guest-tier-locked instrument and rhythm buttons. Uses `::before` (striped diagonal cover, z-index:1) + `::after` ("?" centered, z-index:2). Hover wiggle + colour shift to yellow. Idle pulse animation (2.4s). Crucially: must use `::before` to cover content because the original buttons hold their icons as **text nodes** (emoji like 🌌🔔) which the `> *` selector can't hide.
 27. **Playhead (tape head) animation overhaul** (2026-06-07) — fixed the start-of-play glitch and gave it a subtle cartoony look. `#playhead` is now split into an outer element (position only, `transform: translateX()`) + inner `.playheadBody` (all visuals + the wiggle). Positioning moved off `left` onto `translateX` (GPU/sub-pixel — kills the CPU→GPU handoff jank on the first move). `@keyframes wiggle` redesigned to start/end at identity so adding `.playing` no longer snaps from neutral to a rotated keyframe (the old pop). Per-step motion is a snap+settle via `cubic-bezier(0.34,1.56,0.64,1)` over `--phMove` (130ms→70ms as tempo rises, set in `setPlayheadWobbleFromTempo`). Restyle: 16px radius, sticker drop-shadow + warm glow, purple dashed contact line. CSS `?v=18`.
+28. **Mobile note-placement flash fix** (2026-06-07) — `redrawRowNotes()` no longer wipes `layer.innerHTML` and rebuilds every block on each redraw (that flashed on iOS when placing a note). It now **diffs against the existing DOM**: removes blocks no longer in the model, refreshes geometry on ones that persist, and creates only genuinely new ones (`createNoteBlock` / `applyNoteGeometry` helpers). New blocks get a touch-only entrance animation (`.placing` → `@keyframes notePlace`, removed on `animationend`). CSS also adds `-webkit-tap-highlight-color: transparent` on `.cell`/`.noteBlock`, `@media (hover:none){ .cell:hover{transform:none} }` (kills the post-tap hover pop), and `transform: translateZ(0)` on `.noteLayer` (own GPU layer). Ported from the abandoned `reverent-vaughan` branch, adapted to the `pointer-events:none` note-block architecture. CSS `?v=19`.
 
 ---
 
@@ -244,7 +245,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=18`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=19`).
 
 ---
 
@@ -309,3 +310,4 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Instrument and rhythm button order matters** — Strings and Bells live at positions 5–6 (rightmost) in `#instButtons` because they become `?` placeholders for guests; same for Drill and Hip Hop in `.rhythmBox`. Visual gating only works if locked items are at the END of the row. Don't reorder without re-examining `applyLockState()`.
 - **`functions/` directory is committed** — but `functions/node_modules/` is gitignored. Run `npm install` in `functions/` before deploying Cloud Functions.
 - **Playhead = two nested elements** — outer `#playhead` does position (`transform: translateX()`), inner `.playheadBody` does visuals + the `wiggle` animation. They're split because a single element can't hold two independent `transform`s. Do NOT animate `#playhead` position with `left` (causes a first-frame CPU→GPU handoff glitch) and do NOT move the wiggle back onto the outer element. `movePlayheadToStep()` sets `transform`; `resetPlayheadInstant()` clears the inline transition (`""`) to fall back to the CSS snap+settle bezier. The `wiggle` keyframes MUST start/end at identity (`rotate(0) scale(1)`) or the start-of-play pop returns.
+- **`redrawRowNotes()` is diff-based — do NOT revert to `layer.innerHTML = ""`** — wiping and rebuilding every note block on each redraw caused a visible flash on iOS when placing a note. The function now reuses persisting DOM blocks (keyed by `data-id`), removes stale ones, and only creates new blocks via `createNoteBlock()`. New blocks carry a `.placing` class for a touch-only entrance animation that's stripped on `animationend`. Keep note blocks `pointer-events:none` (no per-block click handlers) — deletion still goes through `.cell`/`onCellClick`.
