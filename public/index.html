@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=17">
+<link rel="stylesheet" href="css/styles.css?v=18">
 </head>
 <body>
 <script>
@@ -94,7 +94,7 @@
 </div>
 <div id="sequencerShell">
 <div id="sequencerWrapper">
-<div id="playhead" style="display:none;"></div>
+<div id="playhead" style="display:none;"><div class="playheadBody"></div></div>
 <div id="sequencer"></div>
 </div>
 <div aria-label="Drum controls" id="drumPanel">
@@ -1044,6 +1044,9 @@ function setPlayheadWobbleFromTempo(t){
   const ratio = (t >= 90) ? 1 : clamp01((t - 40) / (90 - 40));
   document.documentElement.style.setProperty("--wiggleDeg",   (1.2 * ratio).toFixed(3) + "deg");
   document.documentElement.style.setProperty("--wiggleScale", (0.01 * ratio).toFixed(4));
+  // Shorten the per-step move (snap+settle) as tempo rises so the bounce never lags the beat.
+  // ~130ms at slow tempo -> ~70ms at fast tempo.
+  document.documentElement.style.setProperty("--phMove", (130 - 60 * ratio).toFixed(0) + "ms");
 }
 
 /* -------------------- RESPONSIVE FIT -------------------- */
@@ -2154,12 +2157,12 @@ function redrawRowNotes(r){
 /* -------------------- PLAYHEAD -------------------- */
 function setPlayheadVisible(on){ playheadEl.style.display = on ? "block" : "none"; }
 function setPlayheadPlaying(isPlaying){ playheadEl.classList.toggle("playing", isPlaying); }
-function movePlayheadToStep(s){ playheadEl.style.left = `${s * (CELL + GAP)}px`; }
+function movePlayheadToStep(s){ playheadEl.style.transform = `translateX(${s * (CELL + GAP)}px)`; }
 function resetPlayheadInstant(){
   playheadEl.style.transition = "none";
   movePlayheadToStep(0);
   void playheadEl.offsetWidth;
-  playheadEl.style.transition = "left 70ms linear";
+  playheadEl.style.transition = "";
 }
 
 /* -------------------- ENVELOPE -------------------- */

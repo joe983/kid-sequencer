@@ -812,35 +812,52 @@ body.loggedIn #robotLogo{
     }
     .noteBlock.playing{ animation: swell 260ms ease-out; }
 
+    /* Outer = position only. Driven by transform:translateX (GPU, sub-pixel) so the
+       first frame of motion never triggers a layout/CPU->GPU handoff glitch. The
+       back-overshoot bezier gives the "snap to step then little settle" bounce. */
     #playhead{
       position:absolute;
       top:0; bottom:0;
       width: var(--cell);
       left: 0;
       pointer-events:none;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.30);
-      border: 4px solid rgba(0,0,0,0.22);
-      box-shadow: 0 0 0 3px rgba(255,255,255,0.25) inset;
-      transition: left 70ms linear;
+      transform: translateX(0);
+      transition: transform var(--phMove, 110ms) cubic-bezier(0.34, 1.56, 0.64, 1);
+      will-change: transform;
+    }
+    /* Inner = all visuals + the wiggle. Kept separate so position-transform and
+       wiggle-transform don't fight over the single `transform` property. */
+    .playheadBody{
+      position:absolute;
+      inset:0;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.32);
+      border: 4px solid rgba(60, 40, 90, 0.30);
+      box-shadow:
+        0 0 0 3px rgba(255,255,255,0.30) inset,
+        0 5px 0 rgba(60, 40, 90, 0.18),
+        0 0 14px 2px rgba(255, 214, 92, 0.35);
       transform-origin: 50% 50%;
     }
-    #playhead::after{
+    .playheadBody::after{
       content:"";
       position:absolute;
-      top:6px; bottom:6px;
+      top:7px; bottom:7px;
       left: 50%;
       width: 0;
-      border-left: 3px dashed rgba(0,0,0,0.18);
+      border-left: 4px dashed rgba(60, 40, 90, 0.28);
       transform: translateX(-50%);
     }
 
+    /* Starts and ends at neutral (0deg / scale 1) so adding `.playing` on the first
+       tick doesn't snap from identity to a rotated keyframe — no start-of-play pop. */
     @keyframes wiggle {
-      0%   { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
-      50%  { transform: rotate(var(--wiggleDeg))           scale(calc(1 + var(--wiggleScale))); }
-      100% { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+      0%   { transform: rotate(0) scale(1); }
+      25%  { transform: rotate(calc(-1 * var(--wiggleDeg))) scale(calc(1 + var(--wiggleScale))); }
+      75%  { transform: rotate(var(--wiggleDeg))            scale(calc(1 + var(--wiggleScale))); }
+      100% { transform: rotate(0) scale(1); }
     }
-    #playhead.playing{ animation: wiggle 220ms ease-in-out infinite; }
+    #playhead.playing .playheadBody{ animation: wiggle 220ms ease-in-out infinite; }
 
     #rightCol{
       width: var(--rightW);
