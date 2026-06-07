@@ -269,8 +269,8 @@
         <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
       </div>
       <div class="authForm">
-        <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" />
-        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" />
+        <input id="loginEmail" type="email" placeholder="Email" autocomplete="email" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doLogin(); }" />
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doLogin(); }" />
         <div class="authStatus" id="loginStatus"></div>
         <button class="authSubmit" id="loginSubmit" onclick="doLogin()">Log in</button>
       </div>
@@ -287,8 +287,8 @@
         <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
       </div>
       <div class="authForm">
-        <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" />
-        <input id="registerPassword" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" />
+        <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
+        <input id="registerPassword" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
         <div class="authStatus" id="registerStatus"></div>
         <button class="authSubmit" id="registerSubmit" onclick="doRegister()">Create account</button>
       </div>
