@@ -2000,34 +2000,128 @@ html.js-loading #contentWrap{
 }
 
 /* ---- Printable colouring-in worksheet ----
-   #printSheet is built once (buildPrintWorksheet) as a blank rows x cols
-   grid of outlined squares — no instrument colours, no notes — so kids can
-   colour squares by hand and scan the sheet back in via the camera's
-   sheet-scan crop (which expects a plain rows x cols grid of cells). It's
-   invisible on screen; @media print hides the whole app and blows this grid
-   up to fill an A4 landscape page (landscape gives bigger cells than portrait
-   for a 16:8 grid). */
+   #printSheet is built once (buildPrintWorksheet) and mirrors the on-screen
+   sequencer's look in B&W: title header, decorative note-length circles
+   down the left (matching the on-screen left column), beat numbers above,
+   and a uniform rows x cols grid of rounded outlined cells (matching the
+   on-screen cell style — 12px-equivalent radius, thick black border). The
+   grid itself stays uniform so the camera's sheet-scan crop still works;
+   all decorative elements sit outside it. Invisible on screen; @media print
+   hides the rest of the app and renders this at A4 landscape (the only
+   orientation that gives a usable cell size for a 2:1 grid). */
 #printSheet { display: none; }
 
 @media print {
-  /* Grid is 16:8 (2:1) — always width-constrained on A4 landscape (the
-     content-area aspect ratio is ~1.46:1, well under 2:1), so cell size is
-     governed entirely by the horizontal margin. Shrinking it to 5mm (vs the
-     10mm used vertically, where there's no payoff) buys ~4% bigger cells
-     without risking clipping on typical printers' non-printable edges. */
+  /* Grid is 16:8 (2:1) — width-constrained on A4 landscape, so cell size
+     is governed by horizontal margin. 5mm horizontal (vs 10mm vertical
+     where there's no payoff) maximises cell size without risking clipping
+     on typical printers' non-printable edges. */
   @page { size: A4 landscape; margin: 10mm 5mm; }
 
   body > *:not(#printSheet) { display: none !important; }
 
   #printSheet {
-    display: grid !important;
+    display: flex !important;
+    flex-direction: column;
     width: 100%;
+    min-height: 100vh;
     background: #ffffff;
+    color: #000000;
+    font-family: "Trebuchet MS", Arial, sans-serif;
+    box-sizing: border-box;
   }
 
-  #printSheet .printCell {
-    border: 2px solid #000000;
-    box-sizing: border-box;
+  .printHeader {
+    text-align: center;
+    margin-bottom: 3mm;
+    flex: 0 0 auto;
+  }
+  .printTitle {
+    font-size: 22pt;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.3pt;
+    line-height: 1.05;
+  }
+  .printSub {
+    font-size: 10pt;
+    font-weight: 600;
+    margin: 1.2mm 0 0;
+    color: #1d1d1d;
+  }
+
+  /* 2x2 CSS grid: row 1 is the beat-numbers strip (only over the grid
+     column); row 2 is the side col + grid. Putting the side col in row 2
+     only keeps its 5 decorative circles aligned with the grid's height
+     and prevents the last one from spilling below. */
+  .printBody {
+    display: grid;
+    grid-template-columns: 14mm 4mm 1fr;
+    /* Row 2 sized to the grid's own height (driven by aspect-ratio 16/8 on
+       width). Side col in row 2 then stretches to exactly the grid's
+       height, keeping the 5 circles aligned with the cells instead of
+       spilling below. */
+    grid-template-rows: auto auto;
+    flex: 1 1 auto;
+    align-content: start;
+  }
+
+  /* Decorative left column: 5 circles spread evenly across the grid's
+     height, each containing a musical-note glyph. Not interactive — these
+     mirror the on-screen note-length buttons so the printed sheet still
+     reads as "Kid Sequencer", not a generic graph paper grid. */
+  .printSideCol {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+  }
+  .printNoteCircle {
+    width: 14mm;
+    height: 14mm;
+    border: 2.2pt solid #000000;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18pt;
+    line-height: 1;
     background: #ffffff;
+    box-sizing: border-box;
+  }
+
+  /* Beat numbers above the grid — one per group of 4 columns. Lives in
+     row 1, grid column only, so it aligns with the cells (not the side
+     col). */
+  .printBeatRow {
+    grid-column: 3;
+    grid-row: 1;
+    display: flex;
+    margin-bottom: 1.5mm;
+  }
+  .printBeatNum {
+    flex: 1 1 0;
+    text-align: center;
+    font-size: 12pt;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .printGrid {
+    grid-column: 3;
+    grid-row: 2;
+    display: grid;
+    gap: 1mm;
+    width: 100%;
+    aspect-ratio: 16 / 8;
+    align-self: start;
+  }
+  .printCell {
+    border: 2.2pt solid #000000;
+    border-radius: 2.2mm;
+    background: #ffffff;
+    box-sizing: border-box;
   }
 }
