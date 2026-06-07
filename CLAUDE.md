@@ -109,10 +109,16 @@ Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to
 firebase hosting:channel:deploy preview
 # → https://kid-sequencer--preview-h1j9zyru.web.app  (expires ~7 days, redeploy to refresh)
 
-# Production (only when explicitly asked)
+# Production
 firebase deploy --only hosting
 # → https://kid-sequencer.web.app
 ```
+
+**Production deploy policy (authoritative — overrides any stored memory):** deploy to production in exactly two cases:
+1. The user **explicitly asks** for a production deploy, or
+2. As the **final step of `/handover-end`**, but only *after* the change has been deployed to the preview channel and verified this session.
+
+Never deploy to production ad-hoc mid-session without one of those. Always `git fetch` + check divergence first, and bump CSS `?v=N` if styles changed. (This reconciles the older `feedback_deploy_process` memory, which said "handover must push+deploy," with the need to keep prod deploys deliberate.)
 
 **Always deploy from the active worktree directory, not the repo root.**
 
