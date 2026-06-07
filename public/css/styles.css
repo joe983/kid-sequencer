@@ -2141,3 +2141,9 @@ html.js-loading #contentWrap{
 /* Pots: present but inactive — stop the idle nudge and block dragging. */
 .learning-mode #potRow .potKnob { animation: none !important; }
 .learning-mode #potRow .potBody { pointer-events: none; opacity: 0.55; cursor: default; }
+
+/* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
+   requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).
+   Greys + blocks the grid while leaving the fixed-position upgrade modal usable.
+   No level uses this today — Level 1 is requiresTier:"guest" (fully open). */
+.level-locked #contentWrap { pointer-events: none; filter: grayscale(0.6) opacity(0.5); }

@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=23">
+<link rel="stylesheet" href="css/styles.css?v=24">
 </head>
 <body>
 <script>
@@ -397,7 +397,12 @@ const LEARN_LEVELS = {
     instrument: "piano",         // "organ" in the UI = piano key in code
     drumPatternKey: "techlearn", // dedicated 8-step techno loop (see DRUM_PATTERNS)
     lockPots: true,
-    maxCell: 112                 // let the small 3×8 grid grow to fill the stage (engine default cap 64)
+    maxCell: 112,                // let the small 3×8 grid grow to fill the stage (engine default cap 64)
+    // Tier entitlement — "guest" = fully open (no lock; access is the unguessable
+    // URL only). To fold a level into the paid tier later, change this to "member"
+    // or "paid": the entitlement hook in applyLockState then greys the grid and
+    // shows the upgrade modal for users without that tier. Nothing else to change.
+    requiresTier: "guest"
   }
 };
 const _lvlParam = new URLSearchParams(location.search).get("level");
@@ -788,6 +793,26 @@ function handleLoginBtn(){
 }
 window.handleLoginBtn = handleLoginBtn;
 
+// Tier-entitlement hook for scaffolding levels — DORMANT by default.
+// A LEARN_LEVEL may declare requiresTier: "guest" | "member" | "paid".
+// "guest" (or unset) means fully open: this returns immediately and never locks
+// anything. To fold a level into the paid tier later, set its requiresTier to
+// "member"/"paid" — a user without that tier then gets the grid greyed
+// (.level-locked) plus the upgrade modal. It re-runs from applyLockState() on
+// every auth/tier change, so a fresh login or upgrade unlocks the level live.
+// Relies on isPaid/isLoggedIn already being resolved by applyLockState's caller.
+function enforceLevelEntitlement(){
+  if(!LEARN_LEVEL || !LEARN_LEVEL.requiresTier || LEARN_LEVEL.requiresTier === "guest") return;
+  const ok = LEARN_LEVEL.requiresTier === "paid"   ? !!isPaid
+           : LEARN_LEVEL.requiresTier === "member" ? !!isLoggedIn
+           : true;
+  document.documentElement.classList.toggle("level-locked", !ok); // greying can apply synchronously
+  // Defer the modal: applyLockState() runs once at parse time, before the modal's
+  // helper consts are initialised — calling openUpgradeModal then would throw (TDZ)
+  // and abort the IIFE. rAF + try/catch keeps flipping requiresTier safe.
+  if(!ok) requestAnimationFrame(() => { try{ openUpgradeModal("subscribe"); }catch(e){} });
+}
+
 function applyLockState(){
   // Re-read tier from sessionStorage so async auth updates are picked up immediately
   // Only trust the stored tier if the user is actually logged in
@@ -834,6 +859,9 @@ function applyLockState(){
     document.getElementById("drumStyleDrill"),
     document.getElementById("drumStyleHipHop"),
   ].forEach(el => { if(el) el.classList.toggle("locked-member", memberLocked); });
+
+  // Scaffolding-level entitlement (dormant unless a level sets requiresTier).
+  enforceLevelEntitlement();
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
