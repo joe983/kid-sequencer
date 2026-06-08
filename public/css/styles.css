@@ -2065,3 +2065,58 @@ html.js-loading #contentWrap{
     opacity: 1 !important;
   }
 }
+
+/* ---- Scaffolded learning levels (?level=N) ----
+   <html> gets `.learning-mode` (set in the IIFE) when a LEARN_LEVEL is active.
+   These scaled-back pages strip the bottom instrument/rhythm panel and the
+   topbar's camera/save/load/print/login, and neutralise the effect pots
+   (kept visible but inert). Everything else is the normal sequencer. */
+.learning-mode #drumPanel,            /* both the instrument (.soundsBox) and rhythm (.rhythmBox) rows */
+.learning-mode #cameraBtn,
+.learning-mode #saveBtn,
+.learning-mode #loadBtn,
+.learning-mode #printBtn,
+.learning-mode #loginCtaWrap,
+.learning-mode #tempoControls,        /* tempo +/- removed entirely */
+.learning-mode #potRow { display: none !important; }  /* echo + filter pots removed entirely */
+
+/* Only the volume fader remains in the right column. Drop the lift that pulls
+   the column up to the top-bar controls row, so the fader's top aligns with the
+   grid top, and size its track to the top two grid rows so it lines up with the
+   first two squares. */
+.learning-mode #rightCol { transform: none !important; }
+.learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * 2 + var(--gap)); }
+
+/* Note-value glyph drawn in the centre of a placed block (learning mode).
+   Sits above the candy-bar ::after overlay via z-index. */
+.noteBlock .noteGlyph{
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Noto Music", "Bravura", "Arial Unicode MS", "Segoe UI Symbol", serif;
+  font-size: calc(var(--cell) * 0.62);
+  line-height: 1;
+  color: #1d1d1d;
+  pointer-events: none;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
+/* Quarter note = SOLID bar: hide the candy-bar segment/separator overlay so
+   there's no divider down the middle (the ::before bevel stays for depth).
+   Eighth keeps ::after — its mid-block separator reads as "two 8th notes". */
+.noteBlock[data-kind="quarter"]::after{ display: none; }
+
+/* These music glyphs render high within their em-box, so flex-centring (which
+   centres the em-box, not the visible ink) leaves them pushed to the top.
+   Nudge each down by its measured ink-centre offset. In em so it scales with
+   the glyph/cell size; per-kind because ♩ and ♫ differ. */
+.noteBlock[data-kind="quarter"] .noteGlyph{ transform: translateY(0.36em); }
+.noteBlock[data-kind="eighth"]  .noteGlyph{ transform: translateY(0.27em); }
+
+/* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
+   requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).
+   Greys + blocks the grid while leaving the fixed-position upgrade modal usable.
+   No level uses this today — Level 1 is requiresTier:"guest" (fully open). */
+.level-locked #contentWrap { pointer-events: none; filter: grayscale(0.6) opacity(0.5); }

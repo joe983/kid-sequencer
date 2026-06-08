@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=26">
+<link rel="stylesheet" href="css/styles.css?v=28">
 </head>
 <body>
 <script>
@@ -336,14 +336,8 @@
 
 
 /* -------------------- CONFIG -------------------- */
-const rows = 8;
-const cols = 16;
-
 let CELL = 46;
 const GAP  = 4;
-
-const freqs = [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
-const rowColors = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
 
 const EIGHTH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
   <text x="16" y="22" text-anchor="middle"
@@ -381,7 +375,52 @@ const WHOLE_NOTE_SVG = `
 `;
 
 
-const toolSteps = [
+/* -------------------- LEARNING LEVELS --------------------
+   Scaled-back "scaffolding" variants selected by a ?level=N URL param.
+   Reachable only via that URL (nothing on the main site links to them).
+   With no/unknown param, LEARN_LEVEL is null and the full app is unchanged. */
+const LEARN_LEVELS = {
+  "1": {
+    rows: 3,
+    cols: 8,
+    // top→bottom = high→low (matches the row 0 = highest convention).
+    freqs:     [392.00, 329.63, 261.63],            // G4, E4, C4 (C-major triad)
+    rowColors: ["#3DA9FF", "#FFFF00", "#FF0000"],   // each note's existing full-grid colour: G4 blue, E4 yellow, C4 red
+    // Both tools place a 2-column (one-beat) note, distinguished by `kind`:
+    //   quarter → one sustained attack, drawn as a SOLID bar with a ♩ glyph
+    //   eighth  → two 8th-note attacks (one per column), drawn as a SEGMENTED
+    //             bar (the candy-bar divider down the middle) with a ♫ glyph.
+    toolSteps: [
+      { steps: 2, label: "8th", svg: EIGHTH_SVG, divs: 8, symClass: "eighth", kind: "eighth" },
+      { steps: 2, label: "1/4", symbol: "♩",     divs: 4, symClass: "normal", kind: "quarter" }
+    ],
+    selectedSteps: 2,            // quarter preselected
+    selectedKind: "quarter",     // …and its kind (both tools are steps:2, so kind disambiguates)
+    stepDiv: 2,                  // each grid column = an 8th note (engine default is 4 = 16th)
+    tempo: 90, lockTempo: true,
+    instrument: "piano",         // "organ" in the UI = piano key in code
+    drumPatternKey: "techlearn", // dedicated 8-step techno loop (see DRUM_PATTERNS)
+    lockPots: true,
+    maxCell: 112,                // let the small 3×8 grid grow to fill the stage (engine default cap 64)
+    // Tier entitlement — "guest" = fully open (no lock; access is the unguessable
+    // URL only). To fold a level into the paid tier later, change this to "member"
+    // or "paid": the entitlement hook in applyLockState then greys the grid and
+    // shows the upgrade modal for users without that tier. Nothing else to change.
+    requiresTier: "guest"
+  }
+};
+const _lvlParam = new URLSearchParams(location.search).get("level");
+// NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
+const LEARN_LEVEL = (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
+if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <html> always exists at parse time
+
+const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
+const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : 16;
+
+const freqs = LEARN_LEVEL ? LEARN_LEVEL.freqs : [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
+const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+
+const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps : [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
   { steps: 2,  label: "8th",   svg: EIGHTH_SVG, divs: 8,  symClass:"eighth" },
   { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
@@ -389,7 +428,12 @@ const toolSteps = [
   { steps: 16, label: "Whole",  svg: WHOLE_NOTE_SVG,  divs: 1,  symClass:"whole" }
 ];
 
-let selectedSteps = 1;
+let selectedSteps = LEARN_LEVEL ? LEARN_LEVEL.selectedSteps : 1;
+// Learning levels distinguish two same-width tools by kind ("quarter"|"eighth").
+// null in the full app (note kind is a learning-mode-only concept).
+let selectedKind = LEARN_LEVEL ? (LEARN_LEVEL.selectedKind || null) : null;
+// Glyph drawn in the centre of a placed note block (learning mode only).
+const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
 var isPaid = false;
@@ -437,7 +481,7 @@ let notesByRow = Array.from({length: rows}, () => []);
 let occ = Array.from({length: rows}, () => Array(cols).fill(null));
 
 let audioCtx = null;
-let tempo = 120;
+let tempo = LEARN_LEVEL ? LEARN_LEVEL.tempo : 120;
 // Tempo ramp state — when the user adjusts tempo while playing, we ease the
 // current `tempo` toward `_tempoTarget` over `_TEMPO_RAMP_MS` via rAF rather
 // than snapping (which used to jerk at the start of the loop because the old
@@ -536,11 +580,19 @@ const DRUM_PATTERNS = {
     snare:   [0,0,0,1,    0,0,1,0,     0,0,0,1,     0,0,1,0],
     shaker:  [0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22],
     cowbell: [0.35,0,0,0, 0,0,0,0,    0.35,0,0,0,  0,0,0,0]
+  },
+  // Learning Level 1 — 8 columns at 8th-note resolution (stepDiv:2), so the bar
+  // is one 4/4 measure. Length-8 arrays, indexed by column 0–7. Key ≠ "techhouse"
+  // so the techhouse swing branch in playDrumsAtStep stays off (on-the-beat feel).
+  techlearn: {
+    kick: [1,0,1,0,1,0,1,0],   // four-on-the-floor: a kick on each of the 4 beats
+    clap: [0,0,1,0,0,0,1,0],   // backbeat on beats 2 & 4
+    hatC: [0,0.22,0,0.22,0,0.22,0,0.22]  // offbeat 8ths
   }
 };
 
 const LEVEL = {
-  piano:   0.40,
+  piano:   0.318,  // organ — reduced 2 dB from 0.40 (factor 10^(-2/20) = 0.7943)
   trumpet: 0.77,
   strings: 0.86,
   synth:   0.34,
@@ -750,6 +802,26 @@ function handleLoginBtn(){
 }
 window.handleLoginBtn = handleLoginBtn;
 
+// Tier-entitlement hook for scaffolding levels — DORMANT by default.
+// A LEARN_LEVEL may declare requiresTier: "guest" | "member" | "paid".
+// "guest" (or unset) means fully open: this returns immediately and never locks
+// anything. To fold a level into the paid tier later, set its requiresTier to
+// "member"/"paid" — a user without that tier then gets the grid greyed
+// (.level-locked) plus the upgrade modal. It re-runs from applyLockState() on
+// every auth/tier change, so a fresh login or upgrade unlocks the level live.
+// Relies on isPaid/isLoggedIn already being resolved by applyLockState's caller.
+function enforceLevelEntitlement(){
+  if(!LEARN_LEVEL || !LEARN_LEVEL.requiresTier || LEARN_LEVEL.requiresTier === "guest") return;
+  const ok = LEARN_LEVEL.requiresTier === "paid"   ? !!isPaid
+           : LEARN_LEVEL.requiresTier === "member" ? !!isLoggedIn
+           : true;
+  document.documentElement.classList.toggle("level-locked", !ok); // greying can apply synchronously
+  // Defer the modal: applyLockState() runs once at parse time, before the modal's
+  // helper consts are initialised — calling openUpgradeModal then would throw (TDZ)
+  // and abort the IIFE. rAF + try/catch keeps flipping requiresTier safe.
+  if(!ok) requestAnimationFrame(() => { try{ openUpgradeModal("subscribe"); }catch(e){} });
+}
+
 function applyLockState(){
   // Re-read tier from sessionStorage so async auth updates are picked up immediately
   // Only trust the stored tier if the user is actually logged in
@@ -796,6 +868,9 @@ function applyLockState(){
     document.getElementById("drumStyleDrill"),
     document.getElementById("drumStyleHipHop"),
   ].forEach(el => { if(el) el.classList.toggle("locked-member", memberLocked); });
+
+  // Scaffolding-level entitlement (dormant unless a level sets requiresTier).
+  enforceLevelEntitlement();
 }
 // Apply lock state without triggering any layout/position functions
 applyLockState();
@@ -1129,7 +1204,10 @@ function fitToViewport(){
   const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / rows);
 
   let cell = Math.min(maxCellByWidth, maxCellByHeight);
-  cell = Math.max(26, Math.min(64, cell));
+  // Learning levels have far fewer/larger cells; let them grow past the default
+  // 64px cap so a 3×8 grid still fills the stage.
+  const MAXCELL = (LEARN_LEVEL && LEARN_LEVEL.maxCell) ? LEARN_LEVEL.maxCell : 64;
+  cell = Math.max(26, Math.min(MAXCELL, cell));
 
   if(cell <= 36){
     // Tight viewports: keep toolW pinned to circle size, only widen the right column.
@@ -1182,6 +1260,7 @@ function fitToViewport(){
 // different containers (topBar vs rightCol) so we use viewport coords and
 // translate back into topBar's coordinate space for the `left` offset.
 function syncTopBarLoginPosition(){
+  if (LEARN_LEVEL) return; // learning levels hide login + print — nothing to centre
   const login = document.getElementById('loginCtaWrap');
   const printBtn = document.getElementById('printBtn');
   const tempoUp = document.getElementById('tempoUpBtn');
@@ -1951,7 +2030,9 @@ function stopAllAudioNow(){
 }
 
 function stepDurationSec(){
-  return (60 / tempo) / 4;
+  // Default app: 4 steps/beat (each column = a 16th note). A LEARN_LEVEL can
+  // override the subdivision (e.g. stepDiv:2 → each column = an 8th note).
+  return (60 / tempo) / (LEARN_LEVEL ? LEARN_LEVEL.stepDiv : 4);
 }
 
 function dottedEighthSec(){
@@ -2025,11 +2106,15 @@ function buildTools(){
         return;
       }
       selectedSteps = t.steps;
+      selectedKind = t.kind || null;
       toolsListEl.querySelectorAll(".tool").forEach(x => x.classList.remove("selected"));
       tool.classList.add("selected");
     };
 
-    if(t.steps === selectedSteps) tool.classList.add("selected");
+    // When tools carry a kind (learning mode), select by kind — both tools share
+    // steps:2 there, so a steps comparison would highlight both.
+    const isSel = t.kind ? (t.kind === selectedKind) : (t.steps === selectedSteps);
+    if(isSel) tool.classList.add("selected");
     toolsListEl.appendChild(tool);
   });
 }
@@ -2081,9 +2166,9 @@ function canPlace(r, start, len){
   return true;
 }
 
-function placeNote(r, start, len){
+function placeNote(r, start, len, kind){
   const id = nextId++;
-  notesByRow[r].push({ id, start, len });
+  notesByRow[r].push({ id, start, len, kind: kind || null });
   for(let c=start; c<start+len; c++) occ[r][c] = id;
 }
 
@@ -2104,21 +2189,21 @@ function overlappingNoteIds(r, start, len){
   return set;
 }
 
-function smartPlaceNote(r, clickCol, len){
+function smartPlaceNote(r, clickCol, len, kind){
   let baseStart = Math.min(clickCol, cols - len);
   baseStart = Math.max(0, baseStart);
 
   for(let start = baseStart; start >= 0; start--){
     if(start + len > cols) continue;
     if(canPlace(r, start, len)){
-      placeNote(r, start, len);
+      placeNote(r, start, len, kind);
       return;
     }
   }
 
   const overlaps = overlappingNoteIds(r, baseStart, len);
   overlaps.forEach(id => deleteNoteById(r, id));
-  placeNote(r, baseStart, len);
+  placeNote(r, baseStart, len, kind);
 }
 
 function onCellClick(r, c){
@@ -2131,7 +2216,7 @@ function onCellClick(r, c){
   }
 
   pushUndo();
-  smartPlaceNote(r, c, selectedSteps);
+  smartPlaceNote(r, c, selectedSteps, selectedKind);
   redrawRowNotes(r);
 }
 
@@ -2152,6 +2237,15 @@ function createNoteBlock(r, note){
   const block = document.createElement("div");
   block.className = "noteBlock placing";
   block.dataset.id = String(note.id);
+  // Learning mode: tag the kind (drives solid vs segmented via CSS) and draw the
+  // note-value glyph in the centre.
+  if(note.kind){
+    block.dataset.kind = note.kind;
+    const glyph = document.createElement("span");
+    glyph.className = "noteGlyph";
+    glyph.textContent = NOTE_GLYPHS[note.kind] || "";
+    block.appendChild(glyph);
+  }
   applyNoteGeometry(block, r, note);
   // Note blocks are pointer-events:none — clicks pass through to the
   // underlying .cell, where onCellClick handles deletion via occ[r][c].
@@ -2683,7 +2777,9 @@ function startSequencer(){
     melodicMaster.gain.setTargetAtTime(gain, audioCtx.currentTime, 0.008);
 
     for(const { r, note } of stepNotes){
-      playInstrument(freqs[r], note.len);
+      // An eighth-pair sounds as two separate 8ths: its first attack lasts one
+      // column (the second fires below). Everything else sustains its full length.
+      playInstrument(freqs[r], note.kind === "eighth" ? 1 : note.len);
 
       const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
       if(block){
@@ -2691,6 +2787,23 @@ function startSequencer(){
         block.classList.remove("playing");
         void block.offsetWidth;
         block.classList.add("playing");
+      }
+    }
+
+    // Learning-mode eighth pairs: fire the SECOND 8th at the pair's second column
+    // (one attack per column). Guarded so the full app is unaffected.
+    if(LEARN_LEVEL){
+      for(let r=0;r<rows;r++){
+        const n2 = notesByRow[r].find(n => n.kind === "eighth" && n.start !== step && (n.start + 1) % cols === step);
+        if(!n2) continue;
+        playInstrument(freqs[r], 1);
+        const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${n2.id}"]`);
+        if(block){
+          setBlockPulseVars(block);
+          block.classList.remove("playing");
+          void block.offsetWidth;
+          block.classList.add("playing");
+        }
       }
     }
 
@@ -2791,10 +2904,12 @@ function requestTempo(newTempo){
   syncDelayTime();
 }
 function tempoUp(){
+  if (LEARN_LEVEL && LEARN_LEVEL.lockTempo) return; // tempo locked in this learning level
   const base = (_tempoTarget !== null) ? _tempoTarget : Math.round(tempo);
   requestTempo(base + 5);
 }
 function tempoDown(){
+  if (LEARN_LEVEL && LEARN_LEVEL.lockTempo) return; // tempo locked in this learning level
   const base = (_tempoTarget !== null) ? _tempoTarget : Math.round(tempo);
   requestTempo(base - 5);
 }
@@ -3423,6 +3538,7 @@ root.classList.add('stageScaled');
 
 /* -------------------- POT KNOB INTERACTION -------------------- */
 (function setupEchoPot(){
+  if (LEARN_LEVEL && LEARN_LEVEL.lockPots) return; // pots inactive in this learning level
   const pot = document.getElementById("echoPot");
   if(!pot) return;
   const body = pot.querySelector(".potBody");
@@ -3464,6 +3580,7 @@ root.classList.add('stageScaled');
 })();
 
 (function setupFilterPot(){
+  if (LEARN_LEVEL && LEARN_LEVEL.lockPots) return; // pots inactive in this learning level
   const pot = document.getElementById("filterPot");
   if(!pot) return;
   const body = pot.querySelector(".potBody");
@@ -3501,7 +3618,17 @@ root.classList.add('stageScaled');
 })();
 
 function init(){
-  setInstrument("piano");
+  setInstrument(LEARN_LEVEL ? LEARN_LEVEL.instrument : "piano");
+  if (LEARN_LEVEL) {
+    // Force the beat: point drumStyle at the level's pattern, mark techno active
+    // (so it's not muted), and ensure drums play.
+    drumStyle = LEARN_LEVEL.drumPatternKey;
+    activeDrumStyle = "techno";
+    setDrumsMuted(false);
+    if (LEARN_LEVEL.lockTempo) {
+      document.getElementById("tempoControls")?.classList.add("locked"); // .locked CSS greys the arrows
+    }
+  }
   updateTempoBox();
   setPlayheadWobbleFromTempo(tempo);
   // Layout is handled by the layout system (scheduleLayout/layoutPass).
@@ -3823,8 +3950,10 @@ window.KidSequencer = {
 
     .seqTrackArea{
       position: relative;
-      /* Much shorter, while still ending at grid bottom */
-      height: calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 88px);
+      /* Much shorter, while still ending at grid bottom. A learning level can
+         override the height via --faderTrackH (set on the host) — e.g. to span
+         only the top two grid rows. */
+      height: var(--faderTrackH, calc((var(--cell) * 8 + var(--gap) * 7) - (4 * var(--instBtnSize) + 3 * var(--instGap)) - 88px));
       width: var(--instBtnSize);
       display:flex;
       align-items:center;
