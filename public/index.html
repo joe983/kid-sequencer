@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=22">
+<link rel="stylesheet" href="css/styles.css?v=23">
 </head>
 <body>
 <script>
@@ -35,7 +35,6 @@
     })();
   </script>
 <div aria-hidden="true" id="debug-info"></div>
-<div id="printSheet" aria-hidden="true"></div>
 <div id="viewport">
 <div id="page">
 <div id="topBar">
@@ -3539,86 +3538,13 @@ window.tempoUp = tempoUp;
 window.tempoDown = tempoDown;
 window.logout = logout;
 
-// Builds the A4 colouring-in worksheet (header + decorative note-length
-// circles down the left + beat numbers above + rows x cols outlined squares)
-// the first time it's needed. Mirrors the on-screen sequencer's visual style
-// in black and white so kids can see the connection between the worksheet
-// and the app. The grid itself stays a uniform rows x cols so the camera's
-// sheet-scan crop still works — all decoration sits outside the grid.
-// @media print rules in styles.css hide everything else and blow this up
-// to fill an A4 landscape page.
-function buildPrintWorksheet(){
-  const sheet = document.getElementById('printSheet');
-  if(!sheet || sheet.childElementCount) return;
-
-  // Header: title + one-line instruction
-  const header = document.createElement('div');
-  header.className = 'printHeader';
-  const title = document.createElement('h1');
-  title.className = 'printTitle';
-  title.textContent = 'Kid Sequencer';
-  const sub = document.createElement('p');
-  sub.className = 'printSub';
-  sub.textContent = 'Colour in the squares to make a song. Scan it back in with the camera!';
-  header.appendChild(title);
-  header.appendChild(sub);
-  sheet.appendChild(header);
-
-  // Body: CSS grid with 2 columns (side col + grid area) x 2 rows (beat
-  // numbers row + grid row). Side col lives in row 2 so its circles only
-  // span the grid's height (not the beat row), keeping them aligned with
-  // the cells. Beat numbers live in row 1, column 2 so they align with
-  // the grid's columns, not the side col.
-  const body = document.createElement('div');
-  body.className = 'printBody';
-
-  // Beat numbers (1..4) above each group of 4 columns
-  const beatRow = document.createElement('div');
-  beatRow.className = 'printBeatRow';
-  for(let b = 1; b <= 4; b++){
-    const n = document.createElement('div');
-    n.className = 'printBeatNum';
-    n.textContent = String(b);
-    beatRow.appendChild(n);
-  }
-  body.appendChild(beatRow);
-
-  // Decorative left column: 5 circles matching the on-screen note-length
-  // buttons. Purely decorative — mirrors the app's visual identity so the
-  // worksheet reads as "Kid Sequencer" rather than generic graph paper.
-  const sideCol = document.createElement('div');
-  sideCol.className = 'printSideCol';
-  const NOTE_GLYPHS = ['♬', '♪', '♩', '\u{1D15F}', '\u{1D15D}']; // ♬ ♪ ♩ half whole
-  NOTE_GLYPHS.forEach(g => {
-    const c = document.createElement('div');
-    c.className = 'printNoteCircle';
-    c.textContent = g;
-    sideCol.appendChild(c);
-  });
-  body.appendChild(sideCol);
-
-  const grid = document.createElement('div');
-  grid.className = 'printGrid';
-  grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  grid.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-  for(let r = 0; r < rows; r++){
-    for(let c = 0; c < cols; c++){
-      const cell = document.createElement('div');
-      cell.className = 'printCell';
-      grid.appendChild(cell);
-    }
-  }
-  body.appendChild(grid);
-
-  sheet.appendChild(body);
-}
-
-// Print button: hand off to the browser's print dialog. Stops audio first
-// so the page is in a clean state when the user prints.
+// Print button: print exactly what's on the screen, but in B&W with notes
+// + active button highlights stripped. No custom worksheet — the @media
+// print rules in styles.css desaturate the running UI and hide the
+// transient state (notes, playhead, .active highlights).
 function printSheet(){
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
-  try{ buildPrintWorksheet(); }catch(e){ console.warn('worksheet build failed', e); }
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }
 window.printSheet = printSheet;
