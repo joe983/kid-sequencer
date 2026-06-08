@@ -1999,129 +1999,69 @@ html.js-loading #contentWrap{
   .tierPrice { font-size: 22px; }
 }
 
-/* ---- Printable colouring-in worksheet ----
-   #printSheet is built once (buildPrintWorksheet) and mirrors the on-screen
-   sequencer's look in B&W: title header, decorative note-length circles
-   down the left (matching the on-screen left column), beat numbers above,
-   and a uniform rows x cols grid of rounded outlined cells (matching the
-   on-screen cell style — 12px-equivalent radius, thick black border). The
-   grid itself stays uniform so the camera's sheet-scan crop still works;
-   all decorative elements sit outside it. Invisible on screen; @media print
-   hides the rest of the app and renders this at A4 landscape (the only
-   orientation that gives a usable cell size for a 2:1 grid). */
-#printSheet { display: none; }
-
+/* ---- Print: exactly the on-screen UI, in B&W, with transient state
+   (notes, playhead, .selected highlights, login button) hidden.
+   No custom worksheet — just the running app desaturated. ---- */
 @media print {
-  /* Grid is 16:8 (2:1) — width-constrained on A4 landscape, so cell size
-     is governed by horizontal margin. 5mm horizontal (vs 10mm vertical
-     where there's no payoff) maximises cell size without risking clipping
-     on typical printers' non-printable edges. */
-  @page { size: A4 landscape; margin: 10mm 5mm; }
+  @page { size: A4 landscape; margin: 6mm; }
 
-  body > *:not(#printSheet) { display: none !important; }
-
-  #printSheet {
-    display: flex !important;
-    flex-direction: column;
-    width: 100%;
-    min-height: 100vh;
-    background: #ffffff;
-    color: #000000;
-    font-family: "Trebuchet MS", Arial, sans-serif;
-    box-sizing: border-box;
+  /* Desaturate the whole page in B&W (cheap, prints reliably) and force
+     backgrounds + borders to render (browsers strip them by default for
+     ink-saving — we want the cells, buttons, grid lines, etc.). */
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    filter: grayscale(100%);
+    -webkit-filter: grayscale(100%);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    overflow: visible !important;
   }
 
-  .printHeader {
-    text-align: center;
-    margin-bottom: 3mm;
-    flex: 0 0 auto;
+  /* #viewport is position:fixed and sized to the *screen* viewport
+     (--vvw/--vvh). In print that anchors it to whatever the screen size
+     was, not the printable page — #page then sits centred inside that
+     huge box and overflows the printed sheet. Neutralise it for print so
+     #page falls into normal flow inside body. */
+  #viewport {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  .printTitle {
-    font-size: 22pt;
-    font-weight: 900;
-    margin: 0;
-    letter-spacing: -0.3pt;
-    line-height: 1.05;
-  }
-  .printSub {
-    font-size: 10pt;
-    font-weight: 600;
-    margin: 1.2mm 0 0;
-    color: #1d1d1d;
+  #page {
+    margin: 0 auto !important;
   }
 
-  /* 2x2 CSS grid: row 1 is the beat-numbers strip (only over the grid
-     column); row 2 is the side col + grid. Putting the side col in row 2
-     only keeps its 5 decorative circles aligned with the grid's height
-     and prevents the last one from spilling below. */
-  .printBody {
-    display: grid;
-    grid-template-columns: 14mm 4mm 1fr;
-    /* Row 2 sized to the grid's own height (driven by aspect-ratio 16/8 on
-       width). Side col in row 2 then stretches to exactly the grid's
-       height, keeping the 5 circles aligned with the cells instead of
-       spilling below. */
-    grid-template-rows: auto auto;
-    flex: 1 1 auto;
-    align-content: start;
+  /* Fit-to-page is handled by the beforeprint JS handler (printSheet
+     attaches it). It measures #page's natural pixel width, sets
+     transform: scale() to map it to A4 landscape's printable area, and
+     restores on afterprint. CSS can't compute the scale directly because
+     dividing a px length by an mm length isn't valid CSS arithmetic. */
+
+  /* Hide transient/ephemeral state so the printed page reads as the
+     blank starting screen, not whatever the user happened to have set. */
+  .noteBlock,
+  #playhead,
+  #upgradeModal,
+  #camModal,
+  #saveModal,
+  #loadModal,
+  #loginBtn,
+  #logoutBtn,
+  .saveToast,
+  .scanLimitPanel {
+    display: none !important;
   }
 
-  /* Decorative left column: 5 circles spread evenly across the grid's
-     height, each containing a musical-note glyph. Not interactive — these
-     mirror the on-screen note-length buttons so the printed sheet still
-     reads as "Kid Sequencer", not a generic graph paper grid. */
-  .printSideCol {
-    grid-column: 1;
-    grid-row: 2;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    align-items: center;
-  }
-  .printNoteCircle {
-    width: 14mm;
-    height: 14mm;
-    border: 2.2pt solid #000000;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18pt;
-    line-height: 1;
-    background: #ffffff;
-    box-sizing: border-box;
-  }
-
-  /* Beat numbers above the grid — one per group of 4 columns. Lives in
-     row 1, grid column only, so it aligns with the cells (not the side
-     col). */
-  .printBeatRow {
-    grid-column: 3;
-    grid-row: 1;
-    display: flex;
-    margin-bottom: 1.5mm;
-  }
-  .printBeatNum {
-    flex: 1 1 0;
-    text-align: center;
-    font-size: 12pt;
-    font-weight: 800;
-    line-height: 1;
-  }
-
-  .printGrid {
-    grid-column: 3;
-    grid-row: 2;
-    display: grid;
-    gap: 1mm;
-    width: 100%;
-    aspect-ratio: 16 / 8;
-    align-self: start;
-  }
-  .printCell {
-    border: 2.2pt solid #000000;
-    border-radius: 2.2mm;
-    background: #ffffff;
-    box-sizing: border-box;
+  /* Strip "selected" highlights from instrument / rhythm / note-length
+     buttons so no single button looks chosen. */
+  .tool.selected,
+  .drumStyleBtn.selected,
+  .instBtn.selected {
+    background: #ffffff !important;
+    filter: none !important;
+    opacity: 1 !important;
   }
 }
