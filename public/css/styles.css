@@ -2168,6 +2168,13 @@ html.js-loading #contentWrap{
    Eighth keeps ::after — its mid-block separator reads as "two 8th notes". */
 .noteBlock[data-kind="quarter"]::after{ display: none; }
 
+/* These music glyphs render high within their em-box, so flex-centring (which
+   centres the em-box, not the visible ink) leaves them pushed to the top.
+   Nudge each down by its measured ink-centre offset. In em so it scales with
+   the glyph/cell size; per-kind because ♩ and ♫ differ. */
+.noteBlock[data-kind="quarter"] .noteGlyph{ transform: translateY(0.36em); }
+.noteBlock[data-kind="eighth"]  .noteGlyph{ transform: translateY(0.27em); }
+
 /* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
    requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).
    Greys + blocks the grid while leaving the fixed-position upgrade modal usable.
