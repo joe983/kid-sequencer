@@ -2175,23 +2175,6 @@ html.js-loading #contentWrap{
 .noteBlock[data-kind="quarter"] .noteGlyph{ transform: translateY(0.36em); }
 .noteBlock[data-kind="eighth"]  .noteGlyph{ transform: translateY(0.27em); }
 
-/* Bold cartoon divider down the centre of an eighth (two-eighth) block. Sits
-   above the faint candy-bar separator and below the glyph (z-index 3). Solid
-   black with rounded caps and inset top/bottom; width scales with the cell so
-   it stays chunky at every page scale. */
-.noteBlock[data-kind="eighth"] .noteDivider{
-  position: absolute;
-  z-index: 2;
-  top: 15%;
-  bottom: 15%;
-  left: 50%;
-  width: calc(var(--cell) * 0.09);   /* ~10px at cell 112 — stays bold after the page scales down */
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.92);
-  border-radius: 999px;
-  pointer-events: none;
-}
-
 /* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
    requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).
    Greys + blocks the grid while leaving the fixed-position upgrade modal usable.

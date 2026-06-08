@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=28">
+<link rel="stylesheet" href="css/styles.css?v=27">
 </head>
 <body>
 <script>
@@ -2242,13 +2242,6 @@ function createNoteBlock(r, note){
   // note-value glyph in the centre.
   if(note.kind){
     block.dataset.kind = note.kind;
-    // An eighth is a two-eighth pair: add a bold cartoon divider down the middle
-    // (behind the glyph) to emphasise the split into two notes.
-    if(note.kind === "eighth"){
-      const divider = document.createElement("span");
-      divider.className = "noteDivider";
-      block.appendChild(divider);
-    }
     const glyph = document.createElement("span");
     glyph.className = "noteGlyph";
     glyph.textContent = NOTE_GLYPHS[note.kind] || "";
