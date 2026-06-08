@@ -2016,20 +2016,11 @@ html.js-loading #contentWrap{
     print-color-adjust: exact;
   }
 
-  /* Make the UI fill A4 landscape: clear the responsive transform: scale()
-     that the JS layout slaps onto #page at runtime (otherwise the print
-     inherits whatever scale the viewport happens to be at — tiny on
-     phones), size #page to A4 landscape's printable width (297mm − 2×8mm
-     page margin = 281mm), and centre it on the sheet. The UI itself is
-     unchanged; it just renders at its full design size. */
-  #page {
-    transform: none !important;
-    width: 281mm !important;
-    max-width: 281mm !important;
-    min-width: 0 !important;
-    margin: 0 auto !important;
-    padding: 0 !important;
-  }
+  /* Fit-to-page is handled by the beforeprint JS handler (printSheet
+     attaches it). It measures #page's natural pixel width, sets
+     transform: scale() to map it to A4 landscape's printable area, and
+     restores on afterprint. CSS can't compute the scale directly because
+     dividing a px length by an mm length isn't valid CSS arithmetic. */
 
   /* Hide transient/ephemeral state so the printed page reads as the
      blank starting screen, not whatever the user happened to have set. */

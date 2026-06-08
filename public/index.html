@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=24">
+<link rel="stylesheet" href="css/styles.css?v=25">
 </head>
 <body>
 <script>
@@ -3542,6 +3542,41 @@ window.logout = logout;
 // + active button highlights stripped. No custom worksheet — the @media
 // print rules in styles.css desaturate the running UI and hide the
 // transient state (notes, playhead, .active highlights).
+//
+// Fit-to-page: the on-screen #page has a JS-driven `transform: scale(N)`
+// that adapts it to the viewport (N goes as low as ~0.2 on phones). For
+// print we ignore that and compute a fresh scale that maps #page's
+// natural pixel size to A4 landscape's printable area. CSS can't do this
+// arithmetic (px ÷ mm isn't valid), so it lives in beforeprint / afterprint.
+let _preprintPageTransform = null;
+let _preprintPageOrigin = null;
+function _applyPrintScale(){
+  const page = document.getElementById('page');
+  if(!page) return;
+  _preprintPageTransform = page.style.transform;
+  _preprintPageOrigin = page.style.transformOrigin;
+  // Measure natural (unscaled) size
+  page.style.transform = 'none';
+  const w = page.offsetWidth || 1;
+  const h = page.offsetHeight || 1;
+  // A4 landscape printable area with @page margin 8mm: 281mm × 194mm
+  // At 96 CSS DPI: 1062px × 733px
+  const targetW = 1062, targetH = 733;
+  const scale = Math.min(targetW / w, targetH / h);
+  page.style.transform = `scale(${scale})`;
+  page.style.transformOrigin = 'top left';
+}
+function _restorePrintScale(){
+  const page = document.getElementById('page');
+  if(!page) return;
+  page.style.transform = _preprintPageTransform || '';
+  page.style.transformOrigin = _preprintPageOrigin || '';
+  // Force a fresh viewport-fit recompute so the screen layout snaps back.
+  try{ if(typeof fitToViewport === 'function') fitToViewport(); }catch(e){}
+}
+window.addEventListener('beforeprint', _applyPrintScale);
+window.addEventListener('afterprint', _restorePrintScale);
+
 function printSheet(){
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
