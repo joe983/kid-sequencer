@@ -2147,6 +2147,27 @@ html.js-loading #contentWrap{
 .learning-mode #rightCol { transform: none !important; }
 .learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * 2 + var(--gap)); }
 
+/* Note-value glyph drawn in the centre of a placed block (learning mode).
+   Sits above the candy-bar ::after overlay via z-index. */
+.noteBlock .noteGlyph{
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Noto Music", "Bravura", "Arial Unicode MS", "Segoe UI Symbol", serif;
+  font-size: calc(var(--cell) * 0.62);
+  line-height: 1;
+  color: #1d1d1d;
+  pointer-events: none;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
+/* Quarter note = SOLID bar: hide the candy-bar segment/separator overlay so
+   there's no divider down the middle (the ::before bevel stays for depth).
+   Eighth keeps ::after — its mid-block separator reads as "two 8th notes". */
+.noteBlock[data-kind="quarter"]::after{ display: none; }
+
 /* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
    requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).
    Greys + blocks the grid while leaving the fixed-position upgrade modal usable.
