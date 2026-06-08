@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=25">
+<link rel="stylesheet" href="css/styles.css?v=26">
 </head>
 <body>
 <script>
@@ -3559,9 +3559,11 @@ function _applyPrintScale(){
   page.style.transform = 'none';
   const w = page.offsetWidth || 1;
   const h = page.offsetHeight || 1;
-  // A4 landscape printable area with @page margin 8mm: 281mm × 194mm
-  // At 96 CSS DPI: 1062px × 733px
-  const targetW = 1062, targetH = 733;
+  // A4 landscape printable area with @page margin 6mm: 285mm × 198mm.
+  // At 96 CSS DPI that's 1077px × 748px. Apply a 3% safety margin because
+  // some browsers add their own padding on top of @page margin (Chrome's
+  // "Default" margin setting, Firefox's gutter, etc.).
+  const targetW = 1077 * 0.97, targetH = 748 * 0.97;
   const scale = Math.min(targetW / w, targetH / h);
   page.style.transform = `scale(${scale})`;
   page.style.transformOrigin = 'top left';

@@ -2003,17 +2003,35 @@ html.js-loading #contentWrap{
    (notes, playhead, .selected highlights, login button) hidden.
    No custom worksheet — just the running app desaturated. ---- */
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 landscape; margin: 6mm; }
 
   /* Desaturate the whole page in B&W (cheap, prints reliably) and force
      backgrounds + borders to render (browsers strip them by default for
      ink-saving — we want the cells, buttons, grid lines, etc.). */
   html, body {
     background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
     filter: grayscale(100%);
     -webkit-filter: grayscale(100%);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    overflow: visible !important;
+  }
+
+  /* #viewport is position:fixed and sized to the *screen* viewport
+     (--vvw/--vvh). In print that anchors it to whatever the screen size
+     was, not the printable page — #page then sits centred inside that
+     huge box and overflows the printed sheet. Neutralise it for print so
+     #page falls into normal flow inside body. */
+  #viewport {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #page {
+    margin: 0 auto !important;
   }
 
   /* Fit-to-page is handled by the beforeprint JS handler (printSheet
