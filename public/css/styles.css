@@ -2069,10 +2069,10 @@ html.js-loading #contentWrap{
 /* ---- Scaffolded learning levels (?level=N) ----
    <html> gets `.learning-mode` (set in the IIFE) when a LEARN_LEVEL is active.
    These scaled-back pages strip the bottom instrument/rhythm panel and the
-   topbar's camera/save/load/print/login, and neutralise the effect pots
-   (kept visible but inert). Everything else is the normal sequencer. */
+   topbar's save/load/print/login, and neutralise the effect pots (kept visible
+   but inert). The camera/scan button stays — kids can scan on every level.
+   Everything else is the normal sequencer. */
 .learning-mode #drumPanel,            /* both the instrument (.soundsBox) and rhythm (.rhythmBox) rows */
-.learning-mode #cameraBtn,
 .learning-mode #saveBtn,
 .learning-mode #loadBtn,
 .learning-mode #printBtn,
@@ -2082,10 +2082,50 @@ html.js-loading #contentWrap{
 
 /* Only the volume fader remains in the right column. Drop the lift that pulls
    the column up to the top-bar controls row, so the fader's top aligns with the
-   grid top, and size its track to the top two grid rows so it lines up with the
-   first two squares. */
+   grid top, and size its track to span every grid row (--learnRows is set from
+   JS = the level's row count: 1, 2, or 3) so it lines up with the squares. */
 .learning-mode #rightCol { transform: none !important; }
-.learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * 2 + var(--gap)); }
+.learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * var(--learnRows, 2) + var(--gap) * (var(--learnRows, 2) - 1)); }
+
+/* Treble-clef staff toggle — learning levels only. Hidden in the full app; the
+   icon is a music-font clef glyph centred by the shared .bigBtn .icon flexbox. */
+#staveBtn { display: none; }
+.learning-mode #staveBtn { display: inline-flex; }
+#staveBtn .staveIcon {
+  font-family: "Noto Music", "Bravura", "Segoe UI Symbol", "Arial Unicode MS", serif;
+  font-size: 23px;        /* clef glyph is tall; keep it inside the 58px button (was clipped at 36px) */
+  line-height: 1;
+  color: #1d1d1d;
+  transform: translateY(5px);  /* the clef's ink sits high in its em-box; push down to centre it */
+}
+#staveBtn.active { background: #ffe14d; }   /* lit while the staff is showing */
+
+/* The staff panel sits below the grid, matching its width so the bar lines up
+   under the sequencer. Hidden until toggled open. */
+#stavePanel { display: none; }
+.learning-mode #stavePanel.open {
+  display: block;
+  /* Match the grid width (8 columns) but cap it so the staff stays a readable,
+     consistent size instead of ballooning on the wide few-row levels; centred
+     under the grid. The stage is a fixed 1600x900, so this always has room. */
+  width: min(760px, calc(var(--cell) * 8 + var(--gap) * 7));
+  margin: 16px auto 0;
+  box-sizing: border-box;
+  padding: 8px 18px 12px;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 18px;
+  box-shadow: 0 8px 0 rgba(0,0,0,0.10);
+  animation: staveDrop 0.28s cubic-bezier(0.32,0.72,0,1);
+}
+.learning-mode #stavePanel.open svg { display: block; }
+@keyframes staveDrop {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .learning-mode #stavePanel.open { animation: none; }
+}
 
 /* Note-value glyph drawn in the centre of a placed block (learning mode).
    Sits above the candy-bar ::after overlay via z-index. */

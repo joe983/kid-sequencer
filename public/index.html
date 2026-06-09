@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=28">
+<link rel="stylesheet" href="css/styles.css?v=33">
 </head>
 <body>
 <script>
@@ -62,6 +62,7 @@
 <circle cx="12" cy="14" fill="#ffffff" opacity="0.9" r="4"></circle>
 <circle cx="12" cy="14" fill="currentColor" opacity="0.75" r="2.2"></circle>
 </svg></span></button>
+<button aria-label="Show staff" aria-pressed="false" class="bigBtn iconBtn" id="staveBtn" onclick="toggleStave()" title="Show staff"><span class="icon staveIcon">𝄞</span></button>
 <button aria-label="Save" class="bigBtn iconBtn" id="saveBtn" onclick="saveToCloud()" title="Save tune"><span class="icon saveIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
 <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z" fill="currentColor"></path>
 <polyline fill="white" opacity="0.85" points="9,3 9,9 15,9 15,3"></polyline>
@@ -97,6 +98,7 @@
 <div id="playhead" style="display:none;"><div class="playheadBody"></div></div>
 <div id="sequencer"></div>
 </div>
+<div id="stavePanel" aria-hidden="true"></div>
 <div aria-label="Drum controls" id="drumPanel">
 <div class="drumBox rhythmBox">
 <div id="drumControls">
@@ -379,21 +381,25 @@ const WHOLE_NOTE_SVG = `
    Scaled-back "scaffolding" variants selected by a ?level=N URL param.
    Reachable only via that URL (nothing on the main site links to them).
    With no/unknown param, LEARN_LEVEL is null and the full app is unchanged. */
-const LEARN_LEVELS = {
-  "1": {
-    rows: 3,
-    cols: 8,
-    // top→bottom = high→low (matches the row 0 = highest convention).
-    freqs:     [392.00, 329.63, 261.63],            // G4, E4, C4 (C-major triad)
-    rowColors: ["#3DA9FF", "#FFFF00", "#FF0000"],   // each note's existing full-grid colour: G4 blue, E4 yellow, C4 red
-    // Both tools place a 2-column (one-beat) note, distinguished by `kind`:
-    //   quarter → one sustained attack, drawn as a SOLID bar with a ♩ glyph
-    //   eighth  → two 8th-note attacks (one per column), drawn as a SEGMENTED
-    //             bar (the candy-bar divider down the middle) with a ♫ glyph.
-    toolSteps: [
-      { steps: 2, label: "8th", svg: EIGHTH_SVG, divs: 8, symClass: "eighth", kind: "eighth" },
-      { steps: 2, label: "1/4", symbol: "♩",     divs: 4, symClass: "normal", kind: "quarter" }
-    ],
+// Shared note tools for every learning level. Both tools place a 2-column
+// (one-beat) note, distinguished by `kind`:
+//   quarter → one sustained attack, drawn as a SOLID bar with a ♩ glyph
+//   eighth  → two 8th-note attacks (one per column), drawn as a SEGMENTED
+//             bar (the candy-bar divider down the middle) with a ♫ glyph.
+const _LEARN_TOOLS = [
+  { steps: 2, label: "8th", svg: EIGHTH_SVG, divs: 8, symClass: "eighth", kind: "eighth" },
+  { steps: 2, label: "1/4", symbol: "♩",     divs: 4, symClass: "normal", kind: "quarter" }
+];
+// Levels differ ONLY in rows / freqs / rowColours / cell-size cap. Everything
+// else (8 columns at 8th-note resolution, organ + techlearn beat, locked tempo
+// 90, inert pots, guest tier) is identical, so it's factored into this builder.
+// Fewer notes ⇒ fewer rows ⇒ bigger cells (maxCell) so the grid still fills the
+// stage. top→bottom = high→low (row 0 = highest, matching the full-grid convention).
+function _mkLearnLevel(rows, freqs, rowColors, maxCell){
+  return {
+    rows, cols: 8,
+    freqs, rowColors,
+    toolSteps: _LEARN_TOOLS,
     selectedSteps: 2,            // quarter preselected
     selectedKind: "quarter",     // …and its kind (both tools are steps:2, so kind disambiguates)
     stepDiv: 2,                  // each grid column = an 8th note (engine default is 4 = 16th)
@@ -401,13 +407,21 @@ const LEARN_LEVELS = {
     instrument: "piano",         // "organ" in the UI = piano key in code
     drumPatternKey: "techlearn", // dedicated 8-step techno loop (see DRUM_PATTERNS)
     lockPots: true,
-    maxCell: 112,                // let the small 3×8 grid grow to fill the stage (engine default cap 64)
+    maxCell,                     // engine default cap is 64; learning grids grow past it
     // Tier entitlement — "guest" = fully open (no lock; access is the unguessable
     // URL only). To fold a level into the paid tier later, change this to "member"
     // or "paid": the entitlement hook in applyLockState then greys the grid and
     // shows the upgrade modal for users without that tier. Nothing else to change.
     requiresTier: "guest"
-  }
+  };
+}
+const LEARN_LEVELS = {
+  // Level 1 — a single note: low C (red). One grid row, biggest cells.
+  "1": _mkLearnLevel(1, [261.63],                 ["#FF0000"],                       168),
+  // Level 2 — two notes: E (yellow) above C (red). Two rows.
+  "2": _mkLearnLevel(2, [329.63, 261.63],         ["#FFFF00", "#FF0000"],            140),
+  // Level 3 — C-major triad: G (blue), E (yellow), C (red). Three rows.
+  "3": _mkLearnLevel(3, [392.00, 329.63, 261.63], ["#3DA9FF", "#FFFF00", "#FF0000"], 112)
 };
 const _lvlParam = new URLSearchParams(location.search).get("level");
 // NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
@@ -416,6 +430,9 @@ if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <ht
 
 const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
 const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : 16;
+// Tell the learning-mode CSS how many grid rows there are so the volume fader's
+// track height spans the whole grid (1, 2, or 3 rows) instead of a hard-coded 2.
+if (LEARN_LEVEL) document.documentElement.style.setProperty("--learnRows", String(rows));
 
 const freqs = LEARN_LEVEL ? LEARN_LEVEL.freqs : [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
@@ -434,6 +451,10 @@ let selectedSteps = LEARN_LEVEL ? LEARN_LEVEL.selectedSteps : 1;
 let selectedKind = LEARN_LEVEL ? (LEARN_LEVEL.selectedKind || null) : null;
 // Glyph drawn in the centre of a placed note block (learning mode only).
 const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
+// Whether the learning-mode treble-clef staff panel is currently shown.
+// Declared with state (not beside its functions) so the live-update hook in
+// redrawRowNotes can never hit a temporal-dead-zone reference.
+let _staveOpen = false;
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
 var isPaid = false;
@@ -2276,6 +2297,142 @@ function redrawRowNotes(r){
     if(block) applyNoteGeometry(block, r, note);
     else layer.appendChild(createNoteBlock(r, note));
   }
+
+  // Live-update the learning-mode staff (no-op unless it's a learning level and
+  // the panel is open). Every grid mutation — place, delete, clear, undo, scan —
+  // flows through redrawRowNotes, so this single hook keeps the staff in sync.
+  if(LEARN_LEVEL && _staveOpen) renderStave();
+}
+
+/* -------------------- LEARNING STAVE (treble-clef notation) --------------------
+   Learning levels only. The treble-clef button slides up a one-bar 4/4 staff
+   below the grid that mirrors the programmed notes in standard notation and
+   re-renders live. Pitches sit at the bottom of a treble staff: C4 on a ledger
+   line, E4 on the bottom line, G4 on the 2nd line. Notes are positioned by
+   8th-note COLUMN (smartPlaceNote allows off-beat starts), so a single bar needs
+   no ties. A quarter-kind note = a quarter note; an eighth-kind note = a beamed
+   pair of eighths; notes sharing a start column across rows = a stacked chord;
+   empty columns = rests. */
+
+// rounded-frequency → staff metadata. staffPos = half-line steps above the
+// bottom line (E4): E4=0, G4=+2 (line above), C4=-2 (ledger line below).
+const STAVE_PITCH = {
+  262: { name: "C", staffPos: -2 },  // C4 261.63
+  330: { name: "E", staffPos:  0 },  // E4 329.63
+  392: { name: "G", staffPos:  2 }   // G4 392.00
+};
+function _stavePitch(freq){ return STAVE_PITCH[Math.round(freq)] || { name: "", staffPos: 0 }; }
+
+function toggleStave(){
+  if(!LEARN_LEVEL) return;
+  _staveOpen = !_staveOpen;
+  const panel = document.getElementById("stavePanel");
+  const btn = document.getElementById("staveBtn");
+  if(btn){ btn.classList.toggle("active", _staveOpen); btn.setAttribute("aria-pressed", _staveOpen ? "true" : "false"); }
+  if(!panel) return;
+  panel.setAttribute("aria-hidden", _staveOpen ? "false" : "true");
+  if(_staveOpen){ panel.classList.add("open"); renderStave(); }
+  else { panel.classList.remove("open"); }
+}
+
+function renderStave(){
+  const panel = document.getElementById("stavePanel");
+  if(!panel) return;
+
+  // ---- geometry (logical SVG units; the SVG scales to the panel width) ----
+  const W = 680, H = 200;
+  const lineGap = 14, halfGap = lineGap / 2;
+  const staffTopY = 64;
+  const lineY = i => staffTopY + i * lineGap;          // 0 = top line (F5) … 4 = bottom (E4)
+  const bottomLineY = lineY(4);
+  const staffMidY = lineY(2);
+  const staffLeft = 24, staffRight = 656;
+  const contentLeft = 116, contentRight = 648;
+  const colW = (contentRight - contentLeft) / cols;
+  const colX = c => contentLeft + (c + 0.5) * colW;
+  const pitchY = sp => bottomLineY - sp * halfGap;
+  const STEM = 40;
+  const INK = "#1d1d1d";
+  const MUSIC_FONT = "'Noto Music','Bravura','Segoe UI Symbol',serif";
+  const parts = [];
+
+  // staff lines + start barline + final (thick) barline
+  for(let i=0;i<5;i++) parts.push(`<line x1="${staffLeft}" y1="${lineY(i)}" x2="${staffRight}" y2="${lineY(i)}" stroke="${INK}" stroke-width="2"/>`);
+  parts.push(`<line x1="${staffLeft}" y1="${lineY(0)}" x2="${staffLeft}" y2="${lineY(4)}" stroke="${INK}" stroke-width="2"/>`);
+  parts.push(`<line x1="${staffRight-3}" y1="${lineY(0)}" x2="${staffRight-3}" y2="${lineY(4)}" stroke="${INK}" stroke-width="6"/>`);
+
+  // Treble clef — sized down ~35% and positioned so its spiral curls onto the G
+  // line (2nd line from the bottom = lineY(3)). The 0.19·size term converts the
+  // glyph's text baseline to its spiral centre for this font; if a platform's
+  // clef glyph sits differently, nudge that factor.
+  const clefSize = 52;
+  parts.push(`<text x="28" y="${lineY(3) - 2}" font-family="${MUSIC_FONT}" font-size="${clefSize}" fill="${INK}">𝄞</text>`);
+  // 4/4 time signature (plain digits always render) — a touch larger, stacked to fill the staff
+  parts.push(`<text x="84" y="${lineY(1)+10}" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="31" fill="${INK}">4</text>`);
+  parts.push(`<text x="84" y="${lineY(3)+10}" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="31" fill="${INK}">4</text>`);
+
+  // ---- collect events keyed by start column (union of rows = chord) ----
+  const startMap = {};
+  const occupied = new Array(cols).fill(false);
+  for(let r=0;r<rows;r++){
+    for(const n of notesByRow[r]){
+      const ev = startMap[n.start] || (startMap[n.start] = { kind: "quarter", notes: [] });
+      if(n.kind === "eighth") ev.kind = "eighth";
+      ev.notes.push({ staffPos: _stavePitch(freqs[r]).staffPos, color: rowColors[r] });
+      for(let c=n.start; c<n.start+n.len && c<cols; c++) occupied[c] = true;
+    }
+  }
+
+  function notehead(cx, sp, color){
+    const cy = pitchY(sp);
+    let s = "";
+    // ledger line(s) for middle C and anything at/below it
+    for(let L = -2; L >= sp; L -= 2){
+      const ly = pitchY(L);
+      s += `<line x1="${cx-13}" y1="${ly}" x2="${cx+13}" y2="${ly}" stroke="${INK}" stroke-width="2.2"/>`;
+    }
+    s += `<ellipse cx="${cx}" cy="${cy}" rx="9" ry="6.6" fill="${color}" stroke="${INK}" stroke-width="2.2" transform="rotate(-22 ${cx} ${cy})"/>`;
+    return s;
+  }
+  const stemTopOf = notes => Math.min(...notes.map(n => pitchY(n.staffPos))) - STEM; // highest pitch − stem
+  const stemBottomOf = notes => Math.max(...notes.map(n => pitchY(n.staffPos)));      // lowest pitch
+  function drawChord(cx, notes, stemTopY){
+    let s = "";
+    for(const n of notes) s += notehead(cx, n.staffPos, n.color);
+    const stemX = cx + 8.2;
+    s += `<line x1="${stemX}" y1="${stemBottomOf(notes)}" x2="${stemX}" y2="${stemTopY}" stroke="${INK}" stroke-width="3"/>`;
+    return { svg: s, stemX };
+  }
+  function drawRest(c, kind){
+    const glyph = kind === "quarter" ? "𝄽" : "𝄾";
+    const x = kind === "quarter" ? (colX(c) + colX(c+1)) / 2 : colX(c);
+    parts.push(`<text x="${x}" y="${staffMidY+2}" text-anchor="middle" font-family="${MUSIC_FONT}" font-size="${lineGap*2.8}" fill="${INK}">${glyph}</text>`);
+  }
+
+  for(let c=0;c<cols;){
+    const ev = startMap[c];
+    if(ev){
+      const stemTopY = stemTopOf(ev.notes);
+      if(ev.kind === "eighth"){
+        const a = drawChord(colX(c),   ev.notes, stemTopY);   // both eighths share the chord + beam height
+        const b = drawChord(colX(c+1), ev.notes, stemTopY);
+        parts.push(a.svg, b.svg);
+        parts.push(`<line x1="${a.stemX}" y1="${stemTopY}" x2="${b.stemX}" y2="${stemTopY}" stroke="${INK}" stroke-width="6"/>`);
+      } else {
+        parts.push(drawChord(colX(c), ev.notes, stemTopY).svg);
+      }
+      c += 2;                                  // a learning note is one beat (2 columns) wide
+    } else if(occupied[c]){
+      c += 1;                                  // tail column of a note — already drawn
+    } else if(c % 2 === 0 && c+1 < cols && !startMap[c+1] && !occupied[c+1]){
+      drawRest(c, "quarter"); c += 2;          // whole empty beat → quarter rest
+    } else {
+      drawRest(c, "eighth"); c += 1;           // lone empty 8th → eighth rest
+    }
+  }
+
+  panel.innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Staff notation of the tune on the grid">${parts.join("")}</svg>`;
 }
 
 /* -------------------- PLAYHEAD -------------------- */
@@ -3658,6 +3815,7 @@ window.stop = stop;
 window.clearGrid = clearGrid;
 window.undo = undo;
 window.openCameraModal = openCameraModal;
+window.toggleStave = toggleStave;
 window.closeCameraModal = closeCameraModal;
 window.camCapture = camCapture;
 window.camImport = camImport;
