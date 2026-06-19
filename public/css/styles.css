@@ -1270,6 +1270,35 @@ body.loggedIn #robotLogo{
     /* Overlay: hidden by default (camera mode = plain viewfinder) */
     .camOverlay{ position:absolute; inset:0; pointer-events:none; display:none; }
 
+    /* Worksheet-scanner aim guide: corner brackets that turn green on lock-on.
+       Driven by #camModal.scan-locking / .scan-locked (toggled by the scan loop). */
+    .camOverlay{ display:block; inset:14px; border-radius:14px;
+      --aimCol: rgba(255,255,255,0.85);
+      background:
+        linear-gradient(var(--aimCol),var(--aimCol)) top left     / 26px 4px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) top left     / 4px 26px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) top right    / 26px 4px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) top right    / 4px 26px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) bottom left  / 26px 4px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) bottom left  / 4px 26px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) bottom right / 26px 4px no-repeat,
+        linear-gradient(var(--aimCol),var(--aimCol)) bottom right / 4px 26px no-repeat;
+      transition: --aimCol 0.15s linear;
+    }
+    #camModal.scan-locking .camOverlay{ --aimCol: #ffd23d; } /* found something — hold steady */
+    #camModal.scan-locked  .camOverlay{ --aimCol: #2fd35e; } /* locked — importing */
+
+    /* Status badge along the bottom of the live view. */
+    .camStage::after{ content:"Point the camera at your worksheet";
+      position:absolute; left:50%; bottom:10px; transform:translateX(-50%);
+      max-width:90%; padding:6px 12px; border-radius:999px; pointer-events:none;
+      background:rgba(0,0,0,0.55); color:#fff; font-weight:800; font-size:12px; line-height:1.2;
+      white-space:nowrap; text-align:center; }
+    #camModal.scan-locking .camStage::after{ content:"Hold steady…"; background:rgba(196,140,0,0.85); }
+    #camModal.scan-locked  .camStage::after{ content:"Got it!"; background:rgba(28,165,70,0.9); }
+    /* Hide the badge once a still has been captured (preview showing, not the live video). */
+    #camModal .camStage:has(#camPreview[style*="display: block"])::after{ display:none; }
+
     /* Overlay: sheet scan — dashed border + grid lines */
     .camOverlay.mode-sheet{ display:block; inset:10px; border:4px dashed rgba(255,255,255,0.75); border-radius:14px; }
     .camOverlay.mode-sheet::before{ content:""; position:absolute; inset:0; background-image:

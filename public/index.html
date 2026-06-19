@@ -12,7 +12,9 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=33">
+<link rel="stylesheet" href="css/styles.css?v=34">
+<!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
 <body>
 <script>
@@ -200,7 +202,7 @@
 <button class="bigBtn" onclick="camImport()">Use</button>
 <button class="bigBtn" onclick="closeCameraModal()">Close</button>
 </div>
-<div class="modalHint">Tip: line the grid up inside the dashed box.</div>
+<div class="modalHint">Tip: fit the whole worksheet — QR code and all four corner marks — inside the frame. It scans by itself, or tap Capture then Use.</div>
 </div>
 </div>
 
@@ -427,6 +429,28 @@ const _lvlParam = new URLSearchParams(location.search).get("level");
 // NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
 const LEARN_LEVEL = (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
 if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <html> always exists at parse time
+// The level key for the page currently loaded: null for the full/main grid,
+// "1"/"2"/"3" for a scaffolding level. Used by the worksheet scanner to decide
+// whether a scanned sheet matches this page or needs a redirect.
+const CURRENT_LEVEL_KEY = LEARN_LEVEL ? _lvlParam : null;
+
+/* -------------------- WORKSHEET SCANNER — SHEET GEOMETRY --------------------
+   Maps a QR payload printed on a worksheet to the grid template it represents.
+   The scanner reads the QR to know WHICH sequencer the sheet is for, then uses
+   these dimensions (plus 4 corner markers) to sample the right cells.
+
+   cellFrac / gapFrac describe the horizontal layout WITHIN one column slot of
+   the de-warped grid rectangle: each of `cols` slots is `cellFrac` square +
+   `gapFrac` gap (cellFrac + gapFrac === 1). The inter-cell gap that the
+   note-length rule measures is the `gapFrac` portion at the right of each slot.
+   The 4 corner markers are assumed to sit at the outer corners of the cell
+   grid's bounding box (contract — worksheet design is out of scope here). */
+const SHEET_GEOMETRY = {
+  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28 },
+  "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
+  "kidseq:lvl2": { levelKey: "2", rows: 2, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
+  "kidseq:lvl3": { levelKey: "3", rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 }
+};
 
 const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
 const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : 16;
@@ -3349,6 +3373,9 @@ async function openCameraModal(){
 
     camVideoEl.srcObject = camStream;
     await camVideoEl.play().catch(()=>{});
+    // Start the live auto-detect loop: read QR (which sheet) + corner markers
+    // each frame and auto-import once locked. Capture/Use remain as a fallback.
+    _startSheetScan();
   }catch(e){
     console.error("Camera open failed:", e);
     const name = (e && e.name) ? e.name : "Error";
@@ -3369,6 +3396,7 @@ async function openCameraModal(){
 }
 
 function closeCameraModal(){
+  _stopSheetScan();
   camModalEl.classList.remove("show");
   camModalEl.setAttribute("aria-hidden", "true");
   try{
@@ -3379,13 +3407,316 @@ function closeCameraModal(){
   camStream = null;
 }
 
+/* ==================== WORKSHEET SCANNER PIPELINE ====================
+   Flow: live camera → read QR (which sheet) + 4 corner markers (geometry) →
+   perspective de-warp → read each cell filled-vs-blank → join adjacent cells
+   into longer notes via the gap rule → place notes (routing to the right grid
+   template). The QR only changes how we interpret the frame, never the lens. */
+
+const SCAN_WORK_W      = 420;   // working resolution width for QR + marker detection
+const SCAN_LOCK_FRAMES = 3;     // consecutive good frames before auto-capture
+const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is heavy)
+const SCAN_FILL_RATIO  = 0.70;  // a cell is "inked" if darker than 70% of paper white
+const SCAN_GAP_JOIN    = 0.50;  // >50% of the inter-cell gap coloured ⇒ notes joined
+
+let _scanRafId    = 0;
+let _scanLockCount= 0;
+let _scanLastTick = 0;
+let _scanWorkCanvas = null;
+
+/* ---- linear algebra: solve A·x = b (n×n) by Gaussian elimination ---- */
+function _solveLinear(A, b){
+  const n = b.length;
+  const M = A.map((row, i) => row.concat(b[i]));
+  for(let col=0; col<n; col++){
+    let piv = col;
+    for(let r=col+1; r<n; r++) if(Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if(Math.abs(M[piv][col]) < 1e-9) return null;
+    const tmp = M[col]; M[col] = M[piv]; M[piv] = tmp;
+    const pv = M[col][col];
+    for(let j=col; j<=n; j++) M[col][j] /= pv;
+    for(let r=0; r<n; r++){
+      if(r === col) continue;
+      const f = M[r][col];
+      if(f === 0) continue;
+      for(let j=col; j<=n; j++) M[r][j] -= f * M[col][j];
+    }
+  }
+  return M.map(row => row[n]);
+}
+
+/* ---- homography: maps the unit square's corners (0,0)(1,0)(1,1)(0,1) onto the
+   detected marker quad [TL,TR,BR,BL]; returns mapPoint(u,v) → source pixel. ---- */
+function _homographyUnitToQuad(quad){
+  const uv = [[0,0],[1,0],[1,1],[0,1]];
+  const A = [], b = [];
+  for(let k=0; k<4; k++){
+    const u = uv[k][0], v = uv[k][1], X = quad[k].x, Y = quad[k].y;
+    A.push([u, v, 1, 0, 0, 0, -u*X, -v*X]); b.push(X);
+    A.push([0, 0, 0, u, v, 1, -u*Y, -v*Y]); b.push(Y);
+  }
+  const h = _solveLinear(A, b);
+  if(!h) return null;
+  const [a, bb, c, d, e, f, g, hh] = h;
+  return (u, v) => {
+    const denom = g*u + hh*v + 1;
+    return { x: (a*u + bb*v + c)/denom, y: (d*u + e*v + f)/denom };
+  };
+}
+
+/* ---- locate 4 corner markers: solid, achromatic (black) blobs near the image
+   corners. Achromatic test is what separates the black marks from the kids'
+   coloured cells; returns [TL,TR,BR,BL] in image coords, or null. ---- */
+function _cornerMarkersFrom(imgData){
+  const { data, width: w, height: h } = imgData;
+  const N = w * h;
+  // Adaptive dark threshold from mean luminance.
+  let lumSum = 0;
+  for(let p=0; p<N; p++){ const i=p*4; lumSum += (Math.max(data[i],data[i+1],data[i+2]) + Math.min(data[i],data[i+1],data[i+2])) >> 1; }
+  const meanL = lumSum / N;
+  const T = Math.min(120, meanL * 0.55);
+
+  const mask = new Uint8Array(N);
+  for(let p=0; p<N; p++){
+    const i = p*4, R = data[i], G = data[i+1], B = data[i+2];
+    const mx = Math.max(R,G,B), mn = Math.min(R,G,B);
+    const lum = (mx + mn) >> 1;
+    const sat = mx === 0 ? 0 : (mx - mn) / mx;
+    if(lum < T && sat < 0.35) mask[p] = 1; // dark AND near-greyscale
+  }
+
+  // 4-connected components via explicit stack flood fill.
+  const labels = new Int32Array(N);
+  const stack  = new Int32Array(N);
+  const comps  = [];
+  let lab = 0;
+  for(let p=0; p<N; p++){
+    if(!mask[p] || labels[p]) continue;
+    lab++;
+    let sp = 0; stack[sp++] = p; labels[p] = lab;
+    let area=0, sx=0, sy=0, minx=w, maxx=0, miny=h, maxy=0;
+    while(sp > 0){
+      const q = stack[--sp], qx = q % w, qy = (q / w) | 0;
+      area++; sx += qx; sy += qy;
+      if(qx < minx) minx = qx; if(qx > maxx) maxx = qx;
+      if(qy < miny) miny = qy; if(qy > maxy) maxy = qy;
+      if(qx > 0)   { const n = q-1; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
+      if(qx < w-1) { const n = q+1; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
+      if(qy > 0)   { const n = q-w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
+      if(qy < h-1) { const n = q+w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
+    }
+    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1 });
+  }
+
+  // Keep solid, squarish blobs of a plausible size (not noise, not the QR/border).
+  const cand = comps.filter(c => {
+    const fa = c.area / N;
+    if(fa < 0.0004 || fa > 0.04) return false;
+    const ar = c.bw / c.bh;
+    if(ar < 0.45 || ar > 2.2) return false;
+    return (c.area / (c.bw * c.bh)) >= 0.55; // solidly filled square
+  });
+  if(cand.length < 4) return null;
+
+  // Pick the four corner-most centroids (extremes of x+y and x−y).
+  let tl=null, tr=null, br=null, bl=null;
+  let tlV=Infinity, brV=-Infinity, trV=-Infinity, blV=Infinity;
+  for(const c of cand){
+    const sum = c.cx + c.cy, dif = c.cx - c.cy;
+    if(sum < tlV){ tlV = sum; tl = c; }
+    if(sum > brV){ brV = sum; br = c; }
+    if(dif > trV){ trV = dif; tr = c; }
+    if(dif < blV){ blV = dif; bl = c; }
+  }
+  const pts = [tl, tr, br, bl];
+  // Reject if any two "corners" collapsed onto the same blob / are too close (not a real quad).
+  const minSep = Math.min(w, h) * 0.12;
+  for(let a=0; a<4; a++) for(let b2=a+1; b2<4; b2++){
+    if(Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy) < minSep) return null;
+  }
+  return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
+}
+
+/* ---- luminance of a single source pixel (clamped) ---- */
+function _lumAt(imgData, x, y){
+  const w = imgData.width, h = imgData.height, d = imgData.data;
+  const px = x < 0 ? 0 : (x > w-1 ? w-1 : Math.round(x));
+  const py = y < 0 ? 0 : (y > h-1 ? h-1 : Math.round(y));
+  const i = (py * w + px) * 4;
+  return (Math.max(d[i],d[i+1],d[i+2]) + Math.min(d[i],d[i+1],d[i+2])) >> 1;
+}
+
+/* ---- read the de-warped grid into a flat note list (row/start/len, len in
+   columns). Adjacent filled cells merge when the gap between them is >50% inked. */
+function _scanNotesFromFrame(imgData, geom, mapPoint){
+  const { rows: R, cols: C, cellFrac, gapFrac } = geom;
+
+  // Paper-white baseline: 85th percentile luminance over random grid samples.
+  const whites = [];
+  for(let s=0; s<200; s++){ const p = mapPoint(Math.random(), Math.random()); whites.push(_lumAt(imgData, p.x, p.y)); }
+  whites.sort((a,b) => a - b);
+  const white = whites[Math.floor(whites.length * 0.85)] || 200;
+  const inkThresh = white * SCAN_FILL_RATIO;
+
+  // Slot c spans u∈[c/C,(c+1)/C]: first cellFrac is the square, the rest is the gap.
+  const cellU = (c, t) => (c + t * cellFrac) / C;            // t∈[0,1] across the cell
+  const gapU  = (c, t) => (c + cellFrac + t * gapFrac) / C;  // t∈[0,1] across the gap
+  const rowV  = (r, t) => (r + 0.15 + t * 0.70) / R;         // vertical band inside the row
+
+  const darkFraction = (uFn, r, c) => {
+    let dark = 0;
+    for(let iy=0; iy<3; iy++) for(let ix=0; ix<3; ix++){
+      const p = mapPoint(uFn(c, (ix + 0.5) / 3), rowV(r, (iy + 0.5) / 3));
+      if(_lumAt(imgData, p.x, p.y) < inkThresh) dark++;
+    }
+    return dark / 9;
+  };
+  const cellFilled = (r, c) => darkFraction(cellU, r, c) >= 0.5;
+  const gapJoined  = (r, c) => darkFraction(gapU, r, c) > SCAN_GAP_JOIN;
+
+  const notes = [];
+  for(let r=0; r<R; r++){
+    let c = 0;
+    while(c < C){
+      if(cellFilled(r, c)){
+        const start = c; let len = 1;
+        while(c + 1 < C && cellFilled(r, c + 1) && gapJoined(r, c)){ len++; c++; }
+        notes.push({ row: r, start, len });
+      }
+      c++;
+    }
+  }
+  return notes;
+}
+
+/* ---- apply a scanned note list onto the CURRENT page's grid ---- */
+function _applyScannedNotes(notes){
+  pushUndo();
+  notesByRow = Array.from({length: rows}, () => []);
+  occ        = Array.from({length: rows}, () => Array(cols).fill(null));
+  nextId     = 1;
+  const kind = LEARN_LEVEL ? (LEARN_LEVEL.selectedKind || null) : null;
+  for(const n of notes){
+    if(n.row >= 0 && n.row < rows && n.start >= 0 && canPlace(n.row, n.start, n.len)){
+      placeNote(n.row, n.start, n.len, kind);
+    }
+  }
+  redrawAllNotes();
+}
+
+/* ---- route a scan to the right template: apply in place when the scanned
+   sheet matches this page, otherwise stash the notes and navigate to the
+   matching grid (?level=N or the param-less main page). ---- */
+function _routeScannedNotes(geom, notes){
+  if(geom.levelKey === CURRENT_LEVEL_KEY){
+    _applyScannedNotes(notes);
+    closeCameraModal();
+    try{ showSaveToast("loaded"); }catch(e){}
+    return;
+  }
+  try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes })); }catch(e){}
+  const base = location.pathname;
+  location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
+}
+
+function _processScanFrame(imgData, sheetId, corners){
+  const geom = SHEET_GEOMETRY[sheetId];
+  if(!geom) return false;
+  const mapPoint = _homographyUnitToQuad(corners);
+  if(!mapPoint) return false;
+  _routeScannedNotes(geom, _scanNotesFromFrame(imgData, geom, mapPoint));
+  return true;
+}
+
+/* ---- apply notes stashed before a cross-template redirect (runs once after
+   the grid is built — see layoutPass). ---- */
+let _scanImportApplied = false;
+function _applyPendingScanImport(){
+  if(_scanImportApplied) return;
+  let raw = null;
+  try{ raw = sessionStorage.getItem("kidseq_scan_import"); }catch(e){}
+  if(!raw) return;
+  _scanImportApplied = true;
+  try{ sessionStorage.removeItem("kidseq_scan_import"); }catch(e){}
+  let payload = null;
+  try{ payload = JSON.parse(raw); }catch(e){ return; }
+  if(!payload || !Array.isArray(payload.notes)) return;
+  _applyScannedNotes(payload.notes);
+  try{ showSaveToast("loaded"); }catch(e){}
+}
+
+/* ---- live auto-detect loop ---- */
+function _scanFrameImageData(){
+  if(!camVideoEl || !camVideoEl.videoWidth) return null;
+  const vw = camVideoEl.videoWidth, vh = camVideoEl.videoHeight;
+  const w = SCAN_WORK_W, h = Math.max(1, Math.round(vh * w / vw));
+  if(!_scanWorkCanvas) _scanWorkCanvas = document.createElement("canvas");
+  _scanWorkCanvas.width = w; _scanWorkCanvas.height = h;
+  const ctx = _scanWorkCanvas.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(camVideoEl, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h);
+}
+
+function _setScanStatus(state){
+  if(!camModalEl) return;
+  camModalEl.classList.toggle("scan-locking", state === "locking");
+  camModalEl.classList.toggle("scan-locked",  state === "locked");
+}
+
+function _scanTick(ts){
+  _scanRafId = requestAnimationFrame(_scanTick);
+  if(ts - _scanLastTick < SCAN_TICK_MS) return;
+  _scanLastTick = ts;
+  if(typeof jsQR !== "function") return;
+  const imgData = _scanFrameImageData();
+  if(!imgData) return;
+
+  let qr = null;
+  try{ qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
+  const sheetId = qr && qr.data;
+  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
+
+  if(sheetId && corners){
+    _scanLockCount++;
+    _setScanStatus(_scanLockCount >= SCAN_LOCK_FRAMES ? "locked" : "locking");
+    if(_scanLockCount >= SCAN_LOCK_FRAMES){
+      _stopSheetScan();
+      _processScanFrame(imgData, sheetId, corners);
+    }
+  } else {
+    _scanLockCount = 0;
+    _setScanStatus(null);
+  }
+}
+
+function _startSheetScan(){
+  _scanLockCount = 0; _scanLastTick = 0;
+  if(_scanRafId) cancelAnimationFrame(_scanRafId);
+  _scanRafId = requestAnimationFrame(_scanTick);
+}
+function _stopSheetScan(){
+  if(_scanRafId) cancelAnimationFrame(_scanRafId);
+  _scanRafId = 0; _scanLockCount = 0;
+  _setScanStatus(null);
+}
+
+/* ---- manual fallback: freeze a still, then run it through the same pipeline ---- */
+function _imageDataFromCanvasScaled(srcCanvas, targetW){
+  const sw = srcCanvas.width, sh = srcCanvas.height;
+  const w = Math.min(targetW, sw), h = Math.max(1, Math.round(sh * w / sw));
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.drawImage(srcCanvas, 0, 0, w, h);
+  return ctx.getImageData(0, 0, w, h);
+}
+
 function camCapture(){
   if(!camVideoEl || !camVideoEl.videoWidth) return;
-  const w = camVideoEl.videoWidth;
-  const h = camVideoEl.videoHeight;
-  camCanvasEl.width = w;
-  camCanvasEl.height = h;
-  const ctx = camCanvasEl.getContext("2d");
+  _stopSheetScan(); // user has taken manual control
+  const w = camVideoEl.videoWidth, h = camVideoEl.videoHeight;
+  camCanvasEl.width = w; camCanvasEl.height = h;
+  const ctx = camCanvasEl.getContext("2d", { willReadFrequently: true });
   ctx.drawImage(camVideoEl, 0, 0, w, h);
   camCapturedDataUrl = camCanvasEl.toDataURL("image/png");
   camPreviewEl.src = camCapturedDataUrl;
@@ -3394,84 +3725,20 @@ function camCapture(){
 }
 
 function camImport(){
-  if(!camCapturedDataUrl){
-    camCapture();
-    if(!camCapturedDataUrl) return;
+  if(!camCapturedDataUrl) camCapture();
+  if(!camCanvasEl.width) return;
+  const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
+  let qr = null;
+  try{ if(typeof jsQR === "function") qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
+  const sheetId = qr && qr.data;
+  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
+  if(sheetId && corners){
+    _stopSheetScan();
+    _processScanFrame(imgData, sheetId, corners);
+  }else{
+    try{ showSaveToast("error"); }catch(e){}
+    alert("Couldn't read the worksheet.\nMake sure the QR code and all four corner marks are inside the frame, then try again.");
   }
-  importGridFromDataUrl(camCapturedDataUrl);
-  closeCameraModal();
-}
-
-function importGridFromDataUrl(dataUrl){
-  const img = new Image();
-  img.onload = () => {
-    const w = img.naturalWidth;
-    const h = img.naturalHeight;
-    camCanvasEl.width = w;
-    camCanvasEl.height = h;
-    const ctx = camCanvasEl.getContext("2d");
-    ctx.drawImage(img, 0, 0, w, h);
-
-    const { data } = ctx.getImageData(0, 0, w, h);
-
-    // centered crop to reduce background impact
-    const cropX = Math.floor(w * 0.10);
-    const cropY = Math.floor(h * 0.12);
-    const cropW = Math.floor(w * 0.80);
-    const cropH = Math.floor(h * 0.76);
-
-    function idx(px, py){ return (py * w + px) * 4; }
-
-    function sampleCell(r, c){
-      // sample a few points inside the cell
-      const x0 = cropX + Math.floor((c + 0.15) * cropW / cols);
-      const x1 = cropX + Math.floor((c + 0.85) * cropW / cols);
-      const y0 = cropY + Math.floor((r + 0.20) * cropH / rows);
-      const y1 = cropY + Math.floor((r + 0.80) * cropH / rows);
-
-      const pts = [
-        [x0, y0],
-        [x1, y0],
-        [Math.floor((x0+x1)/2), Math.floor((y0+y1)/2)],
-        [x0, y1],
-        [x1, y1]
-      ];
-
-      let satSum = 0;
-      let lumSum = 0;
-      for(const [x,y] of pts){
-        const i = idx(Math.max(0, Math.min(w-1, x)), Math.max(0, Math.min(h-1, y)));
-        const R = data[i]/255, G = data[i+1]/255, B = data[i+2]/255;
-        const maxv = Math.max(R,G,B);
-        const minv = Math.min(R,G,B);
-        const lum = (maxv + minv) * 0.5;
-        const sat = (maxv === 0) ? 0 : (maxv - minv) / maxv; // simple saturation proxy
-        satSum += sat;
-        lumSum += lum;
-      }
-      const sat = satSum / pts.length;
-      const lum = lumSum / pts.length;
-
-      // heuristic: colored if reasonably saturated and not near-white
-      return (sat > 0.18) && (lum < 0.92);
-    }
-
-    pushUndo();
-    notesByRow = Array.from({length: rows}, () => []);
-    occ = Array.from({length: rows}, () => Array(cols).fill(null));
-    nextId = 1;
-
-    for(let r=0;r<rows;r++){
-      for(let c=0;c<cols;c++){
-        if(sampleCell(r,c)){
-          if(canPlace(r, c, 1)) placeNote(r, c, 1);
-        }
-      }
-    }
-
-    redrawAllNotes();
-  };
-  img.src = dataUrl;
 }
 
 
@@ -3641,6 +3908,9 @@ root.classList.add('stageScaled');
     try{
       fitToViewport();
       buildGrid();
+      // Apply any notes scanned on another grid before a cross-template redirect.
+      // One-shot (guarded inside); must run after buildGrid has rendered the rows.
+      try{ _applyPendingScanImport(); }catch(e){}
       positionRobotLogo();
       // Cell rects only become valid AFTER buildGrid renders rows.
       syncTopBarLayout();
@@ -3912,6 +4182,16 @@ window.KidSequencer = {
     closeCameraModal,
     camCapture,
     camImport
+  },
+  // Worksheet-scanner internals — exposed for debugging/tuning the CV pipeline.
+  Scan: {
+    SHEET_GEOMETRY,
+    cornerMarkersFrom: _cornerMarkersFrom,
+    homographyUnitToQuad: _homographyUnitToQuad,
+    notesFromFrame: _scanNotesFromFrame,
+    processFrame: _processScanFrame,
+    applyPending: _applyPendingScanImport,
+    get appliedFlag(){ return _scanImportApplied; }
   },
   Auth: { logout }
 };
