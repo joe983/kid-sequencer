@@ -113,7 +113,7 @@ html.tabletScaled #page{
       /* Left tools column width — matches the circle button size below so the
          title box, the circles, and the column edge all share the same x-axis. */
       --toolW: 124px;
-      --rightW: 58px;
+      --rightW: 124px;   /* widened from 58px to fit the fader + key-controls column */
       --rightLift: 0px;
       --titleInset: 0px;
       --contentLift: 0px;
@@ -887,14 +887,18 @@ body.loggedIn #robotLogo{
       z-index: 4; /* above topBar so the lifted tempo buttons remain clickable */
     }
 
-    #tempoControls{
+    #tempoControls,
+    #keyControls,
+    .keyControls{
       display:flex;
       flex-direction:column;
       align-items:center;
       gap: 8px;
-      width: 100%;
+      width: auto;
     }
-    #tempoControls button{
+    #tempoControls button,
+    #keyControls button,
+    .keyControls button{
       width:58px;
       height:58px;
       font-size:22px;
@@ -915,10 +919,14 @@ body.loggedIn #robotLogo{
       -webkit-appearance: none;
       appearance: none;
     }
-    #tempoControls button:hover{ transform: translateY(-1px); }
-    #tempoControls button:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,0.07); }
+    #tempoControls button:hover,
+    #keyControls button:hover{ transform: translateY(-1px); }
+    #tempoControls button:active,
+    #keyControls button:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,0.07); }
 
-    #tempoBox{
+    #tempoBox,
+    #keyBox,
+    .keyBox{
       width:58px;
       text-align:center;
       font-size:20px;
@@ -931,6 +939,34 @@ body.loggedIn #robotLogo{
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       user-select:none;
       box-sizing: border-box;
+    }
+    /* Placeholder for the second key-like control reserved below — same shape,
+       greyed out, non-interactive until a future feature wires it up. */
+    .keyControls.placeholder{ opacity: 0.35; pointer-events: none; }
+    .keyControls.placeholder button{ cursor: default; }
+
+    /* Fader stays centred in the column (aligned under the tempo stack + pots);
+       the key column hangs off its right edge, so the page widens to the right
+       without disturbing the existing vertical stack. The key column overflows
+       the column's right edge the same way the 76px pots already do — #rightCol
+       doesn't clip. 50% centre + half the 58px fader (29) + 8px gap = the key's
+       left edge. */
+    #faderRow{
+      position: relative;
+      display:flex;
+      flex-direction:row;
+      align-items:flex-start;
+      justify-content: center;   /* the fader is the only in-flow child → centred */
+      width: 100%;
+    }
+    #keyCol{
+      position: absolute;
+      top: 0;
+      left: calc(50% + 37px);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 12px;
     }
 
     #instButtons{
@@ -945,6 +981,10 @@ body.loggedIn #robotLogo{
 
     #masterVolUI{
       filter: drop-shadow(0px 8px 0px rgba(0,0,0,0.07));
+      /* Pin to 58px: the element is display:block and would otherwise stretch to
+         fill the now-124px right column (auto-expanding its hit area under the key
+         column). 58px keeps the track centred under the tempo stack as before. */
+      width: 58px;
     }
 
     .instBtn{
@@ -1347,12 +1387,15 @@ body.loggedIn #robotLogo{
     .bigBtn.locked:active{ transform: none; }
 
     #tempoControls.locked button,
-    #tempoControls.locked #tempoBox{
+    #tempoControls.locked #tempoBox,
+    #keyControls.locked button,
+    #keyControls.locked #keyBox{
       opacity: 0.35;
       filter: grayscale(1);
       cursor: not-allowed;
     }
-    #tempoControls.locked button:hover{ transform: none; }
+    #tempoControls.locked button:hover,
+    #keyControls.locked button:hover{ transform: none; }
 
     #toolsList{
       display:flex;
@@ -2107,6 +2150,7 @@ html.js-loading #contentWrap{
 .learning-mode #printBtn,
 .learning-mode #loginCtaWrap,
 .learning-mode #tempoControls,        /* tempo +/- removed entirely */
+.learning-mode #keyCol,              /* key selector (paid feature) hidden in learning mode */
 .learning-mode #potRow { display: none !important; }  /* echo + filter pots removed entirely */
 
 /* Only the volume fader remains in the right column. Drop the lift that pulls

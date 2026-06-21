@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=34">
+<link rel="stylesheet" href="css/styles.css?v=35">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -179,7 +179,21 @@
 <div class="potBody"><div class="potIndicator"></div></div>
 </div>
 </div>
+<div id="faderRow">
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
+<div id="keyCol">
+<div id="keyControls">
+<button id="keyUpBtn" onclick="keyUp()">▲</button>
+<div id="keyBox">C</div>
+<button id="keyDownBtn" onclick="keyDown()">▼</button>
+</div>
+<div class="keyControls placeholder" id="keyControls2" aria-hidden="true">
+<button disabled tabindex="-1">▲</button>
+<div class="keyBox">—</div>
+<button disabled tabindex="-1">▼</button>
+</div>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -460,6 +474,36 @@ if (LEARN_LEVEL) document.documentElement.style.setProperty("--learnRows", Strin
 
 const freqs = LEARN_LEVEL ? LEARN_LEVEL.freqs : [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+
+// --- Key selector (paid tier) -----------------------------------------------
+// 14 keys cycle in this order; the up arrow advances forward, down reverses, both wrap.
+// "m" suffix = natural minor. Default `C` matches the unchanged C-major freqs above.
+// pitchFor(row) is the single chokepoint tick() reads at audio dispatch — Bass × 0.25
+// and Bells × 4 in playInstrument() therefore follow automatically. In learning mode
+// freqs is a SHORT array (1-3 entries) and the key control is hidden, so we just
+// return freqs[row] there.
+const KEY_ORDER = ['A','Am','B','Bm','C','Cm','D','Dm','E','Em','F','Fm','G','Gm'];
+const _MAJOR_STEPS = [0,2,4,5,7,9,11,12];
+const _MINOR_STEPS = [0,2,3,5,7,8,10,12]; // natural minor
+const _ROOT_SEMITONES = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
+const _C4_HZ = 261.63;
+const SCALES = (() => {
+  const out = {};
+  for(const k of KEY_ORDER){
+    const isMinor = k.endsWith('m');
+    const root = isMinor ? k.slice(0,-1) : k;
+    const steps = isMinor ? _MINOR_STEPS : _MAJOR_STEPS;
+    const semi = _ROOT_SEMITONES[root];
+    const ascending = steps.map(s => _C4_HZ * Math.pow(2, (semi + s) / 12));
+    out[k] = ascending.slice().reverse(); // row 0 = top = octave; row 7 = bottom = root
+  }
+  return out;
+})();
+let currentKey = 'C';
+function pitchFor(row){
+  if(LEARN_LEVEL) return freqs[row]; // learning mode never transposes; freqs is short here
+  return (SCALES[currentKey] || SCALES.C)[row];
+}
 
 const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps : [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
@@ -903,6 +947,10 @@ function applyLockState(){
   if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
   const loadBtnEl = document.getElementById("loadBtn");
   if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
+  // Key selector is paid-tier only (.locked greys the arrows + box; clicks route
+  // to the upgrade modal via keyUp/keyDown's isPaid guard).
+  const keyControlsEl = document.getElementById("keyControls");
+  if(keyControlsEl) keyControlsEl.classList.toggle("locked", !isPaid);
 
   // Member-tier locks: 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
   // show as "?" placeholders until the user registers.
@@ -946,7 +994,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn")].forEach(bindLockedNudge);
+[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn"), document.getElementById("keyControls")].forEach(bindLockedNudge);
 
 /* -------- UPGRADE MODAL -------- */
 let _upgradePath = null;
@@ -969,6 +1017,7 @@ function openUpgradeModal(path){
       print:  'Print your tune',
       save:   'Save your tune',
       load:   'Load a saved tune',
+      key:    'Change the key',
       login:  'Welcome back'
     };
     titleEl.textContent = titles[path] || 'Make Music';
@@ -1234,10 +1283,11 @@ function fitToViewport(){
   // pinned to the circle size so the title box, circles, and column edge all
   // share the same x-axis.
   let toolW = 124;
-  // Right column hugs its 58px-wide controls (tempo, instruments, volume) so
-  // the gap from the grid's right edge mirrors the gap from the circle column
-  // on the left (~14px from mainLayout's flex gap).
-  let rightW = 58;
+  // Right column holds the tempo stack + pots (58px wide, centred) and, at the
+  // bottom, the fader sitting beside the key-selector column (58 + 8 gap + 58).
+  // So the column reserves 124px — the fader+key pair sets the width. In learning
+  // mode the key column is hidden, so the original 58px is enough there.
+  let rightW = LEARN_LEVEL ? 58 : 124;
 
   const outerPadding = 24;
   const gaps = 14 * 2;
@@ -1256,7 +1306,7 @@ function fitToViewport(){
 
   if(cell <= 36){
     // Tight viewports: keep toolW pinned to circle size, only widen the right column.
-    rightW = Math.max(96, Math.floor(vw * 0.16));
+    rightW = Math.max(LEARN_LEVEL ? 96 : 124, Math.floor(vw * 0.16));
   }
 
   document.documentElement.style.setProperty("--toolW", toolW + "px");
@@ -2960,7 +3010,9 @@ function startSequencer(){
     for(const { r, note } of stepNotes){
       // An eighth-pair sounds as two separate 8ths: its first attack lasts one
       // column (the second fires below). Everything else sustains its full length.
-      playInstrument(freqs[r], note.kind === "eighth" ? 1 : note.len);
+      // pitchFor() routes through the active key (paid-tier selector); in learning
+      // mode it falls back to the level's short freqs array.
+      playInstrument(pitchFor(r), note.kind === "eighth" ? 1 : note.len);
 
       const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
       if(block){
@@ -2977,7 +3029,7 @@ function startSequencer(){
       for(let r=0;r<rows;r++){
         const n2 = notesByRow[r].find(n => n.kind === "eighth" && n.start !== step && (n.start + 1) % cols === step);
         if(!n2) continue;
-        playInstrument(freqs[r], 1);
+        playInstrument(pitchFor(r), 1);
         const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${n2.id}"]`);
         if(block){
           setBlockPulseVars(block);
@@ -3095,11 +3147,37 @@ function tempoDown(){
   requestTempo(base - 5);
 }
 
+/* -------------------- KEY SELECTOR (paid tier) -------------------- */
+// Cycles currentKey through KEY_ORDER; up advances, down reverses, both wrap.
+// Pitch change is instant — notes already on the grid play in the new key from
+// the next playhead step (pitchFor() is read fresh each tick). No ramp needed.
+function _updateKeyBox(){
+  const el = document.getElementById('keyBox');
+  if(el) el.textContent = currentKey;
+}
+function keyUp(){
+  if(LEARN_LEVEL) return;                              // belt-and-braces; control is hidden anyway
+  if(!isPaid){ openUpgradeModal('key'); return; }
+  const i = KEY_ORDER.indexOf(currentKey);
+  currentKey = KEY_ORDER[(i + 1) % KEY_ORDER.length];
+  _updateKeyBox();
+}
+function keyDown(){
+  if(LEARN_LEVEL) return;
+  if(!isPaid){ openUpgradeModal('key'); return; }
+  const i = KEY_ORDER.indexOf(currentKey);
+  currentKey = KEY_ORDER[(i - 1 + KEY_ORDER.length) % KEY_ORDER.length];
+  _updateKeyBox();
+}
+window.keyUp = keyUp;
+window.keyDown = keyDown;
+
 /* -------------------- CLEAR -------------------- */
 function clearGrid(){
   pushUndo();
   notesByRow = Array.from({length: rows}, () => []);
   occ = Array.from({length: rows}, () => Array(cols).fill(null));
+  if(!LEARN_LEVEL){ currentKey = 'C'; _updateKeyBox(); } // wiping the grid resets the key
   redrawAllNotes();
 }
 
@@ -3144,6 +3222,9 @@ function _applySequenceData(d){
   try{ stop(); }catch(e){}
   pushUndo();
   if(typeof d.tempo === "number") requestTempo(d.tempo);
+  // Restore the key (older saves predate this field — fall back to C).
+  currentKey = (typeof d.key === "string" && KEY_ORDER.includes(d.key)) ? d.key : 'C';
+  _updateKeyBox();
   if(d.instrument) setInstrument(d.instrument);
   if(typeof d.selectedSteps === "number"){ selectedSteps = d.selectedSteps; buildTools(); }
   activeDrumStyle = d.drumsMuted ? null : (DRUM_STYLE_UI[d.drumStyle] || "techno");
@@ -3203,7 +3284,7 @@ async function confirmSaveName(){
     const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
     await setDoc(doc(db,"users",user.uid,"sequences",_slugify(name)),{
       name, savedAt: serverTimestamp(),
-      tempo, instrument, drumStyle, drumsMuted, selectedSteps,
+      tempo, instrument, drumStyle, drumsMuted, selectedSteps, key: currentKey,
       notesByRow: notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})))
     });
     showSaveToast("saved");
@@ -4057,6 +4138,7 @@ function init(){
     }
   }
   updateTempoBox();
+  _updateKeyBox();
   setPlayheadWobbleFromTempo(tempo);
   // Layout is handled by the layout system (scheduleLayout/layoutPass).
   // Do NOT call fitToViewport() here — competing calls cause rightLift to flip-flop
