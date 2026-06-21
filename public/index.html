@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=35">
+<link rel="stylesheet" href="css/styles.css?v=36">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -179,21 +179,8 @@
 <div class="potBody"><div class="potIndicator"></div></div>
 </div>
 </div>
-<div id="faderRow">
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
-<div id="keyCol">
-<div id="keyControls">
-<button id="keyUpBtn" onclick="keyUp()">▲</button>
-<div id="keyBox">C</div>
-<button id="keyDownBtn" onclick="keyDown()">▼</button>
-</div>
-<div class="keyControls placeholder" id="keyControls2" aria-hidden="true">
-<button disabled tabindex="-1">▲</button>
-<div class="keyBox">—</div>
-<button disabled tabindex="-1">▼</button>
-</div>
-</div>
-</div>
+<button id="keyBtn" onclick="openKeyMenu()" aria-haspopup="listbox" aria-label="Key">C</button>
 </div>
 </div>
 </div>
@@ -344,6 +331,11 @@
     <div id="loadSheetList"></div>
   </div>
 </div>
+
+<!-- Key picker popup (paid tier). Anchored next to #keyBtn via getBoundingClientRect;
+     position:fixed so the scaled #page transform doesn't distort it. -->
+<div id="keyMenuBackdrop" onclick="closeKeyMenu()"></div>
+<div aria-hidden="true" class="keyMenu" id="keyMenu" role="listbox"></div>
 
 <script>
 /* OPTION A ORGANISATION START */
@@ -947,10 +939,11 @@ function applyLockState(){
   if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
   const loadBtnEl = document.getElementById("loadBtn");
   if(loadBtnEl) loadBtnEl.classList.toggle("locked", !isPaid);
-  // Key selector is paid-tier only (.locked greys the arrows + box; clicks route
-  // to the upgrade modal via keyUp/keyDown's isPaid guard).
-  const keyControlsEl = document.getElementById("keyControls");
-  if(keyControlsEl) keyControlsEl.classList.toggle("locked", !isPaid);
+  // Key selector is paid-tier only. Non-payers simply don't see the button (no
+  // greyed/upsell state on this control). Also hidden in learning mode.
+  const keyBtnEl = document.getElementById("keyBtn");
+  if(keyBtnEl) keyBtnEl.style.display = (isPaid && !LEARN_LEVEL) ? "" : "none";
+  if(!(isPaid && !LEARN_LEVEL)) closeKeyMenu(); // close picker if tier drops mid-open
 
   // Member-tier locks: 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
   // show as "?" placeholders until the user registers.
@@ -994,7 +987,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn"), document.getElementById("keyControls")].forEach(bindLockedNudge);
+[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn")].forEach(bindLockedNudge);
 
 /* -------- UPGRADE MODAL -------- */
 let _upgradePath = null;
@@ -1017,7 +1010,6 @@ function openUpgradeModal(path){
       print:  'Print your tune',
       save:   'Save your tune',
       load:   'Load a saved tune',
-      key:    'Change the key',
       login:  'Welcome back'
     };
     titleEl.textContent = titles[path] || 'Make Music';
@@ -1283,11 +1275,11 @@ function fitToViewport(){
   // pinned to the circle size so the title box, circles, and column edge all
   // share the same x-axis.
   let toolW = 124;
-  // Right column holds the tempo stack + pots (58px wide, centred) and, at the
-  // bottom, the fader sitting beside the key-selector column (58 + 8 gap + 58).
-  // So the column reserves 124px — the fader+key pair sets the width. In learning
-  // mode the key column is hidden, so the original 58px is enough there.
-  let rightW = LEARN_LEVEL ? 58 : 124;
+  // Right column hugs its 58px-wide controls (tempo, instruments, volume, key
+  // button) so the gap from the grid's right edge mirrors the gap from the circle
+  // column on the left (~14px from mainLayout's flex gap). The key button stacks
+  // below the fader at the same 58px width; the key picker is a fixed popup.
+  let rightW = 58;
 
   const outerPadding = 24;
   const gaps = 14 * 2;
@@ -1306,7 +1298,7 @@ function fitToViewport(){
 
   if(cell <= 36){
     // Tight viewports: keep toolW pinned to circle size, only widen the right column.
-    rightW = Math.max(LEARN_LEVEL ? 96 : 124, Math.floor(vw * 0.16));
+    rightW = Math.max(96, Math.floor(vw * 0.16));
   }
 
   document.documentElement.style.setProperty("--toolW", toolW + "px");
@@ -3148,36 +3140,69 @@ function tempoDown(){
 }
 
 /* -------------------- KEY SELECTOR (paid tier) -------------------- */
-// Cycles currentKey through KEY_ORDER; up advances, down reverses, both wrap.
-// Pitch change is instant — notes already on the grid play in the new key from
-// the next playhead step (pitchFor() is read fresh each tick). No ramp needed.
-function _updateKeyBox(){
-  const el = document.getElementById('keyBox');
+// A single square button (#keyBtn) shows the current key; tapping it opens a
+// scrollable popup list (#keyMenu) of all KEY_ORDER entries. Picking one sets
+// currentKey instantly — notes already on the grid play in the new key from the
+// next playhead step (pitchFor() is read fresh each tick). No ramp needed.
+function _updateKeyBtn(){
+  const el = document.getElementById('keyBtn');
   if(el) el.textContent = currentKey;
 }
-function keyUp(){
-  if(LEARN_LEVEL) return;                              // belt-and-braces; control is hidden anyway
-  if(!isPaid){ openUpgradeModal('key'); return; }
-  const i = KEY_ORDER.indexOf(currentKey);
-  currentKey = KEY_ORDER[(i + 1) % KEY_ORDER.length];
-  _updateKeyBox();
+function _renderKeyMenu(){
+  const menu = document.getElementById('keyMenu');
+  if(!menu) return;
+  menu.innerHTML = '';
+  KEY_ORDER.forEach(k => {
+    const item = document.createElement('div');
+    item.className = 'keyMenuItem' + (k === currentKey ? ' current' : '');
+    item.textContent = k;
+    item.setAttribute('role', 'option');
+    item.addEventListener('click', () => { currentKey = k; _updateKeyBtn(); closeKeyMenu(); });
+    menu.appendChild(item);
+  });
 }
-function keyDown(){
-  if(LEARN_LEVEL) return;
-  if(!isPaid){ openUpgradeModal('key'); return; }
-  const i = KEY_ORDER.indexOf(currentKey);
-  currentKey = KEY_ORDER[(i - 1 + KEY_ORDER.length) % KEY_ORDER.length];
-  _updateKeyBox();
+function openKeyMenu(){
+  if(LEARN_LEVEL || !isPaid) return;   // button is hidden for these anyway; guard for safety
+  const menu = document.getElementById('keyMenu');
+  const bd = document.getElementById('keyMenuBackdrop');
+  const btn = document.getElementById('keyBtn');
+  if(!menu || !bd || !btn) return;
+  _renderKeyMenu();
+  // Show invisibly first so offsetWidth/Height are measurable for anchoring.
+  menu.style.visibility = 'hidden';
+  menu.classList.add('show');
+  bd.classList.add('show');
+  // getBoundingClientRect already reflects the #page scale transform → true
+  // on-screen coords. Prefer placing the list ABOVE the button (it's near the
+  // bottom of the column); fall back below if there's no room. Clamp to viewport.
+  const r = btn.getBoundingClientRect();
+  const mh = menu.offsetHeight, mw = menu.offsetWidth;
+  let top = r.top - mh - 8;
+  if(top < 8) top = Math.min(r.bottom + 8, window.innerHeight - mh - 8);
+  top = Math.max(8, top);
+  let left = r.left + r.width / 2 - mw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+  menu.style.visibility = 'visible';
+  menu.setAttribute('aria-hidden', 'false');
+  menu.querySelector('.keyMenuItem.current')?.scrollIntoView({ block: 'center' });
 }
-window.keyUp = keyUp;
-window.keyDown = keyDown;
+function closeKeyMenu(){
+  const menu = document.getElementById('keyMenu');
+  const bd = document.getElementById('keyMenuBackdrop');
+  if(menu){ menu.classList.remove('show'); menu.setAttribute('aria-hidden', 'true'); }
+  if(bd) bd.classList.remove('show');
+}
+window.openKeyMenu = openKeyMenu;
+window.closeKeyMenu = closeKeyMenu;
 
 /* -------------------- CLEAR -------------------- */
 function clearGrid(){
   pushUndo();
   notesByRow = Array.from({length: rows}, () => []);
   occ = Array.from({length: rows}, () => Array(cols).fill(null));
-  if(!LEARN_LEVEL){ currentKey = 'C'; _updateKeyBox(); } // wiping the grid resets the key
+  if(!LEARN_LEVEL){ currentKey = 'C'; _updateKeyBtn(); } // wiping the grid resets the key
   redrawAllNotes();
 }
 
@@ -3224,7 +3249,7 @@ function _applySequenceData(d){
   if(typeof d.tempo === "number") requestTempo(d.tempo);
   // Restore the key (older saves predate this field — fall back to C).
   currentKey = (typeof d.key === "string" && KEY_ORDER.includes(d.key)) ? d.key : 'C';
-  _updateKeyBox();
+  _updateKeyBtn();
   if(d.instrument) setInstrument(d.instrument);
   if(typeof d.selectedSteps === "number"){ selectedSteps = d.selectedSteps; buildTools(); }
   activeDrumStyle = d.drumsMuted ? null : (DRUM_STYLE_UI[d.drumStyle] || "techno");
@@ -3403,6 +3428,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if(e.key === "Escape"){
       const sheet = document.getElementById("loadSheet");
       if(sheet && sheet.classList.contains("show")) closeLoadSheet();
+      const keyMenu = document.getElementById("keyMenu");
+      if(keyMenu && keyMenu.classList.contains("show")) closeKeyMenu();
     }
   });
   // Tap backdrop to dismiss save modal or load sheet
@@ -4138,7 +4165,7 @@ function init(){
     }
   }
   updateTempoBox();
-  _updateKeyBox();
+  _updateKeyBtn();
   setPlayheadWobbleFromTempo(tempo);
   // Layout is handled by the layout system (scheduleLayout/layoutPass).
   // Do NOT call fitToViewport() here — competing calls cause rightLift to flip-flop
