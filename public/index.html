@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=38">
+<link rel="stylesheet" href="css/styles.css?v=39">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -4225,33 +4225,26 @@ function _applyPrintScale(){
   const h = page.offsetHeight || 900;
 
   // A4 printable area (page minus @page margin), in CSS px (1mm = 96/25.4 px).
-  // "Long" = the 297mm edge, "short" = the 210mm edge. MARGIN is kept small
-  // and the SAFETY factor trims a touch more so the artwork never clips at the
-  // printer's hardware margin. For the BIGGEST print, the user should also set
-  // the dialog's Margins to "None"/"Minimum" — that's the lever we can't reach
-  // from code. Centring is handled by body flexbox (robust to the dialog's
-  // margin override), so these numbers only need to fit, not position.
-  const MM = 96 / 25.4, MARGIN = 3, SAFETY = 0.985;
-  const pL = (297 - 2 * MARGIN) * MM;   // long edge px  (~1099.8)
-  const pS = (210 - 2 * MARGIN) * MM;   // short edge px (~771.0)
+  // "Long" = the 297mm edge, "short" = the 210mm edge. MARGIN/SAFETY only need
+  // to keep a small safe border so the artwork doesn't clip — positioning is
+  // handled by the CSS absolute-centre idiom, not these numbers. NOTE: the
+  // print dialog's own Margins setting can shrink the result further (it
+  // overrides @page margin in Chrome); set Margins to "None"/"Minimum" for the
+  // biggest print — that lever isn't reachable from code.
+  const MM = 96 / 25.4, MARGIN = 4, SAFETY = 0.98;
+  const pL = (297 - 2 * MARGIN) * MM;   // long edge px  (~1092.3)
+  const pS = (210 - 2 * MARGIN) * MM;   // short edge px (~763.5)
 
   // One scale fits either orientation (A4's two orientations share a ratio):
   // landscape needs w≤pL & h≤pS; portrait (rotated) needs h≤pS & w≤pL.
   const s = Math.min(pL / w, pS / h) * SAFETY;
-  const cw = w * s, ch = h * s;          // scaled stage footprint
 
   const root = document.documentElement.style;
-  // #viewport is sized to the scaled footprint; body flexbox centres it on the
-  // real page. Landscape: footprint is cw×ch. Portrait: rotated → ch×cw.
-  root.setProperty('--print-vp-w', cw + 'px');
-  root.setProperty('--print-vp-h', ch + 'px');
-  root.setProperty('--print-vp-w-p', ch + 'px');
-  root.setProperty('--print-vp-h-p', cw + 'px');
-  // Landscape: plain scale (origin top-left fills #viewport from its corner).
-  root.setProperty('--print-tf-landscape', `scale(${s})`);
-  // Portrait: rotate(90°) about the origin swings the box to negative-x, so
-  // translateX by ch brings it back into [0,ch] to fill the ch×cw #viewport.
-  root.setProperty('--print-tf-portrait', `translate(${ch}px, 0px) rotate(90deg) scale(${s})`);
+  // translate(-50%,-50%) centres the stage's own centre on the page centre
+  // (paired with #page top:50%/left:50% + transform-origin center). scale()
+  // and rotate() then compose about that centre, so it stays centred.
+  root.setProperty('--print-tf-landscape', `translate(-50%, -50%) scale(${s})`);
+  root.setProperty('--print-tf-portrait', `translate(-50%, -50%) rotate(90deg) scale(${s})`);
 
   // Leave inline transform as 'none' — the @media print rules override it
   // (with !important) via the vars above, and afterprint restores the saved

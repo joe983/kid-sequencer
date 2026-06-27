@@ -2111,7 +2111,6 @@ html.js-loading #contentWrap{
     background: #ffffff !important;
     margin: 0 !important;
     padding: 0 !important;
-    height: 100% !important;
     filter: grayscale(100%);
     -webkit-filter: grayscale(100%);
     -webkit-print-color-adjust: exact;
@@ -2119,41 +2118,33 @@ html.js-loading #contentWrap{
     overflow: visible !important;
   }
 
-  /* Centre the printout in the *actual* printable area. body fills the page
-     box (height:100%) and flex-centres #viewport. Centring this way (rather
-     than computing an offset from the @page margin) is robust to the print
-     dialog's own Margins setting, which can OVERRIDE @page margin in Chrome —
-     so the artwork stays dead-centre whatever margins the user picks. */
-  body {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  /* #viewport is normally position:fixed and sized to the *screen* viewport
-     (--vvw/--vvh). For print we repurpose it as a box sized to the *scaled
-     stage footprint* (cw×ch, vars from _applyPrintScale) — it wraps the
-     artwork exactly, with no internal slack. This is CRITICAL — #page's
-     layout box stays 1600x900 even when transform-scaled, so without a
-     fixed-size clipping parent it overflows onto 2-4 blank pages. Sizing
-     #viewport to the footprint makes pagination follow *its* box (one page),
-     and body's flex centring places it correctly. (px ÷ mm isn't valid CSS
-     arithmetic, so JS computes the px footprint.) */
+  /* #viewport is normally position:fixed sized to the screen (--vvw/--vvh).
+     For print, flatten it to a non-positioned, zero-impact wrapper so #page's
+     absolute positioning resolves against the PAGE BOX (initial containing
+     block), not against #viewport. */
   #viewport {
     position: static !important;
-    width: var(--print-vp-w, 1083px) !important;
-    height: var(--print-vp-h, 609px) !important;
-    overflow: hidden !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
     margin: 0 !important;
-    flex: 0 0 auto !important;
   }
-  /* #page (the 1600x900 design stage) is just scaled to fill #viewport
-     (landscape) — no translate needed since #viewport == the footprint.
-     transform-origin top-left so the scaled box starts at #viewport's corner. */
+
+  /* Centre via the canonical absolute-centre idiom: top/left 50% of the page
+     box + translate(-50%,-50%) puts the stage's centre at the page centre.
+     This is robust to the print dialog's Margins override (it centres on the
+     real printable area, not on a guessed @page margin — that guess is exactly
+     what jammed the earlier flex attempt to the top). And being out of normal
+     flow, the 1600x900 layout box can NEVER spill onto extra pages regardless
+     of its transform-scaled size. The translate/rotate/scale is one var from
+     _applyPrintScale (px ÷ mm isn't valid CSS arithmetic, so JS sizes it). */
   #page {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
     margin: 0 !important;
-    transform: var(--print-tf-landscape, scale(0.677)) !important;
-    transform-origin: top left !important;
+    transform: var(--print-tf-landscape, translate(-50%,-50%) scale(0.66)) !important;
+    transform-origin: center center !important;
   }
 
   /* Hide transient/ephemeral state so the printed page reads as the
@@ -2192,12 +2183,8 @@ html.js-loading #contentWrap{
    #viewport is sized to the portrait printable area (swapped w/h vars) and
    #page gets the rotate variant of the transform. */
 @media print and (orientation: portrait) {
-  #viewport {
-    width: var(--print-vp-w-p, 609px) !important;
-    height: var(--print-vp-h-p, 1083px) !important;
-  }
   #page {
-    transform: var(--print-tf-portrait, translate(609px,0) rotate(90deg) scale(0.677)) !important;
+    transform: var(--print-tf-portrait, translate(-50%,-50%) rotate(90deg) scale(0.66)) !important;
   }
 }
 
