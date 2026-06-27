@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=36">
+<link rel="stylesheet" href="css/styles.css?v=37">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -4219,18 +4219,44 @@ function _applyPrintScale(){
   if(!page) return;
   _preprintPageTransform = page.style.transform;
   _preprintPageOrigin = page.style.transformOrigin;
-  // Measure natural (unscaled) size
+  // Measure natural (unscaled) size of the design stage (1600×900).
   page.style.transform = 'none';
-  const w = page.offsetWidth || 1;
-  const h = page.offsetHeight || 1;
-  // A4 landscape printable area with @page margin 6mm: 285mm × 198mm.
-  // At 96 CSS DPI that's 1077px × 748px. Apply a 3% safety margin because
-  // some browsers add their own padding on top of @page margin (Chrome's
-  // "Default" margin setting, Firefox's gutter, etc.).
-  const targetW = 1077 * 0.97, targetH = 748 * 0.97;
-  const scale = Math.min(targetW / w, targetH / h);
-  page.style.transform = `scale(${scale})`;
-  page.style.transformOrigin = 'top left';
+  const w = page.offsetWidth || 1600;
+  const h = page.offsetHeight || 900;
+
+  // A4 printable area (page minus @page margin), in CSS px (1mm = 96/25.4 px).
+  // "Long" = the 297mm edge, "short" = the 210mm edge. A 3% safety factor
+  // absorbs the extra gutter some browsers add on top of @page margin
+  // (Chrome's "Default" margins, Firefox's printer-min margin, etc.).
+  const MM = 96 / 25.4, MARGIN = 5, SAFETY = 0.97;
+  const pL = (297 - 2 * MARGIN) * MM;   // long edge px  (~1084.7)
+  const pS = (210 - 2 * MARGIN) * MM;   // short edge px (~755.9)
+
+  // Same scale fits either orientation (A4's two orientations share a ratio):
+  // landscape needs w≤pL & h≤pS; portrait (rotated) needs h≤pS & w≤pL.
+  const s = Math.min(pL / w, pS / h) * SAFETY;
+  const cw = w * s, ch = h * s;          // scaled stage footprint
+
+  // Centre the stage within the printable box. transform-origin is top-left,
+  // so these are absolute offsets from the box's top-left corner.
+  // Landscape: stage sits upright; w→horizontal, h→vertical.
+  const txL = (pL - cw) / 2, tyL = (pS - ch) / 2;
+  // Portrait: stage rotated 90° (w→vertical, h→horizontal). rotate(90deg)
+  // about the origin swings the box to negative-x, so translateX must also
+  // push it back by its rotated width (ch) before centring → (pS + ch)/2.
+  const txP = (pS + ch) / 2, tyP = (pL - cw) / 2;
+
+  const root = document.documentElement.style;
+  root.setProperty('--print-vp-w', pL + 'px');
+  root.setProperty('--print-vp-h', pS + 'px');
+  root.setProperty('--print-vp-w-p', pS + 'px');
+  root.setProperty('--print-vp-h-p', pL + 'px');
+  root.setProperty('--print-tf-landscape', `translate(${txL}px, ${tyL}px) scale(${s})`);
+  root.setProperty('--print-tf-portrait', `translate(${txP}px, ${tyP}px) rotate(90deg) scale(${s})`);
+
+  // Leave inline transform as 'none' — the @media print rules override it
+  // (with !important) via the vars above, and afterprint restores the saved
+  // screen transform. The CSS handles landscape vs portrait reactively.
 }
 function _restorePrintScale(){
   const page = document.getElementById('page');
