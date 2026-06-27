@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=39">
+<link rel="stylesheet" href="css/styles.css?v=40">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -4231,9 +4231,9 @@ function _applyPrintScale(){
   // print dialog's own Margins setting can shrink the result further (it
   // overrides @page margin in Chrome); set Margins to "None"/"Minimum" for the
   // biggest print — that lever isn't reachable from code.
-  const MM = 96 / 25.4, MARGIN = 4, SAFETY = 0.98;
-  const pL = (297 - 2 * MARGIN) * MM;   // long edge px  (~1092.3)
-  const pS = (210 - 2 * MARGIN) * MM;   // short edge px (~763.5)
+  const MM = 96 / 25.4, MARGIN = 10, SAFETY = 0.99;
+  const pL = (297 - 2 * MARGIN) * MM;   // long edge px  (~1047.2)
+  const pS = (210 - 2 * MARGIN) * MM;   // short edge px (~718.1)
 
   // One scale fits either orientation (A4's two orientations share a ratio):
   // landscape needs w≤pL & h≤pS; portrait (rotated) needs h≤pS & w≤pL.

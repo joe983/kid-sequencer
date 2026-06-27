@@ -2101,8 +2101,10 @@ html.js-loading #contentWrap{
 @media print {
   /* Default the printout to landscape. Browsers honour this by opening the
      print preview in landscape; the user can still override to portrait in
-     the dialog, which the orientation fallback block below handles. */
-  @page { size: A4 landscape; margin: 5mm; }
+     the dialog, which the orientation fallback block below handles. 10mm
+     margin ≈ Chrome's "Default" so #viewport (sized to match below) fills the
+     real printable area exactly in the common case → perfectly centred. */
+  @page { size: A4 landscape; margin: 10mm; }
 
   /* Desaturate the whole page in B&W (cheap, prints reliably) and force
      backgrounds + borders to render (browsers strip them by default for
@@ -2117,33 +2119,37 @@ html.js-loading #contentWrap{
     print-color-adjust: exact;
     overflow: visible !important;
   }
+  /* Stray empty body sibling — keep it out of the print flow so it can't nudge
+     #viewport off-centre. */
+  #debug-info { display: none !important; }
 
   /* #viewport is normally position:fixed sized to the screen (--vvw/--vvh).
-     For print, flatten it to a non-positioned, zero-impact wrapper so #page's
-     absolute positioning resolves against the PAGE BOX (initial containing
-     block), not against #viewport. */
+     For print, repurpose it as an IN-FLOW box sized (in mm) to the A4
+     landscape printable area, clipping overflow. Being in normal flow at the
+     page area's size, it prints on exactly ONE page (the 1600x900 #page's
+     untransformed layout box is clipped, so it can't spill onto extra pages —
+     position:absolute alone does NOT prevent that) and, by filling the page
+     vertically, it lets the absolute-centred child sit dead-centre. The
+     position:relative makes it the containing block for #page so the 50%
+     offsets resolve against its known size (not the unreliable page ICB). */
   #viewport {
-    position: static !important;
-    width: auto !important;
-    height: auto !important;
-    overflow: visible !important;
-    margin: 0 !important;
+    position: relative !important;
+    width: calc(297mm - 20mm) !important;
+    height: calc(210mm - 20mm) !important;
+    overflow: hidden !important;
+    margin: 0 auto !important;
   }
 
-  /* Centre via the canonical absolute-centre idiom: top/left 50% of the page
-     box + translate(-50%,-50%) puts the stage's centre at the page centre.
-     This is robust to the print dialog's Margins override (it centres on the
-     real printable area, not on a guessed @page margin — that guess is exactly
-     what jammed the earlier flex attempt to the top). And being out of normal
-     flow, the 1600x900 layout box can NEVER spill onto extra pages regardless
-     of its transform-scaled size. The translate/rotate/scale is one var from
-     _applyPrintScale (px ÷ mm isn't valid CSS arithmetic, so JS sizes it). */
+  /* Stage absolute-centred inside #viewport via the canonical top/left:50% +
+     translate(-50%,-50%) idiom, then scaled (var from _applyPrintScale; px ÷ mm
+     isn't valid CSS arithmetic so JS sizes it). transform-origin centre so the
+     scale/rotate compose about the centre and it stays centred. */
   #page {
     position: absolute !important;
     top: 50% !important;
     left: 50% !important;
     margin: 0 !important;
-    transform: var(--print-tf-landscape, translate(-50%,-50%) scale(0.66)) !important;
+    transform: var(--print-tf-landscape, translate(-50%,-50%) scale(0.648)) !important;
     transform-origin: center center !important;
   }
 
@@ -2183,8 +2189,14 @@ html.js-loading #contentWrap{
    #viewport is sized to the portrait printable area (swapped w/h vars) and
    #page gets the rotate variant of the transform. */
 @media print and (orientation: portrait) {
+  /* #viewport takes the portrait page-area dimensions (swap w/h) so it still
+     fills the page → one centred page; #page rotates 90° inside it. */
+  #viewport {
+    width: calc(210mm - 20mm) !important;
+    height: calc(297mm - 20mm) !important;
+  }
   #page {
-    transform: var(--print-tf-portrait, translate(-50%,-50%) rotate(90deg) scale(0.66)) !important;
+    transform: var(--print-tf-portrait, translate(-50%,-50%) rotate(90deg) scale(0.648)) !important;
   }
 }
 
