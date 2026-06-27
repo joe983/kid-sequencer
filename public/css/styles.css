@@ -2140,17 +2140,20 @@ html.js-loading #contentWrap{
     margin: 0 auto !important;
   }
 
-  /* Stage absolute-centred inside #viewport via the canonical top/left:50% +
-     translate(-50%,-50%) idiom, then scaled (var from _applyPrintScale; px ÷ mm
-     isn't valid CSS arithmetic so JS sizes it). transform-origin centre so the
-     scale/rotate compose about the centre and it stays centred. */
+  /* Stage anchored at #viewport's top-left with transform-origin 0 0, so the
+     JS-built transform (translate + scale, or + rotate for portrait) maps
+     stage coords directly into the #viewport box. _applyPrintScale measures
+     the real content bounding box and builds the transform to crop the dead
+     stage margins, fill the printable area, and centre the *content* (not the
+     raw 1600×900 box) — px ÷ mm isn't valid CSS arithmetic, so JS sizes it.
+     The fallback value just centres the whole stage if the JS hasn't run. */
   #page {
     position: absolute !important;
-    top: 50% !important;
-    left: 50% !important;
+    top: 0 !important;
+    left: 0 !important;
     margin: 0 !important;
-    transform: var(--print-tf-landscape, translate(-50%,-50%) scale(0.648)) !important;
-    transform-origin: center center !important;
+    transform: var(--print-tf-landscape, translate(0px,65px) scale(0.654)) !important;
+    transform-origin: 0 0 !important;
   }
 
   /* Hide transient/ephemeral state so the printed page reads as the
@@ -2196,7 +2199,7 @@ html.js-loading #contentWrap{
     height: calc(297mm - 20mm) !important;
   }
   #page {
-    transform: var(--print-tf-portrait, translate(-50%,-50%) rotate(90deg) scale(0.648)) !important;
+    transform: var(--print-tf-portrait, translate(653px,0px) rotate(90deg) scale(0.654)) !important;
   }
 }
 
