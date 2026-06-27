@@ -106,23 +106,34 @@ Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to
 
 ## Deployment
 
-```bash
-# Preview channel (default — use this unless told otherwise)
-firebase hosting:channel:deploy preview
-# → https://kid-sequencer--preview-h1j9zyru.web.app  (expires ~7 days, redeploy to refresh)
+> **⚠️ CRITICAL: pushing to `main` auto-deploys to PRODUCTION.** A GitHub Action
+> (`.github/workflows/firebase-hosting-merge.yml`, `channelId: live`) deploys the
+> `live` channel on every push to `main`; PRs deploy a preview channel. So
+> **merging to main and pushing IS a production deploy** — there is no separate
+> manual prod step, and you cannot land on `main` without going live. Decide
+> whether the user wants it live *before* you push to main. The manual
+> `firebase deploy` command below is rarely needed.
+>
+> **False-negative gotcha:** that workflow can report **failure** even when the
+> deploy succeeded — the release POST hits a "premature close", retries, and the
+> retry returns `400 … version is already the current active version` (which only
+> happens because the first attempt already went live). Always verify the live URL
+> (`curl https://kid-sequencer.web.app/index.html | grep 'styles.css?v='`) rather
+> than trusting the red X on the run.
 
-# Production
+```bash
+# Preview channel (manual — for a shareable link without touching prod)
+firebase hosting:channel:deploy preview
+# → https://kid-sequencer--preview-<hash>.web.app  (expires ~7 days, redeploy to refresh)
+
+# Production (manual — usually unnecessary; a push to main already deploys live)
 firebase deploy --only hosting
 # → https://kid-sequencer.web.app
 ```
 
-**Production deploy policy (authoritative — overrides any stored memory):** deploy to production in exactly two cases:
-1. The user **explicitly asks** for a production deploy, or
-2. As the **final step of `/handover-end`**, but only *after* the change has been deployed to the preview channel and verified this session.
+**Production deploy = any push to `main`.** Before merging/pushing to main, make sure the change is verified (preview channel or local) and the user is OK with it going live. Always `git fetch` + check divergence first, and bump CSS `?v=N` if styles changed. (This corrects the older "keep prod deploys deliberate / explicit-ask-only" framing — the auto-deploy means the *push* is the deploy. See `project_auto_deploy` memory.)
 
-Never deploy to production ad-hoc mid-session without one of those. Always `git fetch` + check divergence first, and bump CSS `?v=N` if styles changed. (This reconciles the older `feedback_deploy_process` memory, which said "handover must push+deploy," with the need to keep prod deploys deliberate.)
-
-**Always deploy from the active worktree directory, not the repo root.**
+**When deploying manually, do so from the active worktree directory, not the repo root.**
 
 ---
 
