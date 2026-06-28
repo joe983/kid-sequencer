@@ -4285,8 +4285,17 @@ function _restorePrintScale(){
   if(!page) return;
   page.style.transform = _preprintPageTransform || '';
   page.style.transformOrigin = _preprintPageOrigin || '';
-  // Force a fresh viewport-fit recompute so the screen layout snaps back.
-  try{ if(typeof fitToViewport === 'function') fitToViewport(); }catch(e){}
+  // Re-run the FULL layout pass (scheduleLayout → layoutPass), NOT fitToViewport
+  // directly. layoutPass measures inside a transform sandwich (it blanks the page
+  // scale before measuring), which syncTopBarLoginPosition relies on: it positions
+  // the login/logout button from getBoundingClientRect() (scaled px) but applies
+  // the result as an unscaled `left`. Calling fitToViewport while the page is still
+  // scaled makes that offset ~0.7× too small, so the wider "Logout" button jumps
+  // left onto the Clear button. scheduleLayout is the same path a resize uses.
+  try{
+    if(typeof window.scheduleLayout === 'function') window.scheduleLayout();
+    else if(typeof fitToViewport === 'function') fitToViewport();
+  }catch(e){}
 }
 window.addEventListener('beforeprint', _applyPrintScale);
 window.addEventListener('afterprint', _restorePrintScale);
