@@ -15,33 +15,44 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Deploy with the firebase CLI directly instead of
-      # FirebaseExtended/action-hosting-deploy@v0. The runner network hits a
-      # "premature close" on keep-alive HTTPS connections, so firebase-tools
-      # retries each request without keep-alive. The uploads are idempotent and
-      # succeed on retry, but the final *release* POST is not: the first attempt
-      # actually goes live, the premature close makes the client retry, and the
-      # retry returns 400 "is the current active version" — which only happens
-      # *because* the deploy already succeeded. The old action surfaced that as a
-      # red X on every push. Here we run the deploy and treat ONLY that specific
-      # outcome as success; any other failure still fails the job.
+      # The deploy itself. FirebaseExtended/action-hosting-deploy@v0 authenticates
+      # correctly, but on this runner every API call hits a "premature close" and
+      # firebase-tools retries it without keep-alive. Uploads are idempotent and
+      # succeed on retry, but the final release POST is not: the first attempt goes
+      # live, the retry then returns 400 "is the current active version", and the
+      # action exits 1 — a FALSE failure on every push. So we let it run but do not
+      # trust its exit code (continue-on-error); the verify step below decides the
+      # real outcome by checking what's actually live.
       - name: Deploy to Firebase Hosting (live)
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
-          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KID_SEQUENCER }}
+        id: deploy
+        continue-on-error: true
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KID_SEQUENCER }}
+          channelId: live
+          projectId: kid-sequencer
+
+      # Source of truth: the live site must serve the version from THIS commit.
+      # If the deploy genuinely failed, this never matches and the job fails (red).
+      # If it succeeded — even when the action reported its false failure — this
+      # matches and the job passes (green).
+      - name: Verify the deploy is live
         run: |
-          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
-          set +e
-          out=$(npx --yes firebase-tools@13 deploy --only hosting --project kid-sequencer --non-interactive 2>&1)
-          code=$?
-          echo "$out"
-          if [ "$code" -eq 0 ]; then
-            echo "Deploy succeeded cleanly."
-            exit 0
+          expected=$(grep -o 'styles\.css?v=[0-9]*' public/index.html | head -1)
+          if [ -z "$expected" ]; then
+            echo "::error::Could not read the expected styles.css version from public/index.html."
+            exit 1
           fi
-          if echo "$out" | grep -q "is the current active version"; then
-            echo "::notice::Known false-negative: the release POST was retried after a premature close and the version was already live. The deploy succeeded — treating as success."
-            exit 0
-          fi
-          echo "::error::Firebase deploy failed for a real reason (see log above)."
-          exit "$code"
+          echo "Expecting live to serve: $expected"
+          for i in $(seq 1 12); do
+            live=$(curl -fsSL "https://kid-sequencer.web.app/index.html" 2>/dev/null | grep -o 'styles\.css?v=[0-9]*' | head -1)
+            echo "attempt $i — live: ${live:-<none>}"
+            if [ "$live" = "$expected" ]; then
+              echo "Live site matches this commit ($expected). Deploy verified. ✅"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "::error::Live site never reflected $expected after the deploy — treating as a real failure."
+          exit 1
