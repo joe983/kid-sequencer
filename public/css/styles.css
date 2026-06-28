@@ -2099,7 +2099,12 @@ html.js-loading #contentWrap{
    (notes, playhead, .selected highlights, login button) hidden.
    No custom worksheet — just the running app desaturated. ---- */
 @media print {
-  @page { size: A4 landscape; margin: 6mm; }
+  /* Default the printout to landscape. Browsers honour this by opening the
+     print preview in landscape; the user can still override to portrait in
+     the dialog, which the orientation fallback block below handles. 10mm
+     margin ≈ Chrome's "Default" so #viewport (sized to match below) fills the
+     real printable area exactly in the common case → perfectly centred. */
+  @page { size: A4 landscape; margin: 10mm; }
 
   /* Desaturate the whole page in B&W (cheap, prints reliably) and force
      backgrounds + borders to render (browsers strip them by default for
@@ -2114,27 +2119,42 @@ html.js-loading #contentWrap{
     print-color-adjust: exact;
     overflow: visible !important;
   }
+  /* Stray empty body sibling — keep it out of the print flow so it can't nudge
+     #viewport off-centre. */
+  #debug-info { display: none !important; }
 
-  /* #viewport is position:fixed and sized to the *screen* viewport
-     (--vvw/--vvh). In print that anchors it to whatever the screen size
-     was, not the printable page — #page then sits centred inside that
-     huge box and overflows the printed sheet. Neutralise it for print so
-     #page falls into normal flow inside body. */
+  /* #viewport is normally position:fixed sized to the screen (--vvw/--vvh).
+     For print, repurpose it as an IN-FLOW box sized (in mm) to the A4
+     landscape printable area, clipping overflow. Being in normal flow at the
+     page area's size, it prints on exactly ONE page (the 1600x900 #page's
+     untransformed layout box is clipped, so it can't spill onto extra pages —
+     position:absolute alone does NOT prevent that) and, by filling the page
+     vertically, it lets the absolute-centred child sit dead-centre. The
+     position:relative makes it the containing block for #page so the 50%
+     offsets resolve against its known size (not the unreliable page ICB). */
   #viewport {
-    position: static !important;
-    width: auto !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  #page {
+    position: relative !important;
+    width: calc(297mm - 20mm) !important;
+    height: calc(210mm - 20mm) !important;
+    overflow: hidden !important;
     margin: 0 auto !important;
   }
 
-  /* Fit-to-page is handled by the beforeprint JS handler (printSheet
-     attaches it). It measures #page's natural pixel width, sets
-     transform: scale() to map it to A4 landscape's printable area, and
-     restores on afterprint. CSS can't compute the scale directly because
-     dividing a px length by an mm length isn't valid CSS arithmetic. */
+  /* Stage anchored at #viewport's top-left with transform-origin 0 0, so the
+     JS-built transform (translate + scale, or + rotate for portrait) maps
+     stage coords directly into the #viewport box. _applyPrintScale measures
+     the real content bounding box and builds the transform to crop the dead
+     stage margins, fill the printable area, and centre the *content* (not the
+     raw 1600×900 box) — px ÷ mm isn't valid CSS arithmetic, so JS sizes it.
+     The fallback value just centres the whole stage if the JS hasn't run. */
+  #page {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    transform: var(--print-tf-landscape, translate(0px,65px) scale(0.654)) !important;
+    transform-origin: 0 0 !important;
+  }
 
   /* Hide transient/ephemeral state so the printed page reads as the
      blank starting screen, not whatever the user happened to have set. */
@@ -2159,6 +2179,27 @@ html.js-loading #contentWrap{
     background: #ffffff !important;
     filter: none !important;
     opacity: 1 !important;
+  }
+}
+
+/* Portrait fallback — if the printout ends up on portrait paper (user
+   overrode the dialog, or a printer that ignores @page size), rotate the
+   whole stage 90° so the sequencer still prints large and landscape-
+   oriented (sideways on the page) instead of tiny. The `orientation` print
+   media feature reflects the *actual* page-box orientation and browsers
+   re-evaluate it live when the user flips the dialog, so this reacts
+   correctly even though _applyPrintScale runs before the choice is made.
+   #viewport is sized to the portrait printable area (swapped w/h vars) and
+   #page gets the rotate variant of the transform. */
+@media print and (orientation: portrait) {
+  /* #viewport takes the portrait page-area dimensions (swap w/h) so it still
+     fills the page → one centred page; #page rotates 90° inside it. */
+  #viewport {
+    width: calc(210mm - 20mm) !important;
+    height: calc(297mm - 20mm) !important;
+  }
+  #page {
+    transform: var(--print-tf-portrait, translate(653px,0px) rotate(90deg) scale(0.654)) !important;
   }
 }
 

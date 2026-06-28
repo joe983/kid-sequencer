@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=36">
+<link rel="stylesheet" href="css/styles.css?v=42">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -4219,18 +4219,66 @@ function _applyPrintScale(){
   if(!page) return;
   _preprintPageTransform = page.style.transform;
   _preprintPageOrigin = page.style.transformOrigin;
-  // Measure natural (unscaled) size
+  // Drop the screen scale so we measure the stage at its natural 1600×900 and
+  // its children at true stage coordinates.
   page.style.transform = 'none';
-  const w = page.offsetWidth || 1;
-  const h = page.offsetHeight || 1;
-  // A4 landscape printable area with @page margin 6mm: 285mm × 198mm.
-  // At 96 CSS DPI that's 1077px × 748px. Apply a 3% safety margin because
-  // some browsers add their own padding on top of @page margin (Chrome's
-  // "Default" margin setting, Firefox's gutter, etc.).
-  const targetW = 1077 * 0.97, targetH = 748 * 0.97;
-  const scale = Math.min(targetW / w, targetH / h);
-  page.style.transform = `scale(${scale})`;
-  page.style.transformOrigin = 'top left';
+  const w = page.offsetWidth || 1600;
+  const h = page.offsetHeight || 900;
+  const pr = page.getBoundingClientRect();
+
+  // Measure the actual VISIBLE content bounding box inside the stage (union of
+  // the top bar + the main content). The app doesn't fill its 1600×900 stage —
+  // there's dead space (biased to the bottom) — so scaling/centring on the raw
+  // stage prints small and high. Cropping to the real content box makes the
+  // print fill the sheet AND sit dead-centre, while still showing the whole app.
+  // (Measured at beforeprint, where screen layout is still active, so the rects
+  // are the real on-stage positions.)
+  // Union the TIGHT visual clusters (not the topBar/contentWrap containers,
+  // whose boxes include padding/empty space and would under-fill the sheet).
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, measured = false;
+  ['titleBox', 'controls', 'loginCtaWrap', 'toolsList', 'sequencer', 'drumPanel', 'rightCol'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const r = el.getBoundingClientRect();
+    if(r.width <= 0 || r.height <= 0) return;
+    minX = Math.min(minX, r.left - pr.left);
+    minY = Math.min(minY, r.top  - pr.top);
+    maxX = Math.max(maxX, r.right - pr.left);
+    maxY = Math.max(maxY, r.bottom - pr.top);
+    measured = true;
+  });
+  const PAD = 12; // px of breathing room around the content (stage coords)
+  let cx, cy, cw, ch;
+  if(measured && maxX > minX && maxY > minY){
+    cx = Math.max(0, minX - PAD); cy = Math.max(0, minY - PAD);
+    cw = Math.min(w, maxX + PAD) - cx; ch = Math.min(h, maxY + PAD) - cy;
+  } else {
+    cx = 0; cy = 0; cw = w; ch = h;   // fallback: whole stage
+  }
+  const ccx = cx + cw / 2, ccy = cy + ch / 2;   // content centre, stage coords
+
+  // Printable area (A4 minus @page 10mm margin) in CSS px (1mm = 96/25.4 px).
+  // Computed per orientation; #page is positioned top:0/left:0 with origin 0 0,
+  // so the transform maps stage coords straight into the #viewport box.
+  const MM = 96 / 25.4, MARGIN = 10, SAFETY = 0.98;
+  const VWl = (297 - 2 * MARGIN) * MM, VHl = (210 - 2 * MARGIN) * MM; // landscape
+  const VWp = (210 - 2 * MARGIN) * MM, VHp = (297 - 2 * MARGIN) * MM; // portrait
+  const sL = Math.min(VWl / cw, VHl / ch) * SAFETY;
+  // Portrait rotates the content 90°, so it occupies ch horizontally, cw vertically.
+  const sP = Math.min(VWp / ch, VHp / cw) * SAFETY;
+
+  // Place the content centre at the viewport centre (derived from the
+  // translate→rotate→scale composition; see the print CSS comment).
+  const txL = VWl / 2 - sL * ccx, tyL = VHl / 2 - sL * ccy;
+  const txP = VWp / 2 + sP * ccy, tyP = VHp / 2 - sP * ccx;
+
+  const root = document.documentElement.style;
+  root.setProperty('--print-tf-landscape', `translate(${txL}px, ${tyL}px) scale(${sL})`);
+  root.setProperty('--print-tf-portrait', `translate(${txP}px, ${tyP}px) rotate(90deg) scale(${sP})`);
+
+  // Leave inline transform as 'none' — the @media print rules override it
+  // (with !important) via the vars above, and afterprint restores the saved
+  // screen transform. The CSS handles landscape vs portrait reactively.
 }
 function _restorePrintScale(){
   const page = document.getElementById('page');
