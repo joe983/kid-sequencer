@@ -2089,27 +2089,56 @@ html.js-loading #contentWrap{
 .authSubmit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 0 5px 0 rgba(0,0,0,0.2); }
 
 /* ---- Responsive tweaks ---- */
-/* Below 500px the tier cards stack into one column, which makes the marketing
-   view tall enough that the "Log in" footer link scrolls off the bottom on
-   small screens. Compact the whole view (paddings, gaps, fonts, CTA spacing)
-   so the three stacked cards + the footer link fit without scrolling. */
-@media (max-width: 500px) {
-  .upgradeCard { padding: 16px 14px 14px; border-radius: 18px; }
-  .upgradeHeader { margin-bottom: 12px; }
-  .upgradeLogo { font-size: 24px; }
-  .upgradeTitle { font-size: 18px; }
-  .upgradeClose, .upgradeBack { width: 32px; height: 32px; font-size: 16px; }
+/* On phones the app is scaled down to fit the viewport (heavily in portrait),
+   so a native-size modal reads as a much bigger, heavier design than the landing
+   UI behind it. Lighten the WHOLE popup on phone-sized viewports — smaller fonts,
+   thinner borders/shadows, tighter spacing — so it sits closer to the app's scale
+   and feels like the same product. The comma covers both portrait (narrow width)
+   AND landscape phones (short height), which a max-width query alone would miss.
+   UX guardrails kept: input font-size stays 16px so iOS doesn't auto-zoom on
+   focus, and inputs/buttons stay ~44px tap targets. Also compacts the stacked
+   tier cards so the marketing view's footer link doesn't scroll off. */
+@media (max-width: 500px), (max-height: 520px) {
+  .upgradeCard {
+    padding: 15px 14px 13px;
+    border-radius: 16px;
+    border-width: 3px;
+    box-shadow: 0 5px 0 #1d1d1d, 0 9px 22px rgba(0,0,0,0.2);
+  }
+  .upgradeHeader { margin-bottom: 11px; gap: 8px; }
+  .upgradeLogo { font-size: 20px; }
+  .upgradeTitle { font-size: 16px; letter-spacing: -0.4px; }
+  .upgradeClose, .upgradeBack {
+    width: 30px; height: 30px; font-size: 15px;
+    border-width: 2px; border-radius: 10px; box-shadow: 0 2px 0 #1d1d1d;
+  }
 
+  /* tier cards (marketing view) */
   .tierGrid { gap: 8px; margin-bottom: 10px; }
-  .tierCard { padding: 10px 12px; gap: 3px; border-radius: 14px; }
+  .tierCard { padding: 10px 12px; gap: 3px; border-radius: 12px; border-width: 2px; box-shadow: 0 3px 0 #ccc; }
   .tierName { font-size: 10px; letter-spacing: 1px; margin-bottom: 0; }
-  .tierPrice { font-size: 19px; margin-bottom: 2px; }
+  .tierPrice { font-size: 18px; margin-bottom: 2px; }
   .tierPrice span { font-size: 11px; }
-  .tierFeatures { font-size: 11.5px; gap: 2px; }
-  .tierCta { margin-top: 8px; padding: 9px 8px; font-size: 12px; }
-  .tierCta-pro { font-size: 13px; }
+  .tierFeatures { font-size: 11px; gap: 2px; }
+  .feat-yes::before, .feat-no::before { font-size: 11px; }
+  .tierCta { margin-top: 8px; padding: 9px 8px; font-size: 12px; border-width: 2px; border-radius: 11px; }
+  .tierCta-pro { font-size: 12px; }
+  .tierBadge { font-size: 9px; }
+
+  /* login / register form */
+  .authForm { gap: 9px; margin-bottom: 12px; }
+  .authForm input {
+    height: 44px; font-size: 16px;  /* keep 16px: iOS zooms inputs below 16px */
+    border-width: 2px; border-radius: 11px; padding: 0 12px; box-shadow: 0 2px 0 #1d1d1d;
+  }
+  .authStatus { font-size: 12px; min-height: 16px; }
+  .authSubmit {
+    height: 46px; font-size: 15px;
+    border-width: 2px; border-radius: 12px; box-shadow: 0 3px 0 #1d1d1d;
+  }
 
   .upgradeFooter { font-size: 12px; margin-top: 4px; }
+  .upgradeTextBtn { font-size: 12px; }
 }
 
 /* ---- Print: exactly the on-screen UI, in B&W, with transient state
