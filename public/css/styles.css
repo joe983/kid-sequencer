@@ -2089,10 +2089,27 @@ html.js-loading #contentWrap{
 .authSubmit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 0 5px 0 rgba(0,0,0,0.2); }
 
 /* ---- Responsive tweaks ---- */
-@media (max-width: 400px) {
-  .upgradeCard { padding: 20px 14px 16px; border-radius: 18px; }
+/* Below 500px the tier cards stack into one column, which makes the marketing
+   view tall enough that the "Log in" footer link scrolls off the bottom on
+   small screens. Compact the whole view (paddings, gaps, fonts, CTA spacing)
+   so the three stacked cards + the footer link fit without scrolling. */
+@media (max-width: 500px) {
+  .upgradeCard { padding: 16px 14px 14px; border-radius: 18px; }
+  .upgradeHeader { margin-bottom: 12px; }
+  .upgradeLogo { font-size: 24px; }
   .upgradeTitle { font-size: 18px; }
-  .tierPrice { font-size: 22px; }
+  .upgradeClose, .upgradeBack { width: 32px; height: 32px; font-size: 16px; }
+
+  .tierGrid { gap: 8px; margin-bottom: 10px; }
+  .tierCard { padding: 10px 12px; gap: 3px; border-radius: 14px; }
+  .tierName { font-size: 10px; letter-spacing: 1px; margin-bottom: 0; }
+  .tierPrice { font-size: 19px; margin-bottom: 2px; }
+  .tierPrice span { font-size: 11px; }
+  .tierFeatures { font-size: 11.5px; gap: 2px; }
+  .tierCta { margin-top: 8px; padding: 9px 8px; font-size: 12px; }
+  .tierCta-pro { font-size: 13px; }
+
+  .upgradeFooter { font-size: 12px; margin-top: 4px; }
 }
 
 /* ---- Print: exactly the on-screen UI, in B&W, with transient state

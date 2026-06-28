@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=42">
+<link rel="stylesheet" href="css/styles.css?v=43">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -1014,7 +1014,10 @@ function openUpgradeModal(path){
     };
     titleEl.textContent = titles[path] || 'Make Music';
   }
-  showUpgradeView('marketing');
+  // The Login button should drop straight into the login form — not the tall
+  // marketing/tier view where the "Log in" link sits below the fold on small
+  // screens. Other entry points (locked feature, subscribe) still pitch tiers.
+  showUpgradeView(path === 'login' ? 'login' : 'marketing');
   modal.classList.add('show');
   modal.setAttribute('aria-hidden','false');
 }
