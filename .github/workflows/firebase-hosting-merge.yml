@@ -15,9 +15,33 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KID_SEQUENCER }}
-          channelId: live
-          projectId: kid-sequencer
+      # Deploy with the firebase CLI directly instead of
+      # FirebaseExtended/action-hosting-deploy@v0. The runner network hits a
+      # "premature close" on keep-alive HTTPS connections, so firebase-tools
+      # retries each request without keep-alive. The uploads are idempotent and
+      # succeed on retry, but the final *release* POST is not: the first attempt
+      # actually goes live, the premature close makes the client retry, and the
+      # retry returns 400 "is the current active version" — which only happens
+      # *because* the deploy already succeeded. The old action surfaced that as a
+      # red X on every push. Here we run the deploy and treat ONLY that specific
+      # outcome as success; any other failure still fails the job.
+      - name: Deploy to Firebase Hosting (live)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-sa.json
+          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KID_SEQUENCER }}
+        run: |
+          printf '%s' "$FIREBASE_SA" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          set +e
+          out=$(npx --yes firebase-tools@13 deploy --only hosting --project kid-sequencer --non-interactive 2>&1)
+          code=$?
+          echo "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "Deploy succeeded cleanly."
+            exit 0
+          fi
+          if echo "$out" | grep -q "is the current active version"; then
+            echo "::notice::Known false-negative: the release POST was retried after a premature close and the version was already live. The deploy succeeded — treating as success."
+            exit 0
+          fi
+          echo "::error::Firebase deploy failed for a real reason (see log above)."
+          exit "$code"
