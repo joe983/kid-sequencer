@@ -25,7 +25,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3500 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=19)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=44)
   js/firebase-init.js ← Firebase config + exports (auth, db)
   login.html          ← deprecated; redirects to index.html (auth now inline)
 functions/
@@ -114,12 +114,17 @@ Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to
 > whether the user wants it live *before* you push to main. The manual
 > `firebase deploy` command below is rarely needed.
 >
-> **False-negative gotcha:** that workflow can report **failure** even when the
-> deploy succeeded — the release POST hits a "premature close", retries, and the
-> retry returns `400 … version is already the current active version` (which only
-> happens because the first attempt already went live). Always verify the live URL
-> (`curl https://kid-sequencer.web.app/index.html | grep 'styles.css?v='`) rather
-> than trusting the red X on the run.
+> **Deploy workflow (verify-gated, goes GREEN — updated 2026-06-28):** the merge
+> workflow runs `FirebaseExtended/action-hosting-deploy@v0` with
+> `continue-on-error: true`, then a **verify step polls the live site for this
+> commit's `styles.css?v=N`** and decides pass/fail on that. So the run is GREEN
+> when the deploy is genuinely live, RED only on a real failure. The action still
+> hits a runner "premature close" → retries the release POST → `400 … is the
+> current active version` and exits 1 internally, which now shows only as a
+> **demoted annotation** (`npx … exit code 1`) that does NOT fail the check. Don't
+> "fix" that annotation or re-add failure handling — it's expected. `checkout` is
+> pinned to `@v5` (Node 24). Still worth confirming the live URL after a push
+> (`curl --ssl-no-revoke https://kid-sequencer.web.app/index.html | grep 'styles.css?v='`).
 
 ```bash
 # Preview channel (manual — for a shareable link without touching prod)
@@ -204,7 +209,8 @@ node serve.js   # → http://localhost:3000
 
 - **Locked button nudge:** `.locked` class on buttons; `bindLockedNudge()` adds a wiggle + opens upgrade modal on tap. Applied to print/save/load buttons.
 - **Member-locked overlay:** `.locked-member` class on guest-gated instrument/rhythm buttons. Uses `::before` (striped cover) + `::after` ("?") — see gotcha below about text-node visibility.
-- **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'login'|'subscribe'`. Path determines which CTA is highlighted and where the post-register flow continues to.
+- **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'login'|'subscribe'`. Path determines which CTA is highlighted and where the post-register flow continues to. **As shipped in prod (`v=44`):** the modal always opens on the **marketing/tier view** EXCEPT `path === 'login'` (the top-bar account button, via `handleLoginBtn`), which opens the **login form directly**. On phones the modal is compacted/lightened via `@media (max-width:500px),(max-height:520px)` (smaller fonts/borders; inputs stay 16px so iOS doesn't auto-zoom).
+- **⚠️ OPEN UX CONCERN — tier-flow discoverability (raised 2026-06-28, unresolved):** with the account button going straight to login, the 3-tier comparison is only seen by accident (tapping a locked feature), logged-in free Members have no path to discover Pro, and every locked tap dumps the full pricing grid. A full redesign was built, approved, verified, and deployed to a preview channel (account button → tier comparison w/ header Log in; focused per-feature lock prompts w/ "See all plans"; persistent "Go Pro" pill in `#rightCol` for Members; marketing cards compacted to fit a phone) **but the user rolled it back** to stick with `v=44` for now. The full plan is saved at `~/.claude/plans/this-feels-disjointed-and-joyful-wadler.md` — revisit when the user wants to pick it up.
 - **Slide-up sheet:** `transform: translateY(100%)` → `translateY(0)` with `cubic-bezier(0.32,0.72,0,1)`
 - **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `qr`, `proactivated`. Auto-dismiss after 2.4s.
 - **Undo stack:** `pushUndo()` before state changes; `undo()` to restore
@@ -269,7 +275,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=35`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=44`).
 
 ---
 
@@ -336,7 +342,7 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Playhead = two nested elements** — outer `#playhead` does position (`transform: translateX()`), inner `.playheadBody` does visuals + the `wiggle` animation. They're split because a single element can't hold two independent `transform`s. Do NOT animate `#playhead` position with `left` (causes a first-frame CPU→GPU handoff glitch) and do NOT move the wiggle back onto the outer element. `movePlayheadToStep()` sets `transform`; `resetPlayheadInstant()` clears the inline transition (`""`) to fall back to the CSS snap+settle bezier. The `wiggle` keyframes MUST start/end at identity (`rotate(0) scale(1)`) or the start-of-play pop returns.
 - **`redrawRowNotes()` is diff-based — do NOT revert to `layer.innerHTML = ""`** — wiping and rebuilding every note block on each redraw caused a visible flash on iOS when placing a note. The function now reuses persisting DOM blocks (keyed by `data-id`), removes stale ones, and only creates new blocks via `createNoteBlock()`. New blocks carry a `.placing` class for a touch-only entrance animation that's stripped on `animationend`. Keep note blocks `pointer-events:none` (no per-block click handlers) — deletion still goes through `.cell`/`onCellClick`.
 - **Global `*{ caret-color: transparent }` (styles.css ~line 146)** — kills stray focus-caret artifacts on buttons/divs but ALSO hides the text caret in real `<input>` fields. Any input that needs a visible caret must explicitly set `caret-color: <colour>`. `.authForm input` already does this (`caret-color: #1d1d1d`). New text inputs need the same override.
-- **Print = the running UI, scaled** — there is no longer a custom `#printSheet` worksheet or `buildPrintWorksheet()` function. Printing prints the live DOM with `@media print` rules that desaturate, hide transient state, and strip `.selected` highlights, plus a `beforeprint`/`afterprint` JS pair (`_applyPrintScale` / `_restorePrintScale`) that swaps `#page`'s `transform: scale(N)` to fit A4 landscape. **`#viewport` must stay neutralised in `@media print` (`position: static; width: auto; height: auto; overflow: visible`)** — it is normally `position: fixed; width: var(--vvw); height: var(--vvh)` (the *screen* visualViewport), and without the override the print render keeps it at screen-size, pushing `#page` (with `margin: 0 auto`) into the wrong x-offset and overflowing the sheet. If something needs to be hidden in print, add it to the `display: none` list in the `@media print` block; if a future feature changes `--stageW`/`--stageH`, the scale handler reads `#page.offsetWidth/Height` so it adapts automatically.
+- **Print = the running UI, cropped to content & centred (reworked 2026-06-28)** — no custom `#printSheet`/`buildPrintWorksheet()`. `@media print` desaturates, hides transient state, strips `.selected` highlights. The fit is geometry, not the old whole-stage scale: in `@media print`, `#viewport` becomes an **in-flow** box sized in mm to the A4 printable area (`width:calc(297mm - 20mm)` etc., `@page margin 10mm`, `overflow:hidden`) so it prints on exactly ONE page; `#page` is `position:absolute; top:0; left:0; transform-origin:0 0` and `_applyPrintScale` (beforeprint) computes a `translate(...) scale(...)` that maps the stage's **actual content bounding box** (measured union of `#topBar` + `#contentWrap`/clusters at beforeprint, NOT the raw 1600×900 — the app doesn't fill its stage) to the page centre. There's a `@media print and (orientation: portrait)` fallback that rotates the stage 90°. **GOTCHAS:** (1) `position:absolute` alone does NOT stop the 1600×900 layout box spilling to extra pages — the in-flow mm-sized `#viewport` + `overflow:hidden` is what guarantees one page. (2) **`_restorePrintScale` (afterprint) must call `window.scheduleLayout()`, NOT `fitToViewport()` directly** — the latter runs `syncTopBarLoginPosition()` while the page is still scale-transformed, so the login/logout button gets a ~0.7× offset and jumps left onto Clear; `scheduleLayout`→`layoutPass` measures inside the transform sandbox. (3) Headless `--print-to-pdf` forces the print `orientation` media to portrait regardless of `@page size`, so it can't verify the landscape path — test landscape by neutralising the portrait media query in a local copy.
 - **Concurrent worktrees share one Firebase preview channel** — `firebase hosting:channel:deploy preview` from any worktree overwrites the same `kid-sequencer--preview-<hash>.web.app`. If two sessions are working in parallel, whoever deploys last wins on preview. Symptom: you deploy your fix, the URL stays on someone else's older code (different `?v=N`, different DOM). `curl --ssl-no-revoke <preview-url>/index.html | grep styles.css\?v=` to confirm what's actually live. Re-deploy from your worktree to override.
 - **Tempo ramp invariants** — do not reintroduce `pendingTempo`. Don't snap `tempo` to a target in `requestTempo`; always go through the rAF ramp when playing (or snap when stopped). Always call `setPlayheadWobbleFromTempo(tempo)` + `syncDelayTime()` each ramp frame so the visual + echo follow the actual eased rate, not a stale target. If you add a new tempo-dependent thing (e.g., a tempo-synced LFO), wire it into `_stepTempoRamp` too. Tick()'s re-anchor block (`if(_tempoTarget !== null) { seqStartTime = performance.now(); stepCount = 1; }`) must remain — without it the timer chases a stale origin and the step lag compounds across the ramp.
 - **`LEARN_LEVEL` vs `LEVEL` — two different things** — `LEARN_LEVEL` is the active scaffolding-level config (or null). `LEVEL` (declared ~line 595) is the per-instrument **gain map** (`LEVEL.piano` etc.). Don't conflate them. When adding a learning level, branch the relevant grid const on `LEARN_LEVEL` and add a `.learning-mode` CSS rule; when changing an instrument's volume, edit `LEVEL`.
