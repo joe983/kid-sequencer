@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=44">
+<link rel="stylesheet" href="css/styles.css?v=45">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -181,6 +181,7 @@
 </div>
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
 <button id="keyBtn" onclick="openKeyMenu()" aria-haspopup="listbox" aria-label="Key">C</button>
+<button id="aiBtn" onclick="handleAiBtn()" aria-label="Make an AI song">AI</button>
 </div>
 </div>
 </div>
@@ -209,6 +210,24 @@
 
 <!-- Save toast — position:fixed, sits above everything -->
 <div aria-live="polite" id="saveToast"></div>
+
+<!-- AI song modal -->
+<div id="aiModal" class="aiModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+  <div class="aiCard">
+    <button class="aiClose" aria-label="Close" onclick="closeAiModal()">×</button>
+    <div class="aiTitle" id="aiTitle">Make an AI song ✨</div>
+    <div class="aiBody" id="aiBody"></div>
+  </div>
+</div>
+
+<!-- Top-up modal (AI track packs + save-slot packs) -->
+<div id="topupModal" class="aiModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="topupTitle">
+  <div class="aiCard">
+    <button class="aiClose" aria-label="Close" onclick="closeTopupModal()">×</button>
+    <div class="aiTitle" id="topupTitle">Top up</div>
+    <div class="aiBody" id="topupBody"></div>
+  </div>
+</div>
 
 <!-- Upgrade / Auth modal -->
 <div id="upgradeModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="upgradeModalTitle">
@@ -249,13 +268,13 @@
         <div class="tierCard tierCard-pro" id="tierCardPro">
           <div class="tierBadge">Best</div>
           <div class="tierName">Pro</div>
-          <div class="tierPrice">£1.99<span>/mo</span></div>
+          <div class="tierPrice">£4.99<span>/mo</span></div>
           <ul class="tierFeatures">
             <li class="feat-yes">All 6 instruments</li>
             <li class="feat-yes">All 6 rhythms</li>
-            <li class="feat-yes">Camera scan</li>
-            <li class="feat-yes">Print</li>
-            <li class="feat-yes">Save &amp; Load</li>
+            <li class="feat-yes">10 AI songs / month</li>
+            <li class="feat-yes">20 save slots</li>
+            <li class="feat-yes">Print + Camera scan</li>
           </ul>
           <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
         </div>
@@ -492,6 +511,11 @@ const SCALES = (() => {
   return out;
 })();
 let currentKey = 'C';
+// AI song flow state (declared at top so the parse-time applyLockState()→
+// closeAiModal() guard can't hit a TDZ on these).
+let _currentAiTrack = null;   // { path, url, name } for the most recent generation
+let _aiBusy = false;
+let _previewAudio = null;     // inline player for AI songs in the load sheet
 function pitchFor(row){
   if(LEARN_LEVEL) return freqs[row]; // learning mode never transposes; freqs is short here
   return (SCALES[currentKey] || SCALES.C)[row];
@@ -945,6 +969,17 @@ function applyLockState(){
   if(keyBtnEl) keyBtnEl.style.display = (isPaid && !LEARN_LEVEL) ? "" : "none";
   if(!(isPaid && !LEARN_LEVEL)) closeKeyMenu(); // close picker if tier drops mid-open
 
+  // AI song button: hidden for guests + in learning mode; greyed (.locked) for
+  // free Members (tap pitches Pro); fully active for Pro. Gated by presence, not
+  // a striped overlay — the click handler (handleAiBtn) decides upsell vs run.
+  const aiBtnEl = document.getElementById("aiBtn");
+  if(aiBtnEl){
+    const showAi = isLoggedIn && !LEARN_LEVEL;
+    aiBtnEl.style.display = showAi ? "" : "none";
+    aiBtnEl.classList.toggle("locked", !isPaid);
+  }
+  if(!isPaid){ try{ closeAiModal(); }catch(e){} }
+
   // Member-tier locks: 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
   // show as "?" placeholders until the user registers.
   const memberLocked = !isLoggedIn;
@@ -1092,6 +1127,247 @@ async function _startStripeCheckout(){
     showSaveToast('error');
   }
 }
+
+/* -------------------- AI SONG FLOW -------------------- */
+function handleAiBtn(){
+  // Guests never see the button; members see it greyed → pitch Pro; paid → generate.
+  if(!isPaid){ openUpgradeModal('subscribe'); return; }
+  openAiModal();
+}
+window.handleAiBtn = handleAiBtn;
+
+function openAiModal(){
+  const modal = document.getElementById('aiModal');
+  if(!modal) return;
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+  if(_currentAiTrack) _aiShowResult(_currentAiTrack);
+  else _aiShowIntro();
+}
+function closeAiModal(){
+  const modal = document.getElementById('aiModal');
+  if(!modal) return;
+  if(_aiBusy) return;            // don't allow closing mid-generation
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+}
+window.closeAiModal = closeAiModal;
+
+function _aiSetBody(html){
+  const b = document.getElementById('aiBody');
+  if(b) b.innerHTML = html;
+}
+
+async function _fetchAiQuota(){
+  try{
+    const user = await _getFirebaseUser();
+    if(!user) return null;
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const snap = await getDoc(doc(db,'users',user.uid));
+    const d = snap.exists() ? snap.data() : {};
+    const month = (()=>{ const x=new Date(); return `${x.getUTCFullYear()}-${String(x.getUTCMonth()+1).padStart(2,'0')}`; })();
+    const used  = d.aiMonthKey === month ? (d.aiUsedThisMonth||0) : 0;
+    const topup = d.aiTopupBalance || 0;
+    const BASE = 10;
+    return { remaining: Math.max(0, BASE - used) + topup, base: BASE, used, topup };
+  }catch(e){ console.error('[AI quota]',e); return null; }
+}
+
+function _hasAnyNotes(){
+  for(let r=0;r<rows;r++){ if(notesByRow[r] && notesByRow[r].length) return true; }
+  return false;
+}
+
+async function _aiShowIntro(){
+  _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Checking your songs…</div>');
+  const q = await _fetchAiQuota();
+  if(!q){ _aiSetBody('<div class="aiMsg">Couldn\'t check your account — try again.</div>'); return; }
+  if(!_hasAnyNotes()){
+    _aiSetBody('<div class="aiMsg">Add some notes to the grid first, then come back to turn your tune into a full song. 🎵</div>');
+    return;
+  }
+  if(q.remaining <= 0){
+    _aiSetBody(
+      '<div class="aiMsg">You\'ve used all your AI songs this month.</div>' +
+      '<button class="aiCta" id="aiTopupBtn">Get more songs</button>'
+    );
+    document.getElementById('aiTopupBtn')?.addEventListener('click', ()=>{
+      closeAiModal(); try{ openTopupModal('ai'); }catch(e){}
+    });
+    return;
+  }
+  _aiSetBody(
+    `<div class="aiMsg">Turn your tune into a full 3-minute song, built by AI from your music.</div>` +
+    `<div class="aiQuota">${q.remaining} AI song${q.remaining===1?'':'s'} left this month</div>` +
+    `<button class="aiCta" id="aiCreateBtn">Create my song ✨</button>` +
+    `<div class="aiNote">Uses 1 of your AI songs.</div>`
+  );
+  document.getElementById('aiCreateBtn')?.addEventListener('click', runAiGeneration);
+}
+
+async function runAiGeneration(){
+  if(_aiBusy) return;
+  _aiBusy = true;
+  try{
+    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Listening to your song…</div>');
+    const wav = await captureSequenceToWav();
+    if(!wav){ _aiBusy=false; _aiSetBody('<div class="aiMsg">Couldn\'t capture your song — add some notes and try again.</div>'); return; }
+
+    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Composing your song…<br><span class="aiNote">This can take up to a minute.</span></div>');
+
+    const user = await _getFirebaseUser();
+    if(!user){ throw new Error('not signed in'); }
+
+    const { storage } = await import("./js/firebase-init.js");
+    const { ref, uploadBytes } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js");
+    const seedPath = `users/${user.uid}/seeds/${Date.now()}.wav`;
+    await uploadBytes(ref(storage, seedPath), wav, { contentType: 'audio/wav' });
+
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    const fns = getFunctions(app, 'europe-west1');
+    const gen = httpsCallable(fns, 'generateAiTrack', { timeout: 280000 });
+    const name = _lastSaveName || 'My Tune';
+    const meta = { key: currentKey, tempo: Math.round(tempo), instrument, rhythm: drumsMuted ? null : drumStyle };
+    const result = await gen({ seedPath, name, meta });
+
+    _currentAiTrack = { path: result.data.path, url: result.data.url, name };
+    _aiBusy = false;
+    _aiShowResult(_currentAiTrack);
+  }catch(e){
+    console.error('[AI generate]', e);
+    _aiBusy = false;
+    const msg = (e && e.code === 'functions/resource-exhausted')
+      ? 'You\'ve used all your AI songs this month.'
+      : 'Something went wrong making your song — please try again.';
+    _aiSetBody(`<div class="aiMsg">${msg}</div><button class="aiCta" id="aiRetryBtn">Back</button>`);
+    document.getElementById('aiRetryBtn')?.addEventListener('click', _aiShowIntro);
+  }
+}
+window.runAiGeneration = runAiGeneration;
+
+function _aiShowResult(track){
+  _aiSetBody(
+    `<div class="aiMsg">Your song is ready! 🎉</div>` +
+    `<audio class="aiPlayer" controls preload="none" src="${track.url}"></audio>` +
+    `<div class="aiActions">` +
+      `<button class="aiCta" id="aiShareBtn">Share</button>` +
+      `<button class="aiCta aiCta-alt" id="aiDownloadBtn">Download</button>` +
+    `</div>` +
+    `<div class="aiNote">Hit <b>Save</b> to keep this song with your tune.</div>` +
+    `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more songs? Top up</button></div>`
+  );
+  document.getElementById('aiShareBtn')?.addEventListener('click', ()=>_aiShareDownload(track, true));
+  document.getElementById('aiDownloadBtn')?.addEventListener('click', ()=>_aiShareDownload(track, false));
+  document.getElementById('aiTopupLink')?.addEventListener('click', ()=>{ closeAiModal(); openTopupModal('ai'); });
+}
+
+// Inline play/pause of a saved AI song from a load-sheet row.
+function _playAiTrackInline(track, btn){
+  try{
+    const wasPlayingThis = _previewAudio && _previewAudio._src === track.url && !_previewAudio.paused;
+    if(_previewAudio){ _previewAudio.pause(); _previewAudio = null; }
+    document.querySelectorAll('.loadRowAiBtn[data-act="play"]').forEach(b=>b.textContent='▶ Song');
+    if(wasPlayingThis) return;   // second tap on the same row = stop
+    _previewAudio = new Audio(track.url);
+    _previewAudio._src = track.url;
+    btn.textContent = '⏸ Song';
+    _previewAudio.onended = ()=>{ btn.textContent='▶ Song'; _previewAudio=null; };
+    _previewAudio.play().catch(err=>{ console.error('[AI play]',err); btn.textContent='▶ Song'; window.open(track.url,'_blank'); });
+  }catch(e){ console.error('[AI play]',e); }
+}
+
+// share=true → native share sheet (mobile); share=false → force a download (desktop)
+async function _aiShareDownload(track, share){
+  try{
+    const resp = await fetch(track.url);
+    const blob = await resp.blob();
+    const file = new File([blob], _slugify(track.name) + '.mp3', { type: 'audio/mpeg' });
+    if(share && navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file], title: track.name, text: 'My AI song from Kid Sequencer 🎵' });
+      return;
+    }
+    const a = document.createElement('a');
+    const objUrl = URL.createObjectURL(blob);
+    a.href = objUrl; a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(objUrl), 4000);
+  }catch(e){
+    console.error('[AI share/download]', e);
+    window.open(track.url, '_blank');   // last-resort fallback
+  }
+}
+
+/* -------------------- TOP-UP PACKS -------------------- */
+// Display only — the grant amounts are enforced server-side (functions PACKS).
+const TOPUP_PACKS = {
+  ai10:    { type:'ai',    name:'10 AI songs',    sub:'40p each',       price:'£3.99'  },
+  ai25:    { type:'ai',    name:'25 AI songs',    sub:'32p each',       price:'£7.99'  },
+  ai50:    { type:'ai',    name:'50 AI songs',    sub:'26p each',       price:'£12.99' },
+  slots20: { type:'slots', name:'+20 save slots', sub:'keep more tunes', price:'£1.99'  },
+  slots50: { type:'slots', name:'+50 save slots', sub:'keep more tunes', price:'£3.99'  },
+};
+
+function openTopupModal(kind){
+  if(!isPaid){ openUpgradeModal('subscribe'); return; }
+  const m = document.getElementById('topupModal');
+  if(!m) return;
+  _renderTopup(kind || 'ai');
+  m.classList.add('show');
+  m.setAttribute('aria-hidden','false');
+}
+function closeTopupModal(){
+  const m = document.getElementById('topupModal');
+  if(!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden','true');
+}
+window.openTopupModal  = openTopupModal;
+window.closeTopupModal = closeTopupModal;
+
+function _renderTopup(kind){
+  const sec = (title, ids) =>
+    `<div class="topupSection"><div class="topupSectionTitle">${title}</div>` +
+    ids.map(id => {
+      const p = TOPUP_PACKS[id];
+      return `<button class="topupPack" data-pack="${id}">` +
+               `<span><span class="topupPackName">${p.name}</span>` +
+               `<span class="topupPackSub">${p.sub}</span></span>` +
+               `<span class="topupPackPrice">${p.price}</span></button>`;
+    }).join('') + `</div>`;
+  const ai = sec('AI songs', ['ai10','ai25','ai50']);
+  const slots = sec('Save slots', ['slots20','slots50']);
+  const body = document.getElementById('topupBody');
+  if(!body) return;
+  body.innerHTML = (kind === 'slots') ? (slots + ai) : (ai + slots);
+  body.querySelectorAll('.topupPack').forEach(b =>
+    b.addEventListener('click', () => _startTopupCheckout(b.dataset.pack, b)));
+}
+
+async function _startTopupCheckout(packId, btn){
+  if(btn) btn.disabled = true;
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    const fns = getFunctions(app, 'europe-west1');
+    const fn = httpsCallable(fns, 'createTopupCheckout');
+    const res = await fn({ packId, returnUrl: window.location.origin + '/?topup=1' });
+    window.location.href = res.data.url;
+  }catch(e){
+    console.error('[Topup]', e);
+    if(btn) btn.disabled = false;
+    showSaveToast('error');
+  }
+}
+
+/* Handle ?topup=1 redirect back from Stripe (balances are read on demand). */
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  if(!params.has('topup')) return;
+  window.history.replaceState({}, '', window.location.pathname);
+  showSaveToast('topup');
+})();
 
 async function doLogin(){
   const email    = (document.getElementById('loginEmail')?.value || '').trim();
@@ -3077,6 +3353,85 @@ function stop(){
   lastStopAt = performance.now();
 }
 
+/* -------------------- AI SEED CAPTURE -------------------- */
+// Record the user's actual song (post-effects mix at masterComp) by running the
+// live sequencer for a few loop-cycles into a tap node, then encode a mono
+// 16-bit WAV client-side. This reuses the whole tested audio engine — the seed
+// is genuinely "their music" (filter/echo/voice-gain/key all applied) — and WAV
+// avoids MediaRecorder's per-browser codec variance. See the plan/CLAUDE notes.
+function _encodeWavMono(samples, sampleRate){
+  const n = samples.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const view = new DataView(buf);
+  const ws = (off, s) => { for(let i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); };
+  ws(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); ws(8, "WAVE");
+  ws(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  ws(36, "data"); view.setUint32(40, n * 2, true);
+  let off = 44;
+  for(let i=0;i<n;i++){
+    let v = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7FFF, true);
+    off += 2;
+  }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+async function captureSequenceToWav(){
+  await ensureAudioReady();
+  if(!audioCtx || !masterComp) return null;
+  const ctx = audioCtx;
+
+  const loopDur = cols * stepDurationSec();                 // seconds per full cycle
+  const loops = Math.max(2, Math.min(8, Math.ceil(12 / Math.max(0.5, loopDur))));
+  const totalSec = loops * loopDur + 0.45;                  // small tail for release tails
+
+  // Tap masterComp into a ScriptProcessor; route it to a muted sink so it keeps
+  // pulling without adding any audible output (the real path stays audible).
+  const chunks = [];
+  const sp = ctx.createScriptProcessor(4096, 2, 2);
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
+  let recording = true;
+  sp.onaudioprocess = (e) => {
+    if(!recording) return;
+    const inL = e.inputBuffer.getChannelData(0);
+    const inR = e.inputBuffer.numberOfChannels > 1 ? e.inputBuffer.getChannelData(1) : inL;
+    const out = new Float32Array(inL.length);
+    for(let i=0;i<inL.length;i++) out[i] = (inL[i] + inR[i]) * 0.5;
+    chunks.push(out);
+  };
+  masterComp.connect(sp);
+  sp.connect(sink);
+  sink.connect(ctx.destination);
+
+  try{
+    stop();
+    step = 0;
+    setPlayheadVisible(true);
+    setPlayheadPlaying(false);
+    resetPlayheadInstant();
+    startSequencer();
+    await sleep(totalSec * 1000);
+  } finally {
+    recording = false;
+    stop();
+    try{ masterComp.disconnect(sp); }catch(e){}
+    try{ sp.disconnect(); }catch(e){}
+    try{ sink.disconnect(); }catch(e){}
+  }
+
+  let len = 0;
+  for(const c of chunks) len += c.length;
+  if(len === 0) return null;
+  const merged = new Float32Array(len);
+  let o = 0;
+  for(const c of chunks){ merged.set(c, o); o += c.length; }
+  return _encodeWavMono(merged, ctx.sampleRate);
+}
+
 /* -------------------- TEMPO -------------------- */
 // Tempo box shows the TARGET while a ramp is in flight (so the click feels
 // immediate), and the actual rounded tempo when stable.
@@ -3227,6 +3582,8 @@ function showSaveToast(state){
   if(!el) return;
   const msgs = { saving:"Saving…", saved:"Saved ✓", error:"Couldn't save", upgrade:"Save & load with a paid account",
                  loading:"Loading…", loaded:"Loaded ✓", empty:"Nothing saved yet",
+                 slotsfull:"All save slots full — top up to save more",
+                 topup:"Thanks! Your top-up is being added.",
                  proactivated:"You're Pro! Save your tunes now." };
   el.textContent = msgs[state] || state;
   el.className = "saveToast show " + state;
@@ -3309,12 +3666,29 @@ async function confirmSaveName(){
     const user = await _getFirebaseUser();
     if(!user){ showSaveToast("error"); return; }
     const { db } = await import("./js/firebase-init.js");
-    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-    await setDoc(doc(db,"users",user.uid,"sequences",_slugify(name)),{
+    const { doc, setDoc, getDoc, getDocs, collection, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const slug = _slugify(name);
+
+    // Slot cap: 20 base + any purchased top-ups. Overwriting an existing slot
+    // (same slug) is always allowed; only brand-new slots count toward the cap.
+    const seqCol = collection(db,"users",user.uid,"sequences");
+    const [existingSnap, userSnap] = await Promise.all([ getDocs(seqCol), getDoc(doc(db,"users",user.uid)) ]);
+    const slotTopup = (userSnap.exists() ? (userSnap.data().slotTopup||0) : 0);
+    const allowance = 20 + slotTopup;
+    const ids = new Set(); existingSnap.forEach(d=>ids.add(d.id));
+    if(!ids.has(slug) && ids.size >= allowance){
+      showSaveToast("slotsfull");
+      try{ openTopupModal('slots'); }catch(e){}
+      return;
+    }
+
+    const payload = {
       name, savedAt: serverTimestamp(),
       tempo, instrument, drumStyle, drumsMuted, selectedSteps, key: currentKey,
       notesByRow: notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})))
-    });
+    };
+    if(_currentAiTrack){ payload.hasAi = true; payload.audioPath = _currentAiTrack.path; payload.audioUrl = _currentAiTrack.url; }
+    await setDoc(doc(db,"users",user.uid,"sequences",slug), payload);
     showSaveToast("saved");
   }catch(e){ console.error("[Save]",e); showSaveToast("error"); }
 }
@@ -3357,17 +3731,37 @@ function _renderLoadList(seqs){
   seqs.forEach(seq => {
     const row = document.createElement('div');
     row.className='loadRow'; row.dataset.id=seq.id;
+    const hasAi = !!(seq.hasAi && seq.audioUrl);
+    const aiBar = hasAi ? `
+      <div class="loadRowAiBar">
+        <button class="loadRowAiBtn" data-act="play">▶ Song</button>
+        <button class="loadRowAiBtn" data-act="share">Share</button>
+        <button class="loadRowAiBtn" data-act="download">Download</button>
+      </div>` : '';
     row.innerHTML=`
-      <div class="loadRowInfo">
-        <div class="loadRowName">${seq.name||seq.id}</div>
-        <div class="loadRowDate">${_formatSavedAt(seq.savedAt)}</div>
-      </div>
-      <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>`;
+      <div class="loadRowMain">
+        <div class="loadRowInfo">
+          <div class="loadRowName">${seq.name||seq.id}${hasAi?' <span class="loadRowAiTag">AI</span>':''}</div>
+          <div class="loadRowDate">${_formatSavedAt(seq.savedAt)}</div>
+        </div>
+        <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>
+      </div>${aiBar}`;
     row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
       closeLoadSheet();
       _applySequenceData(seq);
       showSaveToast("loaded");
     });
+    if(hasAi){
+      const track = { url: seq.audioUrl, path: seq.audioPath, name: seq.name||seq.id };
+      row.querySelectorAll('.loadRowAiBtn').forEach(btn=>{
+        btn.addEventListener('click', e=>{
+          e.stopPropagation();
+          const act = btn.dataset.act;
+          if(act==='play') _playAiTrackInline(track, btn);
+          else _aiShareDownload(track, act==='share');
+        });
+      });
+    }
     row.querySelector('.loadRowDelete').addEventListener('click', e=>{
       e.stopPropagation();
       if(_deleteConfirmId===seq.id){
@@ -3414,6 +3808,7 @@ function closeLoadSheet(){
   sheet.classList.remove('show');
   sheet.setAttribute('aria-hidden','true');
   _deleteConfirmId=null;
+  if(_previewAudio){ try{ _previewAudio.pause(); }catch(e){} _previewAudio=null; }
 }
 window.loadFromCloud  = loadFromCloud;
 window.closeLoadSheet = closeLoadSheet;
@@ -3433,7 +3828,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if(sheet && sheet.classList.contains("show")) closeLoadSheet();
       const keyMenu = document.getElementById("keyMenu");
       if(keyMenu && keyMenu.classList.contains("show")) closeKeyMenu();
+      const aiModal = document.getElementById("aiModal");
+      if(aiModal && aiModal.classList.contains("show")) closeAiModal();
+      const topupModal = document.getElementById("topupModal");
+      if(topupModal && topupModal.classList.contains("show")) closeTopupModal();
     }
+  });
+  document.getElementById("aiModal")?.addEventListener("click", e => {
+    if(e.target.id === "aiModal") closeAiModal();
+  });
+  document.getElementById("topupModal")?.addEventListener("click", e => {
+    if(e.target.id === "topupModal") closeTopupModal();
   });
   // Tap backdrop to dismiss save modal or load sheet
   document.getElementById("saveNameModal")?.addEventListener("click", e => {

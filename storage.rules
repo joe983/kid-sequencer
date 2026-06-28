@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId} {
+
+      // Short-lived seed WAVs the client uploads for the AI function to read.
+      // Capped size + audio MIME so this can't be abused as general storage.
+      match /seeds/{seedId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null
+                     && request.auth.uid == userId
+                     && request.resource.size < 8 * 1024 * 1024
+                     && request.resource.contentType.matches('audio/.*');
+      }
+
+      // Generated AI tracks. Written only by the Admin SDK (which bypasses
+      // these rules); clients may read their own.
+      match /tracks/{trackId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow write: if false;
+      }
+    }
+  }
+}

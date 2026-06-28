@@ -960,6 +960,92 @@ body.loggedIn #robotLogo{
     #keyBtn:hover{ transform: translateY(-1px); }
     #keyBtn:active{ transform: translateY(2px); box-shadow: 0 4px 0 rgba(0,0,0,0.07); }
 
+    /* AI song button — round, sits below #keyBtn in #rightCol. Distinct magic
+       gradient so it reads as special; greyed (.locked) for free Members. */
+    #aiBtn{
+      width:58px; height:58px;
+      border-radius:50%;
+      border:4px solid #1d1d1d;
+      background:linear-gradient(135deg,#a78bfa 0%,#f472b6 100%);
+      color:#fff; font-weight:900; font-size:17px; line-height:1;
+      letter-spacing:.5px;
+      cursor:pointer; padding:0;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 8px 0 rgba(0,0,0,0.10);
+      transition:transform 120ms ease;
+      touch-action:manipulation;
+      font-family:Arial, sans-serif;
+      -webkit-appearance:none; appearance:none;
+      text-shadow:0 1px 0 rgba(0,0,0,0.25);
+    }
+    #aiBtn:hover{ transform:translateY(-1px); }
+    #aiBtn:active{ transform:translateY(2px); box-shadow:0 4px 0 rgba(0,0,0,0.10); }
+    #aiBtn.locked{ filter:grayscale(1); opacity:.5; }
+
+    /* AI song + top-up modals (shared .aiModal styling) */
+    .aiModal{
+      position:fixed; inset:0; z-index:17000;
+      display:none; align-items:center; justify-content:center;
+      background:rgba(20,16,30,0.55);
+      padding:16px;
+    }
+    .aiModal.show{ display:flex; }
+    .aiModal .aiCard{
+      position:relative;
+      width:min(420px,94vw); max-height:90vh; overflow-y:auto;
+      background:#fff;
+      border:4px solid #1d1d1d;
+      border-radius:22px;
+      box-shadow:0 14px 0 rgba(0,0,0,0.12);
+      padding:26px 22px 22px;
+      text-align:center;
+    }
+    .aiModal .aiClose{
+      position:absolute; top:10px; right:12px;
+      width:34px; height:34px; border:none; background:none;
+      font-size:26px; line-height:1; cursor:pointer; color:#1d1d1d;
+    }
+    .aiModal .aiTitle{ font-weight:900; font-size:21px; margin-bottom:12px; color:#1d1d1d; }
+    .aiModal .aiMsg{ font-size:15px; color:#33323a; line-height:1.4; margin:6px 0 12px; }
+    .aiModal .aiQuota{ font-size:13px; font-weight:800; color:#7c3aed; margin-bottom:14px; }
+    .aiModal .aiNote{ font-size:12px; color:#8a8794; margin-top:10px; }
+    .aiModal .aiCta{
+      display:inline-block;
+      border:4px solid #1d1d1d; border-radius:14px;
+      background:linear-gradient(135deg,#a78bfa 0%,#f472b6 100%);
+      color:#fff; font-weight:900; font-size:16px;
+      padding:12px 20px; cursor:pointer;
+      box-shadow:0 6px 0 rgba(0,0,0,0.12);
+      transition:transform 110ms ease;
+      -webkit-appearance:none; appearance:none;
+    }
+    .aiModal .aiCta:active{ transform:translateY(2px); box-shadow:0 3px 0 rgba(0,0,0,0.12); }
+    .aiModal .aiCta-alt{ background:#fff; color:#1d1d1d; }
+    .aiModal .aiActions{ display:flex; gap:10px; justify-content:center; margin-top:6px; }
+    .aiModal .aiPlayer{ width:100%; margin:10px 0 4px; }
+    .aiModal .aiSpinner{
+      width:42px; height:42px; margin:8px auto 14px;
+      border:5px solid #ece9f5; border-top-color:#a78bfa;
+      border-radius:50%; animation:aiSpin 0.9s linear infinite;
+    }
+    @keyframes aiSpin{ to{ transform:rotate(360deg); } }
+
+    /* Top-up pack list */
+    .topupSection{ text-align:left; margin:6px 0 14px; }
+    .topupSectionTitle{ font-weight:900; font-size:14px; color:#1d1d1d; margin:10px 2px 8px; }
+    .topupPack{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      width:100%; text-align:left;
+      border:3px solid #1d1d1d; border-radius:14px;
+      background:#fff; cursor:pointer; padding:11px 14px; margin-bottom:9px;
+      box-shadow:0 4px 0 rgba(0,0,0,0.08);
+      -webkit-appearance:none; appearance:none;
+    }
+    .topupPack:active{ transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,0.08); }
+    .topupPackName{ font-weight:900; font-size:15px; color:#1d1d1d; }
+    .topupPackSub{ font-size:11px; font-weight:700; color:#8a8794; margin-top:1px; }
+    .topupPackPrice{ font-weight:900; font-size:16px; color:#7c3aed; flex-shrink:0; }
+
     /* Key picker popup — fixed-position scrollable list, anchored to #keyBtn by JS. */
     #keyMenuBackdrop{
       position: fixed;
@@ -1207,7 +1293,7 @@ body.loggedIn #robotLogo{
     }
     /* Exactly 5 rows visible (each row ~66px); scrolls if more */
     #loadSheetList{
-      overflow-y: auto; max-height: 330px;
+      overflow-y: auto; max-height: min(60vh, 420px);
       -webkit-overflow-scrolling: touch;
     }
     /* Clear end-of-list: bottom padding so last item doesn't sit flush */
@@ -1215,13 +1301,30 @@ body.loggedIn #robotLogo{
       content: ''; display: block; height: 10px;
     }
     .loadRow{
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 8px;
       padding: 13px 14px; border-bottom: 3px solid #e8eaf0;
       cursor: pointer; transition: background 100ms;
     }
+    .loadRowMain{ display: flex; align-items: center; gap: 10px; }
     .loadRow:last-child{ border-bottom: 3px solid #e8eaf0; }
     .loadRow:active{ background: #f0f4ff; }
     .loadRowInfo{ flex: 1; min-width: 0; cursor: pointer; }
+    /* AI song row extras */
+    .loadRowAiTag{
+      display: inline-block; vertical-align: middle;
+      font-size: 10px; font-weight: 900; color: #fff;
+      background: linear-gradient(135deg,#a78bfa 0%,#f472b6 100%);
+      border-radius: 6px; padding: 1px 6px; margin-left: 6px;
+    }
+    .loadRowAiBar{ display: flex; gap: 8px; }
+    .loadRowAiBtn{
+      flex: 1; border: 3px solid #1d1d1d; border-radius: 10px;
+      background: #fff; color: #1d1d1d; font-weight: 800; font-size: 13px;
+      padding: 7px 6px; cursor: pointer;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.08);
+      -webkit-appearance: none; appearance: none;
+    }
+    .loadRowAiBtn:active{ transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
     .loadRowName{
       font-family: "Comic Sans MS","Comic Sans","Trebuchet MS",Arial,sans-serif;
       font-weight: 900; font-size: 16px; color: #1f2a44;
@@ -2262,6 +2365,7 @@ html.js-loading #contentWrap{
 .learning-mode #loginCtaWrap,
 .learning-mode #tempoControls,        /* tempo +/- removed entirely */
 .learning-mode #keyBtn,              /* key selector (paid feature) hidden in learning mode */
+.learning-mode #aiBtn,               /* AI song button hidden in learning mode */
 .learning-mode #potRow { display: none !important; }  /* echo + filter pots removed entirely */
 
 /* Only the volume fader remains in the right column. Drop the lift that pulls
