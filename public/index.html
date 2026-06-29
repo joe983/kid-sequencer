@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=47">
+<link rel="stylesheet" href="css/styles.css?v=48">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -1435,18 +1435,29 @@ async function _renderAccount(){
   }
 }
 
-// Stripe hosted customer-portal LOGIN link (no-code). The customer enters their
-// account email and Stripe emails a magic link into the portal (manage/cancel,
-// update card, invoices). This is the TEST-mode link — swap to the live portal
-// link at go-live (Stripe Dashboard → Settings → Billing → Customer portal →
-// login link). Simpler than an API session: no Cloud Function / Cloud Run
-// invoker needed. (The createBillingPortalSession function stays deployed and
-// can be wired back in later for a deep-link, no-email-entry experience.)
-const STRIPE_PORTAL_URL = "https://billing.stripe.com/p/login/test_cNi7sL2Hf3rl9TU0AA2Nq00";
-
 // Pro: open the Stripe billing portal to manage/cancel the subscription.
-function openBillingPortal(){
-  window.open(STRIPE_PORTAL_URL, '_blank', 'noopener');
+// Uses the createBillingPortalSession callable, which deep-links the user
+// straight into their portal (no email re-entry). Needs the Customer Portal
+// activated in Stripe + the Cloud Run invoker set on the function (see
+// STRIPE_SETUP.md §7); until then it shows the inline error below.
+async function openBillingPortal(){
+  const btn = document.getElementById('acctManageBtn');
+  const msg = document.getElementById('acctManageMsg');
+  if(btn) btn.disabled = true;
+  if(msg) msg.textContent = 'Opening…';
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    const fns = getFunctions(app, 'europe-west1');
+    const res = await httpsCallable(fns, 'createBillingPortalSession')({ returnUrl: location.origin + '/' });
+    location.href = res.data.url;
+  }catch(e){
+    console.error('[Billing portal]', e);
+    if(btn) btn.disabled = false;
+    if(msg) msg.textContent = (e && e.code === 'functions/failed-precondition')
+      ? 'No subscription found for this account.'
+      : 'Couldn\'t open billing — try again.';
+  }
 }
 window.openBillingPortal = openBillingPortal;
 
