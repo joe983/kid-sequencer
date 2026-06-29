@@ -51,7 +51,9 @@ const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
 const STABILITY_MODEL    = "stable-audio-2.5";
 const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.6;   // lower = closer to seed; 0.4 was a near-copy, 0.7 drifted off
+const AI_STRENGTH        = 0.5;   // lower = closer to seed. 0.4 near-copy, 0.6 changed the hook;
+                                  // 0.5 keeps the user's melody as the hook while the prompt adds
+                                  // the big-room production. Tune this if the hook drifts/over-copies.
 
 function monthKey() {
   const d = new Date();
@@ -70,17 +72,12 @@ function buildPrompt(meta) {
     piano: "bright piano", trumpet: "brass", strings: "warm strings",
     synth: "synth lead", bass: "deep bass", bells: "glockenspiel bells",
   })[m.instrument] || "melodic lead";
-  const rhythm = ({
-    techhouse: "tech-house", dnb: "drum and bass", funk: "funk",
-    drill: "UK drill", hiphop: "hip hop", reggaeton: "reggaeton",
-  })[m.rhythm] || "upbeat";
   return [
-    `Take the provided melody and develop it into a complete, full-length kids' song, about 3 minutes long.`,
-    `Keep the recognisable main tune, its ${key} key and ~${tempo} BPM feel,`,
-    `but arrange and evolve it: add an intro, build-ups and breakdowns, variation between sections,`,
-    `complementary harmony, bass and extra instrumentation, plus dynamics and drum fills,`,
-    `with a ${instr} carrying the lead melody over a ${rhythm} groove.`,
-    `Avoid a static loop — make it progress. Fun, joyful, clean, studio-quality production for children.`,
+    `Transform the provided melody into a high-energy modern EDM big-room track, about 3 minutes long, with cutting-edge, hi-fi, club-ready production.`,
+    `CRITICAL: keep the provided melody EXACTLY as the main hook — do not change its notes, rhythm or shape; it must stay front-and-centre, loud and instantly recognisable all the way through, in ${key} around ${tempo} BPM, carried by a bright ${instr} lead.`,
+    `Build a rich, layered big-room arrangement AROUND that hook with many sounds: punchy four-on-the-floor kick, deep sidechained sub-bass, stacked supersaw chords, plucks, arpeggios, lush pads, vocal-chop stabs, risers, white-noise sweeps, impacts and downlifters.`,
+    `Structure it like a real EDM track: intro, build-up, huge drop on the hook, breakdown, second build, final drop — with dynamics, fills and clear variation between sections (no static loop).`,
+    `Wide stereo image, crisp sparkling highs, deep powerful low end, loud polished professional master. Joyful and fun but seriously, cuttingly produced.`,
   ].join(" ");
 }
 
