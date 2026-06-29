@@ -24,6 +24,14 @@ This idempotently creates the Pro subscription (£4.99/mo) and the five one-off
 top-up packs, each with tax code `txcd_10103100`, and prints all price IDs.
 (Re-running updates in place via `lookup_key` — safe.)
 
+**Pricing model:** all prices are **tax-inclusive** (`tax_behavior: "inclusive"`)
+— the listed amount is exactly what the customer pays; Stripe (merchant of
+record) carves out VAT by buyer location. Round local prices are pinned for
+**GBP / USD / EUR** (same `x.99` digits). Every other currency is handled by
+**Adaptive Pricing** — enable it once: Stripe Dashboard → Settings → Payments →
+Checkout/Adaptive Pricing → turn on. Stripe then converts + rounds for all other
+currencies automatically.
+
 ## 2. Price IDs (already committed — TEST mode)
 The 6 price IDs are committed as defaults in [functions/index.js](functions/index.js)
 (the `defineString` block). **Nothing to do for test mode** — they travel with the

@@ -25,7 +25,15 @@ const API_VERSION = "2026-02-25.preview";
 // Eligible digital tax code (from the blueprint). Adjust to the most accurate
 // category for your product if needed — see Stripe's tax code list.
 const TAX_CODE = "txcd_10103100";
-const CURRENCY = "gbp";
+const CURRENCY = "gbp";                       // base currency
+// Extra currencies pinned to the SAME round "x.99" amount (all 2-decimal, similar
+// unit value). Every OTHER currency is handled automatically by Stripe Adaptive
+// Pricing (enable it in the Dashboard) — converted + sensibly rounded per buyer.
+const EXTRA_CURRENCIES = ["usd", "eur"];
+
+// All prices are tax-INCLUSIVE: the listed amount is exactly what the customer
+// pays; Stripe (merchant of record) carves the VAT out by buyer location.
+const TAX_BEHAVIOR = "inclusive";
 
 // SKU → product + price definition. amount is in the smallest currency unit (pence).
 const CATALOG = [
@@ -58,14 +66,25 @@ async function getOrCreateProduct(item) {
 }
 
 async function getOrCreatePrice(item, productId) {
-  const existing = await stripe.prices.list({ lookup_keys: [item.lookupKey], limit: 1 });
-  const match = existing.data.find((p) => p.unit_amount === item.amount && p.active);
+  const existing = await stripe.prices.list({ lookup_keys: [item.lookupKey], limit: 10 });
+  // Reuse only if it already matches the amount AND is tax-inclusive (prices are
+  // immutable, so adding tax_behavior/currencies means a fresh price).
+  const match = existing.data.find(
+    (p) => p.active && p.unit_amount === item.amount && p.tax_behavior === TAX_BEHAVIOR
+  );
   if (match) return match;
+  // Build per-currency round amounts (same minor-unit value across currencies).
+  const currency_options = {};
+  for (const c of EXTRA_CURRENCIES) {
+    currency_options[c] = { unit_amount: item.amount, tax_behavior: TAX_BEHAVIOR };
+  }
   // Create a fresh price (prices are immutable) and move the lookup key onto it.
   return await stripe.prices.create({
     product: productId,
     currency: CURRENCY,
     unit_amount: item.amount,
+    tax_behavior: TAX_BEHAVIOR,
+    currency_options,
     ...(item.recurring ? { recurring: item.recurring } : {}),
     lookup_key: item.lookupKey,
     transfer_lookup_key: true,
