@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=56">
+<link rel="stylesheet" href="css/styles.css?v=57">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -526,6 +526,8 @@ let currentKey = 'C';
 let _currentAiTrack = null;   // { path, url, name } for the most recent generation
 let _aiBusy = false;
 let _previewAudio = null;     // inline player for AI songs in the load sheet
+let _seedProduce = false;     // when true, tick() layers extra instruments + a pad bed
+                              // onto the hook (capture-only) to make a richer AI seed
 function pitchFor(row){
   if(LEARN_LEVEL) return freqs[row]; // learning mode never transposes; freqs is short here
   return (SCALES[currentKey] || SCALES.C)[row];
@@ -3496,6 +3498,24 @@ function startSequencer(){
       }
     }
 
+    // AI-seed producer: layer extra instruments on the SAME notes as the hook
+    // plus a sustained open-fifth pad bed, so the captured seed is rich/expansive
+    // (not stripped-back) while the melody stays exactly the user's. Capture-only.
+    if(_seedProduce){
+      for(const { r, note } of stepNotes){
+        const len = note.kind === "eighth" ? 1 : note.len;
+        const f = pitchFor(r);
+        try{ playStrings(f, len); }catch(e){}              // lush double of the hook
+        try{ playBass(f * 0.25, Math.max(2, len)); }catch(e){}  // sub weight underneath
+      }
+      if(step === 0 && rows > 0){
+        const root = pitchFor(rows - 1);                   // bottom row ≈ key root
+        try{ playStrings(root * 0.5,  cols); }catch(e){}   // pad: root an octave down
+        try{ playStrings(root * 0.75, cols); }catch(e){}   // pad: open fifth below (no thirds → safe)
+        try{ playSynth  (root,        cols); }catch(e){}   // mid pad body
+      }
+    }
+
     // Learning-mode eighth pairs: fire the SECOND 8th at the pair's second column
     // (one attack per column). Guarded so the full app is unaffected.
     if(LEARN_LEVEL){
@@ -3610,6 +3630,7 @@ async function _recordLoops(nLoops, muteDrums){
   }
   const dur = nLoops * cols * stepDurationSec() + 0.4;
   try{
+    _seedProduce = true;        // layer the producer voices for the captured seed
     stop();
     step = 0;
     setPlayheadVisible(true);
@@ -3618,6 +3639,7 @@ async function _recordLoops(nLoops, muteDrums){
     startSequencer();
     await sleep(dur * 1000);
   } finally {
+    _seedProduce = false;
     recording = false;
     stop();
     if(drumsCut){ try{ drumBus.connect(masterGain); }catch(e){} }
