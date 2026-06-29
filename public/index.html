@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=49">
+<link rel="stylesheet" href="css/styles.css?v=50">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -181,7 +181,7 @@
 </div>
 <seq-volume-fader id="masterVolUI"></seq-volume-fader>
 <button id="keyBtn" onclick="openKeyMenu()" aria-haspopup="listbox" aria-label="Key">C</button>
-<button id="aiBtn" onclick="handleAiBtn()" aria-label="Make an AI song">AI</button>
+<button id="aiBtn" onclick="handleAiBtn()" aria-label="Make an AI track">AI</button>
 </div>
 </div>
 </div>
@@ -215,7 +215,7 @@
 <div id="aiModal" class="aiModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
   <div class="aiCard">
     <button class="aiClose" aria-label="Close" onclick="closeAiModal()">×</button>
-    <div class="aiTitle" id="aiTitle">Make an AI song ✨</div>
+    <div class="aiTitle" id="aiTitle">Make an AI track ✨</div>
     <div class="aiBody" id="aiBody"></div>
   </div>
 </div>
@@ -281,7 +281,7 @@
           <ul class="tierFeatures">
             <li class="feat-yes">All 6 instruments</li>
             <li class="feat-yes">All 6 rhythms</li>
-            <li class="feat-yes">10 AI songs / month</li>
+            <li class="feat-yes">10 AI tracks / month</li>
             <li class="feat-yes">20 save slots</li>
             <li class="feat-yes">Print + Camera scan</li>
           </ul>
@@ -353,7 +353,7 @@
 <div aria-hidden="true" id="loadSheet">
   <div aria-labelledby="loadSheetTitle" aria-modal="true" id="loadSheetInner" role="dialog">
     <div class="loadSheetHeader">
-      <div class="modalTitle" id="loadSheetTitle">My Tunes</div>
+      <div class="modalTitle" id="loadSheetTitle">My Library</div>
       <button aria-label="Close" class="modalClose" onclick="closeLoadSheet()">×</button>
     </div>
     <div id="loadSheetList"></div>
@@ -1191,17 +1191,17 @@ function _hasAnyNotes(){
 }
 
 async function _aiShowIntro(){
-  _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Checking your songs…</div>');
+  _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Checking your tracks…</div>');
   const q = await _fetchAiQuota();
   if(!q){ _aiSetBody('<div class="aiMsg">Couldn\'t check your account — try again.</div>'); return; }
   if(!_hasAnyNotes()){
-    _aiSetBody('<div class="aiMsg">Add some notes to the grid first, then come back to turn your tune into a full song. 🎵</div>');
+    _aiSetBody('<div class="aiMsg">Add some notes to the grid first, then come back to turn your tune into a full track. 🎵</div>');
     return;
   }
   if(q.remaining <= 0){
     _aiSetBody(
-      '<div class="aiMsg">You\'ve used all your AI songs this month.</div>' +
-      '<button class="aiCta" id="aiTopupBtn">Get more songs</button>'
+      '<div class="aiMsg">You\'ve used all your AI tracks this month.</div>' +
+      '<button class="aiCta" id="aiTopupBtn">Get more tracks</button>'
     );
     document.getElementById('aiTopupBtn')?.addEventListener('click', ()=>{
       closeAiModal(); try{ openTopupModal('ai'); }catch(e){}
@@ -1209,10 +1209,10 @@ async function _aiShowIntro(){
     return;
   }
   _aiSetBody(
-    `<div class="aiMsg">Turn your tune into a full 3-minute song, built by AI from your music.</div>` +
-    `<div class="aiQuota">${q.remaining} AI song${q.remaining===1?'':'s'} left this month</div>` +
-    `<button class="aiCta" id="aiCreateBtn">Create my song ✨</button>` +
-    `<div class="aiNote">Uses 1 of your AI songs.</div>`
+    `<div class="aiMsg">Turn your tune into a full 3-minute track, built by AI from your music.</div>` +
+    `<div class="aiQuota">${q.remaining} AI track${q.remaining===1?'':'s'} left this month</div>` +
+    `<button class="aiCta" id="aiCreateBtn">Create my track ✨</button>` +
+    `<div class="aiNote">Uses 1 of your AI tracks.</div>`
   );
   document.getElementById('aiCreateBtn')?.addEventListener('click', runAiGeneration);
 }
@@ -1221,11 +1221,11 @@ async function runAiGeneration(){
   if(_aiBusy) return;
   _aiBusy = true;
   try{
-    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Listening to your song…</div>');
+    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Listening to your track…</div>');
     const wav = await captureSequenceToWav();
-    if(!wav){ _aiBusy=false; _aiSetBody('<div class="aiMsg">Couldn\'t capture your song — add some notes and try again.</div>'); return; }
+    if(!wav){ _aiBusy=false; _aiSetBody('<div class="aiMsg">Couldn\'t capture your track — add some notes and try again.</div>'); return; }
 
-    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Composing your song…<br><span class="aiNote">This can take up to a minute.</span></div>');
+    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Composing your track…<br><span class="aiNote">This can take up to a minute.</span></div>');
 
     const user = await _getFirebaseUser();
     if(!user){ throw new Error('not signed in'); }
@@ -1250,8 +1250,8 @@ async function runAiGeneration(){
     console.error('[AI generate]', e);
     _aiBusy = false;
     const msg = (e && e.code === 'functions/resource-exhausted')
-      ? 'You\'ve used all your AI songs this month.'
-      : 'Something went wrong making your song — please try again.';
+      ? 'You\'ve used all your AI tracks this month.'
+      : 'Something went wrong making your track — please try again.';
     _aiSetBody(`<div class="aiMsg">${msg}</div><button class="aiCta" id="aiRetryBtn">Back</button>`);
     document.getElementById('aiRetryBtn')?.addEventListener('click', _aiShowIntro);
   }
@@ -1260,15 +1260,15 @@ window.runAiGeneration = runAiGeneration;
 
 function _aiShowResult(track){
   _aiSetBody(
-    `<div class="aiMsg">Your song is ready! 🎉</div>` +
+    `<div class="aiMsg">Your track is ready! 🎉</div>` +
     `<audio class="aiPlayer" controls preload="none" src="${track.url}"></audio>` +
     `<div class="aiActions">` +
       `<button class="aiCta" id="aiSaveBtn">Save</button>` +
       `<button class="aiCta aiCta-alt" id="aiShareBtn">Share</button>` +
       `<button class="aiCta aiCta-alt" id="aiDownloadBtn">Download</button>` +
     `</div>` +
-    `<div class="aiNote">Save keeps this song with your tune.</div>` +
-    `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more songs? Top up</button></div>`
+    `<div class="aiNote">Save keeps this track with your tune.</div>` +
+    `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more tracks? Top up</button></div>`
   );
   document.getElementById('aiSaveBtn')?.addEventListener('click', ()=>{ closeAiModal(); saveToCloud(); });
   document.getElementById('aiShareBtn')?.addEventListener('click', ()=>_aiShareDownload(track, true));
@@ -1281,13 +1281,13 @@ function _playAiTrackInline(track, btn){
   try{
     const wasPlayingThis = _previewAudio && _previewAudio._src === track.url && !_previewAudio.paused;
     if(_previewAudio){ _previewAudio.pause(); _previewAudio = null; }
-    document.querySelectorAll('.loadRowAiBtn[data-act="play"]').forEach(b=>b.textContent='▶ Song');
+    document.querySelectorAll('.loadRowAiBtn[data-act="play"]').forEach(b=>b.textContent='▶ Track');
     if(wasPlayingThis) return;   // second tap on the same row = stop
     _previewAudio = new Audio(track.url);
     _previewAudio._src = track.url;
-    btn.textContent = '⏸ Song';
-    _previewAudio.onended = ()=>{ btn.textContent='▶ Song'; _previewAudio=null; };
-    _previewAudio.play().catch(err=>{ console.error('[AI play]',err); btn.textContent='▶ Song'; window.open(track.url,'_blank'); });
+    btn.textContent = '⏸ Track';
+    _previewAudio.onended = ()=>{ btn.textContent='▶ Track'; _previewAudio=null; };
+    _previewAudio.play().catch(err=>{ console.error('[AI play]',err); btn.textContent='▶ Track'; window.open(track.url,'_blank'); });
   }catch(e){ console.error('[AI play]',e); }
 }
 
@@ -1298,7 +1298,7 @@ async function _aiShareDownload(track, share){
     const blob = await resp.blob();
     const file = new File([blob], _slugify(track.name) + '.mp3', { type: 'audio/mpeg' });
     if(share && navigator.canShare && navigator.canShare({ files: [file] })){
-      await navigator.share({ files: [file], title: track.name, text: 'My AI song from Kid Sequencer 🎵' });
+      await navigator.share({ files: [file], title: track.name, text: 'My AI track from Kid Sequencer 🎵' });
       return;
     }
     const a = document.createElement('a');
@@ -1315,9 +1315,9 @@ async function _aiShareDownload(track, share){
 /* -------------------- TOP-UP PACKS -------------------- */
 // Display only — the grant amounts are enforced server-side (functions PACKS).
 const TOPUP_PACKS = {
-  ai10:    { type:'ai',    name:'10 AI songs',    sub:'40p each',       price:'£3.99'  },
-  ai25:    { type:'ai',    name:'25 AI songs',    sub:'32p each',       price:'£7.99'  },
-  ai50:    { type:'ai',    name:'50 AI songs',    sub:'26p each',       price:'£12.99' },
+  ai10:    { type:'ai',    name:'10 AI tracks',   sub:'40p each',       price:'£3.99'  },
+  ai25:    { type:'ai',    name:'25 AI tracks',   sub:'32p each',       price:'£7.99'  },
+  ai50:    { type:'ai',    name:'50 AI tracks',   sub:'26p each',       price:'£12.99' },
   slots20: { type:'slots', name:'+20 save slots', sub:'keep more tunes', price:'£1.99'  },
   slots50: { type:'slots', name:'+50 save slots', sub:'keep more tunes', price:'£3.99'  },
 };
@@ -1406,7 +1406,7 @@ async function _renderAccount(){
   if(isPro){
     const aiLeft = quota ? quota.remaining : 0;
     html += `<div class="acctStats">`;
-    html += `<div class="acctStat"><span class="acctStatNum">${aiLeft}</span><span class="acctStatLabel">AI songs left</span></div>`;
+    html += `<div class="acctStat"><span class="acctStatNum">${aiLeft}</span><span class="acctStatLabel">AI tracks left</span></div>`;
     html += `<div class="acctStat"><span class="acctStatNum">${usedSlots}/${totalSlots}</span><span class="acctStatLabel">save slots used</span></div>`;
     html += `</div>`;
     html += `<div class="acctActions">`;
@@ -1415,11 +1415,11 @@ async function _renderAccount(){
     html += `</div>`;
     html += `<div class="acctManageMsg" id="acctManageMsg"></div>`;
   } else {
-    html += `<div class="acctFreeNote">AI songs, cloud saves and more come with Pro.</div>`;
+    html += `<div class="acctFreeNote">AI tracks, cloud saves and more come with Pro.</div>`;
     html += `<div class="acctActions"><button class="aiCta" id="acctUpgradeBtn">Upgrade to Pro</button></div>`;
   }
 
-  html += `<div class="acctSeqTitle">My tunes</div>`;
+  html += `<div class="acctSeqTitle">My library</div>`;
   html += `<div class="acctSeqList" id="acctSeqList"></div>`;
   html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button></div>`;
 
@@ -1430,11 +1430,7 @@ async function _renderAccount(){
   document.getElementById('acctUpgradeBtn')?.addEventListener('click', ()=>{ closeAccountModal(); openUpgradeModal('subscribe'); });
   document.getElementById('acctLogoutBtn')?.addEventListener('click', ()=>{ logout(); closeAccountModal(); });
 
-  const listEl = document.getElementById('acctSeqList');
-  if(listEl){
-    if(!seqs.length) listEl.innerHTML = '<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>';
-    else seqs.forEach(seq => listEl.appendChild(_makeSeqRow(seq, closeAccountModal)));
-  }
+  _renderLibrary(document.getElementById('acctSeqList'), seqs, closeAccountModal);
 }
 
 // Pro: open the Stripe billing portal to manage/cancel the subscription.
@@ -1473,7 +1469,7 @@ function _renderTopup(kind){
                `<span class="topupPackSub">${p.sub}</span></span>` +
                `<span class="topupPackPrice">${p.price}</span></button>`;
     }).join('') + `</div>`;
-  const ai = sec('AI songs', ['ai10','ai25','ai50']);
+  const ai = sec('AI tracks', ['ai10','ai25','ai50']);
   const slots = sec('Save slots', ['slots20','slots50']);
   const body = document.getElementById('topupBody');
   if(!body) return;
@@ -3867,33 +3863,32 @@ async function openLoadSheet(){
     _renderLoadList(seqs);
   }catch(e){ console.error("[Load]",e); list.innerHTML='<div class="loadSheetEmpty">Couldn\'t load — try again</div>'; }
 }
-// Build one saved-sequence row (name/date/AI tag + load-on-click, delete-confirm,
-// AI play/share/download). `onLoaded` runs before the sequence is applied (used to
-// close whichever surface the row lives in). Shared by Load sheet + Account popup.
-function _makeSeqRow(seq, onLoaded){
+// Build one library row.
+//   mode 'sequence' (default): name/date/AI tag + load-on-click + delete. Loads
+//     the pattern into the sequencer. `onLoaded` runs before applying (closes the
+//     surface). No track audio controls.
+//   mode 'track': name/date + Play/Share/Download for the attached AI track. No
+//     load, no delete (delete the parent sequence from the Sequences tab).
+// Shared by the Load sheet and the Account popup.
+function _makeSeqRow(seq, onLoaded, mode){
+  mode = mode || 'sequence';
   const row = document.createElement('div');
   row.className='loadRow'; row.dataset.id=seq.id;
   const hasAi = !!(seq.hasAi && seq.audioUrl);
-  const aiBar = hasAi ? `
-      <div class="loadRowAiBar">
-        <button class="loadRowAiBtn" data-act="play">▶ Song</button>
-        <button class="loadRowAiBtn" data-act="share">Share</button>
-        <button class="loadRowAiBtn" data-act="download">Download</button>
-      </div>` : '';
-  row.innerHTML=`
+
+  if(mode === 'track'){
+    row.innerHTML=`
       <div class="loadRowMain">
-        <div class="loadRowInfo">
-          <div class="loadRowName">${seq.name||seq.id}${hasAi?' <span class="loadRowAiTag">AI</span>':''}</div>
+        <div class="loadRowInfo loadRowInfo-static">
+          <div class="loadRowName">${seq.name||seq.id}</div>
           <div class="loadRowDate">${_formatSavedAt(seq.savedAt)}</div>
         </div>
-        <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>
-      </div>${aiBar}`;
-  row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
-    if(typeof onLoaded==='function') onLoaded();
-    _applySequenceData(seq);
-    showSaveToast("loaded");
-  });
-  if(hasAi){
+      </div>
+      <div class="loadRowAiBar">
+        <button class="loadRowAiBtn" data-act="play">▶ Track</button>
+        <button class="loadRowAiBtn" data-act="share">Share</button>
+        <button class="loadRowAiBtn" data-act="download">Download</button>
+      </div>`;
     const track = { url: seq.audioUrl, path: seq.audioPath, name: seq.name||seq.id };
     row.querySelectorAll('.loadRowAiBtn').forEach(btn=>{
       btn.addEventListener('click', e=>{
@@ -3903,7 +3898,23 @@ function _makeSeqRow(seq, onLoaded){
         else _aiShareDownload(track, act==='share');
       });
     });
+    return row;
   }
+
+  // sequence mode — load + delete, no track audio bar
+  row.innerHTML=`
+      <div class="loadRowMain">
+        <div class="loadRowInfo">
+          <div class="loadRowName">${seq.name||seq.id}${hasAi?' <span class="loadRowAiTag">Track</span>':''}</div>
+          <div class="loadRowDate">${_formatSavedAt(seq.savedAt)}</div>
+        </div>
+        <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>
+      </div>`;
+  row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
+    if(typeof onLoaded==='function') onLoaded();
+    _applySequenceData(seq);
+    showSaveToast("loaded");
+  });
   row.querySelector('.loadRowDelete').addEventListener('click', e=>{
     e.stopPropagation();
     if(_deleteConfirmId===seq.id){
@@ -3926,12 +3937,36 @@ function _makeSeqRow(seq, onLoaded){
   });
   return row;
 }
+// Render the two-list library (Sequences | Tracks) into `host`. Sequences load
+// into the sequencer; Tracks are the saved AI audio (play/share/download).
+// `onLoaded` is passed to sequence rows so the surface closes on load.
+function _renderLibrary(host, seqs, onLoaded){
+  if(!host) return;
+  const tracks = (seqs||[]).filter(s => s.hasAi && s.audioUrl);
+  host.innerHTML = `
+    <div class="libTabs">
+      <button class="libTab active" data-tab="sequences">Sequences</button>
+      <button class="libTab" data-tab="tracks">Tracks</button>
+    </div>
+    <div class="libList" data-list="sequences"></div>
+    <div class="libList" data-list="tracks" hidden></div>`;
+  const seqList = host.querySelector('[data-list="sequences"]');
+  const trkList = host.querySelector('[data-list="tracks"]');
+  if(!seqs || !seqs.length) seqList.innerHTML = '<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>';
+  else seqs.forEach(s => seqList.appendChild(_makeSeqRow(s, onLoaded, 'sequence')));
+  if(!tracks.length) trkList.innerHTML = '<div class="loadSheetEmpty">No tracks yet — make an AI track and save it 🎵</div>';
+  else tracks.forEach(s => trkList.appendChild(_makeSeqRow(s, null, 'track')));
+  host.querySelectorAll('.libTab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      host.querySelectorAll('.libTab').forEach(t=>t.classList.toggle('active', t===tab));
+      const which = tab.dataset.tab;
+      seqList.hidden = which !== 'sequences';
+      trkList.hidden = which !== 'tracks';
+    });
+  });
+}
 function _renderLoadList(seqs){
-  const list = document.getElementById('loadSheetList');
-  if(!list) return;
-  if(!seqs.length){ list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>'; return; }
-  list.innerHTML='';
-  seqs.forEach(seq => list.appendChild(_makeSeqRow(seq, closeLoadSheet)));
+  _renderLibrary(document.getElementById('loadSheetList'), seqs, closeLoadSheet);
 }
 async function _deleteSequence(id, row){
   try{

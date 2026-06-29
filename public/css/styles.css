@@ -1378,6 +1378,25 @@ body.loggedIn #robotLogo{
       padding: 36px 20px; text-align: center;
       font-weight: 900; font-size: 15px; opacity: 0.4;
     }
+    .loadRowInfo-static{ cursor: default; }
+
+    /* Library tabs (Sequences | Tracks) — shared by the load sheet + account popup.
+       Sticky so they stay put while the active list scrolls in its container. */
+    .libTabs{
+      position: sticky; top: 0; z-index: 2;
+      display: flex; gap: 8px; padding: 10px 14px;
+      background: #fff; border-bottom: 3px solid #e8eaf0;
+    }
+    .libTab{
+      flex: 1; border: 3px solid #1d1d1d; border-radius: 12px;
+      background: #fff; color: #1d1d1d; font-weight: 900; font-size: 14px;
+      padding: 9px 6px; cursor: pointer;
+      -webkit-appearance: none; appearance: none;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.08);
+    }
+    .libTab.active{ background: #1d1d1d; color: #fff; }
+    .libTab:active{ transform: translateY(2px); box-shadow: 0 1px 0 rgba(0,0,0,0.08); }
+    .libList[hidden]{ display: none; }
 
     /* Camera scan modal */
     #camModal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 10px; box-sizing: border-box; }
@@ -1630,7 +1649,7 @@ body.loggedIn #robotLogo{
       appearance: none;
 }
     .loginBtn.logout{ color:#e00000 !important; }
-    .loginBtn.account{ color:#1565d8 !important; } /* ?v=49 */
+    .loginBtn.account{ color:#1565d8 !important; } /* ?v=50 */
     .loginBtn:hover{ transform: translateY(-1px); }
 
     #tempoControls{ position:relative; }
