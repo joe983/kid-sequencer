@@ -24,17 +24,22 @@ This idempotently creates the Pro subscription (£4.99/mo) and the five one-off
 top-up packs, each with tax code `txcd_10103100`, and prints all price IDs.
 (Re-running updates in place via `lookup_key` — safe.)
 
-## 2. Wire the IDs into Firebase
-- **Pro price ID → secret:** `firebase functions:secrets:set STRIPE_PRICE_ID`
-- **Top-up price IDs → `functions/.env`** (copy from `.env.example`, paste the 5 IDs).
-  These aren't secret; `.env` is gitignored and read at deploy.
+## 2. Price IDs (already committed — TEST mode)
+The 6 price IDs are committed as defaults in [functions/index.js](functions/index.js)
+(the `defineString` block). **Nothing to do for test mode** — they travel with the
+code and survive merges.
 
-## 3. Other secrets
+For **live mode**, re-run the script in step 1 with a live key, then either update
+those defaults or drop the live IDs into `functions/.env` (env overrides win; see
+`.env.example`).
+
+## 3. Secrets (real keys only)
 ```bash
 firebase functions:secrets:set STRIPE_SECRET_KEY       # sk_… (use live for prod)
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET   # whsec_… (from step 4)
 firebase functions:secrets:set STABILITY_API_KEY       # Stability AI key
 ```
+(No `STRIPE_PRICE_ID` secret — price IDs are config, not secrets.)
 
 ## 4. Webhook
 Stripe Dashboard → Developers → Webhooks → Add endpoint:

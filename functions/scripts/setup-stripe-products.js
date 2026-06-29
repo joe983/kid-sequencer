@@ -81,13 +81,15 @@ async function getOrCreatePrice(item, productId) {
     console.log(`✓ ${item.sku.padEnd(8)} ${product.id}  ${price.id}  (${(item.amount / 100).toFixed(2)} ${CURRENCY.toUpperCase()})`);
   }
 
-  console.log("\n--- Wire these into Firebase ---\n");
-  console.log("# Pro price → secret:");
-  console.log(`firebase functions:secrets:set STRIPE_PRICE_ID   (paste: ${result.pro})\n`);
-  console.log("# Top-up prices → functions/.env:");
+  console.log("\n--- Price IDs (committed as defaults in index.js) ---\n");
+  console.log("These are config, not secrets. To use them, update the defineString");
+  console.log("defaults in functions/index.js (or override in functions/.env):\n");
+  console.log(`STRIPE_PRICE_ID=${result.pro}        # Pro £4.99/mo`);
   console.log(`TOPUP_AI10_PRICE=${result.ai10}`);
   console.log(`TOPUP_AI25_PRICE=${result.ai25}`);
   console.log(`TOPUP_AI50_PRICE=${result.ai50}`);
   console.log(`TOPUP_SLOTS20_PRICE=${result.slots20}`);
   console.log(`TOPUP_SLOTS50_PRICE=${result.slots50}`);
+  console.log("\nSecrets to set separately (real keys only):");
+  console.log("  firebase functions:secrets:set STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STABILITY_API_KEY");
 })().catch((e) => { console.error(e); process.exit(1); });

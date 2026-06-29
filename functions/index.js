@@ -10,10 +10,9 @@ const db = getFirestore();
 
 const STORAGE_BUCKET = "kid-sequencer.firebasestorage.app";
 
-// --- Secrets (API keys) -----------------------------------------------------
+// --- Secrets (real API keys only) -------------------------------------------
 const stripeSecretKey     = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
-const stripePriceId       = defineSecret("STRIPE_PRICE_ID");        // £4.99/mo recurring
 const stabilityApiKey     = defineSecret("STABILITY_API_KEY");
 
 // Managed Payments (Stripe = merchant of record, handles tax/VAT) requires the
@@ -24,12 +23,16 @@ function stripeClient() {
   return require("stripe")(stripeSecretKey.value(), { apiVersion: STRIPE_API_VERSION });
 }
 
-// --- Config params (Stripe one-off price IDs; not secret) -------------------
-const topupAi10Price    = defineString("TOPUP_AI10_PRICE",    { default: "" });
-const topupAi25Price    = defineString("TOPUP_AI25_PRICE",    { default: "" });
-const topupAi50Price    = defineString("TOPUP_AI50_PRICE",    { default: "" });
-const topupSlots20Price = defineString("TOPUP_SLOTS20_PRICE", { default: "" });
-const topupSlots50Price = defineString("TOPUP_SLOTS50_PRICE", { default: "" });
+// --- Stripe price IDs (NOT secret — committed config). These are the TEST-mode
+// prices created by `npm run setup:stripe`. They survive merges. For live mode,
+// re-run the script with a live key and either update these defaults or override
+// them in functions/.env (env values take precedence). ---
+const stripePriceId     = defineString("STRIPE_PRICE_ID",     { default: "price_1TnT6HFXTeND9GTEK7CSQp00" }); // Pro £4.99/mo
+const topupAi10Price    = defineString("TOPUP_AI10_PRICE",    { default: "price_1TnT6JFXTeND9GTEqRJfrH3w" });
+const topupAi25Price    = defineString("TOPUP_AI25_PRICE",    { default: "price_1TnT6LFXTeND9GTE2lkbitJA" });
+const topupAi50Price    = defineString("TOPUP_AI50_PRICE",    { default: "price_1TnT6MFXTeND9GTE34aMlmAC" });
+const topupSlots20Price = defineString("TOPUP_SLOTS20_PRICE", { default: "price_1TnT6OFXTeND9GTEBJOAYFua" });
+const topupSlots50Price = defineString("TOPUP_SLOTS50_PRICE", { default: "price_1TnT6QFXTeND9GTESvuFfTra" });
 
 // packId → grant (server-authoritative). Price ID comes from the matching param.
 const PACKS = {
@@ -84,7 +87,7 @@ function buildPrompt(meta) {
 // Subscription checkout (Pro, £4.99/mo)
 // ---------------------------------------------------------------------------
 exports.createCheckoutSession = onCall(
-  { region: "europe-west1", secrets: [stripeSecretKey, stripePriceId] },
+  { region: "europe-west1", secrets: [stripeSecretKey] },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
 
