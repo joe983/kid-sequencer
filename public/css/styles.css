@@ -1030,6 +1030,39 @@ body.loggedIn #robotLogo{
     }
     @keyframes aiSpin{ to{ transform:rotate(360deg); } }
 
+    /* Account popup (reuses .aiModal / .aiCard / .aiCta / .aiSpinner) */
+    .accountCard{ text-align:left; }
+    .acctHeader{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin:2px 0 14px;
+    }
+    .acctEmail{ font-weight:800; font-size:15px; color:#1d1d1d; word-break:break-all; }
+    .acctBadge{
+      flex:none; font-weight:900; font-size:12px; color:#33323a;
+      border:3px solid #1d1d1d; border-radius:999px; padding:3px 10px; background:#f1eef8;
+    }
+    .acctBadge-pro{ background:linear-gradient(135deg,#a78bfa 0%,#f472b6 100%); color:#fff; }
+    .acctStats{ display:flex; gap:10px; margin:0 0 12px; }
+    .acctStat{
+      flex:1; text-align:center;
+      border:3px solid #1d1d1d; border-radius:14px; background:#faf9fd; padding:10px 6px;
+    }
+    .acctStatNum{ display:block; font-weight:900; font-size:20px; color:#1d1d1d; }
+    .acctStatLabel{ display:block; font-size:11px; color:#8a8794; margin-top:2px; }
+    .acctActions{ display:flex; gap:10px; justify-content:center; margin:0 0 8px; }
+    .acctActions .aiCta{ flex:1; font-size:14px; padding:11px 12px; }
+    .acctManageMsg{ font-size:12px; color:#c0392b; text-align:center; min-height:14px; margin-bottom:6px; }
+    .acctFreeNote{ font-size:13px; color:#33323a; text-align:center; margin:2px 0 12px; }
+    .acctSeqTitle{ font-weight:900; font-size:14px; color:#1d1d1d; margin:14px 2px 8px; }
+    .acctSeqList{ max-height:300px; overflow-y:auto; }
+    .acctFooter{ text-align:center; margin-top:16px; }
+    .acctLogout{
+      border:3px solid #e00000; border-radius:14px; background:#fff; color:#e00000;
+      font-weight:900; font-size:15px; padding:10px 22px; cursor:pointer;
+      -webkit-appearance:none; appearance:none;
+    }
+    .acctLogout:active{ transform:translateY(2px); }
+
     /* Top-up pack list */
     .topupSection{ text-align:left; margin:6px 0 14px; }
     .topupSectionTitle{ font-weight:900; font-size:14px; color:#1d1d1d; margin:10px 2px 8px; }
@@ -1596,6 +1629,7 @@ body.loggedIn #robotLogo{
       appearance: none;
 }
     .loginBtn.logout{ color:#e00000 !important; }
+    .loginBtn.account{ color:#1565d8 !important; }
     .loginBtn:hover{ transform: translateY(-1px); }
 
     #tempoControls{ position:relative; }

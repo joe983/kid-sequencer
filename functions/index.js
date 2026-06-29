@@ -112,6 +112,31 @@ exports.createCheckoutSession = onCall(
 );
 
 // ---------------------------------------------------------------------------
+// Stripe billing portal — let a Pro user manage/cancel their subscription.
+// Requires the Customer Portal to be activated/configured in the Stripe
+// dashboard (Settings → Billing → Customer portal) for the active mode.
+// ---------------------------------------------------------------------------
+exports.createBillingPortalSession = onCall(
+  { region: "europe-west1", secrets: [stripeSecretKey] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+
+    const snap = await db.doc(`users/${request.auth.uid}`).get();
+    const customerId = snap.exists ? snap.data().stripeCustomerId : null;
+    if (!customerId) throw new HttpsError("failed-precondition", "No subscription found");
+
+    const stripe = stripeClient();
+    const returnUrl = request.data.returnUrl || "https://kid-sequencer.web.app/";
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: returnUrl,
+    });
+
+    return { url: session.url };
+  }
+);
+
+// ---------------------------------------------------------------------------
 // One-off top-up checkout (AI track packs + save-slot packs)
 // ---------------------------------------------------------------------------
 exports.createTopupCheckout = onCall(
