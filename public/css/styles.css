@@ -1053,6 +1053,8 @@ body.loggedIn #robotLogo{
     .acctActions{ display:flex; gap:10px; justify-content:center; margin:0 0 8px; }
     .acctActions .aiCta{ flex:1; font-size:14px; padding:11px 12px; }
     .acctManageMsg{ font-size:12px; color:#c0392b; text-align:center; min-height:14px; margin-bottom:6px; }
+    /* "powered by Stripe" / redirect cue under payment CTAs (upgrade modal + account) */
+    .stripeNote{ font-size:11px; font-weight:700; color:#8a8794; text-align:center; margin-top:8px; line-height:1.3; }
     .acctFreeNote{ font-size:13px; color:#33323a; text-align:center; margin:2px 0 12px; }
     .acctSeqTitle{ font-weight:900; font-size:14px; color:#1d1d1d; margin:14px 2px 8px; }
     .acctSeqList{ max-height:300px; overflow-y:auto; }
@@ -1649,7 +1651,7 @@ body.loggedIn #robotLogo{
       appearance: none;
 }
     .loginBtn.logout{ color:#e00000 !important; }
-    .loginBtn.account{ color:#1565d8 !important; } /* ?v=51 */
+    .loginBtn.account{ color:#1565d8 !important; } /* ?v=52 */
     .loginBtn:hover{ transform: translateY(-1px); }
 
     #tempoControls{ position:relative; }
