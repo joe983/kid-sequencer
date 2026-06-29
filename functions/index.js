@@ -76,7 +76,7 @@ function buildPrompt(meta) {
     `Transform the provided melody into a high-energy modern EDM big-room track, about 3 minutes long, with cutting-edge, hi-fi, club-ready production.`,
     `CRITICAL: keep the provided melody EXACTLY as the main hook — do not change its notes, rhythm or shape; it must stay front-and-centre, loud and instantly recognisable all the way through, in ${key} around ${tempo} BPM, carried by a bright ${instr} lead.`,
     `Build a rich, layered big-room arrangement AROUND that hook with many sounds: punchy four-on-the-floor kick, deep sidechained sub-bass, stacked supersaw chords, plucks, arpeggios, lush pads, vocal-chop stabs, risers, white-noise sweeps, impacts and downlifters.`,
-    `Structure it like a real EDM track: intro, build-up, huge drop on the hook, breakdown, second build, final drop — with dynamics, fills and clear variation between sections (no static loop).`,
+    `The input is already arranged as a pop song (verse / pre-chorus / chorus / breakdown) — FOLLOW its dynamics: the quieter melody-only passages are verses/intros/breakdowns, the busier full passages are the choruses/drops. Emphasise that contrast with build-ups into each drop, fills and clear variation between sections (no static loop).`,
     `Wide stereo image, crisp sparkling highs, deep powerful low end, loud polished professional master. Joyful and fun but seriously, cuttingly produced.`,
   ].join(" ");
 }

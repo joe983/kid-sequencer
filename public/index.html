@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=55">
+<link rel="stylesheet" href="css/styles.css?v=56">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -3581,19 +3581,12 @@ function _encodeWavMono(samples, sampleRate){
   return new Blob([buf], { type: "audio/wav" });
 }
 
-async function captureSequenceToWav(){
-  await ensureAudioReady();
-  if(!audioCtx || !masterComp) return null;
+// Record the live sequencer for `nLoops` cycles into a mono Float32 buffer at the
+// native sample rate. Silent (speakers disconnected). `muteDrums` drops the drum
+// bus so we can capture a melody-only stem. Used to grab the two stems the
+// arranged seed is built from.
+async function _recordLoops(nLoops, muteDrums){
   const ctx = audioCtx;
-
-  const loopDur = cols * stepDurationSec();                 // seconds per full cycle
-  const loops = Math.max(2, Math.min(8, Math.ceil(12 / Math.max(0.5, loopDur))));
-  const totalSec = loops * loopDur + 0.45;                  // small tail for release tails
-
-  // Tap masterComp into a ScriptProcessor; route it to a muted sink so it keeps
-  // pulling. We also disconnect masterComp from the speakers for the duration of
-  // the capture so the sequence records SILENTLY (the user shouldn't hear it
-  // play while the AI track is being made) — the tap still gets full signal.
   const chunks = [];
   const sp = ctx.createScriptProcessor(4096, 2, 2);
   const sink = ctx.createGain();
@@ -3610,8 +3603,12 @@ async function captureSequenceToWav(){
   masterComp.connect(sp);
   sp.connect(sink);
   sink.connect(ctx.destination);
-  try{ masterComp.disconnect(ctx.destination); }catch(e){}   // mute speakers during capture
-
+  try{ masterComp.disconnect(ctx.destination); }catch(e){}   // silent capture
+  let drumsCut = false;
+  if(muteDrums && typeof drumBus !== "undefined" && drumBus){
+    try{ drumBus.disconnect(masterGain); drumsCut = true; }catch(e){}
+  }
+  const dur = nLoops * cols * stepDurationSec() + 0.4;
   try{
     stop();
     step = 0;
@@ -3619,39 +3616,115 @@ async function captureSequenceToWav(){
     setPlayheadPlaying(false);
     resetPlayheadInstant();
     startSequencer();
-    await sleep(totalSec * 1000);
+    await sleep(dur * 1000);
   } finally {
     recording = false;
     stop();
-    try{ masterComp.connect(ctx.destination); }catch(e){}     // restore speakers
+    if(drumsCut){ try{ drumBus.connect(masterGain); }catch(e){} }
+    try{ masterComp.connect(ctx.destination); }catch(e){}
     try{ masterComp.disconnect(sp); }catch(e){}
     try{ sp.disconnect(); }catch(e){}
     try{ sink.disconnect(); }catch(e){}
   }
-
   let len = 0;
   for(const c of chunks) len += c.length;
-  if(len === 0) return null;
   const merged = new Float32Array(len);
   let o = 0;
   for(const c of chunks){ merged.set(c, o); o += c.length; }
+  return merged;
+}
 
-  // Stable Audio's audio-to-audio output length tracks the INPUT length, so a
-  // ~12s capture yields a ~30s clip. Tile the captured loop up to a full-length
-  // seed (~170s) so the AI track runs ~3 min. Downsample 2× (cheap 2-tap
-  // average) to keep the longer mono WAV under the 8MB seed cap — Stability
-  // resamples internally anyway.
-  const half = Math.floor(merged.length / 2);
-  if(half === 0) return null;
-  const ds = new Float32Array(half);
-  for(let i=0;i<half;i++) ds[i] = (merged[2*i] + merged[2*i+1]) * 0.5;
-  const outRate = Math.round(ctx.sampleRate / 2);
-  const SEED_TARGET_SEC = 170;
-  const MAX_SAMPLES = Math.floor((7.6 * 1024 * 1024) / 2);   // stay under 8MB (16-bit)
-  const targetLen = Math.min(Math.floor(SEED_TARGET_SEC * outRate), MAX_SAMPLES);
-  const tiled = new Float32Array(targetLen);
-  for(let i=0;i<targetLen;i++) tiled[i] = ds[i % ds.length];
-  return _encodeWavMono(tiled, outRate);
+// Build a pop/EDM song structure from the user's one-bar loop. Two energy levels:
+// 'full' (drums in = chorus/drop) and 'mel' (melody only = intro/verse/breakdown).
+// Randomised a little each call (jittered lengths, optional verse2/bridge) so no
+// two renders are identical, but the order stays a coherent pop arrangement.
+function _buildArrangementPlan(totalBars){
+  const rnd = (a,b) => a + Math.random() * (b - a);
+  let secs = [
+    { stem:'mel',  w:0.6 },   // intro
+    { stem:'full', w:1.0 },   // verse 1
+    { stem:'mel',  w:0.55 },  // pre-chorus / drop-down
+    { stem:'full', w:1.5 },   // chorus 1
+    { stem:'full', w:0.9, opt:'verse2' },   // verse 2
+    { stem:'mel',  w:0.55 },  // pre-chorus 2
+    { stem:'full', w:1.5 },   // chorus 2
+    { stem:'mel',  w:0.9, opt:'bridge' },   // bridge / breakdown
+    { stem:'full', w:1.8 },   // final chorus (double)
+    { stem:'mel',  w:0.55 },  // outro
+  ];
+  if(Math.random() < 0.35) secs = secs.filter(s => s.opt !== 'verse2');
+  if(Math.random() < 0.30) secs = secs.filter(s => s.opt !== 'bridge');
+  secs.forEach(s => { s.w *= rnd(0.85, 1.15); });
+  const sumW = secs.reduce((a,s) => a + s.w, 0);
+  return secs.map(s => ({ stem:s.stem, bars: Math.max(1, Math.round(totalBars * s.w / sumW)) }));
+}
+
+// Capture the user's loop as two stems, then arrange them into a ~3-minute
+// pop/EDM song-structured seed. Stable Audio's audio-to-audio follows the input's
+// length AND its dynamics, so giving it a real arrangement (with the user's tune
+// as the constant hook) makes the output a structured track rather than a flat
+// loop. Downsampled 2× to stay under the 8MB seed cap.
+async function captureSequenceToWav(){
+  await ensureAudioReady();
+  if(!audioCtx || !masterComp) return null;
+  const ctx = audioCtx;
+  const sr = ctx.sampleRate;
+  const loopDur = cols * stepDurationSec();
+  const L = Math.round(loopDur * sr);                       // one loop in samples (native)
+  if(L <= 0) return null;
+
+  const fullRec = await _recordLoops(2, false);
+  const melRec  = await _recordLoops(2, true);
+
+  // Grab a clean interior loop [L,2L) (steady state). The audio is periodic with
+  // period L, so any L-length window tiles seamlessly on the beat.
+  const grab = (rec) => rec.length >= 2*L ? rec.subarray(L, 2*L)
+                       : rec.length >= L   ? rec.subarray(0, L)
+                       : rec;
+  let full = grab(fullRec);
+  let mel  = grab(melRec);
+  if(!full.length) return null;
+  if(!mel.length) mel = full;                                // no melodic notes → reuse full
+
+  // Downsample 2× (cheap 2-tap average) to fit the long seed under 8MB.
+  const ds = (buf) => { const h = Math.floor(buf.length/2); const o = new Float32Array(h);
+    for(let i=0;i<h;i++) o[i] = (buf[2*i] + buf[2*i+1]) * 0.5; return o; };
+  const fullLo = ds(full), melLo = ds(mel);
+  const outRate = Math.round(sr / 2);
+  const Llo = fullLo.length;
+  if(Llo <= 0) return null;
+
+  const MAX_SAMPLES = Math.floor((7.6 * 1024 * 1024) / 2);  // under 8MB (16-bit)
+  const targetBars = Math.max(6, Math.min(
+    Math.round(165 / loopDur),
+    Math.floor(MAX_SAMPLES / Llo)
+  ));
+  const plan = _buildArrangementPlan(targetBars);
+
+  let totalLo = 0;
+  for(const s of plan) totalLo += s.bars * Llo;
+  totalLo = Math.min(totalLo, MAX_SAMPLES);
+  const out = new Float32Array(totalLo);
+
+  const F = Math.max(1, Math.round(0.006 * outRate));        // ~6ms fade at stem changes
+  let pos = 0, prevStem = null;
+  for(const s of plan){
+    if(pos >= totalLo) break;
+    const loop = (s.stem === 'mel') ? melLo : fullLo;
+    const start = pos;
+    const want = s.bars * Llo;
+    for(let k=0; k<want && pos<totalLo; k++){ out[pos++] = loop[k % loop.length]; }
+    // Smooth the seam only when the energy level changes (melody is phase-aligned
+    // across the cut, so this just fades the drums in/out → no clicks/disjoint).
+    if(prevStem !== null && prevStem !== s.stem){
+      for(let i=0;i<F;i++){
+        if(start-1-i >= 0)      out[start-1-i] *= (i / F);
+        if(start+i   < totalLo) out[start+i]   *= (i / F);
+      }
+    }
+    prevStem = s.stem;
+  }
+  return _encodeWavMono(out, outRate);
 }
 
 /* -------------------- TEMPO -------------------- */
