@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=52">
+<link rel="stylesheet" href="css/styles.css?v=53">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -286,7 +286,7 @@
             <li class="feat-yes">Print + Camera scan</li>
           </ul>
           <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
-          <div class="stripeNote">🔒 Secure checkout · powered by Stripe</div>
+          <div class="stripeNote">🔒 Secure checkout · powered by Stripe — opens in a new tab</div>
         </div>
       </div>
       <div class="upgradeFooter">
@@ -1125,18 +1125,21 @@ window.handleSubscribeCta = handleSubscribeCta;
 
 async function _startStripeCheckout(){
   const btn = document.getElementById('subscribeBtn');
+  const win = window.open('', '_blank');   // open in the click gesture (dodges popup blockers)
   if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
   try{
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
     const { app } = await import("./js/firebase-init.js");
     const fns = getFunctions(app, 'europe-west1');
     const createSession = httpsCallable(fns, 'createCheckoutSession');
-    const result = await createSession({ returnUrl: window.location.origin + '/?subscribed=1' });
-    window.location.href = result.data.url;
+    const result = await createSession({ returnUrl: window.location.origin + '/payment-done.html' });
+    _sendStripeTab(win, result.data.url);
   }catch(e){
     console.error('[Stripe]', e);
-    if(btn){ btn.disabled = false; btn.textContent = 'Subscribe'; }
+    if(win && !win.closed) win.close();
     showSaveToast('error');
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Subscribe'; }
   }
 }
 
@@ -1431,7 +1434,7 @@ async function _renderAccount(){
     html += `<button class="aiCta aiCta-alt" id="acctTopupBtn">Top up</button>`;
     html += `<button class="aiCta aiCta-alt" id="acctManageBtn">Manage subscription ↗</button>`;
     html += `</div>`;
-    html += `<div class="stripeNote">🔒 Payments &amp; billing handled by Stripe — Manage opens Stripe</div>`;
+    html += `<div class="stripeNote">🔒 Payments &amp; billing handled by Stripe — opens in a new tab</div>`;
     html += `<div class="acctManageMsg" id="acctManageMsg"></div>`;
   } else {
     html += `<div class="acctFreeNote">AI tracks, cloud saves and more come with Pro.</div>`;
@@ -1460,23 +1463,67 @@ async function _renderAccount(){
 async function openBillingPortal(){
   const btn = document.getElementById('acctManageBtn');
   const msg = document.getElementById('acctManageMsg');
+  const win = window.open('', '_blank');   // open in the click gesture (dodges popup blockers)
   if(btn) btn.disabled = true;
   if(msg) msg.textContent = 'Opening…';
   try{
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
     const { app } = await import("./js/firebase-init.js");
     const fns = getFunctions(app, 'europe-west1');
-    const res = await httpsCallable(fns, 'createBillingPortalSession')({ returnUrl: location.origin + '/' });
-    location.href = res.data.url;
+    const res = await httpsCallable(fns, 'createBillingPortalSession')({ returnUrl: location.origin + '/payment-done.html' });
+    _sendStripeTab(win, res.data.url);
+    if(msg) msg.textContent = '';
   }catch(e){
     console.error('[Billing portal]', e);
-    if(btn) btn.disabled = false;
+    if(win && !win.closed) win.close();
     if(msg) msg.textContent = (e && e.code === 'functions/failed-precondition')
       ? 'No subscription found for this account.'
       : 'Couldn\'t open billing — try again.';
+  }finally{
+    if(btn) btn.disabled = false;
   }
 }
 window.openBillingPortal = openBillingPortal;
+
+/* -------------------- STRIPE IN A NEW TAB -------------------- */
+// Stripe's hosted Checkout + billing portal can't be iframed, so we open them in
+// a new tab (opened synchronously in the click gesture, then pointed at the URL
+// once the session is ready) and keep the app loaded. When the user returns to
+// this tab we re-read their account so tier/credits update without a refresh.
+let _stripePending = false;
+let _stripeWatchInstalled = false;
+function _sendStripeTab(win, url){
+  if(!url) return;
+  if(win && !win.closed){ win.location.href = url; }
+  else { window.location.href = url; }   // popup blocked → fall back to same-tab redirect
+  _stripePending = true;
+  if(!_stripeWatchInstalled){
+    _stripeWatchInstalled = true;
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible' && _stripePending){
+        _stripePending = false;
+        _resyncAfterStripe();
+      }
+    });
+  }
+}
+async function _resyncAfterStripe(){
+  try{
+    const user = await _getFirebaseUser();
+    if(!user) return;
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const snap = await getDoc(doc(db,'users',user.uid));
+    const tier = snap.exists() ? (snap.data().tier || 'free') : 'free';
+    const wasPaid = isPaid;
+    try{ sessionStorage.setItem('kidseq_tier', tier); }catch(e){}
+    isPaid = isLoggedIn && tier === 'paid';
+    applyLockState();
+    if(isPaid && !wasPaid) showSaveToast('proactivated');
+    const am = document.getElementById('accountModal');   // refresh credits/slots/tier if open
+    if(am && am.classList.contains('show')) _renderAccount();
+  }catch(e){ console.error('[Stripe resync]', e); }
+}
 
 function _renderTopup(kind){
   const sec = (title, ids) =>
@@ -1498,18 +1545,21 @@ function _renderTopup(kind){
 }
 
 async function _startTopupCheckout(packId, btn){
+  const win = window.open('', '_blank');   // open in the click gesture (dodges popup blockers)
   if(btn) btn.disabled = true;
   try{
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
     const { app } = await import("./js/firebase-init.js");
     const fns = getFunctions(app, 'europe-west1');
     const fn = httpsCallable(fns, 'createTopupCheckout');
-    const res = await fn({ packId, returnUrl: window.location.origin + '/?topup=1' });
-    window.location.href = res.data.url;
+    const res = await fn({ packId, returnUrl: window.location.origin + '/payment-done.html' });
+    _sendStripeTab(win, res.data.url);
   }catch(e){
     console.error('[Topup]', e);
-    if(btn) btn.disabled = false;
+    if(win && !win.closed) win.close();
     showSaveToast('error');
+  }finally{
+    if(btn) btn.disabled = false;
   }
 }
 
