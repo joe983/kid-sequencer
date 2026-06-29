@@ -51,9 +51,10 @@ const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
 const STABILITY_MODEL    = "stable-audio-2.5";
 const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.5;   // lower = closer to seed. 0.4 near-copy, 0.6 changed the hook;
-                                  // 0.5 keeps the user's melody as the hook while the prompt adds
-                                  // the big-room production. Tune this if the hook drifts/over-copies.
+const AI_STRENGTH        = 0.3;   // LOW on purpose: the production is baked into the seed by the
+                                  // in-app producer, so the AI runs faithfully (keeps the exact
+                                  // hook + the layered production) and only adds sonic glue. 0.4
+                                  // already preserved the hook; 0.5+ repainted it. Keep this low.
 
 function monthKey() {
   const d = new Date();
@@ -72,12 +73,15 @@ function buildPrompt(meta) {
     piano: "bright piano", trumpet: "brass", strings: "warm strings",
     synth: "synth lead", bass: "deep bass", bells: "glockenspiel bells",
   })[m.instrument] || "melodic lead";
+  // The seed is ALREADY a produced, arranged kids'-pop mix (layered hook + pads +
+  // verse/chorus dynamics). We run the model at LOW strength, so this prompt asks
+  // it to faithfully ENHANCE/POLISH — not rewrite. Keeping the melody is critical.
   return [
-    `Transform the provided melody into a high-energy modern EDM big-room track, about 3 minutes long, with cutting-edge, hi-fi, club-ready production.`,
-    `CRITICAL: keep the provided melody EXACTLY as the main hook — do not change its notes, rhythm or shape; it must stay front-and-centre, loud and instantly recognisable all the way through, in ${key} around ${tempo} BPM, carried by a bright ${instr} lead.`,
-    `Build a rich, layered big-room arrangement AROUND that hook with many sounds: punchy four-on-the-floor kick, deep sidechained sub-bass, stacked supersaw chords, plucks, arpeggios, lush pads, vocal-chop stabs, risers, white-noise sweeps, impacts and downlifters.`,
-    `The input is already arranged as a pop song (verse / pre-chorus / chorus / breakdown) — FOLLOW its dynamics: the quieter melody-only passages are verses/intros/breakdowns, the busier full passages are the choruses/drops. Emphasise that contrast with build-ups into each drop, fills and clear variation between sections (no static loop).`,
-    `Wide stereo image, crisp sparkling highs, deep powerful low end, loud polished professional master. Joyful and fun but seriously, cuttingly produced.`,
+    `Enhance and polish this already-produced kids' pop track to a modern, hi-fi, radio- and TikTok-ready standard, about 3 minutes long, in ${key} around ${tempo} BPM with a ${instr} lead.`,
+    `CRITICAL: keep the existing melody, parts and arrangement EXACTLY — do NOT rewrite the tune, change its notes, or restructure the song. The hook must stay identical and recognisable throughout.`,
+    `Improve the sound faithfully: add cohesion, warmth, depth, clarity and wide stereo, with lush pads and strings, gentle filter/LFO movement and subtle modern sheen that evolves across sections.`,
+    `Respect the input's dynamics (quieter passages = verses/breakdowns, fuller passages = choruses) — reinforce that contrast without adding or removing the melody.`,
+    `Clean, joyful, expansive, professional production suitable for young children.`,
   ].join(" ");
 }
 
