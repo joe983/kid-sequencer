@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=48">
+<link rel="stylesheet" href="css/styles.css?v=49">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -1263,12 +1263,14 @@ function _aiShowResult(track){
     `<div class="aiMsg">Your song is ready! 🎉</div>` +
     `<audio class="aiPlayer" controls preload="none" src="${track.url}"></audio>` +
     `<div class="aiActions">` +
-      `<button class="aiCta" id="aiShareBtn">Share</button>` +
+      `<button class="aiCta" id="aiSaveBtn">Save</button>` +
+      `<button class="aiCta aiCta-alt" id="aiShareBtn">Share</button>` +
       `<button class="aiCta aiCta-alt" id="aiDownloadBtn">Download</button>` +
     `</div>` +
-    `<div class="aiNote">Hit <b>Save</b> to keep this song with your tune.</div>` +
+    `<div class="aiNote">Save keeps this song with your tune.</div>` +
     `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more songs? Top up</button></div>`
   );
+  document.getElementById('aiSaveBtn')?.addEventListener('click', ()=>{ closeAiModal(); saveToCloud(); });
   document.getElementById('aiShareBtn')?.addEventListener('click', ()=>_aiShareDownload(track, true));
   document.getElementById('aiDownloadBtn')?.addEventListener('click', ()=>_aiShareDownload(track, false));
   document.getElementById('aiTopupLink')?.addEventListener('click', ()=>{ closeAiModal(); openTopupModal('ai'); });
