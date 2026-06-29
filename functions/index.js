@@ -16,6 +16,14 @@ const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const stripePriceId       = defineSecret("STRIPE_PRICE_ID");        // £4.99/mo recurring
 const stabilityApiKey     = defineSecret("STABILITY_API_KEY");
 
+// Managed Payments (Stripe = merchant of record, handles tax/VAT) requires the
+// preview API version. Pin it on every Stripe client; the setup script uses the
+// same version when creating products/prices.
+const STRIPE_API_VERSION = "2026-02-25.preview";
+function stripeClient() {
+  return require("stripe")(stripeSecretKey.value(), { apiVersion: STRIPE_API_VERSION });
+}
+
 // --- Config params (Stripe one-off price IDs; not secret) -------------------
 const topupAi10Price    = defineString("TOPUP_AI10_PRICE",    { default: "" });
 const topupAi25Price    = defineString("TOPUP_AI25_PRICE",    { default: "" });
@@ -80,15 +88,15 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
 
-    const Stripe = require("stripe");
-    const stripe = Stripe(stripeSecretKey.value());
+    const stripe = stripeClient();
     const uid = request.auth.uid;
     const email = request.auth.token.email;
     const returnUrl = request.data.returnUrl || "https://kid-sequencer.web.app/?subscribed=1";
 
+    // Managed Payments: Stripe handles payment methods + tax as merchant of record.
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      payment_method_types: ["card"],
+      managed_payments: { enabled: true },
       line_items: [{ price: stripePriceId.value(), quantity: 1 }],
       success_url: returnUrl,
       cancel_url: "https://kid-sequencer.web.app/",
@@ -118,15 +126,15 @@ exports.createTopupCheckout = onCall(
     const priceId = pack.price.value();
     if (!priceId) throw new HttpsError("failed-precondition", "Pack not configured");
 
-    const Stripe = require("stripe");
-    const stripe = Stripe(stripeSecretKey.value());
+    const stripe = stripeClient();
     const uid = request.auth.uid;
     const email = request.auth.token.email;
     const returnUrl = request.data.returnUrl || "https://kid-sequencer.web.app/?topup=1";
 
+    // Managed Payments: Stripe handles payment methods + tax as merchant of record.
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
+      managed_payments: { enabled: true },
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: returnUrl,
       cancel_url: "https://kid-sequencer.web.app/",
@@ -253,8 +261,7 @@ exports.generateAiTrack = onCall(
 exports.stripeWebhook = onRequest(
   { region: "europe-west1", secrets: [stripeSecretKey, stripeWebhookSecret] },
   async (req, res) => {
-    const Stripe = require("stripe");
-    const stripe = Stripe(stripeSecretKey.value());
+    const stripe = stripeClient();
 
     const sig = req.headers["stripe-signature"];
     let event;
