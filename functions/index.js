@@ -51,10 +51,10 @@ const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
 const STABILITY_MODEL    = "stable-audio-2.5";
 const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.3;   // LOW on purpose: the production is baked into the seed by the
-                                  // in-app producer, so the AI runs faithfully (keeps the exact
-                                  // hook + the layered production) and only adds sonic glue. 0.4
-                                  // already preserved the hook; 0.5+ repainted it. Keep this low.
+const AI_STRENGTH        = 0.75;  // HIGH on purpose for this experiment: let the model deviate
+                                  // far from the seed (sticks to the riff less) so it produces a
+                                  // fully professional track. Trades hook-exactness for sound
+                                  // quality — the riff is guidance, not a constraint.
 
 function monthKey() {
   const d = new Date();
@@ -73,15 +73,15 @@ function buildPrompt(meta) {
     piano: "bright piano", trumpet: "brass", strings: "warm strings",
     synth: "synth lead", bass: "deep bass", bells: "glockenspiel bells",
   })[m.instrument] || "melodic lead";
-  // The seed is ALREADY a produced, arranged kids'-pop mix (layered hook + pads +
-  // verse/chorus dynamics). We run the model at LOW strength, so this prompt asks
-  // it to faithfully ENHANCE/POLISH — not rewrite. Keeping the melody is critical.
+  // High-strength experiment: the model has creative freedom. The seed is the
+  // melodic riff/hook to base the song on (kept recognisable), but the goal here
+  // is maximum professional production quality, not note-exact fidelity.
   return [
-    `Enhance and polish this already-produced kids' pop track to a modern, hi-fi, radio- and TikTok-ready standard, about 3 minutes long, in ${key} around ${tempo} BPM with a ${instr} lead.`,
-    `CRITICAL: keep the existing melody, parts and arrangement EXACTLY — do NOT rewrite the tune, change its notes, or restructure the song. The hook must stay identical and recognisable throughout.`,
-    `Improve the sound faithfully: add cohesion, warmth, depth, clarity and wide stereo, with lush pads and strings, gentle filter/LFO movement and subtle modern sheen that evolves across sections.`,
-    `Respect the input's dynamics (quieter passages = verses/breakdowns, fuller passages = choruses) — reinforce that contrast without adding or removing the melody.`,
-    `Clean, joyful, expansive, professional production suitable for young children.`,
+    `A professional, modern, radio- and TikTok-ready kids' pop/EDM track, about 3 minutes long, in ${key} around ${tempo} BPM, with a bright ${instr} lead.`,
+    `Use the provided audio as the melodic riff/hook to build the song on — keep that hook clearly recognisable — but produce it to a fully professional, release-quality standard with full creative freedom.`,
+    `Rich modern production with many layers: punchy kick, deep sidechained sub-bass, stacked supersaw chords, plucks, arpeggios, lush pads and strings, vocal-chop stabs, risers, white-noise sweeps and impacts.`,
+    `Give it a real song structure — intro, build-up, big drop on the hook, breakdown, second build and final drop — with dynamics, fills and clear variation between sections.`,
+    `Pristine hi-fi mix: wide stereo, crisp sparkling highs, deep powerful low end, loud polished professional master. Joyful, fun, expansive and cutting-edge — it should sound like a real released track.`,
   ].join(" ");
 }
 
