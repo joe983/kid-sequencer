@@ -26,14 +26,53 @@ const API_VERSION = "2026-02-25.preview";
 // category for your product if needed — see Stripe's tax code list.
 const TAX_CODE = "txcd_10103100";
 const CURRENCY = "gbp";                       // base currency
-// Extra currencies pinned to the SAME round "x.99" amount (all 2-decimal, similar
-// unit value). Every OTHER currency is handled automatically by Stripe Adaptive
-// Pricing (enable it in the Dashboard) — converted + sensibly rounded per buyer.
-const EXTRA_CURRENCIES = ["usd", "eur"];
 
 // All prices are tax-INCLUSIVE: the listed amount is exactly what the customer
 // pays; Stripe (merchant of record) carves the VAT out by buyer location.
 const TAX_BEHAVIOR = "inclusive";
+
+// Approximate GBP→currency FX rates (STATIC — pricing doesn't track live FX; edit
+// freely). Each listed currency gets a CHARM-rounded local price pinned via
+// currency_options. Currencies NOT listed fall back to Stripe Adaptive Pricing.
+const FX_RATES = {
+  usd: 1.27, eur: 1.17, aud: 1.94, cad: 1.74, nzd: 2.12, chf: 1.13,
+  sek: 13.5, nok: 13.7, dkk: 8.7,  pln: 5.05, czk: 29.5, thb: 45.9,
+  sgd: 1.71, hkd: 9.9,  mxn: 23.5, brl: 6.95, inr: 106,  zar: 23.3,
+  aed: 4.66, ils: 4.7,  php: 73,   myr: 5.95, jpy: 197,  krw: 1740,
+};
+// Stripe zero-decimal currencies (amount is whole units, NOT ×100).
+const ZERO_DECIMAL = new Set(["jpy", "krw"]);
+// Currencies pinned to the SAME round digits as GBP (e.g. $4.99/€4.99) instead of
+// FX-charm — common consumer anchor for the US/EU.
+const SAME_DIGIT = new Set(["usd", "eur"]);
+// Hard per-pack, per-currency overrides (major units). Highest precedence — used
+// for deliberate price points like USD Pro at $5.99.
+const OVERRIDES = {
+  pro: { usd: 5.99 },
+};
+// Bump when the currency set / charm rule changes, to force fresh prices on re-run.
+const CCY_VERSION = "fx1";
+
+// Round a converted amount UP to a "nice" charm price (e.g. 229→299, 6.34→6.99).
+function charm(x) {                                   // x in major currency units
+  if (x < 15)   return Math.ceil(x) - 0.01;          // 6.99, 9.99, 12.99
+  if (x < 80)   return Math.ceil(x / 10) * 10 - 1;   // 49, 69
+  if (x < 2000) return Math.ceil(x / 100) * 100 - 1; // 199, 299, 599, 999
+  return Math.ceil(x / 1000) * 1000 - 1;             // 8999
+}
+
+function buildCurrencyOptions(gbpMajor, sku) {
+  const opts = {};
+  const over = OVERRIDES[sku] || {};
+  for (const [ccy, rate] of Object.entries(FX_RATES)) {
+    const major = (ccy in over) ? over[ccy]
+                : SAME_DIGIT.has(ccy) ? gbpMajor
+                : charm(gbpMajor * rate);
+    const minor = ZERO_DECIMAL.has(ccy) ? Math.round(major) : Math.round(major * 100);
+    opts[ccy] = { unit_amount: minor, tax_behavior: TAX_BEHAVIOR };
+  }
+  return opts;
+}
 
 // SKU → product + price definition. amount is in the smallest currency unit (pence).
 const CATALOG = [
@@ -67,24 +106,21 @@ async function getOrCreateProduct(item) {
 
 async function getOrCreatePrice(item, productId) {
   const existing = await stripe.prices.list({ lookup_keys: [item.lookupKey], limit: 10 });
-  // Reuse only if it already matches the amount AND is tax-inclusive (prices are
-  // immutable, so adding tax_behavior/currencies means a fresh price).
+  // Reuse only if it matches the amount, is tax-inclusive, AND carries the current
+  // currency-set version (prices are immutable, so changing currencies = new price).
   const match = existing.data.find(
-    (p) => p.active && p.unit_amount === item.amount && p.tax_behavior === TAX_BEHAVIOR
+    (p) => p.active && p.unit_amount === item.amount &&
+           p.tax_behavior === TAX_BEHAVIOR && p.metadata && p.metadata.ccyset === CCY_VERSION
   );
   if (match) return match;
-  // Build per-currency round amounts (same minor-unit value across currencies).
-  const currency_options = {};
-  for (const c of EXTRA_CURRENCIES) {
-    currency_options[c] = { unit_amount: item.amount, tax_behavior: TAX_BEHAVIOR };
-  }
   // Create a fresh price (prices are immutable) and move the lookup key onto it.
   return await stripe.prices.create({
     product: productId,
     currency: CURRENCY,
     unit_amount: item.amount,
     tax_behavior: TAX_BEHAVIOR,
-    currency_options,
+    currency_options: buildCurrencyOptions(item.amount / 100, item.sku),
+    metadata: { ccyset: CCY_VERSION },
     ...(item.recurring ? { recurring: item.recurring } : {}),
     lookup_key: item.lookupKey,
     transfer_lookup_key: true,
