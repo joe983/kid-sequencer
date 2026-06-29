@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=51">
+<link rel="stylesheet" href="css/styles.css?v=52">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -286,6 +286,7 @@
             <li class="feat-yes">Print + Camera scan</li>
           </ul>
           <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
+          <div class="stripeNote">🔒 Secure checkout · powered by Stripe</div>
         </div>
       </div>
       <div class="upgradeFooter">
@@ -1428,8 +1429,9 @@ async function _renderAccount(){
     html += `</div>`;
     html += `<div class="acctActions">`;
     html += `<button class="aiCta aiCta-alt" id="acctTopupBtn">Top up</button>`;
-    html += `<button class="aiCta aiCta-alt" id="acctManageBtn">Manage subscription</button>`;
+    html += `<button class="aiCta aiCta-alt" id="acctManageBtn">Manage subscription ↗</button>`;
     html += `</div>`;
+    html += `<div class="stripeNote">🔒 Payments &amp; billing handled by Stripe — Manage opens Stripe</div>`;
     html += `<div class="acctManageMsg" id="acctManageMsg"></div>`;
   } else {
     html += `<div class="acctFreeNote">AI tracks, cloud saves and more come with Pro.</div>`;
