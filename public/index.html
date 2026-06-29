@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=50">
+<link rel="stylesheet" href="css/styles.css?v=51">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -1259,13 +1259,18 @@ async function runAiGeneration(){
 window.runAiGeneration = runAiGeneration;
 
 function _aiShowResult(track){
+  // One platform-appropriate action: Share on mobile (native sheet → Save to
+  // Files / apps), Download on desktop (saves to the default folder).
+  const mobile = _isMobile();
+  const actBtn = mobile
+    ? `<button class="aiCta aiCta-alt" id="aiShareBtn">Share</button>`
+    : `<button class="aiCta aiCta-alt" id="aiDownloadBtn">Download</button>`;
   _aiSetBody(
     `<div class="aiMsg">Your track is ready! 🎉</div>` +
     `<audio class="aiPlayer" controls preload="none" src="${track.url}"></audio>` +
     `<div class="aiActions">` +
       `<button class="aiCta" id="aiSaveBtn">Save</button>` +
-      `<button class="aiCta aiCta-alt" id="aiShareBtn">Share</button>` +
-      `<button class="aiCta aiCta-alt" id="aiDownloadBtn">Download</button>` +
+      actBtn +
     `</div>` +
     `<div class="aiNote">Save keeps this track with your tune.</div>` +
     `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more tracks? Top up</button></div>`
@@ -1308,8 +1313,20 @@ async function _aiShareDownload(track, share){
     setTimeout(()=>URL.revokeObjectURL(objUrl), 4000);
   }catch(e){
     console.error('[AI share/download]', e);
-    window.open(track.url, '_blank');   // last-resort fallback
+    // Fallback: direct download anchor. New tracks are stored with
+    // Content-Disposition: attachment, so this saves to the default folder
+    // rather than opening the file in a Firebase tab.
+    try{
+      const a = document.createElement('a');
+      a.href = track.url; a.download = _slugify(track.name) + '.mp3'; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+    }catch(e2){ console.error('[AI download fallback]', e2); }
   }
+}
+// iOS / Android (incl. iPadOS, which reports as Macintosh + touch)
+function _isMobile(){
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
 }
 
 /* -------------------- TOP-UP PACKS -------------------- */
@@ -3886,8 +3903,9 @@ function _makeSeqRow(seq, onLoaded, mode){
       </div>
       <div class="loadRowAiBar">
         <button class="loadRowAiBtn" data-act="play">▶ Track</button>
-        <button class="loadRowAiBtn" data-act="share">Share</button>
-        <button class="loadRowAiBtn" data-act="download">Download</button>
+        ${_isMobile()
+          ? '<button class="loadRowAiBtn" data-act="share">Share</button>'
+          : '<button class="loadRowAiBtn" data-act="download">Download</button>'}
       </div>`;
     const track = { url: seq.audioUrl, path: seq.audioPath, name: seq.name||seq.id };
     row.querySelectorAll('.loadRowAiBtn').forEach(btn=>{
