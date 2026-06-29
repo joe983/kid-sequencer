@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=54">
+<link rel="stylesheet" href="css/styles.css?v=55">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -3635,7 +3635,23 @@ async function captureSequenceToWav(){
   const merged = new Float32Array(len);
   let o = 0;
   for(const c of chunks){ merged.set(c, o); o += c.length; }
-  return _encodeWavMono(merged, ctx.sampleRate);
+
+  // Stable Audio's audio-to-audio output length tracks the INPUT length, so a
+  // ~12s capture yields a ~30s clip. Tile the captured loop up to a full-length
+  // seed (~170s) so the AI track runs ~3 min. Downsample 2× (cheap 2-tap
+  // average) to keep the longer mono WAV under the 8MB seed cap — Stability
+  // resamples internally anyway.
+  const half = Math.floor(merged.length / 2);
+  if(half === 0) return null;
+  const ds = new Float32Array(half);
+  for(let i=0;i<half;i++) ds[i] = (merged[2*i] + merged[2*i+1]) * 0.5;
+  const outRate = Math.round(ctx.sampleRate / 2);
+  const SEED_TARGET_SEC = 170;
+  const MAX_SAMPLES = Math.floor((7.6 * 1024 * 1024) / 2);   // stay under 8MB (16-bit)
+  const targetLen = Math.min(Math.floor(SEED_TARGET_SEC * outRate), MAX_SAMPLES);
+  const tiled = new Float32Array(targetLen);
+  for(let i=0;i<targetLen;i++) tiled[i] = ds[i % ds.length];
+  return _encodeWavMono(tiled, outRate);
 }
 
 /* -------------------- TEMPO -------------------- */

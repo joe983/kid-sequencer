@@ -51,7 +51,7 @@ const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
 const STABILITY_MODEL    = "stable-audio-2.5";
 const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.4;   // lower = closer to the user's seed (0.7 drifted too far)
+const AI_STRENGTH        = 0.6;   // lower = closer to seed; 0.4 was a near-copy, 0.7 drifted off
 
 function monthKey() {
   const d = new Date();
@@ -75,11 +75,12 @@ function buildPrompt(meta) {
     drill: "UK drill", hiphop: "hip hop", reggaeton: "reggaeton",
   })[m.rhythm] || "upbeat";
   return [
-    `A fun, joyful kids' music track, about 3 minutes long.`,
-    `Tempo around ${tempo} BPM, in the key of ${key}.`,
-    `Led by a ${instr} melody over a ${rhythm} drum groove.`,
-    `Built from and faithful to the provided melody — keep its tune and feel.`,
-    `Clean, playful, studio-quality production, suitable for children.`,
+    `Take the provided melody and develop it into a complete, full-length kids' song, about 3 minutes long.`,
+    `Keep the recognisable main tune, its ${key} key and ~${tempo} BPM feel,`,
+    `but arrange and evolve it: add an intro, build-ups and breakdowns, variation between sections,`,
+    `complementary harmony, bass and extra instrumentation, plus dynamics and drum fills,`,
+    `with a ${instr} carrying the lead melody over a ${rhythm} groove.`,
+    `Avoid a static loop — make it progress. Fun, joyful, clean, studio-quality production for children.`,
   ].join(" ");
 }
 
