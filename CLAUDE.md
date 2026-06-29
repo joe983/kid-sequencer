@@ -25,14 +25,19 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3500 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=44)
-  js/firebase-init.js ← Firebase config + exports (auth, db)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=45)
+  js/firebase-init.js ← Firebase config + exports (auth, db, storage)
   login.html          ← deprecated; redirects to index.html (auth now inline)
 functions/
-  index.js            ← Cloud Functions: createCheckoutSession + stripeWebhook
+  index.js            ← Cloud Functions: createCheckoutSession, createTopupCheckout, generateAiTrack, stripeWebhook
+  scripts/setup-stripe-products.js ← one-off: create products/prices (npm run setup:stripe)
+  .env.kid-sequencer  ← committed non-secret price IDs (defineString overrides)
+  .env.example        ← template for live-mode price-ID overrides
   package.json        ← Node 20; deps: firebase-admin, firebase-functions, stripe
-firebase.json         ← hosting + functions config
+firebase.json         ← hosting + functions + storage config
 firestore.rules       ← Firestore security rules
+storage.rules         ← Storage rules (seeds client-write, tracks admin-only)
+STRIPE_SETUP.md       ← Stripe Managed Payments setup steps
 serve.js              ← local static server (node serve.js → localhost:3000)
 ```
 
@@ -85,7 +90,7 @@ users/{uid}/
 
 ## Tier system (redesigned 2026-05-17)
 
-| Feature | Guest (not logged in) | Member (free, logged in) | Pro (£1.99/mo) |
+| Feature | Guest (not logged in) | Member (free, logged in) | Pro (£4.99/mo) |
 |---|---|---|---|
 | Tempo, play, sequencer | ✅ | ✅ | ✅ |
 | Piano, Trumpet, Synth, Bass | ✅ | ✅ | ✅ |
@@ -94,7 +99,8 @@ users/{uid}/
 | Techno, DnB, Funk, Reggaeton | ✅ | ✅ | ✅ |
 | UK Drill, Hip Hop (positions 5–6) | 🔒 (?) | ✅ | ✅ |
 | Print | 🔒 | ✅ | ✅ |
-| Save / Load (cloud) | 🔒 | 🔒 | ✅ |
+| Save / Load (cloud) | 🔒 | 🔒 | ✅ (20 slots + top-ups) |
+| AI song (Stable Audio) | 🔒 | 🔒 (greyed AI btn) | ✅ 10/mo + top-ups |
 
 Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to `sessionStorage['kidseq_tier']` by the auth module.
 
@@ -202,6 +208,7 @@ node serve.js   # → http://localhost:3000
 37. **Learning levels restructured into a 1/2/3 note progression + camera on all** (2026-06-21) — `LEARN_LEVELS` is now built by a `_mkLearnLevel(rows, freqs, rowColors, maxCell)` helper (shared tools/timing/locks factored out). **Level 1** = single note, low C/red, **1 row** (`maxCell:168`); **Level 2** = C+E (red/yellow), **2 rows** (`maxCell:140`); **Level 3** = the old triad G/E/C (blue/yellow/red), **3 rows** (`maxCell:112`). Fewer rows ⇒ bigger cells (width-capped ~164px at 8 cols). The volume-fader track height now follows a `--learnRows` CSS var (set from JS = the level's row count) instead of a hard-coded 2 rows. **Camera/scan button is no longer hidden in learning mode** — removed `#cameraBtn` from the `.learning-mode` display:none list; scan import (`importGridFromDataUrl`) is already grid-size-aware via `rows`/`cols`, so it works at every level. (This supersedes #34's "Level 1 = 3-note grid" description — that grid is now Level 3.)
 38. **Learning-level treble-clef staff (`#stavePanel`)** (2026-06-21) — a treble-clef toggle button (`#staveBtn`, in `#controls`, shown only in `.learning-mode`) slides up a one-bar 4/4 staff below the grid that mirrors the programmed notes in standard notation and re-renders **live**. `renderStave()` reads `notesByRow`/`freqs`/`rowColors` and emits an SVG; the live hook is a single line at the end of `redrawRowNotes()` (`if(LEARN_LEVEL && _staveOpen) renderStave();`) — every grid mutation (place/delete/clear/undo/scan) funnels through there. Notation is positioned by **8th-note column** (smartPlaceNote allows off-beat starts, so a single bar needs no ties): quarter-kind → quarter note; eighth-kind → beamed eighth-pair; same-start-column notes across rows → stacked chord; empty columns → rests. Pitch→staff map `STAVE_PITCH` (C4 ledger line, E4 bottom line, G4 2nd line). Noteheads use row colours with a dark outline (yellow stays visible). Staff/notes/stems/beams/ledgers are pure SVG; clef (𝄞) + rests (𝄽/𝄾) are music-font glyphs (`Noto Music`/`Bravura`/`Segoe UI Symbol`) — **their vertical anchoring is font-metric estimated** (clef `y = lineY(3) − 2` to land the spiral on the G line; rests `y = staffMidY + 2`; button glyph `font-size:23px; translateY(5px)`), so a different platform glyph may need a px nudge. `window.toggleStave` exposed for the inline `onclick`. `_staveOpen` declared with top-of-IIFE state (not beside its functions) so the redraw hook can't hit a TDZ.
 39. **Key selector (paid tier) — square button + scrollable popup picker** (2026-06-21) — a single square button `#keyBtn` (same look as a tempo button, 58×58) sits **below the volume fader** in `#rightCol` and shows the current key letter (e.g. `C`). Tapping it (`openKeyMenu()`) opens `#keyMenu` — a `position:fixed` scrollable vertical list of all 14 keys (`max-height:260px`, current item highlighted yellow), anchored **above** the button via `getBoundingClientRect()` (which already reflects the `#page` scale transform) with viewport clamping. Picking an item sets `currentKey` and closes; a transparent full-screen `#keyMenuBackdrop` (`onclick=closeKeyMenu`) and the shared Esc handler close it. `KEY_ORDER` = `['A','Am','B','Bm','C','Cm','D','Dm','E','Em','F','Fm','G','Gm']`. **Audio transposition is one chokepoint:** `pitchFor(row)` (declared near `freqs`) returns `SCALES[currentKey][row]`; `tick()`'s two `playInstrument(...)` calls read `pitchFor(r)` instead of `freqs[r]`. `SCALES` is computed from `_MAJOR_STEPS`/`_MINOR_STEPS` (natural minor) rooted at each key's tonic, row 0 = top/octave, row 7 = bottom/root — `C` reproduces the original `freqs` exactly. Bass ×0.25 / Bells ×4 in `playInstrument` follow automatically. **Visuals stay in C** (grid colours + the learning staff's `STAVE_PITCH` are deliberately untouched). **Tier gate is by presence, not lock:** `applyLockState()` sets `#keyBtn` `display` to visible only when `isPaid && !LEARN_LEVEL` — non-payers simply don't see it (no greyed/upsell state), and it also `closeKeyMenu()`s if tier drops mid-open. Persisted as `key` in the saved Firestore doc (`saveToCloud`); restored in `_applySequenceData` with a `KEY_ORDER.includes` guard → falls back to `C` for older saves. `currentKey` resets to `C` in `clearGrid` (non-learning); `_updateKeyBtn()` runs in `init`. **In learning mode** `pitchFor` returns `freqs[row]` unchanged and `#keyBtn` is hidden (both the tier check and the `.learning-mode` display:none list). The right column is a single 58px stack again (`rightW = 58` in `fitToViewport`). *(Superseded rev: first shipped as a ▲/box/▼ arrow stack beside the fader with a placeholder + `.locked` greying — replaced 2026-06-21 by this button+popup per user feedback.)* CSS `?v=36`.
+40. **AI song generation + save slots + Stripe Managed Payments (2026-06-29, live `?v=45`)** — Pro raised to **£4.99/mo** and gains an **AI song** feature. Round purple `#aiBtn` below `#keyBtn` in `#rightCol` (hidden for guests, greyed `.locked` for free Members → pitches Pro, active for Pro; gated in `applyLockState`). `captureSequenceToWav()` taps `masterComp` into a ScriptProcessor for K loops → mono 16-bit WAV (reuses the live engine, **no OfflineAudioContext refactor**); uploads the seed to **Storage** (`users/{uid}/seeds/`) → `generateAiTrack` Cloud Function → Stability **Stable Audio 2.5 audio-to-audio** → MP3 at `users/{uid}/tracks/` → play / Share (`navigator.share`) / Download. **AI quota** (server-side, Firestore txn, refunded on failure): 10/mo lazy-reset (`aiMonthKey`/`aiUsedThisMonth`) + `aiTopupBalance`. **Save slots:** 20 + `slotTopup`, enforced client-side in `confirmSaveName`; saved doc gains `hasAi`/`audioPath`/`audioUrl`; load-sheet rows get Play/Share/Download. **Top-ups:** `#topupModal` + `createTopupCheckout` (AI £3.99/10·£7.99/25·£12.99/50; slots +20 £1.99·+50 £3.99). **Payments = Stripe Managed Payments** (merchant of record → handles VAT): API version `2026-02-25.preview` pinned, `managed_payments:{enabled:true}` on Checkout, **tax-inclusive** prices, charm-rounded multi-currency (GBP/USD/EUR pinned — USD Pro $5.99; ~24 currencies via FX+charm in `setup-stripe-products.js`; rest via Adaptive Pricing). **⚠️ Stripe is still in TEST mode in prod — the test→live key/price/webhook switch is the only remaining go-live step.** Full setup steps in `STRIPE_SETUP.md`.
 
 ---
 
@@ -275,7 +282,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=44`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=45`).
 
 ---
 
@@ -335,7 +342,11 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Z-index stacking contexts:** `#topBar` has `z-index:3` (position:relative) and `#contentWrap` has `z-index:5` (position:relative). They're sibling stacking contexts on `<body>`. The lifted `#rightCol` (translateY by `--rightLift`) puts the tempo-up button into topBar's Y range — without contentWrap > topBar, topBar covers it and clicks don't land. Keep contentWrap's z-index above topBar's. Tempo-down was always clickable because it sits below the lifted overlap zone. (This is exactly why `tempoUp()` "didn't work" after the tier redesign.)
 - **`::before` for opaque overlays** — when masking a button that contains text/emoji (not just child elements), the `> *` selector does NOT match text nodes. `.locked-member` uses `::before` (z-index:1, opaque striped background) to cover everything, with `::after` (z-index:2) rendering the "?". Setting `color: transparent` on the parent would also work but interferes with `::after` color inheritance.
 - **Firebase preview URLs rotate** — `firebase hosting:channel:deploy preview` may return a different `--preview-<hash>.web.app` URL between runs. Always copy the URL from the latest deploy output. The previous URL 404s once rotated. Production URL is stable.
-- **Stripe Cloud Functions setup is incomplete** — `functions/index.js` ships but requires (1) Stripe account + Product/Price created (£1.99/mo recurring), (2) Firebase Blaze plan, (3) `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` / `STRIPE_PRICE_ID` set via `firebase functions:secrets:set`, (4) `firebase deploy --only functions`, (5) Stripe Dashboard webhook endpoint pointing at `https://europe-west1-kid-sequencer.cloudfunctions.net/stripeWebhook` for `checkout.session.completed` + `customer.subscription.deleted`. Until these are done, the Subscribe button errors out.
+- **Stripe is configured in TEST mode (live switch pending)** — Blaze is on; functions deployed; webhook created (`checkout.session.completed` + `customer.subscription.deleted`); secrets `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`/`STABILITY_API_KEY` set. **Production runs on the TEST Stripe key**, so real users can't actually pay yet. Go-live = redo in Live mode: set live `STRIPE_SECRET_KEY`, re-run `npm run setup:stripe` with the live key → live price IDs → update config → live webhook secret → activate Managed Payments + Adaptive Pricing → `firebase deploy --only functions`. See `STRIPE_SETUP.md`.
+- **Callable (`onCall`) functions need `allUsers` / "Cloud Run Invoker"** on their Cloud Run service or every call fails at the platform layer with *"Empty Authorization header value"* → the client just shows a generic error (e.g. "Couldn't save"). Firebase usually sets this automatically but **didn't here** — set it manually in the Cloud console (Cloud Functions → tick function → Permissions → Add principal `allUsers`, role Cloud Run Invoker) for all 4 functions. The Firebase auth token is validated *inside* the function via `request.auth`; the public invoker just lets the request reach it. Persists across redeploys.
+- **Stripe price IDs are committed config, NOT secrets** — `defineString` defaults in `functions/index.js` + `functions/.env.kid-sequencer` (env overrides the default at deploy). Only real keys are Secret Manager secrets. Regenerate with `npm run setup:stripe` (idempotent via price `lookup_key` + a `ccyset` metadata version — bump `CCY_VERSION` to force fresh prices when the currency set changes). Prices are **immutable**, so changing amount/tax/currencies creates new price IDs → re-paste into config.
+- **AI seed capture = `captureSequenceToWav()` taps `masterComp`** — runs the live sequencer for K loops into a ScriptProcessor and encodes WAV. Do NOT rewrite as OfflineAudioContext (would have to re-implement tempo ramp / voice-gain / eighth-pairs). The seed WAV is uploaded to `users/{uid}/seeds/` and read by `generateAiTrack`.
+- **Storage deploy needs the bucket initialised first** — `firebase deploy --only storage` fails until Storage is "Get Started" in the console. `storage.rules`: clients write only `users/{uid}/seeds/` (capped, audio MIME); `tracks/` is Admin-SDK-only. Client reads its own files via the token URL the function returns.
 - **Tempo arrow buttons** — `#tempoControls button` uses `display:flex; align-items:center; justify-content:center; line-height:1; font-family: Arial` to keep `▲`/`▼` glyphs centred. Explicit `color: #1d1d1d` because browser default for `<button>` text is system-blue on some platforms. `-webkit-appearance: none` strips native styling. Don't revert.
 - **Instrument and rhythm button order matters** — Strings and Bells live at positions 5–6 (rightmost) in `#instButtons` because they become `?` placeholders for guests; same for Drill and Hip Hop in `.rhythmBox`. Visual gating only works if locked items are at the END of the row. Don't reorder without re-examining `applyLockState()`.
 - **`functions/` directory is committed** — but `functions/node_modules/` is gitignored. Run `npm install` in `functions/` before deploying Cloud Functions.
