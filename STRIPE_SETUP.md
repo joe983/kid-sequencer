@@ -67,6 +67,20 @@ different billing-country addresses to see Managed Payments calculate tax.
 Confirm the webhook flips `users/{uid}.tier = "paid"` (subscription) and
 increments `aiTopupBalance` / `slotTopup` (top-ups).
 
+## 7. Customer portal (Manage subscription)
+The account popup's **Manage subscription** button calls the
+`createBillingPortalSession` function, which opens the **Stripe Customer Portal**
+(cancel, update card, view invoices). This requires the portal to be activated:
+
+- Stripe Dashboard → Settings → Billing → **Customer portal** → configure +
+  activate. Do this **once per mode** (Test now, Live at go-live). Without it,
+  `billingPortal.sessions.create` throws and the button shows an error.
+- Like the other callables, after first deploy set **`allUsers` / Cloud Run
+  Invoker** on the `createBillingPortalSession` Cloud Run service (see CLAUDE.md
+  callable-function gotcha) or every call fails with "Empty Authorization header".
+- The portal acts on the customer stored in `users/{uid}.stripeCustomerId`
+  (written by the subscription webhook), so only users who subscribed have it.
+
 ## Notes
 - No subscriber migration: Stripe was never live before, so the £1.99→£4.99
   change is a clean slate.

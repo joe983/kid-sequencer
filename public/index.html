@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=45">
+<link rel="stylesheet" href="css/styles.css?v=46">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -226,6 +226,15 @@
     <button class="aiClose" aria-label="Close" onclick="closeTopupModal()">×</button>
     <div class="aiTitle" id="topupTitle">Top up</div>
     <div class="aiBody" id="topupBody"></div>
+  </div>
+</div>
+
+<!-- Account modal -->
+<div id="accountModal" class="aiModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+  <div class="aiCard accountCard">
+    <button class="aiClose" aria-label="Close" onclick="closeAccountModal()">×</button>
+    <div class="aiTitle" id="accountTitle">My Account</div>
+    <div class="aiBody" id="accountBody"></div>
   </div>
 </div>
 
@@ -903,7 +912,7 @@ function bindLockedNudge(el){
 }
 
 function handleLoginBtn(){
-  if(isLoggedIn){ logout(); } else { openUpgradeModal('login'); }
+  if(isLoggedIn){ openAccountModal(); } else { openUpgradeModal('login'); }
 }
 window.handleLoginBtn = handleLoginBtn;
 
@@ -950,11 +959,13 @@ function applyLockState(){
   if(instButtonsEl) instButtonsEl.classList.remove("locked", "justUnlocked");
   document.body.classList.toggle("loggedIn", isLoggedIn);
 
-  // Swap Login -> Logout (bright red) when signed in
+  // Swap Login -> Account (blue) when signed in; the button now opens the
+  // account popup (logout lives inside it), so it no longer goes red.
   const toolLoginBtnEl = document.getElementById("toolLoginBtn");
   if(toolLoginBtnEl){
-    toolLoginBtnEl.textContent = isLoggedIn ? "Logout" : "Login";
-    toolLoginBtnEl.classList.toggle("logout", isLoggedIn);
+    toolLoginBtnEl.textContent = isLoggedIn ? "Account" : "Login";
+    toolLoginBtnEl.classList.toggle("account", isLoggedIn);
+    toolLoginBtnEl.classList.remove("logout"); // legacy class no longer used here
   }
 
   const printBtnEl = document.getElementById("printBtn");
@@ -1325,6 +1336,126 @@ function closeTopupModal(){
 }
 window.openTopupModal  = openTopupModal;
 window.closeTopupModal = closeTopupModal;
+
+/* -------------------- ACCOUNT POPUP -------------------- */
+function openAccountModal(){
+  const m = document.getElementById('accountModal');
+  if(!m) return;
+  m.classList.add('show');
+  m.setAttribute('aria-hidden','false');
+  _renderAccount();
+}
+function closeAccountModal(){
+  const m = document.getElementById('accountModal');
+  if(!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden','true');
+  _deleteConfirmId = null;
+  if(_previewAudio){ try{ _previewAudio.pause(); }catch(e){} _previewAudio = null; }
+}
+window.openAccountModal  = openAccountModal;
+window.closeAccountModal = closeAccountModal;
+
+function _acctEsc(s){
+  return String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// Build the account popup: header (email + tier), stats/CTAs (AI credits + save
+// slots for Pro; Upgrade for free members), saved-tunes list (load + AI
+// play/share/download via _makeSeqRow), and Log out. Reads the user doc,
+// sequences and AI quota in parallel.
+async function _renderAccount(){
+  const body = document.getElementById('accountBody');
+  if(!body) return;
+  body.innerHTML = '<div class="aiSpinner"></div><div class="aiMsg">Loading your account…</div>';
+
+  const user = await _getFirebaseUser();
+  if(!user){ body.innerHTML = '<div class="aiMsg">You\'re not signed in.</div>'; return; }
+
+  let userDoc = {}, seqs = [], quota = null;
+  try{
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const [snap, fetchedSeqs, q] = await Promise.all([
+      getDoc(doc(db,'users',user.uid)),
+      _fetchSequences(),
+      _fetchAiQuota(),
+    ]);
+    userDoc = snap.exists() ? snap.data() : {};
+    seqs = fetchedSeqs || [];
+    quota = q;
+  }catch(e){
+    console.error('[Account]', e);
+    body.innerHTML = '<div class="aiMsg">Couldn\'t load your account — try again.</div>';
+    return;
+  }
+
+  const isPro      = userDoc.tier === 'paid';
+  const slotTopup  = userDoc.slotTopup || 0;
+  const totalSlots = 20 + slotTopup;
+  const usedSlots  = seqs.length;
+
+  let html = '';
+  html += `<div class="acctHeader">`;
+  html += `<div class="acctEmail">${_acctEsc(user.email || 'Signed in')}</div>`;
+  html += `<div class="acctBadge ${isPro ? 'acctBadge-pro' : ''}">${isPro ? 'Pro' : 'Free member'}</div>`;
+  html += `</div>`;
+
+  if(isPro){
+    const aiLeft = quota ? quota.remaining : 0;
+    html += `<div class="acctStats">`;
+    html += `<div class="acctStat"><span class="acctStatNum">${aiLeft}</span><span class="acctStatLabel">AI songs left</span></div>`;
+    html += `<div class="acctStat"><span class="acctStatNum">${usedSlots}/${totalSlots}</span><span class="acctStatLabel">save slots used</span></div>`;
+    html += `</div>`;
+    html += `<div class="acctActions">`;
+    html += `<button class="aiCta aiCta-alt" id="acctTopupBtn">Top up</button>`;
+    html += `<button class="aiCta aiCta-alt" id="acctManageBtn">Manage subscription</button>`;
+    html += `</div>`;
+    html += `<div class="acctManageMsg" id="acctManageMsg"></div>`;
+  } else {
+    html += `<div class="acctFreeNote">AI songs, cloud saves and more come with Pro.</div>`;
+    html += `<div class="acctActions"><button class="aiCta" id="acctUpgradeBtn">Upgrade to Pro</button></div>`;
+  }
+
+  html += `<div class="acctSeqTitle">My tunes</div>`;
+  html += `<div class="acctSeqList" id="acctSeqList"></div>`;
+  html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button></div>`;
+
+  body.innerHTML = html;
+
+  document.getElementById('acctTopupBtn')?.addEventListener('click', ()=>{ closeAccountModal(); openTopupModal('ai'); });
+  document.getElementById('acctManageBtn')?.addEventListener('click', openBillingPortal);
+  document.getElementById('acctUpgradeBtn')?.addEventListener('click', ()=>{ closeAccountModal(); openUpgradeModal('subscribe'); });
+  document.getElementById('acctLogoutBtn')?.addEventListener('click', ()=>{ logout(); closeAccountModal(); });
+
+  const listEl = document.getElementById('acctSeqList');
+  if(listEl){
+    if(!seqs.length) listEl.innerHTML = '<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>';
+    else seqs.forEach(seq => listEl.appendChild(_makeSeqRow(seq, closeAccountModal)));
+  }
+}
+
+// Pro: open the Stripe billing portal to manage/cancel the subscription.
+async function openBillingPortal(){
+  const btn = document.getElementById('acctManageBtn');
+  const msg = document.getElementById('acctManageMsg');
+  if(btn) btn.disabled = true;
+  if(msg) msg.textContent = 'Opening…';
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    const fns = getFunctions(app, 'europe-west1');
+    const res = await httpsCallable(fns, 'createBillingPortalSession')({ returnUrl: location.origin + '/' });
+    location.href = res.data.url;
+  }catch(e){
+    console.error('[Billing portal]', e);
+    if(btn) btn.disabled = false;
+    if(msg) msg.textContent = (e && e.code === 'functions/failed-precondition')
+      ? 'No subscription found for this account.'
+      : 'Couldn\'t open billing — try again.';
+  }
+}
+window.openBillingPortal = openBillingPortal;
 
 function _renderTopup(kind){
   const sec = (title, ids) =>
@@ -3703,6 +3834,19 @@ function loadFromCloud(){
   if(!isPaid){ openUpgradeModal('load'); return; }
   openLoadSheet();
 }
+// Fetch the signed-in user's saved sequences, newest first. Returns null if not
+// signed in. Shared by the Load sheet and the Account popup.
+async function _fetchSequences(){
+  const user = await _getFirebaseUser();
+  if(!user) return null;
+  const { db } = await import("./js/firebase-init.js");
+  const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+  const snap = await getDocs(collection(db,"users",user.uid,"sequences"));
+  const seqs = [];
+  snap.forEach(d => seqs.push({id:d.id,...d.data()}));
+  seqs.sort((a,b)=>(b.savedAt?.seconds||0)-(a.savedAt?.seconds||0));
+  return seqs;
+}
 async function openLoadSheet(){
   const sheet = document.getElementById('loadSheet');
   const list  = document.getElementById('loadSheetList');
@@ -3712,33 +3856,25 @@ async function openLoadSheet(){
   sheet.classList.add('show');
   sheet.setAttribute('aria-hidden','false');
   try{
-    const user = await _getFirebaseUser();
-    if(!user){ list.innerHTML='<div class="loadSheetEmpty">Not signed in</div>'; return; }
-    const { db } = await import("./js/firebase-init.js");
-    const { collection, getDocs } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-    const snap = await getDocs(collection(db,"users",user.uid,"sequences"));
-    const seqs = [];
-    snap.forEach(d => seqs.push({id:d.id,...d.data()}));
-    seqs.sort((a,b)=>(b.savedAt?.seconds||0)-(a.savedAt?.seconds||0));
+    const seqs = await _fetchSequences();
+    if(seqs===null){ list.innerHTML='<div class="loadSheetEmpty">Not signed in</div>'; return; }
     _renderLoadList(seqs);
   }catch(e){ console.error("[Load]",e); list.innerHTML='<div class="loadSheetEmpty">Couldn\'t load — try again</div>'; }
 }
-function _renderLoadList(seqs){
-  const list = document.getElementById('loadSheetList');
-  if(!list) return;
-  if(!seqs.length){ list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>'; return; }
-  list.innerHTML='';
-  seqs.forEach(seq => {
-    const row = document.createElement('div');
-    row.className='loadRow'; row.dataset.id=seq.id;
-    const hasAi = !!(seq.hasAi && seq.audioUrl);
-    const aiBar = hasAi ? `
+// Build one saved-sequence row (name/date/AI tag + load-on-click, delete-confirm,
+// AI play/share/download). `onLoaded` runs before the sequence is applied (used to
+// close whichever surface the row lives in). Shared by Load sheet + Account popup.
+function _makeSeqRow(seq, onLoaded){
+  const row = document.createElement('div');
+  row.className='loadRow'; row.dataset.id=seq.id;
+  const hasAi = !!(seq.hasAi && seq.audioUrl);
+  const aiBar = hasAi ? `
       <div class="loadRowAiBar">
         <button class="loadRowAiBtn" data-act="play">▶ Song</button>
         <button class="loadRowAiBtn" data-act="share">Share</button>
         <button class="loadRowAiBtn" data-act="download">Download</button>
       </div>` : '';
-    row.innerHTML=`
+  row.innerHTML=`
       <div class="loadRowMain">
         <div class="loadRowInfo">
           <div class="loadRowName">${seq.name||seq.id}${hasAi?' <span class="loadRowAiTag">AI</span>':''}</div>
@@ -3746,44 +3882,50 @@ function _renderLoadList(seqs){
         </div>
         <button class="loadRowDelete" aria-label="Delete" title="Delete">🗑️</button>
       </div>${aiBar}`;
-    row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
-      closeLoadSheet();
-      _applySequenceData(seq);
-      showSaveToast("loaded");
-    });
-    if(hasAi){
-      const track = { url: seq.audioUrl, path: seq.audioPath, name: seq.name||seq.id };
-      row.querySelectorAll('.loadRowAiBtn').forEach(btn=>{
-        btn.addEventListener('click', e=>{
-          e.stopPropagation();
-          const act = btn.dataset.act;
-          if(act==='play') _playAiTrackInline(track, btn);
-          else _aiShareDownload(track, act==='share');
-        });
-      });
-    }
-    row.querySelector('.loadRowDelete').addEventListener('click', e=>{
-      e.stopPropagation();
-      if(_deleteConfirmId===seq.id){
-        _deleteConfirmId=null;
-        _deleteSequence(seq.id, row);
-      } else {
-        // Reset any previously pending row
-        document.querySelectorAll('.loadRowDelete.confirming').forEach(b=>{
-          b.classList.remove('confirming'); b.textContent='🗑️';
-        });
-        _deleteConfirmId=seq.id;
-        const btn=row.querySelector('.loadRowDelete');
-        btn.classList.add('confirming'); btn.textContent='✓';
-        setTimeout(()=>{
-          if(_deleteConfirmId===seq.id){
-            btn.classList.remove('confirming'); btn.textContent='🗑️'; _deleteConfirmId=null;
-          }
-        },3000);
-      }
-    });
-    list.appendChild(row);
+  row.querySelector('.loadRowInfo').addEventListener('click', ()=>{
+    if(typeof onLoaded==='function') onLoaded();
+    _applySequenceData(seq);
+    showSaveToast("loaded");
   });
+  if(hasAi){
+    const track = { url: seq.audioUrl, path: seq.audioPath, name: seq.name||seq.id };
+    row.querySelectorAll('.loadRowAiBtn').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const act = btn.dataset.act;
+        if(act==='play') _playAiTrackInline(track, btn);
+        else _aiShareDownload(track, act==='share');
+      });
+    });
+  }
+  row.querySelector('.loadRowDelete').addEventListener('click', e=>{
+    e.stopPropagation();
+    if(_deleteConfirmId===seq.id){
+      _deleteConfirmId=null;
+      _deleteSequence(seq.id, row);
+    } else {
+      // Reset any previously pending row
+      document.querySelectorAll('.loadRowDelete.confirming').forEach(b=>{
+        b.classList.remove('confirming'); b.textContent='🗑️';
+      });
+      _deleteConfirmId=seq.id;
+      const btn=row.querySelector('.loadRowDelete');
+      btn.classList.add('confirming'); btn.textContent='✓';
+      setTimeout(()=>{
+        if(_deleteConfirmId===seq.id){
+          btn.classList.remove('confirming'); btn.textContent='🗑️'; _deleteConfirmId=null;
+        }
+      },3000);
+    }
+  });
+  return row;
+}
+function _renderLoadList(seqs){
+  const list = document.getElementById('loadSheetList');
+  if(!list) return;
+  if(!seqs.length){ list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>'; return; }
+  list.innerHTML='';
+  seqs.forEach(seq => list.appendChild(_makeSeqRow(seq, closeLoadSheet)));
 }
 async function _deleteSequence(id, row){
   try{
@@ -3795,9 +3937,9 @@ async function _deleteSequence(id, row){
     // Animate row out
     row.style.cssText=`height:${row.offsetHeight}px;overflow:hidden;transition:height 200ms ease,opacity 200ms ease`;
     requestAnimationFrame(()=>{ row.style.height='0'; row.style.opacity='0'; });
+    const list = row.parentNode;   // works for the Load sheet or the Account popup
     setTimeout(()=>{
       row.remove();
-      const list=document.getElementById('loadSheetList');
       if(list&&!list.querySelector('.loadRow')) list.innerHTML='<div class="loadSheetEmpty">Nothing saved yet — hit Save to get started 🎵</div>';
     },220);
   }catch(e){ console.error("[Delete]",e); }
@@ -3832,6 +3974,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if(aiModal && aiModal.classList.contains("show")) closeAiModal();
       const topupModal = document.getElementById("topupModal");
       if(topupModal && topupModal.classList.contains("show")) closeTopupModal();
+      const accountModal = document.getElementById("accountModal");
+      if(accountModal && accountModal.classList.contains("show")) closeAccountModal();
     }
   });
   document.getElementById("aiModal")?.addEventListener("click", e => {
@@ -3839,6 +3983,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   document.getElementById("topupModal")?.addEventListener("click", e => {
     if(e.target.id === "topupModal") closeTopupModal();
+  });
+  document.getElementById("accountModal")?.addEventListener("click", e => {
+    if(e.target.id === "accountModal") closeAccountModal();
   });
   // Tap backdrop to dismiss save modal or load sheet
   document.getElementById("saveNameModal")?.addEventListener("click", e => {
