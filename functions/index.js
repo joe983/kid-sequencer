@@ -263,7 +263,13 @@ exports.generateAiTrack = onCall(
       const destPath = `users/${uid}/tracks/${slug}-${Date.now()}.mp3`;
       await bucket.file(destPath).save(audioBuffer, {
         contentType: "audio/mpeg",
-        metadata: { metadata: { firebaseStorageDownloadTokens: token } },
+        // Content-Disposition: attachment so the download URL saves to the
+        // user's machine instead of opening/playing in the browser tab — lets
+        // the desktop Download button work without a bucket CORS config.
+        metadata: {
+          contentDisposition: `attachment; filename="${slug}.mp3"`,
+          metadata: { firebaseStorageDownloadTokens: token },
+        },
         resumable: false,
       });
 
