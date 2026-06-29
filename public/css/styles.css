@@ -1021,7 +1021,8 @@ body.loggedIn #robotLogo{
     }
     .aiModal .aiCta:active{ transform:translateY(2px); box-shadow:0 3px 0 rgba(0,0,0,0.12); }
     .aiModal .aiCta-alt{ background:#fff; color:#1d1d1d; }
-    .aiModal .aiActions{ display:flex; gap:10px; justify-content:center; margin-top:6px; }
+    .aiModal .aiActions{ display:flex; gap:8px; justify-content:center; margin-top:6px; flex-wrap:wrap; }
+    .aiModal .aiActions .aiCta{ flex:1 1 0; min-width:0; padding:12px 8px; font-size:14px; white-space:nowrap; }
     .aiModal .aiPlayer{ width:100%; margin:10px 0 4px; }
     .aiModal .aiSpinner{
       width:42px; height:42px; margin:8px auto 14px;
@@ -1629,7 +1630,7 @@ body.loggedIn #robotLogo{
       appearance: none;
 }
     .loginBtn.logout{ color:#e00000 !important; }
-    .loginBtn.account{ color:#1565d8 !important; } /* ?v=48 */
+    .loginBtn.account{ color:#1565d8 !important; } /* ?v=49 */
     .loginBtn:hover{ transform: translateY(-1px); }
 
     #tempoControls{ position:relative; }
