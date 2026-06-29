@@ -27,12 +27,12 @@ function stripeClient() {
 // prices created by `npm run setup:stripe`. They survive merges. For live mode,
 // re-run the script with a live key and either update these defaults or override
 // them in functions/.env (env values take precedence). ---
-const stripePriceId     = defineString("STRIPE_PRICE_ID",     { default: "price_1TnUFrFXTeND9GTEbo1zCwGo" }); // Pro £4.99/mo
-const topupAi10Price    = defineString("TOPUP_AI10_PRICE",    { default: "price_1TnUFsFXTeND9GTEWeIaLunR" });
-const topupAi25Price    = defineString("TOPUP_AI25_PRICE",    { default: "price_1TnUFuFXTeND9GTEqRcZkUyt" });
-const topupAi50Price    = defineString("TOPUP_AI50_PRICE",    { default: "price_1TnUFwFXTeND9GTECslHa6nI" });
-const topupSlots20Price = defineString("TOPUP_SLOTS20_PRICE", { default: "price_1TnUFyFXTeND9GTEvIVeTnTC" });
-const topupSlots50Price = defineString("TOPUP_SLOTS50_PRICE", { default: "price_1TnUG0FXTeND9GTEKG3ddSVG" });
+const stripePriceId     = defineString("STRIPE_PRICE_ID",     { default: "price_1TnUkyFXTeND9GTExZC9ayGf" }); // Pro £4.99/mo
+const topupAi10Price    = defineString("TOPUP_AI10_PRICE",    { default: "price_1TnUkzFXTeND9GTEJwEEVSYA" });
+const topupAi25Price    = defineString("TOPUP_AI25_PRICE",    { default: "price_1TnUl1FXTeND9GTERARD2a2o" });
+const topupAi50Price    = defineString("TOPUP_AI50_PRICE",    { default: "price_1TnUl3FXTeND9GTElzonfprz" });
+const topupSlots20Price = defineString("TOPUP_SLOTS20_PRICE", { default: "price_1TnUl5FXTeND9GTENJMYHVTR" });
+const topupSlots50Price = defineString("TOPUP_SLOTS50_PRICE", { default: "price_1TnUl6FXTeND9GTErdem1LUP" });
 
 // packId → grant (server-authoritative). Price ID comes from the matching param.
 const PACKS = {
