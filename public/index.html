@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=53">
+<link rel="stylesheet" href="css/styles.css?v=54">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -3591,7 +3591,9 @@ async function captureSequenceToWav(){
   const totalSec = loops * loopDur + 0.45;                  // small tail for release tails
 
   // Tap masterComp into a ScriptProcessor; route it to a muted sink so it keeps
-  // pulling without adding any audible output (the real path stays audible).
+  // pulling. We also disconnect masterComp from the speakers for the duration of
+  // the capture so the sequence records SILENTLY (the user shouldn't hear it
+  // play while the AI track is being made) — the tap still gets full signal.
   const chunks = [];
   const sp = ctx.createScriptProcessor(4096, 2, 2);
   const sink = ctx.createGain();
@@ -3608,6 +3610,7 @@ async function captureSequenceToWav(){
   masterComp.connect(sp);
   sp.connect(sink);
   sink.connect(ctx.destination);
+  try{ masterComp.disconnect(ctx.destination); }catch(e){}   // mute speakers during capture
 
   try{
     stop();
@@ -3620,6 +3623,7 @@ async function captureSequenceToWav(){
   } finally {
     recording = false;
     stop();
+    try{ masterComp.connect(ctx.destination); }catch(e){}     // restore speakers
     try{ masterComp.disconnect(sp); }catch(e){}
     try{ sp.disconnect(); }catch(e){}
     try{ sink.disconnect(); }catch(e){}

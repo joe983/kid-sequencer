@@ -51,7 +51,7 @@ const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
 const STABILITY_MODEL    = "stable-audio-2.5";
 const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.7;   // lower = closer to the user's seed
+const AI_STRENGTH        = 0.4;   // lower = closer to the user's seed (0.7 drifted too far)
 
 function monthKey() {
   const d = new Date();
