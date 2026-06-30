@@ -1,0 +1,13 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Large assets — soundfonts/sample libs are downloaded, not committed
+assets/
+
+# Rendered audio outputs
+out/
+*.wav
+*.mp3
+*.mid

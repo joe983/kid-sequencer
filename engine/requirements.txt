@@ -1,0 +1,13 @@
+# Core engine deps (CPU). Heavy/GPU deps added per build step.
+numpy>=1.26               # 2.x works with the current tinysoundfont/pedalboard wheels
+mido>=1.3
+tinysoundfont>=0.2        # SF2 rendering (no native deps)
+py7zr>=0.21               # extract FreePats .7z soundfont archives
+# Mix/master (step 4 — done):
+pedalboard>=0.9           # per-layer + bus EQ/comp/reverb/limiter (Spotify, MIT)
+pyloudnorm>=0.1.1         # integrated-loudness metering -> LUFS target (MIT; pulls scipy)
+lameenc>=1.7              # final-mix MP3 export, no ffmpeg dependency
+# Added later:
+#   pretty_midi, music21        (arrangement, step 3)
+#   torch + stable-audio-tools  (texture, step 5 — runs on Modal GPU only)
+#   matchering                  (GPL — reference-match master; run as isolated process)

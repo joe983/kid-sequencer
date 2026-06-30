@@ -1,0 +1,71 @@
+"""Small audio helpers: buffers, envelopes, WAV I/O (stdlib only + numpy)."""
+
+from __future__ import annotations
+
+import wave
+from pathlib import Path
+
+import numpy as np
+
+SR = 44100
+
+
+def midi_to_hz(m: float) -> float:
+    return 440.0 * (2.0 ** ((m - 69) / 12.0))
+
+
+def seconds_per_beat(tempo: float) -> float:
+    return 60.0 / tempo
+
+
+def adsr(n: int, sr: int, a: float, d: float, s: float, r: float) -> np.ndarray:
+    """ADSR envelope of length n samples. a/d/r in seconds, s in 0..1."""
+    env = np.zeros(n, dtype=np.float32)
+    ai = min(int(a * sr), n)
+    di = min(int(d * sr), max(0, n - ai))
+    ri = min(int(r * sr), max(0, n - ai - di))
+    si = max(0, n - ai - di - ri)
+    idx = 0
+    if ai:
+        env[idx:idx + ai] = np.linspace(0, 1, ai, endpoint=False); idx += ai
+    if di:
+        env[idx:idx + di] = np.linspace(1, s, di, endpoint=False); idx += di
+    if si:
+        env[idx:idx + si] = s; idx += si
+    if ri:
+        env[idx:idx + ri] = np.linspace(s, 0, ri, endpoint=True); idx += ri
+    return env
+
+
+def add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
+    """Sum `sig` into `buf` at sample offset `start`, clipping to buf length."""
+    if start >= len(buf):
+        return
+    end = min(len(buf), start + len(sig))
+    buf[start:end] += sig[: end - start]
+
+
+def normalize(buf: np.ndarray, peak: float = 0.9) -> np.ndarray:
+    m = float(np.max(np.abs(buf))) if buf.size else 0.0
+    return buf * (peak / m) if m > 1e-9 else buf
+
+
+def to_stereo(mono: np.ndarray) -> np.ndarray:
+    return np.stack([mono, mono], axis=1)
+
+
+def write_wav(path: str | Path, audio: np.ndarray, sr: int = SR) -> Path:
+    """Write float audio (mono 1-D or stereo Nx2) to a 16-bit WAV."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    a = audio
+    if a.ndim == 1:
+        a = to_stereo(a)
+    a = np.clip(a, -1.0, 1.0)
+    pcm = (a * 32767.0).astype("<i2")
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(a.shape[1])
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(pcm.tobytes())
+    return path
