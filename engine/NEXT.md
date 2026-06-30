@@ -55,14 +55,42 @@ Run: `./.venv/Scripts/python smoke_track.py` (full mastered track) ·
   the ceiling because loudness is the *last* (downward) gain stage. Fine for v1; to get peaks nearer
   the ceiling, drive the limiter harder before the loudness trim.
 
-## Next build step (user pick was "tune the current sounds first")
-Pedalboard half of that pick is **done** (above). Remaining sound-tuning, both needing YOUR ears:
-1. **A/B `out/track.mp3` against a reference** kids-EDM track — tell me what's missing (too dry?
-   pump too deep/shallow? drums weak? riff buried?) so I can tune the presets in `master.py`.
-2. **Real AI-licensed drum kit** — current drums are the GM placeholder. Hard rule #1: a kit must be
-   licensed for AI/automated use (CC0 ideal) and recorded in LICENSES.md *before* use. Pick a source
-   (or I propose CC0 candidates) → I'll add a one-shot-sample drum renderer.
-The soft synth is parked to the Modal build (see Parked).
+## NEW — Real CC0 drum kits (stage = "right sounds: drums") — built & verified (2026-06-30)
+User decision: get the *right sounds* before A/B mix-tuning (no point tuning a mix on placeholder
+GM drums). Per-genre kits chosen (**Option B**). Drums now render from real CC0 one-shots, NOT the
+GM soundfont.
+- **Sources (both CC0 1.0, AI-use OK — see LICENSES.md):** Boochi44/free-drum-samples (electronic
+  kick/sub/snare/clap/hats, 3 flavours) + VCSL (cowbell/shaker/woodblock aux perc).
+- **`scripts/fetch_drumkits.py`** clones Boochi (shallow) + downloads 3 VCSL raw files, curating a
+  flat layout `assets/drums/{hard-trap,bounce,soulful}/<voice>.wav` + `assets/drums/perc/<perc>.wav`
+  (gitignored, like soundfonts).
+- **`kidseq_engine/render/sample_kit.py`** — `KITS` maps each genre→voice→[(relpath, gain)] **layers**
+  (v1 = one layer/voice; the list is the hook for per-voice layering later). Per-genre mapping:
+  techhouse/hiphop/reggaeton→Bounce, dnb/drill→Hard Trap (+808 sub), funk→Soulful Vintage; rim←VCSL
+  woodblock, cowbell/shaker←VCSL. `read_wav` added to audio.py (8/16/24/32-bit, stereo→mono, resample).
+- **`render/__init__.py`** drum priority is now: **sample-kit > GM soundfont > numpy synth.**
+  `drum_source(style)` reports which path fires.
+- **Verified:** `render_all_genres.py` → `out/genre_<style>.mp3` for all 6, every one `drums=sample-kit`,
+  all master to -10.00 LUFS, TP under ceiling. `tests/test_sample_kit.py` (4 tests) + existing
+  sequence/master suites all pass.
+
+Run: `./.venv/Scripts/python scripts/fetch_drumkits.py` (once) ·
+`./.venv/Scripts/python render_all_genres.py` (audition all 6) ·
+`./.venv/Scripts/python tests/test_sample_kit.py`
+
+## Next step — YOUR ears on the 6 genre tracks
+1. **Audition `out/genre_<style>.mp3`** (6 of them). For each genre tell me: drums punchy enough?
+   right flavour (e.g. is drill's 808 sub doing the job, is funk's kit too lofi)? Then I tune the
+   per-voice `_GAIN`/layer mapping in `sample_kit.py` and, if a flavour is wrong, repoint that
+   genre's kit. **Per-voice LAYERING** (stack sub+click under a kick for punch) is the main quality
+   lever now that the infra supports it — say the word and I'll layer the weak voices.
+2. **THEN** the original A/B mix-tune step finally makes sense (real drums feeding the mix): tune
+   `master.py:GENRE_PRESETS` against a reference kids-EDM track.
+
+## Then — synths/orchestral ("right sounds", part 2, Modal build)
+User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
+drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST
+hosting + sfizz/VSCO orchestral — both parked below because they're painful on Windows, easy on Linux).
 
 ## Remaining build order (docs/PLAN.md)
 - Step 3: music21 arrangement (progression bank + bass + pads + structure) — the mixmaster already

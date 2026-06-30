@@ -16,11 +16,26 @@ exact license **and** its AI/automated-use permission below.
 | synth | FreePats **SynthSquare** | **CC0 1.0** | ✅ public domain, no restriction |
 | bass | FreePats **Lately Bass** | **CC0 1.0** | ✅ public domain, no restriction |
 | trumpet, strings, bells | GeneralUser GS v1.471 | **GeneralUser GS License v2.0** | ✅ explicitly allows commercial use + use in software projects |
-| drums | GeneralUser GS (GM kit) | GeneralUser GS License v2.0 | ✅ (placeholder — Splice kits planned) |
+| drums (electronic: kick/sub/snare/clap/hats) | **Boochi44/free-drum-samples** | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
+| drums (aux perc: cowbell/shaker/woodblock) | **VCSL** (sgossner/VCSL) | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
+| drums (GM kit) | GeneralUser GS (GM kit) | GeneralUser GS License v2.0 | ✅ fallback only (used when sample kits not fetched) |
 
 Attribution required: **Salamander (CC-BY)** — credit in app credits/about.
 GeneralUser license asks you to **host your own copy** (don't hot-link the author's
 server) — satisfied by our downloaded copy.
+
+**Drum sample kits (CC0, AI-use OK), verified 2026-06-30** — fetched by
+`scripts/fetch_drumkits.py`, curated flat into `assets/drums/`:
+- **Boochi44/free-drum-samples** (https://github.com/Boochi44/free-drum-samples) — repo
+  states *"All samples in this repository are released under the Creative Commons Zero
+  (CC0 1.0) license."* 3 flavours (hard-trap / bounce / soulful-vintage). Many one-shots
+  derive from the CC0 **tidalcycles/sounds-tr808-fischer** TR-808 set (E. Loveall).
+- **VCSL** (https://github.com/sgossner/VCSL) — Versilian Studios, **CC0 1.0** public-domain
+  dedication. We take 3 aux-percussion one-shots (cowbell, large shaker, woodblock).
+- **Deliberately NOT used:** the full `tidalcycles/Dirt-Samples` (mixed per-folder
+  licensing — only dedicated CC0 `sounds-*` repos are safe) and Freesound per-file
+  one-shots (the Feb-2026 Gen-AI uploader-preference flag is non-binding but adds
+  ambiguity; the CC0 GitHub kits are cleaner for an AI-generation product).
 
 ### Not used (and why)
 - **VSCO 2 CE / Sonatina** — SFZ-only (needs `sfizz`, not our SF2 renderer) and/or

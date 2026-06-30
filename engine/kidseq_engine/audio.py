@@ -54,6 +54,40 @@ def to_stereo(mono: np.ndarray) -> np.ndarray:
     return np.stack([mono, mono], axis=1)
 
 
+def read_wav(path: str | Path, target_sr: int = SR) -> np.ndarray:
+    """Read a PCM WAV to a mono float32 buffer at `target_sr`.
+
+    Handles 8/16/24/32-bit PCM, downmixes stereo to mono, and linearly
+    resamples if the file's rate differs from `target_sr`. Used to load the
+    CC0 drum one-shots (see render/sample_kit.py).
+    """
+    path = Path(path)
+    with wave.open(str(path), "rb") as w:
+        nch, sw, sr, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+        raw = w.readframes(n)
+    if sw == 1:  # unsigned 8-bit
+        data = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    elif sw == 2:
+        data = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif sw == 3:  # packed 24-bit little-endian
+        b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3).astype(np.int32)
+        v = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        v = np.where(v & 0x800000, v - 0x1000000, v)
+        data = v.astype(np.float32) / 8388608.0
+    elif sw == 4:
+        data = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    else:
+        raise ValueError(f"unsupported sample width {sw} bytes in {path}")
+    if nch > 1:
+        data = data.reshape(-1, nch).mean(axis=1)
+    if sr != target_sr and data.size:
+        m = int(round(data.shape[0] / sr * target_sr))
+        x_old = np.linspace(0.0, 1.0, data.shape[0], endpoint=False)
+        x_new = np.linspace(0.0, 1.0, m, endpoint=False)
+        data = np.interp(x_new, x_old, data)
+    return data.astype(np.float32)
+
+
 def write_wav(path: str | Path, audio: np.ndarray, sr: int = SR) -> Path:
     """Write float audio (mono 1-D or stereo Nx2) to a 16-bit WAV."""
     path = Path(path)
