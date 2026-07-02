@@ -41,6 +41,14 @@ server) — satisfied by our downloaded copy.
 - **Rejected: `yaxu/clean-breaks`** — repo has **no license** → fails hard rule #1 despite
   the "clean" name. Classic breaks themselves (Amen/Think/Apache) are uncleared copyrighted
   recordings — never use them or derivatives of them.
+
+## Reference-only packs (user-owned, NOT engine assets)
+- **Jay Cactus — The Vault 2.0** (Greeze UK Drill / Trap Lordz / Candy / The Source), local at
+  `~/Documents/MyMusic/Samples/Drill Samples/`. Terms (jaycactus.com, checked 2026-07-02)
+  **prohibit use in "App Contents (Mobile or otherwise)" / competitive products**, require
+  sounds to be embedded in a mixed musical piece, and are not fully royalty-free (publishing
+  clauses). → **NEVER wire into KITS / the engine.** Fine as the user's own beats and as the
+  A/B tuning reference for what the licensed kits should sound like.
 - **Deliberately NOT used:** the full `tidalcycles/Dirt-Samples` (mixed per-folder
   licensing — only dedicated CC0 `sounds-*` repos are safe) and Freesound per-file
   one-shots (the Feb-2026 Gen-AI uploader-preference flag is non-binding but adds
