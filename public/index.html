@@ -658,12 +658,12 @@ const DRUM_PATTERNS = {
     hatO: [0,0,0.24,0,  0,0,0.24,0,  0,0,0.24,0,  0,0,0.24,0],
   },
   dnb: {
-    // classic DnB feel: snare on 2 & 4, syncopated kicks, fast hats
+    // DnB two-step (ported from the approved 170bpm pack beat, 2026-07-02):
+    // kick on 1 + and-of-3, snare 2 & 4 with GHOST notes on the offbeats
+    // (the rolling played-break feel), subtle hats on 8THS (not 16ths), no open hat.
     kick:  [1,0,0,0,  0,0,0,0,  0,0,1,0,  0,0,0,0],
-    snare: [0,0,0,0,  1,0,0,0,     0,0,0,0,     1,0,0,0],
-    hatC:  [0.20,0.14,0.20,0.14,  0.22,0.14,0.20,0.14,  0.20,0.14,0.24,0.14,  0.20,0.14,0.20,0.14],
-    // occasional open hat stabs
-    hatO:  [0,0,0,0,   0,0,0,0.18,  0,0,0,0,   0,0.18,0,0]
+    snare: [0,0,0,0.20,  1,0,0.18,0,  0,0.20,0,0,  1,0,0.19,0],
+    hatC:  [0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.17,0]
   },
   funk: {
     // Syncopated kicks, snare 2 & 4 with ghost notes, busy hats, cowbell on the "1"
@@ -674,11 +674,13 @@ const DRUM_PATTERNS = {
     cowbell: [0.40,0,0,0, 0,0,0,0,    0.40,0,0,0,  0,0,0,0]
   },
   drill: {
-    // UK drill — half-time: snare on beat 3 only, syncopated 808-style kicks,
-    // hat triplet-feel rolls, deep sub doubles the kicks.
-    kick:  [1,0,0,0,   0,0,0.70,0,  0,0,0,0,    0.90,0,0,0.55],
-    sub:   [1,0,0,0,   0,0,0.70,0,  0,0,0,0,    0.90,0,0,0.55],
+    // UK drill — half-time (ported from the approved 140bpm pack beat, 2026-07-02):
+    // snare on beat 3 only, harder syncopated kicks + pickup into the downbeat,
+    // rim counter after the snare, deep sub doubles the kicks.
+    kick:  [1,0,0,0,   0,0,0.90,0,  0,0,0,0,    0.90,0,0,0.60],
+    sub:   [1,0,0,0,   0,0,0.90,0,  0,0,0,0,    0.90,0,0,0.60],
     snare: [0,0,0,0,   0,0,0,0,     1,0,0,0,    0,0,0,0],
+    rim:   [0,0,0,0,   0,0,0,0,     0,0,0,0.35, 0,0,0,0],
     hatC:  [0.25,0.18,0.25,0.45,  0.25,0.18,0.28,0.18,  0.25,0.18,0.25,0.45,  0.25,0.18,0.28,0.18],
     hatO:  [0,0,0,0,   0,0,0.20,0,  0,0,0,0,    0,0,0.20,0]
   },

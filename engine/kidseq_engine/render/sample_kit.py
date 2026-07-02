@@ -47,6 +47,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "kick":  [("hard-trap/kick.wav", 1.0)],
         "sub":   [("hard-trap/sub.wav", 1.0)],
         "snare": [("hard-trap/snare.wav", 1.0)],
+        "rim":   [("perc/woodblock.wav", 0.8)],
         "hatC":  [("hard-trap/hatC.wav", 1.0)],
         "hatO":  [("hard-trap/hatO.wav", 1.0)],
     },
