@@ -68,3 +68,6 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 .claude/
+
+# Local drum sample kits (audio binaries — installed by script, not committed)
+public/samples/

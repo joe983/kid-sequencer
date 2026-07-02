@@ -645,6 +645,7 @@ let instrument = "piano";
 let drumsMuted = true;            // start muted
 let drumStyle = "techhouse";      // techhouse | dnb
 let drumBus = null;               // GainNode
+let drumSampleKits = null;        // {style:{voice:[{buffer,g,trimMs}]}} — null until load attempted
 let drumNoise = null;             // AudioBuffer
 
 const DRUM_PATTERNS = {
@@ -2321,6 +2322,63 @@ function playSub(at, vel=1){
   osc.start(at); osc.stop(at + 0.50);
 }
 
+/* ---- Sample drum kits ------------------------------------------------------
+   Real one-shot kits loaded from samples/drums/ (manifest.json lists per-style
+   voices; each voice = one or more layered WAVs with gain + optional trimMs).
+   The folder is local-dev only (gitignored + excluded from hosting deploys —
+   audio binaries don't live in git); when the manifest or a sample is absent
+   the voice falls back to its synthesized counterpart, so the app is fully
+   functional with or without the folder. */
+async function loadDrumSampleKits(){
+  if(!audioCtx || drumSampleKits !== null) return;
+  drumSampleKits = {};                       // set eagerly — only attempt once
+  let man;
+  try{
+    const r = await fetch('samples/drums/manifest.json', {cache:'no-store'});
+    if(!r.ok) return;
+    man = await r.json();
+  }catch(e){ return; }
+  const kits = {};
+  await Promise.all(Object.entries(man).map(async ([style, voices]) => {
+    kits[style] = {};
+    await Promise.all(Object.entries(voices).map(async ([voice, layers]) => {
+      const loaded = [];
+      for(const l of layers){
+        try{
+          const res = await fetch('samples/drums/' + l.f);
+          if(!res.ok) continue;
+          const buf = await audioCtx.decodeAudioData(await res.arrayBuffer());
+          loaded.push({ buffer: buf, g: (l.g != null ? l.g : 1), trimMs: (l.trimMs || 0) });
+        }catch(e){}
+      }
+      if(loaded.length) kits[style][voice] = loaded;
+    }));
+  }));
+  drumSampleKits = kits;
+  try{
+    const have = Object.keys(kits).filter(k => Object.keys(kits[k]).length);
+    console.info('[drums] sample kits active:', have.length ? have.join(', ') : '(none — synth voices)');
+  }catch(e){}
+}
+
+function playDrumSample(layers, at, vel){
+  for(const l of layers){
+    const src = audioCtx.createBufferSource();
+    src.buffer = l.buffer;
+    const g = audioCtx.createGain();
+    g.gain.value = vel * l.g;
+    if(l.trimMs){                            // shorten long one-shots, 20ms fade
+      const end = at + l.trimMs / 1000;
+      g.gain.setValueAtTime(g.gain.value, Math.max(at, end - 0.020));
+      g.gain.linearRampToValueAtTime(0.0001, end);
+      try{ src.stop(end + 0.005); }catch(e){}
+    }
+    src.connect(g); g.connect(drumBus);
+    trackNode(src);
+    src.start(at);
+  }
+}
+
 function playDrumsAtStep(s){
   if(drumsMuted) return;
   if(!audioCtx || !drumBus) return;
@@ -2334,16 +2392,24 @@ function playDrumsAtStep(s){
 
   const t = audioCtx.currentTime + AUDIO_AHEAD_S + offs;
 
-  // Generic voice dispatch — any pattern can include any subset of these tracks
-  if(pat.kick    && pat.kick[s])    playKick      (t, pat.kick[s]);
-  if(pat.sub     && pat.sub[s])     playSub       (t, pat.sub[s]);
-  if(pat.snare   && pat.snare[s])   playSnare     (t, pat.snare[s]);
-  if(pat.clap    && pat.clap[s])    playClap      (t, pat.clap[s]);
-  if(pat.hatC    && pat.hatC[s])    playHatClosed (t, pat.hatC[s]);
-  if(pat.hatO    && pat.hatO[s])    playHatOpen   (t, pat.hatO[s]);
-  if(pat.rim     && pat.rim[s])     playRim       (t, pat.rim[s]);
-  if(pat.cowbell && pat.cowbell[s]) playCowbell   (t, pat.cowbell[s]);
-  if(pat.shaker  && pat.shaker[s])  playShaker    (t, pat.shaker[s]);
+  // Generic voice dispatch — any pattern can include any subset of these tracks.
+  // Each voice prefers its sample kit layer (if loaded) and falls back to synth.
+  const kit = drumSampleKits && drumSampleKits[drumStyle];
+  const hit = (voice, synthFn) => {
+    const v = pat[voice] && pat[voice][s];
+    if(!v) return;
+    if(kit && kit[voice]) playDrumSample(kit[voice], t, v);
+    else synthFn(t, v);
+  };
+  hit('kick', playKick);
+  hit('sub', playSub);
+  hit('snare', playSnare);
+  hit('clap', playClap);
+  hit('hatC', playHatClosed);
+  hit('hatO', playHatOpen);
+  hit('rim', playRim);
+  hit('cowbell', playCowbell);
+  hit('shaker', playShaker);
 }
 
 function makeInstrumentBuses(ctx, masterOut){
@@ -2497,6 +2563,10 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);
+
+    // Kick off the (async, optional) sample-kit load — voices fall back to
+    // synth until each kit's buffers are decoded.
+    loadDrumSampleKits();
 
     warmUpAudio(2);
   }

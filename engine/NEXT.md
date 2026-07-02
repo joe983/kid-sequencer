@@ -100,6 +100,23 @@ at **170 BPM**, **drums only** (no piano riff).
   the real dnb master chain (silent riff layer satisfies master()'s riff requirement).
 - Verified: renders sample-kit, -10.26 LUFS, -1.00 dBTP; all 3 test suites pass.
 
+## NEW — App plays SAMPLE drum kits (2026-07-02)
+The sequencer's drum engine now prefers real one-shot samples over synthesis, per voice.
+- `public/index.html`: `loadDrumSampleKits()` fetches `samples/drums/manifest.json` +
+  decodes layered WAVs (per-voice gain + trimMs); `playDrumsAtStep`'s generic dispatch
+  tries the sample kit first, falls back to the synth voice — app fully works without
+  the folder. Kits route through `drumBus` (fader/comp/swing/tempo-ramp all apply).
+- `public/samples/` is **gitignored** + in firebase.json hosting **ignore** (binaries
+  stay out of git and deploys); install locally with scratchpad `install_app_kits.py`
+  (28 samples, 6 genres: dnb=user pack, drill=Greeze, techhouse=TR-909, hiphop=The
+  Source, funk=Hyperfunk+808CB, reggaeton=dancehall KitC).
+- PROJECT_RULES.md rule 1 revised at owner's direction: licensing = owner's decision,
+  LICENSES.md is a record not a gate.
+- Verified live: all 6 genres play samples in the app, tempo ridden 120→180→80 during
+  playback, zero console errors; prod (no samples folder) falls back to synth.
+- **Prod sample delivery is an open design step** (Storage/CDN + preload strategy) —
+  currently samples are local-dev only, so production still sounds synthesized.
+
 ## Next step — ears on out/dnb_drums_170.mp3
 1. User listens to the 170 BPM DnB drum track. Tuning levers ready: swap kick→kick-live.wav,
    rim layer gain (0.55), hat balance in `_GAIN`, or go shopping for a different snare
