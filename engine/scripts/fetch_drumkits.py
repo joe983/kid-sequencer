@@ -5,16 +5,20 @@ Run once after cloning, and in the Modal image build:
 
     ../.venv/Scripts/python fetch_drumkits.py
 
-Sources (both CC0 1.0 — see ../LICENSES.md):
-  Boochi44/free-drum-samples  — 3 flavours (hard-trap / bounce / soulful-vintage),
-                                voice-organised one-shots. Derived from the CC0
-                                tidalcycles/sounds-tr808-fischer TR-808 set.
-  sgossner/VCSL               — CC0 orchestral/world sample library; we take just a
-                                few aux-percussion one-shots (cowbell/shaker/woodblock).
+Sources (all CC0 1.0 — see ../LICENSES.md):
+  Boochi44/free-drum-samples      — 3 flavours (hard-trap / bounce / soulful-vintage),
+                                    voice-organised one-shots. Derived from the CC0
+                                    tidalcycles/sounds-tr808-fischer TR-808 set.
+  sgossner/VCSL                   — CC0 orchestral/world sample library; we take just a
+                                    few aux-percussion one-shots (cowbell/shaker/woodblock).
+  sfzinstruments/virtuosity_drums — CC0 real acoustic kit (drummer Austin McMahon,
+                                    Versilian/Karoryfer). Top-velocity one-shots for the
+                                    breakbeat-DNA genres (DnB). FLAC → WAV via pedalboard.
 
 Curates a flat layout the renderer maps directly:
   assets/drums/{hard-trap,bounce,soulful}/{kick,snare,clap,hatC,hatO,sub}.wav
   assets/drums/perc/{cowbell,shaker,woodblock}.wav
+  assets/drums/virtuosity/{kick,kick-live,snare,rim,hatC,hatO}.wav
 """
 
 from __future__ import annotations
@@ -106,10 +110,54 @@ def fetch_vcsl_perc() -> None:
         print(f"  -> {dst} ({dst.stat().st_size:,} bytes)")
 
 
+VIRT_RAW = "https://raw.githubusercontent.com/sfzinstruments/virtuosity_drums/master/"
+# output name -> repo path (top-velocity hits; close mics: kickmic for kick,
+# snaremic for snare, mid pair for hats)
+VIRT_ONESHOTS = {
+    "kick":      "Samples/kickmic/kick/kickmic_kick_snoff_vl4_rr4.flac",   # tight, snares off
+    "kick-live": "Samples/kickmic/kick/kickmic_kick_snon_vl4_rr4.flac",    # livelier, wire rattle
+    "snare":     "Samples/snaremic/snare/snaremic_snare_center_vl36.flac",  # full crack
+    "rim":       "Samples/snaremic/snare/snaremic_snare_rimshot_vl12.flac", # layer for attack
+    "hatC":      "Samples/mid/hh/mid_hh_closed_vl4_rr4.flac",
+    "hatO":      "Samples/mid/hh/mid_hh_open_vl4_rr3.flac",
+}
+
+
+def fetch_virtuosity() -> None:
+    """Fetch + decode the Virtuosity Drums one-shots (FLAC) to WAV."""
+    out = DRUM_DIR / "virtuosity"
+    out.mkdir(parents=True, exist_ok=True)
+    todo = {n: p for n, p in VIRT_ONESHOTS.items() if not (out / f"{n}.wav").exists()}
+    if not todo:
+        print("Virtuosity one-shots already present, skipping.")
+        return
+    from pedalboard.io import AudioFile  # decodes flac; already an engine dep
+
+    for name, relpath in todo.items():
+        url = VIRT_RAW + urllib.parse.quote(relpath)
+        print(f"Virtuosity {name} (CC0): {relpath}")
+        req = urllib.request.Request(url, headers=UA)
+        with tempfile.NamedTemporaryFile(suffix=".flac", delete=False) as tf:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                tf.write(r.read())
+            tmp_flac = Path(tf.name)
+        try:
+            with AudioFile(str(tmp_flac)) as f:
+                sr = int(f.samplerate)
+                audio = f.read(f.frames)  # (channels, frames) float32
+            dst = out / f"{name}.wav"
+            with AudioFile(str(dst), "w", samplerate=sr, num_channels=audio.shape[0]) as w:
+                w.write(audio)
+            print(f"  -> {dst} ({dst.stat().st_size:,} bytes, {sr} Hz)")
+        finally:
+            tmp_flac.unlink(missing_ok=True)
+
+
 def main() -> None:
     DRUM_DIR.mkdir(parents=True, exist_ok=True)
     fetch_boochi()
     fetch_vcsl_perc()
+    fetch_virtuosity()
     print("done.")
 
 

@@ -35,11 +35,13 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "hatC": [("bounce/hatC.wav", 1.0)],
         "hatO": [("bounce/hatO.wav", 1.0)],
     },
+    # DnB = breakbeat DNA: real acoustic kit (Virtuosity, CC0), NOT electro one-shots.
+    # Snare is layered: full centre hit + rimshot on top for the DnB crack.
     "dnb": {
-        "kick":  [("hard-trap/kick.wav", 1.0)],
-        "snare": [("hard-trap/snare.wav", 1.0)],
-        "hatC":  [("hard-trap/hatC.wav", 1.0)],
-        "hatO":  [("hard-trap/hatO.wav", 1.0)],
+        "kick":  [("virtuosity/kick.wav", 1.0)],
+        "snare": [("virtuosity/snare.wav", 1.0), ("virtuosity/rim.wav", 0.55)],
+        "hatC":  [("virtuosity/hatC.wav", 1.0)],
+        "hatO":  [("virtuosity/hatO.wav", 1.0)],
     },
     "drill": {
         "kick":  [("hard-trap/kick.wav", 1.0)],

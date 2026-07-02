@@ -78,14 +78,38 @@ Run: `./.venv/Scripts/python scripts/fetch_drumkits.py` (once) ·
 `./.venv/Scripts/python render_all_genres.py` (audition all 6) ·
 `./.venv/Scripts/python tests/test_sample_kit.py`
 
-## Next step — YOUR ears on the 6 genre tracks
-1. **Audition `out/genre_<style>.mp3`** (6 of them). For each genre tell me: drums punchy enough?
-   right flavour (e.g. is drill's 808 sub doing the job, is funk's kit too lofi)? Then I tune the
-   per-voice `_GAIN`/layer mapping in `sample_kit.py` and, if a flavour is wrong, repoint that
-   genre's kit. **Per-voice LAYERING** (stack sub+click under a kick for punch) is the main quality
-   lever now that the infra supports it — say the word and I'll layer the weak voices.
-2. **THEN** the original A/B mix-tune step finally makes sense (real drums feeding the mix): tune
-   `master.py:GENRE_PRESETS` against a reference kids-EDM track.
+## Audition verdict (user ears, 2026-07-02) — first Boochi/VCSL pass
+Only **techhouse works**. The rest: **dnb** = electro snares (wrong — needs breakbeat DNA);
+**drill** = 808 bass where the kick should be; **hiphop/funk** = too lofi. Genre-by-genre fix
+plan, **dnb first** (user pick). Note: genre-appropriate tempo matters for a fair listen — the
+first audition ran everything at 120.
+
+## NEW — DnB rebuilt on a real acoustic kit (2026-07-02)
+User requirements: samples actually used in DnB (breakbeat DNA, not random one-shots), audition
+at **170 BPM**, **drums only** (no piano riff).
+- **Source: Virtuosity Drums** (sfzinstruments/virtuosity_drums, **CC0-1.0** verified) — real
+  drummer-played jazz/club kit (Versilian/Karoryfer). This is the legit stand-in for classic
+  breaks: Amen/Think themselves are uncleared copyrighted recordings (hard rule #1 bans them;
+  `yaxu/clean-breaks` rejected — no license).
+- `fetch_drumkits.py` gains `fetch_virtuosity()`: 6 top-velocity one-shots, FLAC→WAV via
+  pedalboard (48k→44.1k handled by read_wav) → `assets/drums/virtuosity/`.
+  Both kicks fetched: `kick.wav` (snares-off, tight — mapped) + `kick-live.wav` (wire rattle, swap candidate).
+- `sample_kit.py` dnb kit repointed: kick=virtuosity, **snare = centre hit + rimshot layered**
+  (first real use of the layering hook — the DnB crack), hats=virtuosity.
+- `render_dnb_audition.py [bpm]` → `out/dnb_drums_170.mp3` — 8 bars @ 170, drums-only through
+  the real dnb master chain (silent riff layer satisfies master()'s riff requirement).
+- Verified: renders sample-kit, -10.26 LUFS, -1.00 dBTP; all 3 test suites pass.
+
+## Next step — ears on out/dnb_drums_170.mp3
+1. User listens to the 170 BPM DnB drum track. Tuning levers ready: swap kick→kick-live.wav,
+   rim layer gain (0.55), hat balance in `_GAIN`, or go shopping for a different snare
+   articulation (Virtuosity has 11: stickshot, flam, buzz, halfopen…).
+2. When dnb passes: same treatment for **drill** — user hears "808 bass instead of kick".
+   Drill's pattern fires kick+sub on the SAME steps; likely the 808 sub swamps a weak kick
+   (`hard-trap/kick.wav` = hard-kick-01.wav — audition it solo to confirm before swapping).
+   Then de-lofi **hiphop/funk** (several Boochi picks were the lofi variants — check
+   `fetch_drumkits.py` prefs; Virtuosity may serve funk directly).
+3. THEN the A/B mix-tune of `master.py:GENRE_PRESETS` against reference tracks, genre by genre.
 
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER

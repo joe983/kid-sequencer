@@ -18,6 +18,7 @@ exact license **and** its AI/automated-use permission below.
 | trumpet, strings, bells | GeneralUser GS v1.471 | **GeneralUser GS License v2.0** | ✅ explicitly allows commercial use + use in software projects |
 | drums (electronic: kick/sub/snare/clap/hats) | **Boochi44/free-drum-samples** | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
 | drums (aux perc: cowbell/shaker/woodblock) | **VCSL** (sgossner/VCSL) | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
+| drums (acoustic breakbeat kit for DnB: kick/snare/rim/hats) | **Virtuosity Drums** (sfzinstruments/virtuosity_drums) | **CC0 1.0** | ✅ public domain; AI/automated use OK |
 | drums (GM kit) | GeneralUser GS (GM kit) | GeneralUser GS License v2.0 | ✅ fallback only (used when sample kits not fetched) |
 
 Attribution required: **Salamander (CC-BY)** — credit in app credits/about.
@@ -32,6 +33,14 @@ server) — satisfied by our downloaded copy.
   derive from the CC0 **tidalcycles/sounds-tr808-fischer** TR-808 set (E. Loveall).
 - **VCSL** (https://github.com/sgossner/VCSL) — Versilian Studios, **CC0 1.0** public-domain
   dedication. We take 3 aux-percussion one-shots (cowbell, large shaker, woodblock).
+- **Virtuosity Drums** (https://github.com/sfzinstruments/virtuosity_drums) — **CC0-1.0**
+  (repo LICENSE, verified 2026-07-02). Real acoustic kit performed by drummer Austin McMahon,
+  recorded by Versilian Studios / Karoryfer Samples (KVRDC'21). We take 6 top-velocity
+  one-shots (kick snares-off/on, snare centre, rimshot, closed/open hat) for the
+  breakbeat-DNA genres. Original performance — no copyrighted break recordings involved.
+- **Rejected: `yaxu/clean-breaks`** — repo has **no license** → fails hard rule #1 despite
+  the "clean" name. Classic breaks themselves (Amen/Think/Apache) are uncleared copyrighted
+  recordings — never use them or derivatives of them.
 - **Deliberately NOT used:** the full `tidalcycles/Dirt-Samples` (mixed per-folder
   licensing — only dedicated CC0 `sounds-*` repos are safe) and Freesound per-file
   one-shots (the Feb-2026 Gen-AI uploader-preference flag is non-binding but adds
