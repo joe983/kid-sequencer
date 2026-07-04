@@ -69,5 +69,6 @@ node_modules/
 .dataconnect
 .claude/
 
-# Local drum sample kits (audio binaries — installed by script, not committed)
-public/samples/
+# Local drum sample kits — raw per-file WAVs are dev-only (installed by script).
+# The packed bundle public/samples/drums.pack IS committed + deployed to prod.
+public/samples/drums/

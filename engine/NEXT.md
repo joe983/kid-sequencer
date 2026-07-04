@@ -114,8 +114,12 @@ The sequencer's drum engine now prefers real one-shot samples over synthesis, pe
   LICENSES.md is a record not a gate.
 - Verified live: all 6 genres play samples in the app, tempo ridden 120→180→80 during
   playback, zero console errors; prod (no samples folder) falls back to synth.
-- **Prod sample delivery is an open design step** (Storage/CDN + preload strategy) —
-  currently samples are local-dev only, so production still sounds synthesized.
+- **Prod sample delivery SHIPPED (2026-07-04):** all kits packed into a single
+  `public/samples/drums.pack` (`[4B LE headerLen][JSON header][concatenated wavs]`;
+  header carries per-layer o/n/g/trimMs/room). App loader tries pack → dev folder →
+  synth. Pack is committed + hosting-served (raw `samples/drums/` folder stays
+  gitignored + hosting-ignored). Rebuild with `tools/install_app_kits.py`. Prod now
+  plays the real kits.
 
 ## Next step — ears on out/dnb_drums_170.mp3
 1. User listens to the 170 BPM DnB drum track. Tuning levers ready: swap kick→kick-live.wav,

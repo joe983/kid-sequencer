@@ -2338,12 +2338,58 @@ function playSub(at, vel=1){
 async function loadDrumSampleKits(){
   if(!audioCtx || drumSampleKits !== null) return;
   drumSampleKits = {};                       // set eagerly — only attempt once
+  // Prefer the packed bundle (one request, ships to prod); fall back to the
+  // per-file dev folder; then to synth voices if neither is present.
+  const kits = await _loadDrumPack() || await _loadDrumFolder();
+  if(!kits) return;
+  drumSampleKits = kits;
+  try{
+    const have = Object.keys(kits).filter(k => Object.keys(kits[k]).length);
+    console.info('[drums] sample kits active:', have.length ? have.join(', ') : '(none — synth voices)');
+  }catch(e){}
+}
+
+// Packed bundle: [4-byte LE headerLen][UTF-8 JSON header][concatenated wav bytes].
+// Header = {style:{voice:[{o,n,g,trimMs?,room?}]}} where o/n slice the data section.
+async function _loadDrumPack(){
+  let ab;
+  try{
+    const r = await fetch('samples/drums.pack');
+    if(!r.ok) return null;
+    ab = await r.arrayBuffer();
+  }catch(e){ return null; }
+  try{
+    const dv = new DataView(ab);
+    const headerLen = dv.getUint32(0, true);
+    const header = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, headerLen)));
+    const dataBase = 4 + headerLen;
+    const kits = {};
+    for(const [style, voices] of Object.entries(header)){
+      kits[style] = {};
+      for(const [voice, layers] of Object.entries(voices)){
+        const loaded = [];
+        for(const l of layers){
+          try{
+            const slice = ab.slice(dataBase + l.o, dataBase + l.o + l.n);
+            const buf = await audioCtx.decodeAudioData(slice);
+            loaded.push({ buffer: buf, g: (l.g != null ? l.g : 1), trimMs: (l.trimMs || 0), room: (l.room || 0) });
+          }catch(e){}
+        }
+        if(loaded.length) kits[style][voice] = loaded;
+      }
+    }
+    return kits;
+  }catch(e){ return null; }
+}
+
+// Dev fallback: individual WAVs described by manifest.json (gitignored, not deployed).
+async function _loadDrumFolder(){
   let man;
   try{
     const r = await fetch('samples/drums/manifest.json', {cache:'no-store'});
-    if(!r.ok) return;
+    if(!r.ok) return null;
     man = await r.json();
-  }catch(e){ return; }
+  }catch(e){ return null; }
   const kits = {};
   await Promise.all(Object.entries(man).map(async ([style, voices]) => {
     kits[style] = {};
@@ -2360,11 +2406,7 @@ async function loadDrumSampleKits(){
       if(loaded.length) kits[style][voice] = loaded;
     }));
   }));
-  drumSampleKits = kits;
-  try{
-    const have = Object.keys(kits).filter(k => Object.keys(kits[k]).length);
-    console.info('[drums] sample kits active:', have.length ? have.join(', ') : '(none — synth voices)');
-  }catch(e){}
+  return kits;
 }
 
 function playDrumSample(layers, at, vel){
