@@ -2562,10 +2562,37 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     bus.bass.input.connect(delaySend);
     bus.bells.input.connect(delaySend);
 
-    // Drums: dedicated bus (bypasses filter, straight to masterGain)
+    // Drums: dedicated bus (bypasses filter) through a shared "glue" chain so
+    // every kit — sampled or synth — sounds like it comes from the same desk:
+    // highpass (rumble) -> soft saturation (warmth) -> glue compressor -> masterGain.
     drumBus = audioCtx.createGain();
     drumBus.gain.setValueAtTime(drumsMuted ? 0.0001 : 0.70, audioCtx.currentTime);
-    drumBus.connect(masterGain);
+
+    const drumHP = audioCtx.createBiquadFilter();
+    drumHP.type = "highpass";
+    drumHP.frequency.setValueAtTime(28, audioCtx.currentTime);
+    drumHP.Q.setValueAtTime(0.7, audioCtx.currentTime);
+
+    const satC = new Float32Array(256);
+    for(let i = 0; i < 256; i++){
+      const x = (i / 128) - 1;
+      satC[i] = Math.tanh(x * 1.2) / Math.tanh(1.2);   // gentle, unity at edges
+    }
+    const drumSat = audioCtx.createWaveShaper();
+    drumSat.curve = satC;
+    drumSat.oversample = "2x";
+
+    const drumGlue = audioCtx.createDynamicsCompressor();
+    drumGlue.threshold.setValueAtTime(-14, audioCtx.currentTime);
+    drumGlue.knee.setValueAtTime(8, audioCtx.currentTime);
+    drumGlue.ratio.setValueAtTime(2.5, audioCtx.currentTime);
+    drumGlue.attack.setValueAtTime(0.008, audioCtx.currentTime);   // lets transients punch
+    drumGlue.release.setValueAtTime(0.15, audioCtx.currentTime);
+
+    drumBus.connect(drumHP);
+    drumHP.connect(drumSat);
+    drumSat.connect(drumGlue);
+    drumGlue.connect(masterGain);
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);
