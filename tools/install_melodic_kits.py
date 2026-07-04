@@ -64,8 +64,13 @@ KITS = {
     },
     "strings": {
         # 9 zones every ~3-4 semitones, G3–B5 — grid + every key-selector root.
+        # Stereo dual-take blend: VSCO's two independent takes panned L/R.
+        # Mono-summing a section phase-flattens it into a synth-like pad, and a
+        # single take repeats vibrato identically per strike — the two-take
+        # stereo blend restores the decorrelated "many players" cue.
         "files": [STRINGS_SRC / f"{n}.wav" for n in
                   ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"]],
+        "blend_take2": STRINGS_SRC / "take2",   # second take, same filenames
         "trim": 5.0, "fade": 0.8,
     },
 }
@@ -84,8 +89,9 @@ def _detect_root_hz(mono: np.ndarray, sr: int) -> float:
     return sr / lag
 
 
-def _condition(src: Path, trim_s: float, fade_s: float):
-    """Return (audio_mono_float32 @ OUT_SR, root_hz)."""
+def _load_prepped(src: Path, trim_s: float, fade_s: float):
+    """Load one take: mono-sum, highpass, strip lead silence, trim+fade.
+    Returns (mono_float32 @ source sr, sr, root_hz)."""
     with AudioFile(str(src)) as f:
         sr = int(f.samplerate)
         audio = f.read(f.frames)              # (ch, n)
@@ -109,23 +115,44 @@ def _condition(src: Path, trim_s: float, fade_s: float):
     n_fade = min(int(fade_s * sr), len(mono))
     if n_fade:
         mono[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
+    return mono.astype(np.float32), sr, root
 
-    # resample to OUT_SR (linear; source is already clean)
-    if sr != OUT_SR:
-        n_out = int(round(len(mono) * OUT_SR / sr))
-        mono = np.interp(
-            np.linspace(0, len(mono) - 1, n_out),
-            np.arange(len(mono)), mono).astype(np.float32)
+
+def _resample(x: np.ndarray, sr: int) -> np.ndarray:
+    if sr == OUT_SR:
+        return x.astype(np.float32)
+    n_out = int(round(len(x) * OUT_SR / sr))
+    return np.interp(np.linspace(0, len(x) - 1, n_out),
+                     np.arange(len(x)), x).astype(np.float32)
+
+
+def _condition(src: Path, trim_s: float, fade_s: float, take2: Path | None = None):
+    """Return (audio (ch, n) float32 @ OUT_SR, root_hz).
+    Mono normally; if take2 is given, a stereo L/R blend of the two independent
+    takes (decorrelated ensemble — mono-summing kills the section realism)."""
+    a, sr, root = _load_prepped(src, trim_s, fade_s)
+    a = _resample(a, sr)
+
+    if take2 is not None:
+        b, sr2, _ = _load_prepped(take2 / src.name, trim_s, fade_s)
+        b = _resample(b, sr2)
+        n = min(len(a), len(b))
+        a, b = a[:n], b[:n]
+        left = 0.80 * a + 0.30 * b
+        right = 0.30 * a + 0.80 * b
+        audio = np.stack([left, right])
+    else:
+        audio = a[np.newaxis, :]
 
     # peak-normalize to -1 dBFS (headroom for polyphony)
-    peak = float(np.max(np.abs(mono))) or 1.0
-    mono = (mono * (0.891 / peak)).astype(np.float32)
-    return mono, root
+    peak = float(np.max(np.abs(audio))) or 1.0
+    audio = (audio * (0.891 / peak)).astype(np.float32)
+    return audio, root
 
 
-def _write_wav(path: Path, mono: np.ndarray, sr: int) -> None:
-    with AudioFile(str(path), "w", samplerate=sr, num_channels=1) as w:
-        w.write(mono[np.newaxis, :])
+def _write_wav(path: Path, audio: np.ndarray, sr: int) -> None:
+    with AudioFile(str(path), "w", samplerate=sr, num_channels=audio.shape[0]) as w:
+        w.write(audio)
 
 
 def main() -> None:
@@ -135,11 +162,13 @@ def main() -> None:
         zones = []
         for i, src in enumerate(spec["files"]):
             assert src.exists(), f"missing: {src}"
-            mono, root = _condition(src, spec["trim"], spec["fade"])
+            audio, root = _condition(src, spec["trim"], spec["fade"],
+                                     spec.get("blend_take2"))
             rel = f"{instr}/{i}.wav"
-            _write_wav(MEL / rel, mono, OUT_SR)
+            _write_wav(MEL / rel, audio, OUT_SR)
             zones.append({"f": rel, "root": round(root, 2), "g": 1.0})
-            print(f"  {instr}[{i}] {src.name:28s} -> {root:6.1f} Hz  ({len(mono)/OUT_SR:.2f}s)")
+            ch = "stereo" if audio.shape[0] == 2 else "mono"
+            print(f"  {instr}[{i}] {src.name:28s} -> {root:6.1f} Hz  ({audio.shape[1]/OUT_SR:.2f}s {ch})")
         # sort by root ascending so the app can nearest-match quickly
         zones.sort(key=lambda z: z["root"])
         manifest[instr] = zones
