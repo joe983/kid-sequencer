@@ -15,11 +15,15 @@ Each note's true fundamental is auto-detected (autocorrelation) and stored as it
 root Hz, so the app never depends on filename/octave-label conventions.
 
 Sources (CC0 / public domain), staged locally under MyMusic/Samples:
-  piano = Versilian VCSL "TX81Z / FM Piano" (github.com/sgossner/VCSL, CC0),
-          velocity vl2 — a DX/TX-era FM electric piano (Rhodes-ish) that fits
-          the app's electronic/urban styles better than an acoustic grand.
-          (The acoustic "Grand Piano, Kawai" set is also staged — swap PIANO_SRC
-          back to PIANO_GRAND to A/B.)
+  piano   = Versilian VCSL "Grand Piano, Kawai" (github.com/sgossner/VCSL, CC0),
+            velocity v3. (An FM electric piano set, VCSL TX81Z, is also staged —
+            swap PIANO_SRC to PIANO_EP to A/B; user chose the acoustic by ear.)
+  strings = VSCO 2 Community Edition "Violin Section" susVib v1
+            (github.com/sgossner/VSCO-2-CE, CC0) — real section sustains.
+
+All staged files are named by REAL scientific pitch (VCSL/VSCO octave labels
+run one octave low and were corrected at staging; roots are still auto-detected
+at build so naming is only for humans).
 
 Re-runnable.
 """
@@ -34,9 +38,10 @@ from pedalboard.io import AudioFile
 
 LIB = Path(r"C:\Users\Joe_C\Documents\MyMusic\Samples")
 KS = LIB / "Kid-Sequencer samples"
-PIANO_GRAND = KS / "VCSL-Grand-Piano-Kawai-CC0"     # acoustic grand (A/B alt)
-PIANO_EP = KS / "VCSL-TX81Z-FM-Piano-CC0"           # FM electric piano (in use)
+PIANO_GRAND = KS / "VCSL-Grand-Piano-Kawai-CC0"     # acoustic grand (in use)
+PIANO_EP = KS / "VCSL-TX81Z-FM-Piano-CC0"           # FM electric piano (A/B alt)
 PIANO_SRC = PIANO_GRAND                              # <- active source for the piano voice
+STRINGS_SRC = KS / "VSCO2-Violin-Section-CC0"       # violin section susVib
 
 # public/samples relative to this file (tools/ -> repo root -> public/samples),
 # so it writes into whatever worktree the tool lives in.
@@ -44,15 +49,25 @@ DST = Path(__file__).resolve().parents[1] / "public" / "samples"
 MEL = DST / "melodic"
 
 OUT_SR = 32000           # mono, plenty for a kids' web app; reverb bus adds gloss
-TRIM_S = 3.0             # note tail length before fade (covers a whole bar)
-FADE_S = 0.22            # fade-out at the trimmed tail
 LEAD_DB = -42.0          # strip leading silence up to first sample above this
 
-# instrument -> [source WAV, ...]  (root pitch auto-detected per file)
-# 8 zones every ~4 semitones, G#3–C6, covering the grid (C4–C5) + key transposition.
+# instrument -> {files, trim (s of tail kept), fade (s fade-out at the trim)}.
+# Root pitch is auto-detected per file. Decaying instruments (piano) use a short
+# trim — their own decay does the work. Sustaining instruments (strings) keep a
+# longer tail: a whole note at tempo 60 holds ~4 s, so trim must exceed that.
 KITS = {
-    "piano": [PIANO_SRC / f"{n}.wav" for n in
-              ["G#3", "C4", "E4", "G#4", "C5", "E5", "G#5", "C6"]],
+    "piano": {
+        # 8 zones every ~4 semitones, G#3–C6, covering the grid (C4–C5) + keys.
+        "files": [PIANO_SRC / f"{n}.wav" for n in
+                  ["G#3", "C4", "E4", "G#4", "C5", "E5", "G#5", "C6"]],
+        "trim": 3.0, "fade": 0.22,
+    },
+    "strings": {
+        # 9 zones every ~3-4 semitones, G3–B5 — grid + every key-selector root.
+        "files": [STRINGS_SRC / f"{n}.wav" for n in
+                  ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"]],
+        "trim": 5.0, "fade": 0.8,
+    },
 }
 
 
@@ -69,7 +84,7 @@ def _detect_root_hz(mono: np.ndarray, sr: int) -> float:
     return sr / lag
 
 
-def _condition(src: Path):
+def _condition(src: Path, trim_s: float, fade_s: float):
     """Return (audio_mono_float32 @ OUT_SR, root_hz)."""
     with AudioFile(str(src)) as f:
         sr = int(f.samplerate)
@@ -89,9 +104,9 @@ def _condition(src: Path):
         mono = mono[above[0]:]
 
     # trim tail + fade
-    n_keep = int(TRIM_S * sr)
+    n_keep = int(trim_s * sr)
     mono = mono[:n_keep]
-    n_fade = min(int(FADE_S * sr), len(mono))
+    n_fade = min(int(fade_s * sr), len(mono))
     if n_fade:
         mono[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
 
@@ -115,12 +130,12 @@ def _write_wav(path: Path, mono: np.ndarray, sr: int) -> None:
 
 def main() -> None:
     manifest: dict = {}
-    for instr, srcs in KITS.items():
+    for instr, spec in KITS.items():
         (MEL / instr).mkdir(parents=True, exist_ok=True)
         zones = []
-        for i, src in enumerate(srcs):
+        for i, src in enumerate(spec["files"]):
             assert src.exists(), f"missing: {src}"
-            mono, root = _condition(src)
+            mono, root = _condition(src, spec["trim"], spec["fade"])
             rel = f"{instr}/{i}.wav"
             _write_wav(MEL / rel, mono, OUT_SR)
             zones.append({"f": rel, "root": round(root, 2), "g": 1.0})
