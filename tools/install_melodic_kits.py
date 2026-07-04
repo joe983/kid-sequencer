@@ -14,9 +14,12 @@ fixed tail with a fade, peak-normalize to -1 dBFS, resample to 32 kHz, 16-bit PC
 Each note's true fundamental is auto-detected (autocorrelation) and stored as its
 root Hz, so the app never depends on filename/octave-label conventions.
 
-Sources (CC0 / public domain):
-  piano = Versilian VCSL "Grand Piano, Kawai" (github.com/sgossner/VCSL, CC0),
-          velocity layer v3, staged locally under MyMusic/Samples.
+Sources (CC0 / public domain), staged locally under MyMusic/Samples:
+  piano = Versilian VCSL "TX81Z / FM Piano" (github.com/sgossner/VCSL, CC0),
+          velocity vl2 — a DX/TX-era FM electric piano (Rhodes-ish) that fits
+          the app's electronic/urban styles better than an acoustic grand.
+          (The acoustic "Grand Piano, Kawai" set is also staged — swap PIANO_SRC
+          back to PIANO_GRAND to A/B.)
 
 Re-runnable.
 """
@@ -30,7 +33,10 @@ from pedalboard import HighpassFilter, Pedalboard
 from pedalboard.io import AudioFile
 
 LIB = Path(r"C:\Users\Joe_C\Documents\MyMusic\Samples")
-PIANO = LIB / "Kid-Sequencer samples" / "VCSL-Grand-Piano-Kawai-CC0"
+KS = LIB / "Kid-Sequencer samples"
+PIANO_GRAND = KS / "VCSL-Grand-Piano-Kawai-CC0"     # acoustic grand (A/B alt)
+PIANO_EP = KS / "VCSL-TX81Z-FM-Piano-CC0"           # FM electric piano (in use)
+PIANO_SRC = PIANO_EP                                 # <- active source for the piano voice
 
 # public/samples relative to this file (tools/ -> repo root -> public/samples),
 # so it writes into whatever worktree the tool lives in.
@@ -43,17 +49,10 @@ FADE_S = 0.22            # fade-out at the trimmed tail
 LEAD_DB = -42.0          # strip leading silence up to first sample above this
 
 # instrument -> [source WAV, ...]  (root pitch auto-detected per file)
+# 8 zones every ~4 semitones, G#3–C6, covering the grid (C4–C5) + key transposition.
 KITS = {
-    "piano": [
-        PIANO / "G#2.wav",  # -> real G#3
-        PIANO / "C3.wav",   # -> real C4 (middle C)
-        PIANO / "E3.wav",   # -> real E4
-        PIANO / "G#3.wav",  # -> real G#4
-        PIANO / "C4.wav",   # -> real C5
-        PIANO / "E4.wav",   # -> real E5
-        PIANO / "G#4.wav",  # -> real G#5
-        PIANO / "C5.wav",   # -> real C6
-    ],
+    "piano": [PIANO_SRC / f"{n}.wav" for n in
+              ["G#3", "C4", "E4", "G#4", "C5", "E5", "G#5", "C6"]],
 }
 
 
