@@ -36,7 +36,7 @@ LIB = Path(r"C:\Users\Joe_C\Documents\MyMusic\Samples")
 KS = LIB / "Kid-Sequencer samples"
 PIANO_GRAND = KS / "VCSL-Grand-Piano-Kawai-CC0"     # acoustic grand (A/B alt)
 PIANO_EP = KS / "VCSL-TX81Z-FM-Piano-CC0"           # FM electric piano (in use)
-PIANO_SRC = PIANO_EP                                 # <- active source for the piano voice
+PIANO_SRC = PIANO_GRAND                              # <- active source for the piano voice
 
 # public/samples relative to this file (tools/ -> repo root -> public/samples),
 # so it writes into whatever worktree the tool lives in.
