@@ -41,7 +41,6 @@ DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
     # pickup into the downbeat, rim counter after the snare. Mirrors the app.
     "drill": {
         "kick":  [1,0,0,0, 0,0,.90,0, 0,0,0,0, .90,0,0,.60],
-        "sub":   [1,0,0,0, 0,0,.90,0, 0,0,0,0, .90,0,0,.60],
         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
         "rim":   [0,0,0,0, 0,0,0,0, 0,0,0,.35, 0,0,0,0],
         "hatC":  [.25,.18,.25,.45, .25,.18,.28,.18, .25,.18,.25,.45, .25,.18,.28,.18],
