@@ -121,7 +121,7 @@
   <rect x="16.5" y="12" width="5" height="9" rx="1.8" fill="#1d1d1d"/>
 </svg>
 </button>
-<button aria-label="Funk" aria-pressed="false" class="drumStyleBtn" id="drumStyleFunk">
+<button aria-label="UK Garage" aria-pressed="false" class="drumStyleBtn" id="drumStyleFunk">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="Funk">  <path d="M12 1.6 L14.6 9.2 L22.6 9.2 L16.1 13.9 L18.7 21.5 L12 16.8 L5.3 21.5 L7.9 13.9 L1.4 9.2 L9.4 9.2 Z" fill="#1d1d1d"/>
 </svg>
 </button>
@@ -650,8 +650,11 @@ let drumNoise = null;             // AudioBuffer
 
 const DRUM_PATTERNS = {
   techhouse: {
-    // 4-on-the-floor + claps on 2 & 4 + driving hats
+    // 4-on-the-floor + claps on 2 & 4 + driving hats.
+    // sub doubles each kick at low level for weight (2026-07-02: match the
+    // sampled kits' heft — the synth kick alone was too light).
     kick: [1,0,0,0,  1,0,0,0,  1,0,0,0,  1,0,0,0],
+    sub:  [0.5,0,0,0,  0.5,0,0,0,  0.5,0,0,0,  0.5,0,0,0],
     clap: [0,0,0,0,  1,0,0,0,  0,0,0,0,  1,0,0,0],
     // closed hat: 16ths with gentle accents
     hatC: [0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14],
@@ -667,12 +670,14 @@ const DRUM_PATTERNS = {
     hatC:  [0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.17,0]
   },
   funk: {
-    // Syncopated kicks, snare 2 & 4 with ghost notes, busy hats, cowbell on the "1"
-    kick:    [1,0,0,0,    0,0,0.85,0,  0,0,1,0,     0,0.6,0,0],
-    snare:   [0,0,0.25,0, 1,0,0.20,0,  0,0.25,0,0,  1,0,0.25,0],
-    hatC:    [0.30,0.15,0.22,0.15,  0.28,0.15,0.22,0.15,  0.30,0.15,0.22,0.15,  0.28,0.15,0.22,0.15],
-    hatO:    [0,0,0.18,0, 0,0,0,0,    0,0,0.18,0,  0,0,0,0],
-    cowbell: [0.40,0,0,0, 0,0,0,0,    0.40,0,0,0,  0,0,0,0]
+    // UK Garage 2-step (replaced funk, 2026-07-02): kick on 1 + and-of-2 +
+    // and-of-3, snare on 2 & 4, rim skips, open hat on the offbeats. Heavy
+    // swing applied in playDrumsAtStep (the shuffle IS the garage feel).
+    kick:  [1,0,0,0,    0,0,0.90,0,  0,0,0.85,0,  0,0,0,0],
+    snare: [0,0,0,0,    1,0,0,0,     0,0,0,0,     1,0,0,0],
+    rim:   [0,0,0,0.25, 0,0,0,0,     0,0.25,0,0,  0,0,0,0.30],
+    hatC:  [0.28,0,0.16,0.12,  0.28,0,0.16,0,  0.28,0,0.16,0.12,  0.28,0,0.18,0],
+    hatO:  [0,0,0.22,0, 0,0,0.22,0,  0,0,0.22,0,  0,0,0.22,0]
   },
   drill: {
     // UK drill — half-time (ported from the approved 140bpm pack beat, 2026-07-02):
@@ -2386,9 +2391,11 @@ function playDrumsAtStep(s){
   const pat = DRUM_PATTERNS[drumStyle] || DRUM_PATTERNS.techhouse;
   const stepDur = stepDurationSec();
 
-  // Subtle shuffle for Tech-House hats only (keeps the playhead/grid exact)
-  const swing = (drumStyle === "techhouse") ? 0.08 : 0.0;
-  const offs = ((drumStyle === "techhouse") && (s % 2 === 1)) ? (stepDur * swing) : 0;
+  // Per-style shuffle on the odd 16ths (keeps the playhead/grid exact).
+  // funk (= UK Garage) swings hard — the shuffle is the 2-step feel.
+  const SWING = { techhouse: 0.08, funk: 0.16 };
+  const swing = SWING[drumStyle] || 0.0;
+  const offs = (swing && (s % 2 === 1)) ? (stepDur * swing) : 0;
 
   const t = audioCtx.currentTime + AUDIO_AHEAD_S + offs;
 

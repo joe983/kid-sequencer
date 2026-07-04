@@ -13,8 +13,10 @@ from ..audio import SR, add_at, seconds_per_beat
 
 # 16-step velocity patterns per genre (subset/copy of the app's DRUM_PATTERNS).
 DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
+    # sub doubles each kick at low level for weight (2026-07-02). Mirrors the app.
     "techhouse": {
         "kick": [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+        "sub":  [.5,0,0,0, .5,0,0,0, .5,0,0,0, .5,0,0,0],
         "clap": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
         "hatC": [.26,.14,.20,.14, .26,.14,.20,.14, .26,.14,.20,.14, .26,.14,.20,.14],
         "hatO": [0,0,.24,0, 0,0,.24,0, 0,0,.24,0, 0,0,.24,0],
@@ -26,12 +28,14 @@ DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
         "snare": [0,0,0,.20, 1,0,.18,0, 0,.20,0,0, 1,0,.19,0],
         "hatC":  [.22,0,.15,0, .22,0,.15,0, .22,0,.15,0, .22,0,.17,0],
     },
+    # "funk" slot = UK Garage 2-step (2026-07-02). Mirrors the app (which also
+    # applies a heavy 0.16 swing to this style in playDrumsAtStep).
     "funk": {
-        "kick":    [1,0,0,0, 0,0,.85,0, 0,0,1,0, 0,.6,0,0],
-        "snare":   [0,0,.25,0, 1,0,.20,0, 0,.25,0,0, 1,0,.25,0],
-        "hatC":    [.30,.15,.22,.15, .28,.15,.22,.15, .30,.15,.22,.15, .28,.15,.22,.15],
-        "hatO":    [0,0,.18,0, 0,0,0,0, 0,0,.18,0, 0,0,0,0],
-        "cowbell": [.40,0,0,0, 0,0,0,0, .40,0,0,0, 0,0,0,0],
+        "kick":  [1,0,0,0, 0,0,.90,0, 0,0,.85,0, 0,0,0,0],
+        "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+        "rim":   [0,0,0,.25, 0,0,0,0, 0,.25,0,0, 0,0,0,.30],
+        "hatC":  [.28,0,.16,.12, .28,0,.16,0, .28,0,.16,.12, .28,0,.18,0],
+        "hatO":  [0,0,.22,0, 0,0,.22,0, 0,0,.22,0, 0,0,.22,0],
     },
     # Ported from the approved 140bpm pack beat (2026-07-02): harder kicks +
     # pickup into the downbeat, rim counter after the snare. Mirrors the app.

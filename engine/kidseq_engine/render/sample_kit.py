@@ -31,6 +31,7 @@ DRUM_DIR = Path(__file__).resolve().parents[2] / "assets" / "drums"
 KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
     "techhouse": {
         "kick": [("bounce/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 1.0)],
         "clap": [("bounce/clap.wav", 1.0)],
         "hatC": [("bounce/hatC.wav", 1.0)],
         "hatO": [("bounce/hatO.wav", 1.0)],
@@ -64,12 +65,13 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "shaker":  [("perc/shaker.wav", 0.9)],
         "cowbell": [("perc/cowbell.wav", 0.8)],
     },
+    # "funk" slot = UK Garage: bounce kit + woodblock rim skip
     "funk": {
-        "kick":    [("soulful/kick.wav", 1.0)],
-        "snare":   [("soulful/snare.wav", 1.0)],
-        "hatC":    [("soulful/hatC.wav", 1.0)],
-        "hatO":    [("soulful/hatO.wav", 1.0)],
-        "cowbell": [("perc/cowbell.wav", 0.7)],
+        "kick":  [("bounce/kick.wav", 1.0)],
+        "snare": [("bounce/snare.wav", 1.0)],
+        "rim":   [("perc/woodblock.wav", 0.8)],
+        "hatC":  [("bounce/hatC.wav", 1.0)],
+        "hatO":  [("bounce/hatO.wav", 1.0)],
     },
 }
 
