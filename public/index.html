@@ -645,7 +645,8 @@ let instrument = "piano";
 let drumsMuted = true;            // start muted
 let drumStyle = "techhouse";      // techhouse | dnb
 let drumBus = null;               // GainNode
-let drumSampleKits = null;        // {style:{voice:[{buffer,g,trimMs}]}} — null until load attempted
+let drumSampleKits = null;        // {style:{voice:[{buffer,g,trimMs,room}]}} — null until load attempted
+let drumRoomSend = null;          // GainNode — shared small drum room (voices opt in via "room")
 let drumNoise = null;             // AudioBuffer
 
 const DRUM_PATTERNS = {
@@ -653,8 +654,9 @@ const DRUM_PATTERNS = {
     // 4-on-the-floor + claps on 2 & 4 + driving hats.
     // sub doubles each kick at low level for weight (2026-07-02: match the
     // sampled kits' heft — the synth kick alone was too light).
-    kick: [1,0,0,0,  1,0,0,0,  1,0,0,0,  1,0,0,0],
-    sub:  [0.5,0,0,0,  0.5,0,0,0,  0.5,0,0,0,  0.5,0,0,0],
+    // kick driven >1 = harder into playKick's saturator (punch, not just level)
+    kick: [1.2,0,0,0,  1.2,0,0,0,  1.2,0,0,0,  1.2,0,0,0],
+    sub:  [0.65,0,0,0,  0.65,0,0,0,  0.65,0,0,0,  0.65,0,0,0],
     clap: [0,0,0,0,  1,0,0,0,  0,0,0,0,  1,0,0,0],
     // closed hat: 16ths with gentle accents
     hatC: [0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14,  0.26,0.14,0.20,0.14],
@@ -2352,7 +2354,7 @@ async function loadDrumSampleKits(){
           const res = await fetch('samples/drums/' + l.f);
           if(!res.ok) continue;
           const buf = await audioCtx.decodeAudioData(await res.arrayBuffer());
-          loaded.push({ buffer: buf, g: (l.g != null ? l.g : 1), trimMs: (l.trimMs || 0) });
+          loaded.push({ buffer: buf, g: (l.g != null ? l.g : 1), trimMs: (l.trimMs || 0), room: (l.room || 0) });
         }catch(e){}
       }
       if(loaded.length) kits[style][voice] = loaded;
@@ -2378,6 +2380,11 @@ function playDrumSample(layers, at, vel){
       try{ src.stop(end + 0.005); }catch(e){}
     }
     src.connect(g); g.connect(drumBus);
+    if(l.room && drumRoomSend){          // opt-in send into the shared room
+      const r = audioCtx.createGain();
+      r.gain.value = l.room;
+      g.connect(r); r.connect(drumRoomSend);
+    }
     trackNode(src);
     src.start(at);
   }
@@ -2593,6 +2600,16 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     drumHP.connect(drumSat);
     drumSat.connect(drumGlue);
     drumGlue.connect(masterGain);
+
+    // Small shared drum room — sample voices opt in per-layer via "room" in the
+    // manifest (e.g. the 909 clap). Feeds the glue comp so room + dry get
+    // squeezed together = one space.
+    drumRoomSend = audioCtx.createGain();
+    drumRoomSend.gain.setValueAtTime(0.9, audioCtx.currentTime);
+    const drumRoomIR = audioCtx.createConvolver();
+    drumRoomIR.buffer = makeHallImpulse(audioCtx, 0.35, 3.0);
+    drumRoomSend.connect(drumRoomIR);
+    drumRoomIR.connect(drumGlue);
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);
