@@ -74,13 +74,14 @@ KITS = {
         "trim": 5.0, "fade": 0.8,
     },
     "synth": {
-        # Reese/rave lead — RENDERED, not sampled: a synth's "sample" is a
-        # render, and rendering per zone gives exact pitch + constant detune
-        # with zero stretch artifacts. Classic Reese recipe: two saws detuned
-        # ±14 cents beating against each other (+ quieter centre saw), through
-        # a Moog ladder LPF with drive, sub sine underneath. Mono is authentic
-        # (the original Reese and its jungle descendants are mono-compatible).
-        "render": "reese",
+        # Rave lead — RENDERED, not sampled: a synth's "sample" is a render,
+        # and rendering per zone gives exact pitch with zero stretch artifacts.
+        # "hoover" = the classic Alpha Juno Mentasm/Dominator stab (user picked
+        # it over a Reese by ear): PWM pulse snarl + sub-octave saw growl +
+        # unison saw, heavy chorus for width, bright ladder LPF with drive,
+        # and the signature short pitch-rise into each note.
+        # (A "reese" renderer is also available in _RENDERERS to A/B.)
+        "render": "hoover",
         "roots": ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"],
         "trim": 5.0, "fade": 0.6,
     },
@@ -168,7 +169,48 @@ def _render_reese(f: float, dur: float) -> np.ndarray:
     return x.astype(np.float32)
 
 
-_RENDERERS = {"reese": _render_reese}
+def _render_hoover(f: float, dur: float) -> np.ndarray:
+    """Classic hoover (Alpha Juno Mentasm/Dominator): PWM pulse snarl at f +
+    sub-octave saw growl + unison saw, chorused for the ensemble shimmer,
+    through a bright ladder LPF with drive. Short pitch-rise into the note —
+    the signature hoover 'zip'. Additive synthesis, so alias-free. Mono @ OUT_SR."""
+    from pedalboard import Chorus, LadderFilter
+
+    t = np.arange(int(dur * OUT_SR)) / OUT_SR
+
+    def saw(freq: float, phase_t) -> np.ndarray:
+        out = np.zeros_like(t)
+        w = 2 * np.pi * freq * t
+        for k in range(1, int(14000 / freq) + 1):
+            out += np.sin(k * (w + phase_t)) / k
+        return out * (2 / np.pi)
+
+    # PWM pulse = difference of two saws with a moving phase offset (the snarl)
+    pwm_phase = np.pi * (1.0 + 0.30 * np.sin(2 * np.pi * 2.5 * t))
+    pulse = saw(f, 0.0) - saw(f, pwm_phase)
+
+    x = 0.90 * pulse + 0.60 * saw(f * 0.5, 1.7) + 0.50 * saw(f, 0.6)
+    x /= 2.0
+
+    # signature zip: first 60ms read at rising speed (~-3 semitones -> pitch)
+    n_zip = int(0.060 * OUT_SR)
+    speed = np.ones(len(x)); speed[:n_zip] = np.linspace(0.84, 1.0, n_zip)
+    pos = np.cumsum(speed); pos -= pos[0]
+    x = np.interp(pos, np.arange(len(x)), x)
+
+    cutoff = min(9000.0, max(4500.0, 8 * f))     # bright — hoovers are brash
+    x = Pedalboard([
+        Chorus(rate_hz=0.9, depth=0.45, centre_delay_ms=6.0, feedback=0.15, mix=0.5),
+        LadderFilter(mode=LadderFilter.Mode.LPF24,
+                     cutoff_hz=cutoff, resonance=0.15, drive=2.5),
+    ])(x[np.newaxis, :].astype(np.float32), OUT_SR)[0]
+
+    n_att = int(0.006 * OUT_SR)
+    x[:n_att] *= np.linspace(0.0, 1.0, n_att)
+    return x.astype(np.float32)
+
+
+_RENDERERS = {"reese": _render_reese, "hoover": _render_hoover}
 
 
 def _resample(x: np.ndarray, sr: int) -> np.ndarray:
