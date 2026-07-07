@@ -85,6 +85,15 @@ KITS = {
         "roots": ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"],
         "trim": 5.0, "fade": 0.6,
     },
+    "bells": {
+        # NOT bells any more — the slot is an old-school rave pad (user swap,
+        # 2026-07-07). Key stays "bells" for saved-sequence compat; the app
+        # plays this kit at GRID pitch (the old x4 octave shift only applies
+        # to the synth glockenspiel fallback). Stereo, ~220ms bloom attack.
+        "render": "ravepad",
+        "roots": ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"],
+        "trim": 5.0, "fade": 0.8,
+    },
 }
 
 # note name -> Hz (A4 = 440), for render roots
@@ -210,7 +219,50 @@ def _render_hoover(f: float, dur: float) -> np.ndarray:
     return x.astype(np.float32)
 
 
-_RENDERERS = {"reese": _render_reese, "hoover": _render_hoover}
+def _render_ravepad(f: float, dur: float) -> np.ndarray:
+    """Old-school rave/trance pad (Juno/JP lineage): 4-saw detuned stack + a
+    quiet octave-up shimmer, warm 12dB ladder LPF, chorus. Almost no attack —
+    a ~220ms bloom baked into the render. Stereo: each channel is rendered
+    with its own oscillator phases and chorus rate (decorrelated width, the
+    same lesson as the strings dual-take blend). Additive = alias-free."""
+    from pedalboard import Chorus, LadderFilter
+
+    t = np.arange(int(dur * OUT_SR)) / OUT_SR
+
+    def saw(freq: float, phase: float) -> np.ndarray:
+        out = np.zeros_like(t)
+        w = 2 * np.pi * freq * t
+        for k in range(1, int(14000 / freq) + 1):
+            out += np.sin(k * w + k * phase) / k
+        return out * (2 / np.pi)
+
+    def channel(phases, chorus_rate: float) -> np.ndarray:
+        d1, d2 = 2 ** (7 / 1200), 2 ** (14 / 1200)
+        x = (saw(f * d1, phases[0]) + saw(f / d1, phases[1]) +
+             saw(f * d2, phases[2]) + saw(f / d2, phases[3]) +
+             0.25 * saw(f * 2, phases[4]))
+        x /= 4.25
+        cutoff = min(5000.0, max(2200.0, 4 * f))
+        x = Pedalboard([
+            LadderFilter(mode=LadderFilter.Mode.LPF12,
+                         cutoff_hz=cutoff, resonance=0.1, drive=1.2),
+            Chorus(rate_hz=chorus_rate, depth=0.5, centre_delay_ms=7.0,
+                   feedback=0.1, mix=0.45),
+        ])(x[np.newaxis, :].astype(np.float32), OUT_SR)[0]
+        return x
+
+    left = channel([0.3, 1.7, 2.6, 4.1, 5.3], 0.70)
+    right = channel([3.9, 0.8, 5.7, 1.9, 2.4], 0.95)
+
+    audio = np.stack([left, right])
+    n_att = int(0.22 * OUT_SR)                   # the "not much attack" bloom
+    ramp = np.sin(np.linspace(0, np.pi / 2, n_att)) ** 2
+    audio[:, :n_att] *= ramp
+    return audio.astype(np.float32)
+
+
+_RENDERERS = {"reese": _render_reese, "hoover": _render_hoover,
+              "ravepad": _render_ravepad}
 
 
 def _resample(x: np.ndarray, sr: int) -> np.ndarray:
@@ -259,16 +311,17 @@ def main() -> None:
             renderer = _RENDERERS[spec["render"]]
             for i, name in enumerate(spec["roots"]):
                 root = _note_hz(name)
-                mono = renderer(root, spec["trim"])
-                n_fade = min(int(spec["fade"] * OUT_SR), len(mono))
+                audio = np.atleast_2d(renderer(root, spec["trim"]))   # (ch, n)
+                n_fade = min(int(spec["fade"] * OUT_SR), audio.shape[1])
                 if n_fade:
-                    mono[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
-                peak = float(np.max(np.abs(mono))) or 1.0
-                audio = (mono * (0.891 / peak))[np.newaxis, :].astype(np.float32)
+                    audio[:, -n_fade:] *= np.linspace(1.0, 0.0, n_fade)
+                peak = float(np.max(np.abs(audio))) or 1.0
+                audio = (audio * (0.891 / peak)).astype(np.float32)
                 rel = f"{instr}/{i}.wav"
                 _write_wav(MEL / rel, audio, OUT_SR)
                 zones.append({"f": rel, "root": round(root, 2), "g": 1.0})
-                print(f"  {instr}[{i}] render:{spec['render']} {name:5s} -> {root:6.1f} Hz  ({len(mono)/OUT_SR:.2f}s mono)")
+                ch = "stereo" if audio.shape[0] == 2 else "mono"
+                print(f"  {instr}[{i}] render:{spec['render']} {name:5s} -> {root:6.1f} Hz  ({audio.shape[1]/OUT_SR:.2f}s {ch})")
             manifest[instr] = zones
             continue
         for i, src in enumerate(spec["files"]):
