@@ -73,7 +73,27 @@ KITS = {
         "blend_take2": STRINGS_SRC / "take2",   # second take, same filenames
         "trim": 5.0, "fade": 0.8,
     },
+    "synth": {
+        # Reese/rave lead — RENDERED, not sampled: a synth's "sample" is a
+        # render, and rendering per zone gives exact pitch + constant detune
+        # with zero stretch artifacts. Classic Reese recipe: two saws detuned
+        # ±14 cents beating against each other (+ quieter centre saw), through
+        # a Moog ladder LPF with drive, sub sine underneath. Mono is authentic
+        # (the original Reese and its jungle descendants are mono-compatible).
+        "render": "reese",
+        "roots": ["G3", "B3", "D4", "F#4", "A4", "C5", "E5", "G5", "B5"],
+        "trim": 5.0, "fade": 0.6,
+    },
 }
+
+# note name -> Hz (A4 = 440), for render roots
+_NOTE_IDX = {"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5,
+             "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11}
+
+
+def _note_hz(name: str) -> float:
+    midi = (int(name[-1]) + 1) * 12 + _NOTE_IDX[name[:-1]]
+    return 440.0 * 2 ** ((midi - 69) / 12)
 
 
 def _detect_root_hz(mono: np.ndarray, sr: int) -> float:
@@ -118,6 +138,39 @@ def _load_prepped(src: Path, trim_s: float, fade_s: float):
     return mono.astype(np.float32), sr, root
 
 
+def _render_reese(f: float, dur: float) -> np.ndarray:
+    """Classic Reese at root f: detuned saw pair + centre saw -> ladder LPF
+    with drive, sub sine added post-filter. Additive saws (harmonics summed to
+    14 kHz) so there is zero aliasing at any zone pitch. Returns mono @ OUT_SR."""
+    from pedalboard import LadderFilter
+
+    t = np.arange(int(dur * OUT_SR)) / OUT_SR
+
+    def saw(freq: float, phase: float) -> np.ndarray:
+        out = np.zeros_like(t)
+        for k in range(1, int(14000 / freq) + 1):
+            out += np.sin(2 * np.pi * k * freq * t + k * phase) / k
+        return out * (2 / np.pi)
+
+    det = 2 ** (14 / 1200)                       # ±14 cents — the Reese beat
+    x = saw(f * det, 0.3) + saw(f / det, 1.7) + 0.5 * saw(f, 0.9)
+    x /= 2.5
+
+    cutoff = min(2600.0, max(900.0, 2.6 * f))    # dark low zones, open enough up top
+    x = Pedalboard([LadderFilter(mode=LadderFilter.Mode.LPF24,
+                                 cutoff_hz=cutoff, resonance=0.2, drive=4.0)])(
+        x[np.newaxis, :], OUT_SR)[0]
+
+    x = x + 0.22 * np.sin(2 * np.pi * (f / 2) * t)   # sub weight, post-filter
+
+    n_att = int(0.008 * OUT_SR)                  # fast attack, no click
+    x[:n_att] *= np.linspace(0.0, 1.0, n_att)
+    return x.astype(np.float32)
+
+
+_RENDERERS = {"reese": _render_reese}
+
+
 def _resample(x: np.ndarray, sr: int) -> np.ndarray:
     if sr == OUT_SR:
         return x.astype(np.float32)
@@ -160,6 +213,22 @@ def main() -> None:
     for instr, spec in KITS.items():
         (MEL / instr).mkdir(parents=True, exist_ok=True)
         zones = []
+        if "render" in spec:
+            renderer = _RENDERERS[spec["render"]]
+            for i, name in enumerate(spec["roots"]):
+                root = _note_hz(name)
+                mono = renderer(root, spec["trim"])
+                n_fade = min(int(spec["fade"] * OUT_SR), len(mono))
+                if n_fade:
+                    mono[-n_fade:] *= np.linspace(1.0, 0.0, n_fade)
+                peak = float(np.max(np.abs(mono))) or 1.0
+                audio = (mono * (0.891 / peak))[np.newaxis, :].astype(np.float32)
+                rel = f"{instr}/{i}.wav"
+                _write_wav(MEL / rel, audio, OUT_SR)
+                zones.append({"f": rel, "root": round(root, 2), "g": 1.0})
+                print(f"  {instr}[{i}] render:{spec['render']} {name:5s} -> {root:6.1f} Hz  ({len(mono)/OUT_SR:.2f}s mono)")
+            manifest[instr] = zones
+            continue
         for i, src in enumerate(spec["files"]):
             assert src.exists(), f"missing: {src}"
             audio, root = _condition(src, spec["trim"], spec["fade"],
