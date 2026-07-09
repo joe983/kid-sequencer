@@ -159,8 +159,8 @@
 <polyline fill="none" points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40" stroke="#1f6bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></polyline>
 </svg></div>
 <div class="instBtn" id="btnBass" aria-label="Bass">🎸</div>
-<div class="instBtn" id="btnStrings" title="Space">🌌</div>
-<div class="instBtn" id="btnBells" aria-label="Bells">🔔</div>
+<div class="instBtn" id="btnStrings" title="Strings">🎻</div>
+<div class="instBtn" id="btnBells" aria-label="Pad">🌌</div>
 </div>
 </div>
 </div>
@@ -648,6 +648,7 @@ let drumBus = null;               // GainNode
 let drumSampleKits = null;        // {style:{voice:[{buffer,g,trimMs,room}]}} — null until load attempted
 let drumRoomSend = null;          // GainNode — shared small drum room (voices opt in via "room")
 let drumNoise = null;             // AudioBuffer
+let melodicSampleKits = null;     // {instrument:[{buffer,root,g}]} sorted by root — null until load attempted
 
 const DRUM_PATTERNS = {
   techhouse: {
@@ -2432,6 +2433,139 @@ function playDrumSample(layers, at, vel){
   }
 }
 
+// ---- Melodic instrument sample kits (pitched multisamples) --------------
+// Mirror of the drum kit system, but each instrument is a set of one-shot
+// notes at known root pitches. The nearest zone is pitch-shifted
+// (playbackRate = targetFreq / root) — this covers the 8 grid rows, key
+// transposition, and the bass ×0.25 / bells ×4 octave shifts automatically.
+// Real one-shots decay naturally, so repeated notes stay legible without the
+// old flat-sustain (organ) envelope. Falls back to the synth play* voices.
+async function loadMelodicSampleKits(){
+  if(!audioCtx || melodicSampleKits !== null) return;
+  melodicSampleKits = {};                    // set eagerly — only attempt once
+  const kits = await _loadMelodicPack() || await _loadMelodicFolder();
+  if(!kits) return;
+  melodicSampleKits = kits;
+  try{
+    const have = Object.keys(kits).filter(k => kits[k] && kits[k].length);
+    console.info('[melodic] sample kits active:', have.length ? have.join(', ') : '(none — synth voices)');
+  }catch(e){}
+}
+
+// Packed bundle: [4-byte LE headerLen][UTF-8 JSON header][concatenated wav bytes].
+// Header = {instrument:[{o,n,root,g}]} where o/n slice the data section.
+// The pack payload is MP3 (mobile-data size). MP3 encoding pads ~30-50ms of
+// silence onto the head of every clip, which would blur note attacks against
+// the drums — measure the real start per zone and skip to it at play time.
+function _leadSilenceSec(buf){
+  try{
+    const d = buf.getChannelData(0);
+    const thresh = 0.004;                    // ~-48 dB
+    for(let i = 0; i < d.length; i++){
+      if(Math.abs(d[i]) > thresh) return Math.max(0, (i - 32) / buf.sampleRate);
+    }
+  }catch(e){}
+  return 0;
+}
+
+async function _loadMelodicPack(){
+  let ab;
+  try{
+    const r = await fetch('samples/melodic.pack');
+    if(!r.ok) return null;
+    ab = await r.arrayBuffer();
+  }catch(e){ return null; }
+  try{
+    const dv = new DataView(ab);
+    const headerLen = dv.getUint32(0, true);
+    const header = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, headerLen)));
+    const dataBase = 4 + headerLen;
+    const kits = {};
+    for(const [instr, zones] of Object.entries(header)){
+      const loaded = [];
+      for(const z of zones){
+        try{
+          const slice = ab.slice(dataBase + z.o, dataBase + z.o + z.n);
+          const buf = await audioCtx.decodeAudioData(slice);
+          loaded.push({ buffer: buf, root: z.root, g: (z.g != null ? z.g : 1),
+                        off: _leadSilenceSec(buf) });
+        }catch(e){}
+      }
+      if(loaded.length){ loaded.sort((a,b) => a.root - b.root); kits[instr] = loaded; }
+    }
+    return Object.keys(kits).length ? kits : null;
+  }catch(e){ return null; }
+}
+
+// Dev fallback: individual WAVs described by manifest.json (gitignored, not deployed).
+async function _loadMelodicFolder(){
+  let man;
+  try{
+    const r = await fetch('samples/melodic/manifest.json', {cache:'no-store'});
+    if(!r.ok) return null;
+    man = await r.json();
+  }catch(e){ return null; }
+  const kits = {};
+  await Promise.all(Object.entries(man).map(async ([instr, zones]) => {
+    const loaded = [];
+    for(const z of zones){
+      try{
+        const res = await fetch('samples/melodic/' + z.f);
+        if(!res.ok) continue;
+        const buf = await audioCtx.decodeAudioData(await res.arrayBuffer());
+        loaded.push({ buffer: buf, root: z.root, g: (z.g != null ? z.g : 1) });
+      }catch(e){}
+    }
+    if(loaded.length){ loaded.sort((a,b) => a.root - b.root); kits[instr] = loaded; }
+  }));
+  return Object.keys(kits).length ? kits : null;
+}
+
+// Per-note level for the sampled voices (peak-normalized at build to -1 dBFS).
+// Separate from the synth LEVEL map so the sample and synth paths tune apart.
+// NB sustained sources (strings) read much louder than transients at equal peak.
+const MELODIC_SAMPLE_LEVEL = { piano: 0.62, trumpet: 0.55, strings: 0.42, synth: 0.40, bass: 0.7, bells: 0.40 };
+// Note-end fade — what makes repeats legible. Piano = damper snap; strings = bow lift.
+// "bells" = the rave pad when sampled: slow bloom in the render, gentle release here.
+const MELODIC_RELEASE_S = { piano: 0.10, trumpet: 0.15, strings: 0.30, synth: 0.10, bass: 0.10, bells: 0.35 };
+
+function playMelodicSample(instrument, freq, steps){
+  const zones = melodicSampleKits[instrument];
+  if(!zones || !zones.length) return false;
+
+  // nearest zone in log-pitch space (minimizes the pitch-shift ratio)
+  let zone = zones[0], best = Infinity;
+  for(const z of zones){
+    const d = Math.abs(Math.log2(freq / z.root));
+    if(d < best){ best = d; zone = z; }
+  }
+
+  const now = audioCtx.currentTime + AUDIO_AHEAD_S;
+  const hold = steps * stepDurationSec();
+  const rel = MELODIC_RELEASE_S[instrument] || 0.10;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = zone.buffer;
+  src.playbackRate.setValueAtTime(freq / zone.root, now);
+
+  // The sample carries its own attack + natural decay; we only hold it open for
+  // the note's duration then damp it (like releasing a piano key), so four
+  // quarter notes read as four distinct strikes.
+  const level = (MELODIC_SAMPLE_LEVEL[instrument] || 0.6) * (zone.g || 1);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(level, now);
+  g.gain.setValueAtTime(level, now + hold);
+  g.gain.linearRampToValueAtTime(0.0001, now + hold + rel);
+
+  src.connect(g);
+  g.connect(bus[instrument].input);          // per-instrument reverb/filter/delay bus
+
+  trackNode(src);
+  src.start(now, zone.off || 0);   // skip MP3 encoder-delay silence (pack zones)
+  try{ src.stop(now + hold + rel + 0.02); }catch(e){}
+  return true;
+}
+
 function playDrumsAtStep(s){
   if(drumsMuted) return;
   if(!audioCtx || !drumBus) return;
@@ -2659,6 +2793,7 @@ masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
     // Kick off the (async, optional) sample-kit load — voices fall back to
     // synth until each kit's buffers are decoded.
     loadDrumSampleKits();
+    loadMelodicSampleKits();
 
     warmUpAudio(2);
   }
@@ -3540,12 +3675,24 @@ function playBells(freq, steps){
 function playInstrument(freq, steps){
   lastAudioActivityAt = performance.now();
 
-  if(instrument === "piano")   return playPiano(freq, steps);
-  if(instrument === "trumpet") return playTrumpet(freq, steps);
-  if(instrument === "strings") return playStrings(freq, steps);
-  if(instrument === "bass")    return playBass (freq * 0.25, steps); // 2 octaves down -> C2-C3
-  if(instrument === "bells")   return playBells(freq * 4,    steps); // 2 octaves up  -> C6-C7
-  return playSynth(freq, steps);
+  // Octave placement for bass/bells. NB the "bells" slot is the rave PAD when
+  // its sample kit is loaded (plays at grid pitch); the synth fallback is still
+  // the old glockenspiel 2 octaves up. Internal key stays "bells" so old saved
+  // sequences load (same pattern as the funk/UK Garage drum key).
+  const hasKit = melodicSampleKits && melodicSampleKits[instrument];
+  const f = instrument === "bass"  ? freq * 0.25          // 2 octaves down -> C2-C3
+          : instrument === "bells" ? (hasKit ? freq : freq * 4)
+          : freq;
+
+  // Prefer a loaded pitched sample kit; fall back to the synth voice.
+  if(hasKit && playMelodicSample(instrument, f, steps)) return;
+
+  if(instrument === "trumpet") return playTrumpet(f, steps);
+  if(instrument === "strings") return playStrings(f, steps);
+  if(instrument === "bass")    return playBass(f, steps);
+  if(instrument === "bells")   return playBells(f, steps);
+  if(instrument === "piano")   return playPiano(f, steps);
+  return playSynth(f, steps);
 }
 
 /* -------------------- PLAYBACK -------------------- */
