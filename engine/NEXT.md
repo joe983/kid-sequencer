@@ -132,6 +132,19 @@ The sequencer's drum engine now prefers real one-shot samples over synthesis, pe
    `fetch_drumkits.py` prefs; Virtuosity may serve funk directly).
 3. THEN the A/B mix-tune of `master.py:GENRE_PRESETS` against reference tracks, genre by genre.
 
+## NEW — Modal/Linux build STOOD UP (2026-07-09)
+The engine now runs end-to-end on Modal (workspace `joe983`, app `kidseq-engine`).
+`infra/modal_app.py`: debian_slim image (+git +portaudio19-dev — pyaudio builds from
+source on Linux) + persistent Volume `kidseq-assets` (31 files, populated once by the
+fetch scripts; functions symlink `engine/assets` → the volume so relative paths work).
+- **Verified:** all 18 tests pass remotely (sequence/master/sample-kit);
+  `smoke` renders in the cloud → `out/modal_track.mp3` locally (-10.00 LUFS, -2.09 dBTP).
+- Run (from `engine/`, `PYTHONUTF8=1` needed on Windows — Modal CLI prints ✓):
+  `python -m modal run infra/modal_app.py::{populate_assets|run_tests|smoke}`
+- Auth: `~/.modal.toml` (this laptop linked via `modal token new`).
+- **Unblocked:** the parked sfizz/VSCO orchestral + VST soft-synth work now has its
+  Linux home — extend the image (apt sfizz / synth binaries) in `infra/modal_app.py`.
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST
