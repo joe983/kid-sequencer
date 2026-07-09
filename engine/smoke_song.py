@@ -46,7 +46,10 @@ def main() -> None:
           + f"  = {total_bars} bars ≈ {total_bars * 4 * 60 / riff.tempo:.0f}s")
     print(f"layers: {sorted(layers)} | kicks={len(kick_onsets)}")
 
-    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets, tempo=riff.tempo)
+    # the intro rides a wetter riff send — "distant" open that dries up at the build
+    intro_end = int(plan[0].bars * riff.bar_beats * (60.0 / riff.tempo) * SR)
+    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
+                 tempo=riff.tempo, riff_wet_spans=[(0, intro_end)])
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

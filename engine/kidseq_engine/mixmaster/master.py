@@ -91,6 +91,39 @@ _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass",)
 
+# ---------------------------------------------------------------------------
+# Shared space (one wet-only reverb return replaces every insert reverb) and
+# the parallel "NY" drum compression bus.
+# ---------------------------------------------------------------------------
+
+# post-board send levels into the shared reverb (dB); everything else stays dry
+_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0}
+_RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
+_ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
+              "funk": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
+_PREDELAY_S = 0.020
+
+# parallel drum crush, summed under the dry kit (dB by genre)
+_NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "funk": -9.0,
+               "reggaeton": -8.0, "dnb": -10.0}
+
+
+def _reverb_return_board(genre: str | None) -> Pedalboard:
+    room = _ROOM_SIZE.get(genre or "", 0.40)
+    return Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=300.0),   # keep mud out of the tail
+        LowpassFilter(cutoff_frequency_hz=7500.0),
+        Reverb(room_size=room, damping=0.55, wet_level=1.0, dry_level=0.0, width=1.0),
+    ])
+
+
+def _ny_crush_board() -> Pedalboard:
+    return Pedalboard([
+        Compressor(threshold_db=-32.0, ratio=8.0, attack_ms=1.0, release_ms=90.0),
+        LowpassFilter(cutoff_frequency_hz=8000.0),
+        Gain(gain_db=6.0),
+    ])
+
 
 def preset_for(genre: str | None) -> GenrePreset:
     return GENRE_PRESETS.get(genre or "default", _DEFAULT)
@@ -134,13 +167,12 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
             Compressor(threshold_db=-18.0, ratio=4.0, attack_ms=10.0, release_ms=120.0),
         ])
     if name == "riff":
-        # EQ + space ONLY — no compressor, nothing time/pitch. (Insert reverb
-        # moves to the shared send in the next increment.)
+        # EQ ONLY — no compressor, nothing time/pitch. Space comes from the
+        # shared reverb send (one coherent room for the whole mix).
         return Pedalboard([
             HighpassFilter(cutoff_frequency_hz=140.0),   # bass owns below; grid is C4-range
             PeakFilter(cutoff_frequency_hz=300.0, gain_db=-2.0, q=1.0),
             PeakFilter(cutoff_frequency_hz=3000.0, gain_db=2.0, q=0.8),   # presence
-            Reverb(room_size=0.22, damping=0.5, wet_level=0.10, dry_level=0.95, width=0.9),
         ])
     if name == "pads":
         return Pedalboard([
@@ -432,13 +464,17 @@ def _process(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
 
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            kick_onsets: list[int], lufs_target: float | None = None,
-           tempo: float = 120.0) -> MasterResult:
+           tempo: float = 120.0,
+           riff_wet_spans: list[tuple[int, int]] | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
             to the longest. Only "riff" is required.
     kick_onsets: sample indices that trigger the sidechain pump.
     tempo: used to sync the glue compressor's release to the groove.
+    riff_wet_spans: (start, end) sample ranges where the riff's reverb send is
+            raised to _RIFF_WET_DB (the arranger passes the intro — a "distant"
+            open that dries up when the band arrives).
     """
     if "riff" not in layers or layers["riff"].size == 0:
         raise ValueError("master() needs a non-empty 'riff' layer")
@@ -457,20 +493,50 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     shape = 1.0 - pump_envelope(n, sr, kick_onsets, 1.0, pump_release)
 
     bus = np.zeros((n, 2), dtype=np.float32)
+    send_acc = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
         proc = _process(buf, _board_for(name, genre), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
             proc = proc[:n]
+        if name == "drums":
+            # parallel NY crush under the dry kit (density without killing punch)
+            crushed = _process(proc, _ny_crush_board(), sr)[:n]
+            if crushed.shape[0] < n:
+                crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
+            proc = proc + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
         proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
+
+        # tap the shared-reverb send pre-pump (the return gets its own duck)
+        send_db = _SEND_DB.get(name)
+        if send_db is not None:
+            if name == "riff" and riff_wet_spans:
+                curve = np.full(n, 10.0 ** (send_db / 20.0), dtype=np.float32)
+                for s0, s1 in riff_wet_spans:
+                    curve[max(0, s0):max(0, s1)] = 10.0 ** (_RIFF_WET_DB / 20.0)
+                send_acc += proc * curve[:, None]
+            else:
+                send_acc += proc * (10.0 ** (send_db / 20.0))
+
         if name in _PUMPED_LAYERS:
             depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
             proc = proc * (1.0 - depth * shape)[:, None]
         gain = 10.0 ** (preset.layer_gain_db.get(name, 0.0) / 20.0)
         bus += proc * gain
+
+    # shared space: ONE wet-only return for the whole mix (coherent room),
+    # pre-delayed 20 ms and ducked at 0.8x the genre pump depth
+    if float(np.max(np.abs(send_acc))) > 1e-9:
+        pre = int(_PREDELAY_S * sr)
+        sent = np.pad(send_acc, ((pre, 0), (0, 0)))[:n]
+        ret = _process(sent, _reverb_return_board(genre), sr)[:n]
+        if ret.shape[0] < n:
+            ret = np.pad(ret, ((0, n - ret.shape[0]), (0, 0)))
+        ret = ret * (1.0 - 0.8 * preset.pump_depth * shape)[:, None]
+        bus += ret
 
     # --- master-bus endgame -------------------------------------------------
     # 1) DC removal, then tone (EQ precedes every nonlinearity: HP first so

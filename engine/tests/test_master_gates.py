@@ -151,10 +151,39 @@ def test_mono_compatible_and_low_end_mono():
 
 
 def test_mono_input_stays_mono():
-    """Invariant: dual-mono layers in ⇒ (near) dual-mono out — no spurious widening."""
+    """Invariant: dual-mono layers in ⇒ near-mono out. The shared reverb return
+    (width 1.0, wet-only, ~-15 dB) adds a LITTLE genuine width by design — the
+    bound allows that but still catches accidental widening of the dry path."""
     for g in GENRES:
         res, _ = _run(g, stereo=False)
-        assert _corr(res.audio[:, 0], res.audio[:, 1]) > 0.98, (g, _corr(res.audio[:, 0], res.audio[:, 1]))
+        assert _corr(res.audio[:, 0], res.audio[:, 1]) > 0.90, (g, _corr(res.audio[:, 0], res.audio[:, 1]))
+
+
+def test_ny_crush_is_impulse_aligned():
+    """The parallel drum bus must not smear timing: crushed path peaks within
+    1 ms of the dry impulse (else parallel summing combs the transient)."""
+    from kidseq_engine.mixmaster.master import _ny_crush_board, _process
+
+    n = SR // 2
+    x = np.zeros((n, 2), dtype=np.float32)
+    x[SR // 4] = 0.9
+    y = _process(x, _ny_crush_board(), SR)
+    assert abs(int(np.argmax(np.abs(y[:, 0]))) - SR // 4) <= int(0.001 * SR)
+
+
+def test_shared_reverb_return_is_wet_only():
+    """The return board must carry NO dry signal (dry comes from the layers) —
+    an impulse in produces ~nothing at the impulse instant."""
+    from kidseq_engine.mixmaster.master import _process, _reverb_return_board
+
+    n = SR
+    x = np.zeros((n, 2), dtype=np.float32)
+    imp = SR // 4
+    x[imp] = 0.9
+    y = _process(x, _reverb_return_board("techhouse"), SR)
+    peak = float(np.max(np.abs(y)))
+    assert peak > 1e-4, "return produced silence"
+    assert float(np.max(np.abs(y[imp]))) < 0.10 * peak, "return leaks dry signal"
 
 
 def test_pump_shape_dip_hold_recover():
