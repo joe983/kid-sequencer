@@ -31,7 +31,7 @@ def main() -> None:
     assert src == "sample-kit", f"dnb kit not on the sample path (got {src}) — run scripts/fetch_drumkits.py"
 
     drums = normalize(drums_audio(STYLE, bpm, BARS), 0.95)
-    kicks = kick_onsets_from_pattern(DRUM_PATTERNS[STYLE], bpm, BARS, SR)
+    kicks = kick_onsets_from_pattern(DRUM_PATTERNS[STYLE], bpm, BARS, SR, style=STYLE)
     # master() requires a riff layer; a silent one keeps this an honest drums-only render
     layers = {"riff": np.zeros_like(drums), "drums": drums}
     res = master(layers, SR, genre=STYLE, kick_onsets=kicks)

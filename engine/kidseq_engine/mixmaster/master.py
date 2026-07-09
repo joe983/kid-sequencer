@@ -52,43 +52,41 @@ class GenrePreset:
     peak_ceiling_db: float = -1.0     # limiter true-peak ceiling
 
 
-# Default works for any genre; specific genres override feel.
+# Since per-layer LUFS calibration (below) sets the base balance, genre gains are
+# small CREATIVE offsets from that calibrated balance, not the balance itself.
 _DEFAULT = GenrePreset(
-    layer_gain_db={"riff": -1.0, "drums": -2.0, "bass": -3.0, "pads": -8.0, "texture": -12.0},
+    layer_gain_db={},
     pump_depth=0.45,
     pump_release_s=0.16,
 )
 
 GENRE_PRESETS: dict[str, GenrePreset] = {
     "default": _DEFAULT,
-    "techhouse": GenrePreset(
-        layer_gain_db={"riff": -1.0, "drums": -1.5, "bass": -3.0, "pads": -8.0, "texture": -12.0},
-        pump_depth=0.6, pump_release_s=0.18,
-    ),
-    "dnb": GenrePreset(
-        layer_gain_db={"riff": -1.0, "drums": -1.0, "bass": -2.5, "pads": -9.0, "texture": -12.0},
-        pump_depth=0.35, pump_release_s=0.10,
-    ),
-    "funk": GenrePreset(
-        layer_gain_db={"riff": -1.0, "drums": -2.0, "bass": -3.0, "pads": -9.0, "texture": -13.0},
-        pump_depth=0.25, pump_release_s=0.12,
-    ),
-    "drill": GenrePreset(
-        layer_gain_db={"riff": -1.5, "drums": -1.5, "bass": -2.0, "pads": -9.0, "texture": -12.0},
-        pump_depth=0.3, pump_release_s=0.14,
-    ),
-    "hiphop": GenrePreset(
-        layer_gain_db={"riff": -1.0, "drums": -2.0, "bass": -2.5, "pads": -9.0, "texture": -12.0},
-        pump_depth=0.25, pump_release_s=0.16,
-    ),
-    "reggaeton": GenrePreset(
-        layer_gain_db={"riff": -1.0, "drums": -1.5, "bass": -3.0, "pads": -8.0, "texture": -12.0},
-        pump_depth=0.4, pump_release_s=0.15,
-    ),
+    "techhouse": GenrePreset(layer_gain_db={"drums": 0.5},
+                             pump_depth=0.50, pump_release_s=0.18),
+    "dnb": GenrePreset(layer_gain_db={"drums": 1.0, "bass": 0.5, "pads": -1.0},
+                       pump_depth=0.35, pump_release_s=0.10),
+    "funk": GenrePreset(layer_gain_db={},
+                        pump_depth=0.30, pump_release_s=0.12),
+    "drill": GenrePreset(layer_gain_db={"bass": 1.0, "riff": -0.5},
+                         pump_depth=0.25, pump_release_s=0.14),
+    "hiphop": GenrePreset(layer_gain_db={},
+                          pump_depth=0.25, pump_release_s=0.16),
+    "reggaeton": GenrePreset(layer_gain_db={"drums": 0.5},
+                             pump_depth=0.40, pump_release_s=0.15),
 }
 
-# Layers ducked by the sidechain pump (drums are the trigger, never ducked).
-_PUMPED_LAYERS = ("riff", "bass", "pads", "texture")
+# Layers ducked by the sidechain pump (drums are the trigger, never ducked),
+# with per-layer depth multipliers: pads/texture pump hardest (the EDM wash),
+# the riff only breathes (it must stay legible — it IS the song).
+_PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5, "fx": 1.0}
+_PUMPED_LAYERS = tuple(_PUMP_MULT)
+_PUMP_DEPTH_CAP = 0.65
+
+# Post-board layer LUFS targets (active regions only) — the calibrated mix
+# balance genre gains offset from.
+_LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
+               "texture": -30.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass",)
@@ -103,38 +101,87 @@ def preset_for(genre: str | None) -> GenrePreset:
 # ---------------------------------------------------------------------------
 
 
-def _riff_board() -> Pedalboard:
-    # EQ + space ONLY. No compressor that pumps the transients, nothing time/pitch.
-    return Pedalboard([
-        HighpassFilter(cutoff_frequency_hz=45.0),      # clear sub-mud so kick/bass own the lows
-        PeakFilter(cutoff_frequency_hz=3000.0, gain_db=2.0, q=0.8),  # presence
-        Reverb(room_size=0.22, damping=0.5, wet_level=0.10, dry_level=0.95, width=0.9),
-    ])
+def _kick_slot(genre: str | None) -> float:
+    """Genre kick fundamental (Hz) — the frequency the mix slots around."""
+    try:
+        from ..render.sample_kit import kick_slot_hz
+        return kick_slot_hz(genre)
+    except Exception:  # noqa: BLE001 — never let slot detection break a master
+        return 55.0
 
 
-def _drums_board() -> Pedalboard:
-    return Pedalboard([
-        Compressor(threshold_db=-14.0, ratio=3.0, attack_ms=4.0, release_ms=120.0),  # punch
-        HighShelfFilter(cutoff_frequency_hz=8000.0, gain_db=2.5, q=0.7),             # air on hats
-    ])
-
-
-def _bass_board() -> Pedalboard:
-    return Pedalboard([
-        Compressor(threshold_db=-18.0, ratio=4.0, attack_ms=10.0, release_ms=120.0),
-        LowpassFilter(cutoff_frequency_hz=4000.0),  # keep it round, out of the riff's way
-    ])
-
-
-def _generic_board() -> Pedalboard:
+def _board_for(name: str, genre: str | None) -> Pedalboard:
+    """Per-layer processing, EQ-slotted around the genre's kick fundamental:
+    drums are boosted AT the kick slot, bass is notched exactly there (and takes
+    80–120 Hz instead); the riff owns 2–4 kHz presence and pads are cut there
+    so they physically cannot mask the melody."""
+    if name == "drums":
+        slot = _kick_slot(genre)
+        return Pedalboard([
+            PeakFilter(cutoff_frequency_hz=slot, gain_db=1.5, q=1.0),
+            PeakFilter(cutoff_frequency_hz=250.0, gain_db=-2.0, q=1.2),   # boxiness
+            Compressor(threshold_db=-14.0, ratio=3.0, attack_ms=4.0, release_ms=120.0),
+            HighShelfFilter(cutoff_frequency_hz=8000.0, gain_db=2.5, q=0.7),  # air
+        ])
+    if name == "bass":
+        slot = _kick_slot(genre)
+        return Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=30.0),
+            PeakFilter(cutoff_frequency_hz=slot, gain_db=-3.0, q=1.4),    # kick's slot
+            PeakFilter(cutoff_frequency_hz=95.0, gain_db=2.0, q=1.0),     # bass body
+            HighShelfFilter(cutoff_frequency_hz=2500.0, gain_db=-1.5, q=0.71),
+            LowpassFilter(cutoff_frequency_hz=6000.0),
+            Compressor(threshold_db=-18.0, ratio=4.0, attack_ms=10.0, release_ms=120.0),
+        ])
+    if name == "riff":
+        # EQ + space ONLY — no compressor, nothing time/pitch. (Insert reverb
+        # moves to the shared send in the next increment.)
+        return Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=140.0),   # bass owns below; grid is C4-range
+            PeakFilter(cutoff_frequency_hz=300.0, gain_db=-2.0, q=1.0),
+            PeakFilter(cutoff_frequency_hz=3000.0, gain_db=2.0, q=0.8),   # presence
+            Reverb(room_size=0.22, damping=0.5, wet_level=0.10, dry_level=0.95, width=0.9),
+        ])
+    if name == "pads":
+        return Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=220.0),
+            LowpassFilter(cutoff_frequency_hz=9000.0),
+            PeakFilter(cutoff_frequency_hz=3000.0, gain_db=-3.0, q=0.9),  # inverse of riff
+            Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0),
+        ])
+    if name == "texture":
+        return Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=400.0),
+            Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0),
+        ])
+    if name == "fx":
+        return Pedalboard([HighpassFilter(cutoff_frequency_hz=150.0)])
     return Pedalboard([Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0)])
 
 
-_LAYER_BOARD = {
-    "riff": _riff_board,
-    "drums": _drums_board,
-    "bass": _bass_board,
-}
+def _calibrate_layer(buf: np.ndarray, sr: int, target_lufs: float) -> np.ndarray:
+    """Trim a layer so its ACTIVE regions (100 ms blocks with RMS > −60 dBFS)
+    measure `target_lufs`. Layers spend much of a song silent (drums drop out
+    in breaks, pads out of intros) — measuring the whole buffer would make
+    sparse layers loud. This sets the calibrated mix balance; genre gains are
+    creative offsets on top."""
+    blk = int(0.1 * sr)
+    nb = buf.shape[0] // blk
+    if nb < 4:
+        return buf
+    blocks = buf[: nb * blk].reshape(nb, blk, buf.shape[1])
+    rms = np.sqrt((blocks ** 2).mean(axis=(1, 2)))
+    act = rms > 10.0 ** (-60.0 / 20.0)
+    if not act.any():
+        return buf
+    active = blocks[act].reshape(-1, buf.shape[1])
+    if active.shape[0] < sr:  # pyloudnorm needs a usable length
+        reps = int(np.ceil(sr / active.shape[0]))
+        active = np.tile(active, (reps, 1))
+    loud = _integrated_lufs(active.astype(np.float32), sr)
+    if not np.isfinite(loud):
+        return buf
+    return (buf * (10.0 ** ((target_lufs - loud) / 20.0))).astype(np.float32)
 
 
 # ---------------------------------------------------------------------------
@@ -143,12 +190,15 @@ _LAYER_BOARD = {
 
 
 def kick_onsets_from_pattern(pattern: dict[str, list[float]], tempo: float, bars: int,
-                             sr: int) -> list[int]:
+                             sr: int, style: str | None = None) -> list[int]:
     """Sample indices of every kick hit across `bars` bars (the pump trigger).
 
     Uses the symbolic pattern (not audio detection) so the pump is musically locked.
-    Falls back to `sub` if a pattern has no kick (e.g. pure-808 styles).
+    `style` applies the same swing as the drum renderers — the duck lands exactly
+    on the swung hit. Falls back to `sub` if a pattern has no kick.
     """
+    from ..render.drums import swung_step_offset
+
     steps = pattern.get("kick") or pattern.get("sub")
     if not steps:
         return []
@@ -158,38 +208,37 @@ def kick_onsets_from_pattern(pattern: dict[str, list[float]], tempo: float, bars
     for b in range(bars):
         for i, vel in enumerate(steps):
             if vel > 0:
-                onsets.append(int((b * 4 * spb + i * step_s) * sr))
+                onsets.append(int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr))
     return onsets
 
 
 def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
-                  release_s: float, attack_s: float = 0.004) -> np.ndarray:
-    """A 1.0-baseline gain envelope that dips to (1-depth) at each kick then recovers.
-
-    Overlapping kicks take the deeper duck (np.minimum). attack_s is a short pre-onset
-    ramp down so the dip has no click.
-    """
+                  release_s: float, attack_s: float = 0.004,
+                  hold_s: float = 0.010) -> np.ndarray:
+    """A 1.0-baseline gain envelope: 4 ms dip ENDING at each kick onset, 10 ms
+    hold at (1-depth), then exponential recovery (τ = release_s/3, ~95% back by
+    release_s). Overlapping kicks take the deeper duck (np.minimum)."""
     env = np.ones(n_samples, dtype=np.float32)
     if not onsets or depth <= 0:
         return env
     tau = max(release_s / 3.0, 1e-3)
     rel_n = max(int(release_s * sr), 1)
     atk_n = max(int(attack_s * sr), 1)
+    hold_n = max(int(hold_s * sr), 1)
     t = np.arange(rel_n) / sr
-    # recovery curve: starts at (1-depth), exponentially returns toward 1.0
-    recovery = (1.0 - depth) + depth * (1.0 - np.exp(-t / tau))
-    recovery = recovery.astype(np.float32)
+    recovery = ((1.0 - depth) + depth * (1.0 - np.exp(-t / tau))).astype(np.float32)
     for on in onsets:
         if on < 0 or on >= n_samples:
             continue
-        # short attack ramp into the dip (ends exactly at the onset)
         a0 = max(0, on - atk_n)
-        if on > a0:
+        if on > a0:  # attack ramp lands AT the onset (duck ready before the hit)
             ramp = np.linspace(1.0, 1.0 - depth, on - a0, endpoint=False, dtype=np.float32)
             env[a0:on] = np.minimum(env[a0:on], ramp)
-        end = min(n_samples, on + rel_n)
-        if end > on:
-            env[on:end] = np.minimum(env[on:end], recovery[: end - on])
+        h_end = min(n_samples, on + hold_n)
+        env[on:h_end] = np.minimum(env[on:h_end], np.float32(1.0 - depth))
+        end = min(n_samples, h_end + rel_n)
+        if end > h_end:
+            env[h_end:end] = np.minimum(env[h_end:end], recovery[: end - h_end])
     return env
 
 
@@ -281,7 +330,10 @@ def _brickwall(x: np.ndarray, sr: int, ceiling_lin: float,
 
 
 def _limit_to_lufs(stereo: np.ndarray, sr: int, target: float,
-                   ceiling_db: float = -1.2, max_iters: int = 3) -> np.ndarray:
+                   ceiling_db: float = -1.2, max_iters: int = 5) -> np.ndarray:
+    # max_iters=5: past the clipper, loudness rises sublinearly with drive, so
+    # each (target - got) correction under-delivers; 3 passes left dense swung
+    # content ~0.3 LU shy of target.
     """Drive-INTO-limiter convergence: gain the ORIGINAL buffer up into a
     4x-oversampled brickwall until integrated loudness lands on target (±0.2 LU).
 
@@ -311,12 +363,17 @@ def _limit_to_lufs(stereo: np.ndarray, sr: int, target: float,
         out = down[pad:pad + n]
         if out.shape[0] < n:
             out = np.pad(out, ((0, n - out.shape[0]), (0, 0)))
+        # decimation re-introduces content-dependent inter-sample overshoot
+        # (0.1-0.6 dB on clip-dense material). Apply the final-ceiling trim
+        # INSIDE the loop so drive targets the post-trim loudness — otherwise
+        # master()'s TP trim silently pulls converged masters off-target.
+        tp = _true_peak_db(out, sr)
+        if tp > ceiling_db + 0.2:
+            out = out * (10.0 ** ((ceiling_db + 0.2 - tp) / 20.0))
         got = _integrated_lufs(out, sr)
         if debug:
-            pk = int(np.argmax(np.max(np.abs(out), axis=1)))
             print(f"    [limit_to_lufs] iter {i}: drive={drive:+.2f} -> "
-                  f"lufs={got:.2f} tp={_true_peak_db(out, sr):.2f} "
-                  f"peak@{pk / sr:.3f}s/{n / sr:.3f}s")
+                  f"lufs={got:.2f} tp={_true_peak_db(out, sr):.2f}")
         if not np.isfinite(got) or abs(got - target) <= 0.2:
             break
         drive += target - got
@@ -392,22 +449,27 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     # Coerce every layer to stereo (N, 2); mono inputs (e.g. tests) are upmixed.
     st_layers = {name: as_stereo(buf) for name, buf in layers.items() if buf.size}
     n = max(buf.shape[0] for buf in st_layers.values())
-    pump = pump_envelope(n, sr, kick_onsets, preset.pump_depth, preset.pump_release_s)
-    pump2 = pump[:, None]  # (n, 1) → broadcasts across both channels
+
+    # One duck SHAPE (0 = no duck, 1 = full), scaled per layer: pads/texture pump
+    # hardest, the riff only breathes. Recovery time follows the groove (~95%
+    # back a bit past the next 8th).
+    pump_release = 0.55 * (60.0 / tempo)
+    shape = 1.0 - pump_envelope(n, sr, kick_onsets, 1.0, pump_release)
 
     bus = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
-        board = _LAYER_BOARD.get(name, _generic_board)()
-        proc = _process(buf, board, sr)  # (M, 2)
+        proc = _process(buf, _board_for(name, genre), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
             proc = proc[:n]
+        proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
         if name in _PUMPED_LAYERS:
-            proc = proc * pump2
-        gain = 10.0 ** (preset.layer_gain_db.get(name, -6.0) / 20.0)
+            depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
+            proc = proc * (1.0 - depth * shape)[:, None]
+        gain = 10.0 ** (preset.layer_gain_db.get(name, 0.0) / 20.0)
         bus += proc * gain
 
     # --- master-bus endgame -------------------------------------------------

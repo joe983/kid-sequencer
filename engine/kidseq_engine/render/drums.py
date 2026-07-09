@@ -123,6 +123,17 @@ def _voice(name: str, sr: int) -> np.ndarray:
 _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
          "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
 
+# Per-style swing (mirrors the app's SWING map in playDrumsAtStep): odd 16th
+# steps are delayed by swing x one step. funk = UK Garage's defining shuffle.
+SWING: dict[str, float] = {"funk": 0.16, "techhouse": 0.08}
+
+
+def swung_step_offset(style: str | None, step: int) -> float:
+    """Step position in step-units with swing applied (odd 16ths delayed).
+    THE shared groove clock: drum renderers AND the sidechain pump both use
+    this, so the duck always lands exactly on the (possibly swung) hit."""
+    return step + (SWING.get(style or "", 0.0) if step % 2 else 0.0)
+
 
 def render_drums(style: str, tempo: float, bars: int, sr: int = SR,
                  pattern: dict | None = None) -> np.ndarray:
@@ -145,6 +156,6 @@ def render_drums(style: str, tempo: float, bars: int, sr: int = SR,
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + i * step_s) * sr)
+                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
                 add_at(buf, oneshot * float(vel) * g, at)
     return buf[: bars * bar_samples + int(0.4 * sr)]

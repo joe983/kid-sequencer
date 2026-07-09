@@ -43,7 +43,8 @@ def main() -> None:
     kick_onsets: list[int] = []
     if riff.drum_style and riff.drum_style in DRUM_PATTERNS:
         layers["drums"] = normalize(drums_audio(riff.drum_style, riff.tempo, BARS), 0.95)
-        kick_onsets = kick_onsets_from_pattern(DRUM_PATTERNS[riff.drum_style], riff.tempo, BARS, SR)
+        kick_onsets = kick_onsets_from_pattern(DRUM_PATTERNS[riff.drum_style], riff.tempo, BARS, SR,
+                                              style=riff.drum_style)
 
     preset = preset_for(riff.drum_style)
     print(f"  preset: {riff.drum_style or 'default'} | pump_depth={preset.pump_depth} "

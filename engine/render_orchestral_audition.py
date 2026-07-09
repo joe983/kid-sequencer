@@ -47,7 +47,7 @@ def main() -> None:
         if riff.drum_style in DRUM_PATTERNS:
             layers["drums"] = normalize(drums_audio(riff.drum_style, riff.tempo, BARS), 0.95)
             kick_onsets = kick_onsets_from_pattern(
-                DRUM_PATTERNS[riff.drum_style], riff.tempo, BARS, SR)
+                DRUM_PATTERNS[riff.drum_style], riff.tempo, BARS, SR, style=riff.drum_style)
 
         res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets, tempo=riff.tempo)
         write_wav(out / f"orch_{instrument}.wav", res.audio)

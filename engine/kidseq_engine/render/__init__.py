@@ -52,7 +52,7 @@ def drums_audio(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray
     if pat and sample_kit.kit_available(style):
         out = sample_kit.render_drums_samples(style, tempo, bars, sr)
     elif default_soundfont() and pat:
-        out = render_drums_sf(pat, tempo, bars, sr)
+        out = render_drums_sf(pat, tempo, bars, sr, style=style)
     else:
         out = render_drums(style, tempo, bars, sr)
     return as_stereo(out)
@@ -65,7 +65,7 @@ def drums_audio_pattern(style: str, pattern: dict, tempo: float, bars: int,
     if sample_kit.kit_available(style):
         out = sample_kit.render_drums_samples(style, tempo, bars, sr, pattern=pattern)
     elif default_soundfont():
-        out = render_drums_sf(pattern, tempo, bars, sr)
+        out = render_drums_sf(pattern, tempo, bars, sr, style=style)
     else:
         out = render_drums(style, tempo, bars, sr, pattern=pattern)
     return as_stereo(out)
