@@ -31,9 +31,16 @@ public/
   samples/drums.pack  ← packed drum-kit bundle (committed, hosting-served — real
                         drum samples for prod). Raw samples/drums/ folder is dev-only
                         (gitignored + hosting-ignored). Rebuild: tools/install_app_kits.py
+  samples/melodic.pack← packed melodic-instrument bundle (same container as drums.pack
+                        but MP3 payload, ~3.3 MB). Raw samples/melodic/ dev-only.
+                        Rebuild: tools/install_melodic_kits.py
 tools/
   install_app_kits.py ← builds public/samples/drums.pack from the local sample library
                         (peak-match + rumble clean + pack); documents voice→sample map
+  install_melodic_kits.py ← builds public/samples/melodic.pack: pitched multisample
+                        zones (roots auto-detected) from CC0 libraries + RENDERED
+                        synth kits (hoover/ravepad/reese). Build takes >2 min —
+                        run with a long Bash timeout
 functions/
   index.js            ← Cloud Functions: createCheckoutSession, createTopupCheckout, generateAiTrack, stripeWebhook
   scripts/setup-stripe-products.js ← one-off: create products/prices (npm run setup:stripe)

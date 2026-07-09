@@ -2454,6 +2454,20 @@ async function loadMelodicSampleKits(){
 
 // Packed bundle: [4-byte LE headerLen][UTF-8 JSON header][concatenated wav bytes].
 // Header = {instrument:[{o,n,root,g}]} where o/n slice the data section.
+// The pack payload is MP3 (mobile-data size). MP3 encoding pads ~30-50ms of
+// silence onto the head of every clip, which would blur note attacks against
+// the drums — measure the real start per zone and skip to it at play time.
+function _leadSilenceSec(buf){
+  try{
+    const d = buf.getChannelData(0);
+    const thresh = 0.004;                    // ~-48 dB
+    for(let i = 0; i < d.length; i++){
+      if(Math.abs(d[i]) > thresh) return Math.max(0, (i - 32) / buf.sampleRate);
+    }
+  }catch(e){}
+  return 0;
+}
+
 async function _loadMelodicPack(){
   let ab;
   try{
@@ -2473,7 +2487,8 @@ async function _loadMelodicPack(){
         try{
           const slice = ab.slice(dataBase + z.o, dataBase + z.o + z.n);
           const buf = await audioCtx.decodeAudioData(slice);
-          loaded.push({ buffer: buf, root: z.root, g: (z.g != null ? z.g : 1) });
+          loaded.push({ buffer: buf, root: z.root, g: (z.g != null ? z.g : 1),
+                        off: _leadSilenceSec(buf) });
         }catch(e){}
       }
       if(loaded.length){ loaded.sort((a,b) => a.root - b.root); kits[instr] = loaded; }
@@ -2546,7 +2561,7 @@ function playMelodicSample(instrument, freq, steps){
   g.connect(bus[instrument].input);          // per-instrument reverb/filter/delay bus
 
   trackNode(src);
-  src.start(now);
+  src.start(now, zone.off || 0);   // skip MP3 encoder-delay silence (pack zones)
   try{ src.stop(now + hold + rel + 0.02); }catch(e){}
   return true;
 }

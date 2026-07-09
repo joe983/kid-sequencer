@@ -354,14 +354,29 @@ def main() -> None:
 
 
 def _build_pack(manifest: dict) -> None:
-    """[4-byte LE headerLen][UTF-8 JSON header][concatenated wav bytes].
-    Header = {instr:[{o,n,root,g}]} with o/n slicing the data blob."""
+    """[4-byte LE headerLen][UTF-8 JSON header][concatenated MP3 bytes].
+    Header = {instr:[{o,n,root,g}]} with o/n slicing the data blob.
+    Pack payload is MP3 (~6x smaller than WAV — mobile data), decoded by
+    decodeAudioData everywhere incl. iOS Safari. The dev folder keeps WAV.
+    MP3 adds ~30-50ms encoder-delay silence at the head of every clip; the
+    app loader measures it per zone after decode and starts playback past it
+    (see the melodic-pack loader in index.html) — do not try to trim it here."""
+    import tempfile
+
     data = bytearray()
     header: dict = {}
     for instr, zones in manifest.items():
         out = []
         for z in zones:
-            raw = (MEL / z["f"]).read_bytes()
+            with AudioFile(str(MEL / z["f"])) as f:
+                sr = int(f.samplerate)
+                audio = f.read(f.frames)
+            kbps = "128" if audio.shape[0] == 2 else "96"
+            tmp = Path(tempfile.gettempdir()) / "kidseq_zone.mp3"
+            with AudioFile(str(tmp), "w", samplerate=sr,
+                           num_channels=audio.shape[0], quality=kbps) as w:
+                w.write(audio)
+            raw = tmp.read_bytes()
             out.append({"o": len(data), "n": len(raw), "root": z["root"], "g": z["g"]})
             data.extend(raw)
         header[instr] = out
@@ -371,7 +386,7 @@ def _build_pack(manifest: dict) -> None:
         f.write(struct.pack("<I", len(head)))
         f.write(head)
         f.write(bytes(data))
-    print(f"packed -> {pack} ({pack.stat().st_size:,} bytes, {len(data):,} audio)")
+    print(f"packed -> {pack} ({pack.stat().st_size:,} bytes, {len(data):,} audio, mp3)")
 
 
 if __name__ == "__main__":
