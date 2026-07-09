@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=57">
+<link rel="stylesheet" href="css/styles.css?v=58">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 </head>
@@ -1293,11 +1293,16 @@ function _aiShowResult(track){
       actBtn +
     `</div>` +
     `<div class="aiNote">Save keeps this track with your tune.</div>` +
+    `<button class="aiCta aiCta-again" id="aiAgainBtn">Make another track ✨</button>` +
     `<div class="aiNote"><button class="upgradeTextBtn" id="aiTopupLink">Need more tracks? Top up</button></div>`
   );
   document.getElementById('aiSaveBtn')?.addEventListener('click', ()=>{ closeAiModal(); saveToCloud(); });
   document.getElementById('aiShareBtn')?.addEventListener('click', ()=>_aiShareDownload(track, true));
   document.getElementById('aiDownloadBtn')?.addEventListener('click', ()=>_aiShareDownload(track, false));
+  // "Make another" returns to the create flow — without this the modal is
+  // trapped on the result view forever once _currentAiTrack is set (reopening
+  // the AI button re-shows this view via openAiModal's _currentAiTrack branch).
+  document.getElementById('aiAgainBtn')?.addEventListener('click', _aiShowIntro);
   document.getElementById('aiTopupLink')?.addEventListener('click', ()=>{ closeAiModal(); openTopupModal('ai'); });
 }
 

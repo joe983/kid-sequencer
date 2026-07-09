@@ -1023,6 +1023,9 @@ body.loggedIn #robotLogo{
     .aiModal .aiCta-alt{ background:#fff; color:#1d1d1d; }
     .aiModal .aiActions{ display:flex; gap:8px; justify-content:center; margin-top:6px; flex-wrap:wrap; }
     .aiModal .aiActions .aiCta{ flex:1 1 0; min-width:0; padding:12px 8px; font-size:14px; white-space:nowrap; }
+    /* "Make another track" — full-width secondary action below Save/Share so the
+       result view is never a dead-end (see _aiShowResult). */
+    .aiModal .aiCta-again{ display:block; width:100%; margin-top:12px; padding:11px 8px; font-size:15px; }
     .aiModal .aiPlayer{ width:100%; margin:10px 0 4px; }
     .aiModal .aiSpinner{
       width:42px; height:42px; margin:8px auto 14px;
