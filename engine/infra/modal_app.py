@@ -122,7 +122,8 @@ def run_tests() -> str:
     _wire_assets()
     out = ""
     for t in ("tests/test_sequence.py", "tests/test_master.py",
-              "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py"):
+              "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
+              "tests/test_arrange.py"):
         out += _run(t)
     return out
 
@@ -151,6 +152,23 @@ def render_orchestral() -> dict[str, bytes]:
     _run("render_orchestral_audition.py")
     out = Path(ENGINE_REMOTE) / "out"
     return {p.name: p.read_bytes() for p in out.glob("orch_*.mp3")}
+
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_song() -> bytes:
+    """Full arranged song (structure + progression + bass + pads); returns MP3."""
+    _wire_assets()
+    _run("smoke_song.py")
+    return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+@app.local_entrypoint()
+def song() -> None:
+    mp3 = render_song.remote()
+    dst = ENGINE_LOCAL / "out" / "modal_song.mp3"
+    dst.parent.mkdir(exist_ok=True)
+    dst.write_bytes(mp3)
+    print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
 @app.local_entrypoint()

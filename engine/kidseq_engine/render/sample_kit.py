@@ -121,11 +121,15 @@ def _voice_buffer(name: str, layers: list[tuple[str, float]]) -> np.ndarray:
     return mix * _GAIN.get(name, 0.4)
 
 
-def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray:
-    """Render `bars` of the named genre's drums from real CC0 one-shots (mono)."""
+def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
+                         pattern: dict | None = None) -> np.ndarray:
+    """Render `bars` of the named genre's drums from real CC0 one-shots (mono).
+
+    `pattern` overrides the style's DRUM_PATTERNS entry (the arranger passes
+    voice subsets for lite sections); the kit lookup stays by style."""
     from .drums import DRUM_PATTERNS  # local import avoids a cycle
 
-    pat = DRUM_PATTERNS.get(style)
+    pat = pattern if pattern is not None else DRUM_PATTERNS.get(style)
     kit = KITS.get(style)
     spb = seconds_per_beat(tempo)
     bar_samples = int(4 * spb * sr)

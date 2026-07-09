@@ -124,9 +124,12 @@ _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
          "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
 
 
-def render_drums(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray:
-    """Render `bars` bars of the named drum style to a mono float buffer."""
-    pat = DRUM_PATTERNS.get(style)
+def render_drums(style: str, tempo: float, bars: int, sr: int = SR,
+                 pattern: dict | None = None) -> np.ndarray:
+    """Render `bars` bars of the named drum style to a mono float buffer.
+
+    `pattern` overrides the style's DRUM_PATTERNS entry (arranger voice subsets)."""
+    pat = pattern if pattern is not None else DRUM_PATTERNS.get(style)
     if not pat:
         return np.zeros(int(bars * 4 * seconds_per_beat(tempo) * sr) + sr, dtype=np.float32)
     spb = seconds_per_beat(tempo)

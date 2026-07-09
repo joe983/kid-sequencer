@@ -39,6 +39,7 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     "trumpet": (GENERALUSER_SF, 0, 56),  # GM Trumpet (sample-based preset, TSF-safe)
     "strings": (GENERALUSER_SF, 0, 48),  # GM String Ensemble 1
     "bells": (GENERALUSER_SF, 0, 9),     # GM Glockenspiel
+    "pads": (GENERALUSER_SF, 0, 50),     # GM Synth Strings 1 — arranger pad fallback
 }
 _DRUM_SF = (GENERALUSER_SF, 128, 0)
 
@@ -62,7 +63,8 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
     if not path.exists():
         # fall back to the GM preset on GeneralUser for this instrument
         from .drums import DRUM_PATTERNS  # noqa: F401  (avoid unused import lints elsewhere)
-        gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48, "bells": 9}
+        gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48,
+              "bells": 9, "pads": 50}
         return GENERALUSER_SF, 0, gm.get(instrument, 0)
     return path, bank, preset
 
