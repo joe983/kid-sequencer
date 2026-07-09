@@ -261,6 +261,35 @@ All merged to main; every increment gated by `tests/test_master_gates.py` (+ tes
 - Ear files in MAIN repo `engine/out/`: `modal_song_stereo/master2/mix3/mix4.mp3`
   (increment A/Bs) + `song_<genre>.mp3` × 6 (full sweep, `::songs` entrypoint).
 
+## NEW — ENGINE IS LIVE IN PROD (2026-07-09, step 6 v1 synchronous)
+**The AI button now calls the engine, not Stable Audio.** Wiring:
+- **Modal endpoint** `infra/modal_app.py::render` — `POST {token, sequence, variation}`
+  → audio/mpeg. Deployed persistently (`modal deploy infra/modal_app.py`) at
+  `https://joe983--kidseq-engine-render.modal.run`. Auth = shared ENGINE_TOKEN
+  (Modal Secret `kidseq-engine-auth` = Firebase Secret `ENGINE_TOKEN`, same value).
+  Verified: 401 on bad token; real render HTTP 200, 7.7 MB in 139 s incl. cold start.
+- **`generateAiTrack` rewritten** (functions/index.js): takes `{sequence, variation,
+  name}` (the saved-state shape — parse_sequence's input), POSTs to the engine,
+  saves the MP3 to `users/{uid}/tracks/` exactly as before. Quota/refund/auth
+  UNCHANGED. `timeoutSeconds: 540`. Stability code/prompt deleted (git history);
+  STABILITY_API_KEY secret no longer bound. `ENGINE_ENDPOINT` in .env.kid-sequencer.
+- **Client** (`runAiGeneration`): sends the grid symbolically (flattened notes +
+  key/tempo/instrument/drumStyle-audio-key) + `variation = Date.now()%1e6` — a fresh
+  nonce per press. No WAV capture/upload (captureSequenceToWav now unused, kept).
+  Callable timeout 540 s; spinner copy says "a few minutes".
+- **Per-press VARIATION** (owner: "can't judge until we know the variation"):
+  same (riff, nonce) = identical track; new nonce varies progression colour (top-2
+  scoring), build:drop split (3 feels), and every FX seed (risers/crashes/throw).
+  The riff itself NEVER varies.
+- **Kick punch pass** (owner: "kicks punch, never boom"): NY crush path HP120
+  (was amplifying kick tails), slot boost tightened +1.0/q1.4, drums HP35,
+  dnb low shelf −2 dB @85 (acoustic kit sustain).
+- **Rollback**: redeploy functions from the pre-wiring commit (Stable Audio path
+  is in git); hosting rollback via Firebase console.
+- **Next**: owner presses AI button in prod several times to judge variation +
+  the mix; funk/reggaeton engine kits still need de-lofi rebuild (owner: "all
+  over"); async job flow (Firestore jobs + webhook) if synchronous UX feels bad.
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST

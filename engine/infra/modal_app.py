@@ -68,6 +68,7 @@ image = (
         "rm /tmp/surge.deb",
     )
     .pip_install_from_requirements(str(ENGINE_LOCAL / "requirements.txt"))
+    .pip_install("fastapi[standard]")  # the production /render web endpoint
     .add_local_dir(
         str(ENGINE_LOCAL),
         remote_path=ENGINE_REMOTE,
@@ -173,6 +174,48 @@ def render_song() -> bytes:
     _wire_assets()
     _run("smoke_song.py")
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Production endpoint — the app's generateAiTrack Cloud Function POSTs the
+# user's sequence here and gets the finished MP3 back. Deployed persistently
+# via `modal deploy infra/modal_app.py`. Auth = shared token (Modal Secret
+# "kidseq-engine-auth" / Firebase Secret ENGINE_TOKEN — same value).
+# ---------------------------------------------------------------------------
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=900,
+              secrets=[modal.Secret.from_name("kidseq-engine-auth")])
+@modal.fastapi_endpoint(method="POST")
+def render(payload: dict):
+    """POST {token, sequence, variation} -> audio/mpeg bytes.
+
+    `sequence` is the app's saved-state shape (riff.notes/key/tempo/instrument/
+    drumStyle) — exactly what kidseq_engine.sequence.parse_sequence takes.
+    `variation` is the per-press nonce (same sequence + same nonce = same track).
+    """
+    import json
+    import os as _os
+
+    from fastapi.responses import Response
+
+    if not payload or payload.get("token") != _os.environ.get("ENGINE_TOKEN"):
+        return Response(status_code=401, content=b"unauthorized")
+    seq = payload.get("sequence")
+    if not isinstance(seq, dict) or not (seq.get("riff") or {}).get("notes"):
+        return Response(status_code=422, content=b"bad sequence")
+    variation = int(payload.get("variation") or 0)
+
+    _wire_assets()
+    tmp = Path(ENGINE_REMOTE) / "out" / "_request_riff.json"
+    tmp.parent.mkdir(exist_ok=True)
+    tmp.write_text(json.dumps(seq), encoding="utf-8")
+    try:
+        _run("smoke_song.py", str(tmp), str(variation))
+    except RuntimeError as e:
+        print(f"[render] engine failed: {e}")
+        return Response(status_code=500, content=b"render failed")
+    mp3 = (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+    return Response(content=mp3, media_type="audio/mpeg")
 
 
 # representative tempo per genre for the full-song ear sweep

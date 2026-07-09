@@ -1237,27 +1237,31 @@ async function runAiGeneration(){
   if(_aiBusy) return;
   _aiBusy = true;
   try{
-    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Listening to your track…</div>');
-    const wav = await captureSequenceToWav();
-    if(!wav){ _aiBusy=false; _aiSetBody('<div class="aiMsg">Couldn\'t capture your track — add some notes and try again.</div>'); return; }
+    // The engine builds the song from the EXACT sequence (symbolic notes), so
+    // no audio capture/upload — just send the grid. `variation` is a fresh
+    // nonce per press: same tune, different production each time.
+    const seqNotes = notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})));
+    if(!seqNotes.length){ _aiBusy=false; _aiSetBody('<div class="aiMsg">Add some notes to your tune first, then try again.</div>'); return; }
 
-    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Composing your track…<br><span class="aiNote">This can take up to a minute.</span></div>');
+    _aiSetBody('<div class="aiSpinner"></div><div class="aiMsg">Composing your track…<br><span class="aiNote">Building a full song takes a few minutes — hang tight!</span></div>');
 
     const user = await _getFirebaseUser();
     if(!user){ throw new Error('not signed in'); }
 
-    const { storage } = await import("./js/firebase-init.js");
-    const { ref, uploadBytes } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js");
-    const seedPath = `users/${user.uid}/seeds/${Date.now()}.wav`;
-    await uploadBytes(ref(storage, seedPath), wav, { contentType: 'audio/wav' });
-
     const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
     const { app } = await import("./js/firebase-init.js");
     const fns = getFunctions(app, 'europe-west1');
-    const gen = httpsCallable(fns, 'generateAiTrack', { timeout: 280000 });
+    const gen = httpsCallable(fns, 'generateAiTrack', { timeout: 540000 });
     const name = _lastSaveName || 'My Tune';
-    const meta = { key: currentKey, tempo: Math.round(tempo), instrument, rhythm: drumsMuted ? null : drumStyle };
-    const result = await gen({ seedPath, name, meta });
+    const sequence = {
+      riff: { notes: seqNotes },
+      key: currentKey,
+      tempo: Math.round(tempo),
+      instrument,
+      drumStyle: drumsMuted ? null : drumStyle,
+    };
+    const variation = Date.now() % 1000000;
+    const result = await gen({ sequence, variation, name });
 
     _currentAiTrack = { path: result.data.path, url: result.data.url, name };
     _aiBusy = false;

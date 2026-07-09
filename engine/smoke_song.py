@@ -31,16 +31,17 @@ _DEGREE = {True: ["i", "ii", "III", "iv", "v", "VI", "VII"],
 def main() -> None:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else \
         Path(__file__).parent / "examples" / "sample_riff.json"
+    variation = int(sys.argv[2]) if len(sys.argv) > 2 else 0
     riff = parse_sequence(json.loads(path.read_text(encoding="utf-8")))
 
-    prog = choose_progression(riff)
+    prog = choose_progression(riff, variation)
     names = _DEGREE[riff.key.endswith("m")]
     print(f"riff: {len(riff.notes)} notes | key={riff.key} tempo={riff.tempo:g} "
           f"instrument={riff.instrument} ({riff_source(riff.instrument)}) "
-          f"drums={riff.drum_style}")
+          f"drums={riff.drum_style} variation={variation}")
     print(f"progression: {'–'.join(names[d] for d in prog)}")
 
-    layers, kick_onsets, plan, _ = build_song(riff, SR)
+    layers, kick_onsets, plan, _ = build_song(riff, SR, variation=variation)
     total_bars = sum(s.bars for s in plan)
     print("plan: " + "  ".join(f"{s.name}[{s.bars}]" for s in plan)
           + f"  = {total_bars} bars ≈ {total_bars * 4 * 60 / riff.tempo:.0f}s")

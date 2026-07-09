@@ -13,7 +13,7 @@ const STORAGE_BUCKET = "kid-sequencer.firebasestorage.app";
 // --- Secrets (real API keys only) -------------------------------------------
 const stripeSecretKey     = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
-const stabilityApiKey     = defineSecret("STABILITY_API_KEY");
+const engineToken         = defineSecret("ENGINE_TOKEN"); // shared with the Modal engine
 
 // Managed Payments (Stripe = merchant of record, handles tax/VAT) requires the
 // preview API version. Pin it on every Stripe client; the setup script uses the
@@ -45,16 +45,14 @@ const PACKS = {
 
 const BASE_MONTHLY_AI = 10;   // included AI tracks per month on Pro
 
-// Stable Audio 2.5 audio-to-audio. NOTE: confirm exact endpoint/params against
-// current Stability docs when wiring the live API key — kept as constants so
-// they're trivial to adjust.
-const STABILITY_ENDPOINT = "https://api.stability.ai/v2beta/audio/stable-audio-2/audio-to-audio";
-const STABILITY_MODEL    = "stable-audio-2.5";
-const AI_DURATION_SEC    = 180;   // ≤ ~190s cap
-const AI_STRENGTH        = 0.75;  // HIGH on purpose for this experiment: let the model deviate
-                                  // far from the seed (sticks to the riff less) so it produces a
-                                  // fully professional track. Trades hook-exactness for sound
-                                  // quality — the riff is guidance, not a constraint.
+// The riff-anchored track engine (engine/ in this repo, deployed on Modal).
+// Replaces the old Stable Audio audio-to-audio call: the riff is RENDERED
+// verbatim inside the track, never reinterpreted by a model. Endpoint URL is
+// committed config (not secret); auth is the ENGINE_TOKEN secret shared with
+// the Modal deployment.
+const engineEndpoint = defineString("ENGINE_ENDPOINT", {
+  default: "https://joe983--kidseq-engine-render.modal.run",
+});
 
 function monthKey() {
   const d = new Date();
@@ -65,25 +63,8 @@ function slugify(s) {
   return String(s || "track").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "track";
 }
 
-function buildPrompt(meta) {
-  const m = meta || {};
-  const tempo = Number.isFinite(m.tempo) ? Math.round(m.tempo) : 100;
-  const key = typeof m.key === "string" ? m.key : "C";
-  const instr = ({
-    piano: "bright piano", trumpet: "brass", strings: "warm strings",
-    synth: "synth lead", bass: "deep bass", bells: "glockenspiel bells",
-  })[m.instrument] || "melodic lead";
-  // High-strength experiment: the model has creative freedom. The seed is the
-  // melodic riff/hook to base the song on (kept recognisable), but the goal here
-  // is maximum professional production quality, not note-exact fidelity.
-  return [
-    `A professional, modern, radio- and TikTok-ready kids' pop/EDM track, about 3 minutes long, in ${key} around ${tempo} BPM, with a bright ${instr} lead.`,
-    `Use the provided audio as the melodic riff/hook to build the song on — keep that hook clearly recognisable — but produce it to a fully professional, release-quality standard with full creative freedom.`,
-    `Rich modern production with many layers: punchy kick, deep sidechained sub-bass, stacked supersaw chords, plucks, arpeggios, lush pads and strings, vocal-chop stabs, risers, white-noise sweeps and impacts.`,
-    `Give it a real song structure — intro, build-up, big drop on the hook, breakdown, second build and final drop — with dynamics, fills and clear variation between sections.`,
-    `Pristine hi-fi mix: wide stereo, crisp sparkling highs, deep powerful low end, loud polished professional master. Joyful, fun, expansive and cutting-edge — it should sound like a real released track.`,
-  ].join(" ");
-}
+// Old Stable Audio prompt builder removed — the engine renders the riff
+// verbatim from symbolic data; there is no prompt. (git history has it.)
 
 // ---------------------------------------------------------------------------
 // Subscription checkout (Pro, £4.99/mo)
@@ -177,23 +158,27 @@ exports.createTopupCheckout = onCall(
 );
 
 // ---------------------------------------------------------------------------
-// Generate an AI track from the user's seed audio (Stable Audio 2.5)
+// Generate an AI track: the riff-anchored engine on Modal renders the user's
+// exact sequence into a full produced song (riff verbatim in every drop).
 // ---------------------------------------------------------------------------
 exports.generateAiTrack = onCall(
   {
     region: "europe-west1",
-    secrets: [stabilityApiKey],
-    timeoutSeconds: 300,
+    secrets: [engineToken],
+    timeoutSeconds: 540,   // engine renders a full ~3-min song (2-4 min CPU)
     memory: "512MiB",
   },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
     const uid = request.auth.uid;
 
-    const seedPath = request.data.seedPath;
-    if (typeof seedPath !== "string" || !seedPath.startsWith(`users/${uid}/seeds/`)) {
-      throw new HttpsError("invalid-argument", "Bad seed path");
+    const sequence = request.data.sequence;
+    const notes = sequence && sequence.riff && sequence.riff.notes;
+    if (!Array.isArray(notes) || notes.length === 0 || notes.length > 256) {
+      throw new HttpsError("invalid-argument", "Bad sequence");
     }
+    const variation = Number.isFinite(request.data.variation)
+      ? Math.abs(Math.trunc(request.data.variation)) % 1000000 : 0;
 
     // --- Quota: lazy monthly reset, consume monthly-first then top-up ---
     const userRef = db.doc(`users/${uid}`);
@@ -233,27 +218,16 @@ exports.generateAiTrack = onCall(
 
     try {
       const bucket = getStorage().bucket(STORAGE_BUCKET);
-      const [seedBuffer] = await bucket.file(seedPath).download();
 
-      const prompt = buildPrompt(request.data.meta);
-
-      const form = new FormData();
-      form.append("audio", new Blob([seedBuffer], { type: "audio/wav" }), "seed.wav");
-      form.append("model", STABILITY_MODEL);
-      form.append("prompt", prompt);
-      form.append("duration", String(AI_DURATION_SEC));
-      form.append("strength", String(AI_STRENGTH));
-      form.append("output_format", "mp3");
-
-      const resp = await fetch(STABILITY_ENDPOINT, {
+      const resp = await fetch(engineEndpoint.value(), {
         method: "POST",
-        headers: { Authorization: `Bearer ${stabilityApiKey.value()}`, Accept: "audio/*" },
-        body: form,
+        headers: { "Content-Type": "application/json", Accept: "audio/mpeg" },
+        body: JSON.stringify({ token: engineToken.value(), sequence, variation }),
       });
 
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
-        console.error("[generateAiTrack] Stability error", resp.status, text.slice(0, 500));
+        console.error("[generateAiTrack] engine error", resp.status, text.slice(0, 500));
         await refund();
         throw new HttpsError("internal", "AI generation failed");
       }
@@ -277,9 +251,6 @@ exports.generateAiTrack = onCall(
 
       const url = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/` +
         `${encodeURIComponent(destPath)}?alt=media&token=${token}`;
-
-      // best-effort: clean up the seed
-      bucket.file(seedPath).delete().catch(() => {});
 
       return { path: destPath, url };
     } catch (e) {

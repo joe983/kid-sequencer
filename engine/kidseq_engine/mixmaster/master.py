@@ -118,7 +118,11 @@ def _reverb_return_board(genre: str | None) -> Pedalboard:
 
 
 def _ny_crush_board() -> Pedalboard:
+    # HP120 is load-bearing: the crush amplifies SUSTAIN, and un-filtered that
+    # means kick tails = boom. Owner rule: kicks punch, never boom. The crushed
+    # path adds mid-band density only; low-end punch stays on the dry transient.
     return Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=120.0),
         Compressor(threshold_db=-32.0, ratio=8.0, attack_ms=1.0, release_ms=90.0),
         LowpassFilter(cutoff_frequency_hz=8000.0),
         Gain(gain_db=6.0),
@@ -150,12 +154,19 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
     so they physically cannot mask the melody."""
     if name == "drums":
         slot = _kick_slot(genre)
-        return Pedalboard([
-            PeakFilter(cutoff_frequency_hz=slot, gain_db=1.5, q=1.0),
+        # Owner rule: kicks PUNCH, never boom — tight slot boost (q1.4, +1 dB),
+        # rumble HP, and on dnb (acoustic kit with real room) shelve the low
+        # sustain down so the transient carries the weight.
+        chain = [
+            HighpassFilter(cutoff_frequency_hz=35.0),
+            PeakFilter(cutoff_frequency_hz=slot, gain_db=1.0, q=1.4),
             PeakFilter(cutoff_frequency_hz=250.0, gain_db=-2.0, q=1.2),   # boxiness
             Compressor(threshold_db=-14.0, ratio=3.0, attack_ms=4.0, release_ms=120.0),
             HighShelfFilter(cutoff_frequency_hz=8000.0, gain_db=2.5, q=0.7),  # air
-        ])
+        ]
+        if genre == "dnb":
+            chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-2.0, q=0.8))
+        return Pedalboard(chain)
     if name == "bass":
         slot = _kick_slot(genre)
         return Pedalboard([
