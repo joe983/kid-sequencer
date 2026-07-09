@@ -50,7 +50,7 @@ def main() -> None:
           f"target={preset.lufs_target} LUFS | kicks={len(kick_onsets)}")
 
     # --- mix + master ---
-    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets)
+    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets, tempo=riff.tempo)
 
     out = Path(__file__).parent / "out"
     write_wav(out / "track_master.wav", res.audio)

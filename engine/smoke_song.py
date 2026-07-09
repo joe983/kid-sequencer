@@ -46,7 +46,7 @@ def main() -> None:
           + f"  = {total_bars} bars ≈ {total_bars * 4 * 60 / riff.tempo:.0f}s")
     print(f"layers: {sorted(layers)} | kicks={len(kick_onsets)}")
 
-    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets)
+    res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets, tempo=riff.tempo)
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

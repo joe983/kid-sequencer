@@ -110,19 +110,18 @@ def test_loudness_hits_target():
     for g in GENRES:
         res, _ = _run(g, stereo=True)
         tgt = preset_for(g).lufs_target
-        # Increment-1 gate = coarse sanity band only (catches silence/blowout).
-        # The current chain's downward-only trim undershoots dense/wide content by
-        # 2.5-4+ dB depending on genre — the exact weakness the Increment-2
-        # drive-into-limiter convergence loop replaces. TIGHTEN-INC2: ±0.3.
-        assert tgt - 5.0 < res.lufs < tgt + 1.0, (g, res.lufs, tgt)
+        # Increment-2 contract: the drive-into-limiter loop converges on target.
+        assert abs(res.lufs - tgt) < 0.3, (g, res.lufs, tgt)
 
 
-def test_true_peak_under_ceiling():
+def test_true_peak_under_ceiling_but_not_starved():
     for g in GENRES:
         res, _ = _run(g, stereo=True)
         ceil = preset_for(g).peak_ceiling_db
         assert res.true_peak_db <= ceil + 0.05, (g, res.true_peak_db, ceil)
-        # TIGHTEN-INC2: add `assert res.true_peak_db >= -1.8` (starved limiter fails)
+        # a TP far below the ceiling means the limiter isn't being driven — the
+        # "quiet master" failure mode this chain exists to prevent
+        assert res.true_peak_db >= -1.8, (g, res.true_peak_db)
 
 
 def test_genuinely_stereo_not_dual_mono():

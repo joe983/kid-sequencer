@@ -49,7 +49,7 @@ def main() -> None:
             kick_onsets = kick_onsets_from_pattern(
                 DRUM_PATTERNS[riff.drum_style], riff.tempo, BARS, SR)
 
-        res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets)
+        res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets, tempo=riff.tempo)
         write_wav(out / f"orch_{instrument}.wav", res.audio)
         write_mp3(out / f"orch_{instrument}.mp3", res.audio, res.sr)
         assert float(np.max(np.abs(res.audio))) > 0.1, f"{instrument} master is silent"
