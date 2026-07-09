@@ -37,7 +37,7 @@ def test_registry_covers_the_gm_placeholder_instruments():
 def test_riff_source_never_crashes_and_names_a_renderer():
     for instr in ("piano", "trumpet", "strings", "bells", "synth", "bass"):
         src = riff_source(instr)
-        assert src.startswith(("sfz(", "soundfont", "numpy-synth")), src
+        assert src.startswith(("sfz(", "vst(", "soundfont", "numpy-synth")), src
 
 
 def test_unavailable_instruments_report_unavailable():

@@ -62,6 +62,15 @@ sparse-clones 3 folders (Trumpet susvib, Violin Section susVib, Glock) and GENER
 our own .sfz mappings (no maintained SFZ port exists); rendered by `sfizz_render`
 (BSD-2-Clause, built from source in the Modal image — we bundle nothing).
 
+## Software instruments (server-side only, never distributed)
+- **Surge XT 1.3.4** (https://surge-synthesizer.github.io) — **GPL-3.0**. Runs ONLY on the
+  Modal/Linux build (installed from the official .deb into the container image), hosted
+  headless via pedalboard; we ship **rendered audio output**, never the synthesizer
+  binary, so GPL obligations don't attach to the app or the MP3s. Patches are our own
+  param dicts in `render/vst_render.py` (Surge factory patches unused).
+- **sfizz** (https://github.com/sfztools/sfizz) — **BSD-2-Clause**, built from source in
+  the Modal image; same server-side-only posture.
+
 ### Not used (and why)
 - **Sonatina** — CC Sampling Plus (restrictive). VSCO 2 CE covers the need as pure CC0.
 - **FreePats GM set** — GPL-v3-with-exception; the exception covers *output*, but

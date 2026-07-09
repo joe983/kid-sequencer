@@ -171,6 +171,28 @@ VSCO SFZ port exist, so both halves are built ourselves:
   will read narrower than the app's dual-take stereo strings — a mix-stage question
   (stereo layers), not a sample-quality one.
 
+## NEW — Surge XT soft synth for synth/bass (+pad) (2026-07-09, Modal)
+The second half of "right sounds part 2": synth-family voices now render through a
+REAL soft synth (filter envelopes / unison detune / chorus = the "produced" movement).
+- **Surge XT 1.3.4 (GPL, server-side only)** installed from the official .deb into the
+  Modal image; **hosted headless by pedalboard** — works with NO display/xvfb once
+  `libasound2` is present (that was the sole missing runtime dep; pedalboard's
+  "scan failure" error means a missing shared lib — `ldd | grep "not found"` it).
+- **`render/vst_render.py`** — patches are param dicts (`PATCHES`): `synth` = 5-voice
+  detuned-saw rave lead w/ LP24 sweep + chorus; `bass` = reese (2-voice detune) +
+  sine sub, vintage ladder; `pad` = 7-voice supersaw, slow attack (for the arrangement
+  stage — not a grid voice). Envelope times via `_env(seconds)` (Surge's normalized
+  log2 scale). `.fxp` factory patches are NOT loadable via pedalboard — param dicts
+  are deliberate (deterministic + reviewable). Full patch re-applied every render.
+  NB bass notes arrive already −24 from sequence.py — do NOT transpose again.
+- **`riff_audio` priority:** sfz (trumpet/strings/bells) / vst (synth/bass) > SF2 >
+  numpy. `riff_source()` says which fired.
+- **Verified:** 28/28 tests remotely (test_vst.py new; render tests auto-skip w/o the
+  VST3); audition now covers all 5 upgraded voices → `out/orch_{trumpet,strings,bells,
+  synth,bass}.mp3`, all −10 LUFS, TP ≤ −1. **Ears pending** (user) — patch tuning
+  levers live in `PATCHES` (cutoff/resonance/detune/env times per voice).
+- LICENSES.md: Surge GPL-3 note (server-side render only, nothing distributed).
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST
