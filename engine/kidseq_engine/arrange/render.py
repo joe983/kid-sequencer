@@ -86,7 +86,8 @@ def build_song(riff: Riff, sr: int = SR):
                 _add_at(layers["drums"], sig, at)
             if sec.drums == "full":
                 kick_onsets += [at + o for o in
-                                kick_onsets_from_pattern(pattern, riff.tempo, sec.bars, sr)]
+                                kick_onsets_from_pattern(pattern, riff.tempo, sec.bars, sr,
+                                                          style=riff.drum_style)]
 
         if sec.bass:
             notes = bass_notes(riff, prog, sec.bars)

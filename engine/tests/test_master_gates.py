@@ -86,7 +86,7 @@ def _run(genre: str, stereo: bool):
     layers = _synth_layers(genre, stereo=stereo)
     n = layers["riff"].shape[0]
     bars = int(_SECONDS / (4 * seconds_per_beat(_TEMPO))) + 1
-    onsets = kick_onsets_from_pattern(DRUM_PATTERNS[genre], _TEMPO, bars, SR)
+    onsets = kick_onsets_from_pattern(DRUM_PATTERNS[genre], _TEMPO, bars, SR, style=genre)
     return master(layers, SR, genre=genre, kick_onsets=onsets), n
 
 
@@ -107,11 +107,20 @@ def test_hygiene_finite_bounded_no_dc():
 
 
 def test_loudness_hits_target():
+    from kidseq_engine.mixmaster.master import _max_short_term_lufs
+
     for g in GENRES:
         res, _ = _run(g, stereo=True)
         tgt = preset_for(g).lufs_target
-        # Increment-2 contract: the drive-into-limiter loop converges on target.
-        assert abs(res.lufs - tgt) < 0.3, (g, res.lufs, tgt)
+        worst = _max_short_term_lufs(res.audio, SR)
+        # fatigue ceiling always holds (small tolerance for re-convergence)
+        assert worst <= -7.8, (g, worst)
+        if abs(res.lufs - tgt) >= 0.3:
+            # off-target is legal ONLY when the short-term guard pulled the
+            # master down (dense content trading integrated loudness for the
+            # -8 LUFS fatigue ceiling) — and the trade must stay bounded
+            assert tgt - 1.2 < res.lufs < tgt, (g, res.lufs, tgt)
+            assert worst >= -8.8, (g, worst)
 
 
 def test_true_peak_under_ceiling_but_not_starved():
@@ -146,6 +155,69 @@ def test_mono_input_stays_mono():
     for g in GENRES:
         res, _ = _run(g, stereo=False)
         assert _corr(res.audio[:, 0], res.audio[:, 1]) > 0.98, (g, _corr(res.audio[:, 0], res.audio[:, 1]))
+
+
+def test_pump_shape_dip_hold_recover():
+    """Sidechain 2.0 shape: 4 ms attack ENDING at the onset, 10 ms hold at the
+    floor, exponential recovery."""
+    from kidseq_engine.mixmaster import pump_envelope
+
+    on = SR // 2
+    env = pump_envelope(SR, SR, [on], 0.5, 0.2)
+    assert env[0] == 1.0
+    assert abs(env[on] - 0.5) < 1e-3, env[on]                    # floor AT onset
+    assert abs(env[on + int(0.009 * SR)] - 0.5) < 1e-3            # still held
+    assert env[on - int(0.006 * SR)] > 0.95                       # before attack
+    assert env[-1] > 0.95                                         # recovered
+
+
+def test_spectral_slots_with_real_assets():
+    """EQ slotting on REAL renders (Modal only — skips without assets):
+    drums own the kick slot, bass owns 80–120 Hz, the riff beats the pads at
+    2–4 kHz presence (the melody can't be masked)."""
+    from kidseq_engine.arrange.render import _render_pads
+    from kidseq_engine.audio import as_stereo
+    from kidseq_engine.mixmaster.master import (
+        _LAYER_LUFS, _board_for, _calibrate_layer, _process)
+    from kidseq_engine.render import drums_audio, riff_audio, sample_kit
+    from kidseq_engine.render.sample_kit import kick_slot_hz
+    from kidseq_engine.sequence import Note
+
+    g = "techhouse"
+    if not sample_kit.kit_available(g):
+        print("SKIP spectral-slot gate (drum assets absent)")
+        return
+    bars, tempo = 4, 124.0
+    raw = {
+        "drums": drums_audio(g, tempo, bars),
+        # A2 root: fundamental 110 Hz sits inside the bass-owned 80-120 band
+        "bass": riff_audio([Note(pitch=45, start_beats=float(b), dur_beats=0.9)
+                            for b in range(4)], tempo, "bass", bars),
+        "riff": riff_audio([Note(pitch=60, start_beats=float(b), dur_beats=0.9)
+                            for b in range(4)], tempo, "piano", bars),
+        "pads": _render_pads([Note(pitch=p, start_beats=0.0, dur_beats=16.0)
+                              for p in (60, 64, 67)], tempo, 16.0, SR),
+    }
+    proc = {name: _calibrate_layer(_process(as_stereo(buf), _board_for(name, g), SR),
+                                   SR, _LAYER_LUFS[name])
+            for name, buf in raw.items() if buf.size}
+
+    def band_db(x, lo, hi):
+        m = x.mean(axis=1).astype(np.float64)
+        mag = np.abs(np.fft.rfft(m * np.hanning(len(m)))) ** 2
+        fr = np.fft.rfftfreq(len(m), 1.0 / SR)
+        sel = (fr >= lo) & (fr < hi)
+        return 10.0 * np.log10(mag[sel].mean() + 1e-20)
+
+    slot = kick_slot_hz(g)
+    m1 = band_db(proc["drums"], slot * 0.85, slot * 1.15) - band_db(proc["bass"], slot * 0.85, slot * 1.15)
+    m2 = band_db(proc["bass"], 80, 120) - band_db(proc["riff"], 80, 120)
+    m3 = band_db(proc["riff"], 2000, 4000) - band_db(proc["pads"], 2000, 4000)
+    print(f"  slot margins: kick-slot drums-vs-bass {m1:+.1f} dB | "
+          f"80-120 bass-vs-riff {m2:+.1f} dB | 2-4k riff-vs-pads {m3:+.1f} dB")
+    assert m1 > 4.0, m1
+    assert m2 > 6.0, m2
+    assert m3 > 3.0, m3
 
 
 if __name__ == "__main__":

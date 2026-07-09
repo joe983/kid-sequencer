@@ -36,7 +36,7 @@ def main() -> None:
         riff = parse_sequence(payload)
         riff_buf = normalize(riff_audio(riff.notes, riff.tempo, riff.instrument, BARS), 0.9)
         drum_buf = normalize(drums_audio(style, riff.tempo, BARS), 0.95)
-        kicks = kick_onsets_from_pattern(DRUM_PATTERNS[style], riff.tempo, BARS, SR)
+        kicks = kick_onsets_from_pattern(DRUM_PATTERNS[style], riff.tempo, BARS, SR, style=style)
         layers = {"riff": riff_buf, "drums": drum_buf}
         res = master(layers, SR, genre=style, kick_onsets=kicks)
         mp3 = out / f"genre_{style}.mp3"

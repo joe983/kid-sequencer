@@ -88,6 +88,33 @@ _GAIN = {"kick": 1.0, "sub": 0.95, "snare": 0.78, "clap": 0.72, "hatC": 0.45,
 _cache: dict[str, np.ndarray] = {}
 
 
+# kick fundamental fallbacks when the kit isn't on disk (Hz, by genre character)
+_SLOT_FALLBACK = {"drill": 45.0, "hiphop": 45.0, "dnb": 50.0}
+_slot_cache: dict[str, float] = {}
+
+
+def kick_slot_hz(style: str | None) -> float:
+    """The genre kick's fundamental (35–70 Hz), FFT-detected from the actual
+    one-shot. The mix boards slot around this: drums boosted AT it, bass
+    notched AT it. Falls back to genre-typical values without assets."""
+    key = style or ""
+    if key in _slot_cache:
+        return _slot_cache[key]
+    val = _SLOT_FALLBACK.get(key, 55.0)
+    kit = KITS.get(key)
+    if kit and kit.get("kick") and kit_available(key):
+        one = _voice_buffer("kick", kit["kick"])
+        seg = one[: int(0.4 * SR)].astype(np.float64)
+        if seg.size > SR // 50:
+            mag = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+            freqs = np.fft.rfftfreq(len(seg), 1.0 / SR)
+            sel = (freqs >= 35.0) & (freqs <= 70.0)
+            if sel.any() and float(mag[sel].max()) > 0:
+                val = float(freqs[sel][np.argmax(mag[sel])])
+    _slot_cache[key] = val
+    return val
+
+
 def kit_available(style: str) -> bool:
     """True only if every sample the genre's kit references exists on disk."""
     kit = KITS.get(style)
@@ -145,6 +172,8 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
     # pan each mono one-shot to stereo once, up front (not per hit)
     voices = {name: pan_stereo(_voice_buffer(name, kit[name]), _PAN.get(name, 0.0))
               for name in pat if name in kit}
+    from .drums import swung_step_offset  # shared groove clock (pump uses it too)
+
     for b in range(bars):
         for name, steps in pat.items():
             one = voices.get(name)  # (M, 2)
@@ -153,6 +182,6 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + i * step_s) * sr)
+                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
                 add_at(buf, one * float(vel), at)
     return buf[: bars * bar_samples + int(0.4 * sr)]

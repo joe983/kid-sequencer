@@ -150,8 +150,10 @@ def render_riff_sf(notes, tempo, instrument, bars, bar_beats=4.0, sr=SR) -> np.n
     return _render_timeline(setup, events, total_frames, sr)
 
 
-def render_drums_sf(pattern, tempo, bars, sr=SR) -> np.ndarray:
+def render_drums_sf(pattern, tempo, bars, sr=SR, style: str | None = None) -> np.ndarray:
     """Render a drum step-pattern with the GM drum kit (channel 9)."""
+    from .drums import swung_step_offset
+
     path, bank, preset = _DRUM_SF
     spb = seconds_per_beat(tempo)
     step_s = spb / 4.0
@@ -167,7 +169,7 @@ def render_drums_sf(pattern, tempo, bars, sr=SR) -> np.ndarray:
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + i * step_s) * sr)
+                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
                 v = max(1, min(127, int(vel * 127)))
                 events.append((at, "on", 9, key, v))
                 events.append((at + hit_dur_f, "off", 9, key, 0))
