@@ -42,6 +42,19 @@ image = (
     .apt_install(
         "git",  # fetch_drumkits shallow-clones sample repos
         "portaudio19-dev",  # pyaudio (tinysoundfont dep) builds from source on Linux
+        "cmake", "build-essential", "pkg-config", "libsndfile1-dev",  # sfizz build
+    )
+    # sfizz_render: no Debian package exists, so build the CLI from source.
+    # One-time cached layer (~4 min). Renders SFZ instruments (VSCO orchestral).
+    .run_commands(
+        "git clone --recursive --depth 1 --shallow-submodules "
+        "https://github.com/sfztools/sfizz.git /tmp/sfizz-src",
+        "cmake -S /tmp/sfizz-src -B /tmp/sfizz-build -DCMAKE_BUILD_TYPE=Release "
+        "-DSFIZZ_JACK=OFF -DSFIZZ_LV2=OFF -DSFIZZ_VST=OFF -DSFIZZ_AU=OFF "
+        "-DSFIZZ_RENDER=ON -DSFIZZ_DEMOS=OFF -DSFIZZ_BENCHMARKS=OFF -DSFIZZ_TESTS=OFF",
+        "cmake --build /tmp/sfizz-build -j 8 --target sfizz_render",
+        "find /tmp/sfizz-build -name sfizz_render -type f -exec cp {} /usr/local/bin/ ';'",
+        "rm -rf /tmp/sfizz-src /tmp/sfizz-build",
     )
     .pip_install_from_requirements(str(ENGINE_LOCAL / "requirements.txt"))
     .add_local_dir(
@@ -78,13 +91,14 @@ def _run(script: str, *args: str) -> str:
 
 
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
-def populate_assets() -> str:
+def populate_assets(force_vsco: bool = False) -> str:
     """Fetch soundfonts + drum kits onto the persistent volume (idempotent)."""
     _wire_assets()
-    for sub in ("soundfonts", "drums"):
+    for sub in ("soundfonts", "drums", "sfz"):
         (Path(ASSETS_MOUNT) / sub).mkdir(parents=True, exist_ok=True)
     out = _run("scripts/fetch_soundfonts.py")
     out += _run("scripts/fetch_drumkits.py")
+    out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())
     print(f"{len(listing)} asset files on volume")
@@ -96,7 +110,8 @@ def run_tests() -> str:
     """Run the engine's full test suite on Linux."""
     _wire_assets()
     out = ""
-    for t in ("tests/test_sequence.py", "tests/test_master.py", "tests/test_sample_kit.py"):
+    for t in ("tests/test_sequence.py", "tests/test_master.py",
+              "tests/test_sample_kit.py", "tests/test_sfz.py"):
         out += _run(t)
     return out
 
@@ -116,3 +131,22 @@ def smoke() -> None:
     dst.parent.mkdir(exist_ok=True)
     dst.write_bytes(mp3)
     print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_orchestral() -> dict[str, bytes]:
+    """Audition renders for the sfizz/VSCO voices; returns {name: mp3 bytes}."""
+    _wire_assets()
+    _run("render_orchestral_audition.py")
+    out = Path(ENGINE_REMOTE) / "out"
+    return {p.name: p.read_bytes() for p in out.glob("orch_*.mp3")}
+
+
+@app.local_entrypoint()
+def orchestral() -> None:
+    files = render_orchestral.remote()
+    dst_dir = ENGINE_LOCAL / "out"
+    dst_dir.mkdir(exist_ok=True)
+    for name, data in files.items():
+        (dst_dir / name).write_bytes(data)
+        print(f"saved {dst_dir / name} ({len(data):,} bytes)")
