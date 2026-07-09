@@ -16,7 +16,7 @@ pitches or timing. (`sequence.py` is the exact pitch/timing model, mirrored from
 | Sequence → exact MIDI notes | `kidseq_engine/sequence.py` | ✅ done + tested |
 | A. Render riff stem | `kidseq_engine/render/sf_render.py` | ✅ real samples (GeneralUser GS); numpy synth fallback |
 | Drums from app patterns | `kidseq_engine/render/sf_render.py` | ✅ real GM drum kit; numpy fallback |
-| B. Arrangement (chords/bass/pads/structure) | `kidseq_engine/arrange/` | ⬜ step 3 |
+| B. Arrangement (chords/bass/pads/structure) | `kidseq_engine/arrange/` | ✅ progression bank scored by riff coverage; tempo-sized EDM structure; genre bass feels; pad voicings (Surge pad / GM fallback); drops = verbatim riff |
 | D. Mix + master | `kidseq_engine/mixmaster/` | ✅ pedalboard chain: per-layer EQ/comp/space + sidechain pump + glue + loudness master (LUFS target) + MP3 |
 | C. Generative texture (Modal GPU) | `kidseq_engine/texture/` | ⬜ step 5 |
 | Async wiring (Firebase + Modal) | `infra/` | ⬜ step 6 |

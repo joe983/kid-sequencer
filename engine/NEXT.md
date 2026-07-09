@@ -193,6 +193,34 @@ REAL soft synth (filter envelopes / unison detune / chorus = the "produced" move
   levers live in `PATCHES` (cutoff/resonance/detune/env times per voice).
 - LICENSES.md: Surge GPL-3 note (server-side render only, nothing distributed).
 
+## NEW — Arrangement stage (PLAN step 3) BUILT (2026-07-09)
+`kidseq_engine/arrange/` — riff → full ~2-minute arranged song. First render verified
+on Modal: sample riff (C, 120, techhouse) → I–V–vi–IV, 64 bars ≈ 128 s,
+`out/modal_song.mp3` at −10.52 LUFS / −1.00 dBTP. **Ears pending.**
+- **Progression:** curated diatonic bank (4 major + 4 minor, 4-chord loops) scored by
+  riff chord-tone coverage (duration-weighted, on-beat bonus, chord 1 ×2) — in-key by
+  construction. Deterministic. **music21 deliberately NOT used** — sequence.py's tested
+  pitch model covers diatonic triads; revisit only for real voice-leading.
+- **Structure:** `plan_song(tempo)` = intro→build→drop→break→build2→drop2→outro; drop/
+  build bars sized by tempo tier so total lands ~1:40–2:30. **Drops use riff.notes
+  VERBATIM by construction** (`riff_variant` never sees them — the fidelity guarantee,
+  asserted in tests). Other sections: `sparse` (on-beat notes) / `sparse_low` (−12).
+- **Bass:** chord roots C2–B2; offbeat 8ths (techhouse/funk/reggaeton), 2-step (dnb),
+  long subs (drill/hiphop). **Pads:** whole-bar triads C4-region, rendered by the Surge
+  `pad` patch on Modal, GM Synth Strings (`INSTRUMENT_SF["pads"]`) fallback locally.
+- **Rendering:** `arrange/render.py::build_song` overlap-ADDS per-section renders into
+  full-song layers (release tails bleed across boundaries — never truncate). One-shot
+  spans use the `bars=1, bar_beats=span` trick on the existing riff renderers, so every
+  layer inherits the sfz/vst > SF2 > synth chain. Drum sections: `full` vs `lite`
+  (hats/rim/shaker/cowbell only) via new `drums_audio_pattern` (+ `pattern=` overrides
+  in sample_kit/drums). **Pump kicks only from `full` sections** — breaks don't duck.
+- Run: `python smoke_song.py` · Modal: `python -m modal run infra/modal_app.py::song`
+  → `out/modal_song.mp3`. Tests: `tests/test_arrange.py` (6, pure theory — run locally
+  too); 34/34 total on Modal.
+- Tuning levers when ears arrive: section bars in `plan_song`, bass feels in
+  `bass_notes`, pad voicing/register in `pad_notes`, lite-section voice set
+  `_LITE_VOICES`, per-layer gains stay in `master.py:GENRE_PRESETS`.
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST

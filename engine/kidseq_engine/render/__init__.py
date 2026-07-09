@@ -50,6 +50,17 @@ def drums_audio(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray
     return render_drums(style, tempo, bars, sr)
 
 
+def drums_audio_pattern(style: str, pattern: dict, tempo: float, bars: int,
+                        sr: int = SR) -> np.ndarray:
+    """drums_audio with an explicit (possibly subset) pattern — the arranger's
+    lite/full section renders. Same renderer priority as drums_audio."""
+    if sample_kit.kit_available(style):
+        return sample_kit.render_drums_samples(style, tempo, bars, sr, pattern=pattern)
+    if default_soundfont():
+        return render_drums_sf(pattern, tempo, bars, sr)
+    return render_drums(style, tempo, bars, sr, pattern=pattern)
+
+
 def drum_source(style: str) -> str:
     """Which renderer drums_audio will use for `style` — for smoke-test logging."""
     pat = DRUM_PATTERNS.get(style)
