@@ -20,10 +20,13 @@ from ..audio import SR
 from ..sequence import Riff
 
 
-def song_seed(riff: Riff) -> int:
-    """Deterministic seed derived from the riff's exact notes + meta."""
+def song_seed(riff: Riff, variation: int = 0) -> int:
+    """Deterministic seed from the riff's exact notes + meta + the per-press
+    variation nonce: same (riff, variation) always renders the same track;
+    a new nonce per AI-button press gives a fresh-but-riff-true production."""
     blob = repr([(n.pitch, n.start_beats, n.dur_beats, n.velocity) for n in riff.notes]
-                + [riff.key, riff.tempo, riff.instrument, riff.drum_style]).encode()
+                + [riff.key, riff.tempo, riff.instrument, riff.drum_style,
+                   int(variation)]).encode()
     return zlib.crc32(blob)
 
 

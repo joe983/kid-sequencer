@@ -110,7 +110,7 @@ def _apply_gap(layers: dict, drop_starts: list[int], sr: int, sixteenth_s: float
 
 
 def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
-               flags: FxFlags | None = None):
+               flags: FxFlags | None = None, variation: int = 0):
     """Arrange + render the full song.
 
     Returns (layers, kick_onsets, plan, prog):
@@ -118,13 +118,15 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
       float32 (empty arrays dropped), kick_onsets = pump triggers only where a
       full kit plays. `plan` overrides plan_song (tests); `flags` gates the
       arrangement FX (all on by default; throw auto-decided from the riff).
+      `variation` is the per-press nonce: progression colour, build:drop split
+      and every FX seed vary with it — the riff itself NEVER does.
     """
-    plan = plan if plan is not None else plan_song(riff.tempo)
+    plan = plan if plan is not None else plan_song(riff.tempo, variation)
     flags = flags if flags is not None else FxFlags()
-    prog = choose_progression(riff)
+    prog = choose_progression(riff, variation)
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
-    seed = fx.song_seed(riff)
+    seed = fx.song_seed(riff, variation)
 
     total_bars = sum(s.bars for s in plan)
     n = int((total_bars * bar_s + 1.0) * sr)

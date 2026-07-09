@@ -41,13 +41,14 @@ def _triad_pcs(degree: int, steps: list[int]) -> tuple[int, int, int]:
     return tuple(steps[(degree + i) % 7] % 12 for i in (0, 2, 4))
 
 
-def choose_progression(riff: Riff) -> list[int]:
-    """Pick the bank progression whose chords best cover the riff's notes.
+def choose_progression(riff: Riff, variation: int = 0) -> list[int]:
+    """Pick a bank progression whose chords cover the riff's notes well.
 
     Notes are weighted by duration (+1 for on-beat starts); the first chord is
     weighted double because it sits under the riff's strongest statement (bar 1
-    of every drop). Deterministic: ties break by bank order.
-    """
+    of every drop). Deterministic: ties break by bank order. `variation`
+    alternates between the two BEST-scoring progressions (both cover the riff;
+    which harmonic colour you get varies per press)."""
     semi, steps = _scale_steps(riff.key)
     bank = _MINOR_BANK if riff.key.endswith("m") else _MAJOR_BANK
     tonic = _C4_MIDI + semi
@@ -66,7 +67,8 @@ def choose_progression(riff: Riff) -> list[int]:
             total += cover * (2.0 if i == 0 else 1.0)
         return total
 
-    return max(bank, key=score)
+    ranked = sorted(bank, key=score, reverse=True)
+    return ranked[variation % 2]
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +96,7 @@ def _r4(x: float, lo: int, hi: int) -> int:
     return max(lo, min(hi, round(x / 4.0) * 4))
 
 
-def plan_song(tempo: float) -> list[Section]:
+def plan_song(tempo: float, variation: int = 0) -> list[Section]:
     """Arrange N build→drop cycles so the song lands ≥3:00 (target ~190 s) at ANY
     tempo in the app's 40–200 BPM range.
 
@@ -102,7 +104,10 @@ def plan_song(tempo: float) -> list[Section]:
     with tempo: slow tempos need 1 cycle, typical 2, very fast 3–4. Each cycle's
     build/drop bar counts are then sized to hit the duration target, phrase-aligned.
     Structure: intro → (build → drop → break)×(C-1) → build → drop → outro. Every
-    drop keeps the verbatim riff + full kit (the fidelity guarantee)."""
+    drop keeps the verbatim riff + full kit (the fidelity guarantee).
+
+    `variation` shifts the build:drop split (longer builds vs longer drops) —
+    total bars stay the same, so the duration window holds for every nonce."""
     bar_s = 4.0 * 60.0 / tempo
     target_bars = round(_TARGET_S / bar_s / 4.0) * 4          # nearest 4 bars
     cycles = max(1, min(4, round(target_bars / _BARS_PER_CYCLE)))
@@ -111,8 +116,9 @@ def plan_song(tempo: float) -> list[Section]:
     break_bars = 8
     overhead = intro_bars + outro_bars + (cycles - 1) * break_bars
     per_cycle = max(4.0, (target_bars - overhead) / cycles)   # bars per build+drop
-    build_bars = _r4(per_cycle / 3.0, 4, 16)                  # build:drop ≈ 1:2
-    drop_bars = _r4(per_cycle * 2.0 / 3.0, 8, 32)
+    build_frac = (1 / 3.0, 1 / 4.0, 2 / 5.0)[variation % 3]   # per-press feel
+    build_bars = _r4(per_cycle * build_frac, 4, 16)
+    drop_bars = _r4(per_cycle * (1.0 - build_frac), 8, 32)
 
     sections = [Section("intro", intro_bars, "sparse", "lite", bass=False, pads=False)]
     for c in range(1, cycles + 1):

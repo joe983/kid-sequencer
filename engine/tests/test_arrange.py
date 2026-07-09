@@ -60,18 +60,32 @@ def test_choose_progression_is_deterministic_and_covers_riff():
 
 
 def test_plan_totals_land_in_the_attention_window():
-    # every song must be >=3:00 (180 s) and <=4:00, across the app's 40-200 BPM clamp
+    # every song must be >=3:00 (180 s) and <=4:00, across the app's 40-200 BPM
+    # clamp AND every per-press variation nonce
     for tempo in (40, 60, 90, 120, 140, 170, 200):
-        plan = plan_song(tempo)
-        bars = sum(s.bars for s in plan)
-        dur = bars * 4 * 60.0 / tempo
-        assert 180.0 <= dur <= 240.0, (tempo, bars, dur)
-        assert [s.name for s in plan][0] == "intro"
-        assert plan[-1].name == "outro"
-        # every drop keeps the verbatim riff + full kit — the fidelity guarantee
-        for s in plan:
-            if s.name.startswith("drop"):
-                assert s.riff_variant == "verbatim" and s.drums == "full"
+        for variation in (0, 1, 2, 3):
+            plan = plan_song(tempo, variation)
+            bars = sum(s.bars for s in plan)
+            dur = bars * 4 * 60.0 / tempo
+            assert 180.0 <= dur <= 240.0, (tempo, variation, bars, dur)
+            assert [s.name for s in plan][0] == "intro"
+            assert plan[-1].name == "outro"
+            # every drop keeps the verbatim riff + full kit — the fidelity guarantee
+            for s in plan:
+                if s.name.startswith("drop"):
+                    assert s.riff_variant == "verbatim" and s.drums == "full"
+
+
+def test_variation_changes_the_arrangement_not_the_riff():
+    riff = _riff()
+    # deterministic per nonce
+    assert choose_progression(riff, 0) == choose_progression(riff, 0)
+    assert choose_progression(riff, 1) == choose_progression(riff, 1)
+    # different nonces vary the plan's build:drop split at a typical tempo
+    p0, p1 = plan_song(120, 0), plan_song(120, 1)
+    assert [s.bars for s in p0] != [s.bars for s in p1]
+    # both progressions still contain the tonic chord (riff coverage holds)
+    assert 0 in choose_progression(riff, 0) and 0 in choose_progression(riff, 1)
 
 
 def test_riff_variants_are_deterministic_and_never_touch_verbatim():
