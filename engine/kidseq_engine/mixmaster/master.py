@@ -29,6 +29,7 @@ from pedalboard import (
     HighShelfFilter,
     Limiter,
     LowpassFilter,
+    LowShelfFilter,
     Pedalboard,
     PeakFilter,
     Reverb,
@@ -193,6 +194,147 @@ def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
 
 
 # ---------------------------------------------------------------------------
+# Master-bus endgame helpers (EQ, calibration, saturation, limiter loop)
+# ---------------------------------------------------------------------------
+
+
+def _master_eq(genre: str | None) -> Pedalboard:
+    """Master tone shape, applied BEFORE every nonlinearity (HP first so
+    subsonics don't eat clipper/limiter headroom). The 3.2 kHz dip is the
+    kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud."""
+    low_hz, low_db, low_q = (60.0, 1.5, 0.8) if genre in ("drill", "hiphop") else (100.0, 1.2, 0.71)
+    return Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=24.0),
+        LowShelfFilter(cutoff_frequency_hz=low_hz, gain_db=low_db, q=low_q),
+        PeakFilter(cutoff_frequency_hz=280.0, gain_db=-1.5, q=1.1),
+        PeakFilter(cutoff_frequency_hz=3200.0, gain_db=-1.0, q=1.4),
+        HighShelfFilter(cutoff_frequency_hz=11000.0, gain_db=1.5, q=0.71),
+    ])
+
+
+def _windowed_lufs_calibrate(stereo: np.ndarray, sr: int, ref_lufs: float = -16.0) -> np.ndarray:
+    """Gain the bus so the LOUDEST 30% of 3 s windows average `ref_lufs`.
+
+    LUFS-based staging replaces peak-normalisation (peak staging made glue
+    behaviour a content lottery); using only the loudest windows keeps quiet
+    intros/outros from skewing the reference."""
+    meter = pyln.Meter(sr)
+    win, hop = 3 * sr, sr
+    vals = []
+    for s in range(0, max(1, stereo.shape[0] - win), hop):
+        v = meter.integrated_loudness(stereo[s:s + win])
+        if np.isfinite(v):
+            vals.append(v)
+    if not vals:
+        return stereo
+    vals.sort(reverse=True)
+    loud = float(np.mean(vals[:max(1, int(len(vals) * 0.3))]))
+    return (stereo * (10.0 ** ((ref_lufs - loud) / 20.0))).astype(np.float32)
+
+
+# full-band tanh soft clip: harmonic density before the limiter. Harder knee on
+# the aggressive four-to-floor/drill styles.
+_CLIP_K = {"techhouse": 1.6, "dnb": 1.6, "drill": 1.6}
+
+
+def _soft_clip(stereo: np.ndarray, genre: str | None) -> np.ndarray:
+    k = _CLIP_K.get(genre or "", 1.3)
+    return (np.tanh(k * stereo) / np.tanh(k)).astype(np.float32)
+
+
+def _brickwall(x: np.ndarray, sr: int, ceiling_lin: float,
+               lookahead_s: float = 0.002, release_s: float = 0.060) -> np.ndarray:
+    """Deterministic stereo-linked lookahead brickwall limiter (vectorized).
+
+    NB: pedalboard's `Limiter` is a JUCE limiter WITH make-up gain — its output
+    ceiling is NOT the threshold (measured +2.2 dBTP at threshold −1.2), which
+    made loudness convergence impossible.
+
+    Construction with a hard guarantee (gain[n] <= required[n] for every n, so
+    NO hard-clip stage — hard clipping at 4x re-creates inter-sample overshoot
+    after decimation):
+      deficit d[n] = 1 - min(1, ceiling/|x|)
+      d2 = asymmetric running MAX of d over [n - release, n + lookahead]
+           (attack via lookahead, hold-style release)
+      d3 = Hann FIR smooth of d2, support ±lookahead — because every point of
+           the FIR support carries a max-window that contains n, the smoothed
+           deficit stays >= d[n] (weighted average of values each >= d[n]).
+      gain = 1 - d3
+    """
+    from scipy.ndimage import maximum_filter1d
+    from scipy.signal import fftconvolve
+
+    amp = np.max(np.abs(x), axis=1)                       # stereo-linked peak
+    d = 1.0 - np.minimum(1.0, ceiling_lin / np.maximum(amp, 1e-9))
+    la = max(2, int(lookahead_s * sr))
+    rel = max(la, int(release_s * sr))
+    # window spanning [n - rel, n + la]: size rel+la+1, shifted right by la
+    size = rel + la + 1
+    origin = (size // 2) - rel  # left edge lands at n - rel
+    origin = int(np.clip(origin, -(size // 2), size // 2))
+    d2 = maximum_filter1d(d, size=size, mode="nearest", origin=origin)
+    w = np.hanning(2 * la + 1)
+    w /= w.sum()
+    d3 = fftconvolve(d2, w, mode="same")
+    gain = (1.0 - d3).astype(np.float32)
+    return (x * gain[:, None]).astype(np.float32)
+
+
+def _limit_to_lufs(stereo: np.ndarray, sr: int, target: float,
+                   ceiling_db: float = -1.2, max_iters: int = 3) -> np.ndarray:
+    """Drive-INTO-limiter convergence: gain the ORIGINAL buffer up into a
+    4x-oversampled brickwall until integrated loudness lands on target (±0.2 LU).
+
+    Replaces the old downward-only trim (which left dense masters 2.5-4 dB
+    quiet). Limiting at 4x sample rate controls inter-sample peaks at the
+    source; the −1.2 ceiling budgets MP3-encoder overshoot under −1.0. Each
+    iteration re-limits from the clean input, never a limited signal."""
+    from scipy.signal import resample_poly
+
+    import os
+
+    debug = bool(os.environ.get("KIDSEQ_DEBUG_MASTER"))
+    ceiling_lin = 10.0 ** (ceiling_db / 20.0)
+    meas = _integrated_lufs(stereo, sr)
+    if not np.isfinite(meas):
+        return stereo
+    drive = target - meas + 0.7  # overshoot budget pushes into the limiter
+    out = stereo
+    n = stereo.shape[0]
+    pad = 2048  # resample_poly edge-ringing lands in padding, not the audio
+    for i in range(max_iters):
+        driven = stereo * (10.0 ** (drive / 20.0))
+        driven = np.pad(driven, ((pad, pad), (0, 0)))
+        up = resample_poly(driven, 4, 1, axis=0)
+        lim = _brickwall(up.astype(np.float32), sr * 4, ceiling_lin)
+        down = resample_poly(lim, 1, 4, axis=0).astype(np.float32)
+        out = down[pad:pad + n]
+        if out.shape[0] < n:
+            out = np.pad(out, ((0, n - out.shape[0]), (0, 0)))
+        got = _integrated_lufs(out, sr)
+        if debug:
+            pk = int(np.argmax(np.max(np.abs(out), axis=1)))
+            print(f"    [limit_to_lufs] iter {i}: drive={drive:+.2f} -> "
+                  f"lufs={got:.2f} tp={_true_peak_db(out, sr):.2f} "
+                  f"peak@{pk / sr:.3f}s/{n / sr:.3f}s")
+        if not np.isfinite(got) or abs(got - target) <= 0.2:
+            break
+        drive += target - got
+    return out
+
+
+def _max_short_term_lufs(stereo: np.ndarray, sr: int) -> float:
+    meter = pyln.Meter(sr)
+    win, hop = 3 * sr, sr
+    worst = -120.0
+    for s in range(0, max(1, stereo.shape[0] - win), hop):
+        v = meter.integrated_loudness(stereo[s:s + win])
+        if np.isfinite(v):
+            worst = max(worst, float(v))
+    return worst
+
+
+# ---------------------------------------------------------------------------
 # Metering
 # ---------------------------------------------------------------------------
 
@@ -232,12 +374,14 @@ def _process(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
 
 
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
-           kick_onsets: list[int], lufs_target: float | None = None) -> MasterResult:
-    """Mix + master a dict of mono layers into a final stereo track.
+           kick_onsets: list[int], lufs_target: float | None = None,
+           tempo: float = 120.0) -> MasterResult:
+    """Mix + master a dict of layers into the final stereo track.
 
-    layers: {"riff": mono, "drums": mono, ...}. Lengths may differ; all are zero-padded
+    layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
             to the longest. Only "riff" is required.
     kick_onsets: sample indices that trigger the sidechain pump.
+    tempo: used to sync the glue compressor's release to the groove.
     """
     if "riff" not in layers or layers["riff"].size == 0:
         raise ValueError("master() needs a non-empty 'riff' layer")
@@ -266,36 +410,38 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         gain = 10.0 ** (preset.layer_gain_db.get(name, -6.0) / 20.0)
         bus += proc * gain
 
-    # bus glue compressor (gentle, slow)
-    glue = Pedalboard([Compressor(threshold_db=-10.0, ratio=2.0, attack_ms=30.0, release_ms=220.0)])
-    bus = _process(bus, glue, sr)
+    # --- master-bus endgame -------------------------------------------------
+    # 1) DC removal, then tone (EQ precedes every nonlinearity: HP first so
+    #    subsonics don't eat clip headroom)
+    bus = bus - bus.mean(axis=0, keepdims=True).astype(np.float32)
+    bus = _process(bus, _master_eq(genre), sr)
 
-    # keep the sub mono (phasey lows fold to centre); highs stay wide
+    # 2) keep the sub mono (phasey lows fold to centre); highs stay wide
     stereo = collapse_lows_to_mono(bus, sr, 120.0)
 
-    # 1) consistent drive into the limiter: peak-normalise to ~-1 dBFS
-    peak = float(np.max(np.abs(stereo)))
-    if peak > 1e-9:
-        stereo = stereo * (10.0 ** (-1.0 / 20.0) / peak)
+    # 3) level staging by LOUDNESS, not peaks — glue then behaves consistently
+    stereo = _windowed_lufs_calibrate(stereo, sr, -16.0)
+    glue_release = float(np.clip(60000.0 / tempo * 0.5, 120.0, 350.0))
+    glue = Pedalboard([Compressor(threshold_db=-13.0, ratio=2.0, attack_ms=30.0,
+                                  release_ms=glue_release)])
+    stereo = _process(stereo, glue, sr)
 
-    # 2) brickwall limiter for density (catches peaks over the ceiling)
-    limiter = Pedalboard([Limiter(threshold_db=preset.peak_ceiling_db, release_ms=100.0)])
-    stereo = np.asarray(limiter(stereo, sr), dtype=np.float32)
+    # 4) density: full-band soft clip, then drive INTO the oversampled limiter
+    #    until integrated loudness converges on target
+    stereo = _soft_clip(stereo, genre) * (10.0 ** (-0.5 / 20.0))
+    stereo = _limit_to_lufs(stereo, sr, target, ceiling_db=-1.2)
 
-    # 3) loudness is set LAST, as a downward trim toward target — this also pulls the
-    #    true peak safely under the ceiling (gain <= 1 for dense content).
-    loud = _integrated_lufs(stereo, sr)
-    if np.isfinite(loud):
-        gain = 10.0 ** ((target - loud) / 20.0)
-        if gain > 1.0:  # sparse content: re-limit instead of raising peaks past the ceiling
-            stereo = np.asarray(limiter(stereo * gain, sr), dtype=np.float32)
-        else:
-            stereo = stereo * gain
-
-    # 4) true-peak safety: trim down if inter-sample peaks still exceed the ceiling
+    # 5) true-peak check (limiter ran at 4x, so this should already hold)
     tp = _true_peak_db(stereo, sr)
     if tp > preset.peak_ceiling_db:
         stereo = stereo * (10.0 ** ((preset.peak_ceiling_db - tp) / 20.0))
+        tp = _true_peak_db(stereo, sr)
+
+    # 6) short-term guardrail: no 3 s stretch hotter than -8 LUFS (fatigue).
+    #    One bounded pass: re-converge at a lower target, accept the trade.
+    worst = _max_short_term_lufs(stereo, sr)
+    if worst > -8.0:
+        stereo = _limit_to_lufs(stereo, sr, target - (worst + 8.0), ceiling_db=-1.2)
         tp = _true_peak_db(stereo, sr)
 
     final_lufs = _integrated_lufs(stereo, sr)

@@ -129,6 +129,18 @@ def run_tests() -> str:
 
 
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def exec_script(script: str) -> str:
+    """Run any engine script remotely (diagnostics / one-offs)."""
+    _wire_assets()
+    return _run(script)
+
+
+@app.local_entrypoint()
+def probe(script: str) -> None:
+    print(exec_script.remote(script))
+
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
 def render_track() -> bytes:
     """Full mastered smoke render; returns the MP3 bytes."""
     _wire_assets()
