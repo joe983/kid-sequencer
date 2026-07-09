@@ -60,13 +60,15 @@ def test_choose_progression_is_deterministic_and_covers_riff():
 
 
 def test_plan_totals_land_in_the_attention_window():
-    for tempo in (60, 90, 120, 140, 170, 190):
+    # every song must be >=3:00 (180 s) and <=4:00, across the app's 40-200 BPM clamp
+    for tempo in (40, 60, 90, 120, 140, 170, 200):
         plan = plan_song(tempo)
         bars = sum(s.bars for s in plan)
         dur = bars * 4 * 60.0 / tempo
-        assert 75.0 <= dur <= 240.0, (tempo, bars, dur)
+        assert 180.0 <= dur <= 240.0, (tempo, bars, dur)
         assert [s.name for s in plan][0] == "intro"
-        # every drop keeps the verbatim riff — the fidelity guarantee
+        assert plan[-1].name == "outro"
+        # every drop keeps the verbatim riff + full kit — the fidelity guarantee
         for s in plan:
             if s.name.startswith("drop"):
                 assert s.riff_variant == "verbatim" and s.drums == "full"
