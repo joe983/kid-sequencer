@@ -1,0 +1,149 @@
+"""Arrangement FX — generator contracts, throw heuristic, flag null tests.
+
+The null tests use a COMPACT plan override + the numpy-synth fallback so they
+run anywhere (no assets needed) in seconds.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+import numpy as np
+
+# Null tests compare bit-identical renders — Surge XT's unison uses internal
+# RNG a VST reset doesn't reseed (audibly identical, sample-different), so
+# these tests pin the deterministic SF2/synth fallback renderers instead.
+# Must be set BEFORE any kidseq_engine import (vst_render reads it at import).
+os.environ["KIDSEQ_SURGE_VST3"] = str(Path("nonexistent-surge-for-null-tests"))
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from kidseq_engine.arrange import Section  # noqa: E402
+from kidseq_engine.arrange.render import FxFlags, build_song  # noqa: E402
+from kidseq_engine.audio import SR  # noqa: E402
+from kidseq_engine.render import fx  # noqa: E402
+from kidseq_engine.sequence import Note, Riff  # noqa: E402
+
+_PLAN = [
+    Section("intro", 1, "sparse", "lite", bass=False, pads=False),
+    Section("build", 2, "verbatim", "lite", bass=True, pads=True),
+    Section("drop", 2, "verbatim", "full", bass=True, pads=True),
+    Section("break", 1, "sparse_low", None, bass=False, pads=True),
+    Section("build2", 2, "verbatim", "lite", bass=True, pads=True),
+    Section("drop2", 2, "verbatim", "full", bass=True, pads=True),
+    Section("outro", 1, "sparse", "lite", bass=False, pads=True),
+]
+_OFF = FxFlags(fx=False, fills=False, automation=False, gap=False, throw=False)
+
+
+def _riff() -> Riff:
+    notes = [
+        Note(pitch=60, start_beats=0.0, dur_beats=1.0),
+        Note(pitch=64, start_beats=1.0, dur_beats=1.0),
+        Note(pitch=67, start_beats=2.0, dur_beats=1.0),
+        Note(pitch=64, start_beats=3.0, dur_beats=1.0),  # sounds past beat 3 -> throw fits
+    ]
+    return Riff(notes=notes, tempo=120.0, key="C", instrument="piano", drum_style="techhouse")
+
+
+def _peak_db(x) -> float:
+    return 20.0 * np.log10(float(np.max(np.abs(x))) + 1e-12)
+
+
+def test_generators_shapes_levels_determinism():
+    r1 = fx.riser(2.0, SR, seed=7, gate_hz=8.0)
+    r2 = fx.riser(2.0, SR, seed=7, gate_hz=8.0)
+    assert r1.shape == (2 * SR, 2) and np.array_equal(r1, r2)
+    assert abs(_peak_db(r1) - (-12.0)) < 1.5
+    imp = fx.impact(SR)
+    assert imp.shape[1] == 2 and abs(_peak_db(imp) - (-6.0)) < 0.8
+    cr = fx.crash(SR, seed=3)
+    assert abs(_peak_db(cr) - (-14.0)) < 0.8
+    rc = fx.reverse_crash(cr, SR)
+    assert abs(_peak_db(rc) - (-16.0)) < 0.8
+    dl = fx.downlifter(2.0, SR)
+    assert abs(_peak_db(dl) - (-16.0)) < 0.8
+    # riser ends silent (the drop must start clean)
+    assert float(np.max(np.abs(r1[-8:]))) < 1e-3
+
+
+def test_throw_fits_heuristic():
+    r = _riff()
+    assert fx.throw_fits(r)
+    from dataclasses import replace
+    assert not fx.throw_fits(replace(r, tempo=170.0))                 # too fast
+    dense = replace(r, notes=r.notes * 3)                             # 12 notes
+    assert not fx.throw_fits(dense)
+    early = replace(r, notes=[Note(pitch=60, start_beats=0.0, dur_beats=1.0)])
+    assert not fx.throw_fits(early)                                   # nothing to echo
+
+
+def test_flags_off_is_deterministic_baseline():
+    r = _riff()
+    l1, k1, _, _ = build_song(r, SR, plan=_PLAN, flags=_OFF)
+    l2, k2, _, _ = build_song(r, SR, plan=_PLAN, flags=_OFF)
+    assert k1 == k2 and sorted(l1) == sorted(l2)
+    assert "fx" not in l1  # empty fx layer is dropped
+    for name in l1:
+        assert np.array_equal(l1[name], l2[name]), name
+
+
+def test_drops_stay_verbatim_under_automation():
+    """Filter automation may touch intro/builds/breaks — NEVER a drop. The
+    riff layer inside every drop must be bit-identical to the no-FX baseline."""
+    r = _riff()
+    base, _, plan, _ = build_song(r, SR, plan=_PLAN, flags=_OFF)
+    auto, _, _, _ = build_song(r, SR, plan=_PLAN,
+                               flags=FxFlags(fx=False, fills=False, automation=True,
+                                             gap=False, throw=False))
+    bar_s = 4.0 * 60.0 / r.tempo
+    bar = 0
+    for sec in plan:
+        a, e = int(bar * bar_s * SR), int((bar + sec.bars) * bar_s * SR)
+        if sec.name.startswith("drop"):
+            assert np.array_equal(base["riff"][a:e], auto["riff"][a:e]), sec.name
+        bar += sec.bars
+
+
+def test_gap_silences_and_does_not_click():
+    r = _riff()
+    layers, _, plan, _ = build_song(r, SR, plan=_PLAN,
+                                    flags=FxFlags(fx=False, fills=False, automation=False,
+                                                  gap=True, throw=False))
+    bar_s = 4.0 * 60.0 / r.tempo
+    spb = 60.0 / r.tempo
+    bar = 0
+    for sec in plan:
+        a = int(bar * bar_s * SR)
+        if sec.name.startswith("drop"):
+            g0 = a - int(0.6 * (spb / 4.0) * SR)
+            for name, buf in layers.items():
+                assert float(np.max(np.abs(buf[g0:a]))) < 1e-6, (sec.name, name)
+                # no click: sample-to-sample jump around the fade stays bounded
+                seg = buf[g0 - int(0.004 * SR):a + 4]
+                assert float(np.max(np.abs(np.diff(seg, axis=0)))) < 0.5, (sec.name, name)
+        bar += sec.bars
+
+
+def test_fx_layer_present_with_flags_on():
+    r = _riff()
+    layers, _, _, _ = build_song(r, SR, plan=_PLAN, flags=FxFlags())
+    assert "fx" in layers
+    assert float(np.max(np.abs(layers["fx"]))) > 0.05
+
+
+if __name__ == "__main__":
+    fails = 0
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn):
+            try:
+                fn()
+                print(f"PASS {name}")
+            except Exception as e:  # noqa: BLE001
+                print(f"FAIL {name}: {e}")
+                fails += 1
+    if fails:
+        sys.exit(1)
+    print("all fx tests passed")

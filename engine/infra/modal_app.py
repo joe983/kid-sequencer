@@ -123,7 +123,8 @@ def run_tests() -> str:
     out = ""
     for t in ("tests/test_sequence.py", "tests/test_master.py",
               "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
-              "tests/test_arrange.py", "tests/test_master_gates.py"):
+              "tests/test_arrange.py", "tests/test_master_gates.py",
+              "tests/test_fx.py"):
         out += _run(t)
     return out
 
@@ -172,6 +173,40 @@ def render_song() -> bytes:
     _wire_assets()
     _run("smoke_song.py")
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+# representative tempo per genre for the full-song ear sweep
+_GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "funk": 132,
+                 "drill": 142, "hiphop": 92, "reggaeton": 96}
+
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
+def render_song_genre(style: str, tempo: int) -> bytes:
+    """Full arranged song for one genre at its representative tempo."""
+    import json
+
+    _wire_assets()
+    src = Path(ENGINE_REMOTE) / "examples" / "sample_riff.json"
+    payload = json.loads(src.read_text(encoding="utf-8"))
+    payload["drumStyle"] = style
+    payload["tempo"] = tempo
+    tmp = Path(ENGINE_REMOTE) / "out" / f"_riff_{style}.json"
+    tmp.parent.mkdir(exist_ok=True)
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    _run("smoke_song.py", str(tmp))
+    return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+@app.local_entrypoint()
+def songs() -> None:
+    """Render the full-song genre sweep (6 tracks, in parallel) and pull local."""
+    dst_dir = ENGINE_LOCAL / "out"
+    dst_dir.mkdir(exist_ok=True)
+    args = list(_GENRE_TEMPOS.items())
+    for (style, _), mp3 in zip(args, render_song_genre.starmap(args)):
+        dst = dst_dir / f"song_{style}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
 @app.local_entrypoint()
