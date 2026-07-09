@@ -50,10 +50,11 @@ soundfont is present.
 | piano | **Salamander Grand V3** (real Yamaha C5, multi-velocity) | CC-BY 3.0 |
 | synth | **FreePats SynthSquare** (matches the app's square lead) | CC0 |
 | bass | **FreePats Lately Bass** (punchy FM EDM bass) | CC0 |
-| trumpet / strings / bells | GeneralUser GS (GM) — see note | GeneralUser v2.0 (commercial OK) |
-| drums | GeneralUser GS GM kit — **placeholder; → Splice kits later** | GeneralUser v2.0 |
+| trumpet / strings / bells | **VSCO 2 CE via sfizz (Modal/Linux)**; GeneralUser GM local fallback | CC0 / GeneralUser v2.0 |
+| drums | real CC0 one-shot kits (Boochi/VCSL/Virtuosity); GM fallback | CC0 / GeneralUser v2.0 |
 
-**trumpet/strings/bells are still GM**: no clean commercially-licensed *SF2* exists for
-them. The premium path is **VSCO 2 CE via the `sfizz` engine on the Modal/Linux build**
-(VSCO is SFZ-only; sfizz installs cleanly on Linux, awkwardly on Windows). Local preview
-stays on SF2 for zero native deps. See `LICENSES.md` for the full rationale.
+**trumpet/strings/bells (2026-07-09):** rendered from **VSCO 2 CE via `sfizz_render`**
+on the Modal build — `scripts/fetch_vsco.py` generates our own .sfz mappings (roots
+auto-detected; VSCO filename octaves are wrong) and `render/sfz_render.py` renders
+them (priority: sfz > SF2 > numpy synth in `riff_audio`). Local Windows preview stays
+on SF2/GM for zero native deps. See `LICENSES.md`.

@@ -145,6 +145,32 @@ fetch scripts; functions symlink `engine/assets` → the volume so relative path
 - **Unblocked:** the parked sfizz/VSCO orchestral + VST soft-synth work now has its
   Linux home — extend the image (apt sfizz / synth binaries) in `infra/modal_app.py`.
 
+## NEW — trumpet/strings/bells = real VSCO 2 CE via sfizz (2026-07-09, Modal)
+GM placeholders replaced on the Modal build. No Debian sfizz package and no maintained
+VSCO SFZ port exist, so both halves are built ourselves:
+- **`sfizz_render` compiled from source** in the Modal image (cmake layer, cached;
+  JACK/LV2/VST all OFF). No sfizz on Windows — local dev keeps the SF2/GM fallback.
+- **`scripts/fetch_vsco.py`** sparse-clones 3 folders of sgossner/VSCO-2-CE (**CC0
+  verified** from repo LICENSE) and **generates .sfz files**: Trumpet susvib +
+  Violin Section susVib (11 pitches × v1/v2 velocity takes), Glock (6 pitches).
+  **Root detection is mode-split** — autocorrelation for the harmonic sustains
+  (uniform +1-octave offset vs filenames, drift <25 cents, octave sanity-snap to the
+  filename prior) but **FFT-peak-near-named for the glock** (bell partials are
+  inharmonic; autocorr octave-errors badly; glock filenames ARE at sounding pitch).
+  An FFT octave-picker for the harmonic voices was tried and REVERTED — strong 2nd
+  harmonics flip it an octave up on random takes. `--force` regenerates.
+- **`render/sfz_render.py`** — looped-riff MIDI (mido) → `sfizz_render` CLI → WAV →
+  mono float32, same length contract as sf_render. `riff_audio` priority:
+  **sfz > SF2 > numpy synth** (`riff_source()` logs which fires).
+- **Verified:** 23/23 tests remotely (tests/test_sfz.py new, 5 tests — render tests
+  auto-skip where sfizz is absent); `render_orchestral_audition.py` on Modal →
+  `out/orch_{trumpet,strings,bells}.mp3` all "sfz(VSCO 2 CE …)", −10 LUFS, TP ≤ −1.
+  `modal run infra/modal_app.py::orchestral` pulls them local. **Ears still pending**
+  (user). Volume now 84 asset files.
+- Known limitation: the engine pipeline is mono end-to-end, so the violin *section*
+  will read narrower than the app's dual-take stereo strings — a mix-stage question
+  (stereo layers), not a sample-quality one.
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST

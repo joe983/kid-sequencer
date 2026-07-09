@@ -15,7 +15,8 @@ exact license **and** its AI/automated-use permission below.
 | piano | Salamander Grand Piano V3 | **CC-BY 3.0** | ✅ commercial OK; attribute S. Christian Collins / Alexander Holm |
 | synth | FreePats **SynthSquare** | **CC0 1.0** | ✅ public domain, no restriction |
 | bass | FreePats **Lately Bass** | **CC0 1.0** | ✅ public domain, no restriction |
-| trumpet, strings, bells | GeneralUser GS v1.471 | **GeneralUser GS License v2.0** | ✅ explicitly allows commercial use + use in software projects |
+| trumpet, strings, bells (Modal/Linux build) | **VSCO 2 CE** (sgossner/VSCO-2-CE) via sfizz | **CC0 1.0** | ✅ public domain; AI/automated use OK |
+| trumpet, strings, bells (local fallback) | GeneralUser GS v1.471 | **GeneralUser GS License v2.0** | ✅ explicitly allows commercial use + use in software projects |
 | drums (electronic: kick/sub/snare/clap/hats) | **Boochi44/free-drum-samples** | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
 | drums (aux perc: cowbell/shaker/woodblock) | **VCSL** (sgossner/VCSL) | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
 | drums (acoustic breakbeat kit for DnB: kick/snare/rim/hats) | **Virtuosity Drums** (sfzinstruments/virtuosity_drums) | **CC0 1.0** | ✅ public domain; AI/automated use OK |
@@ -54,10 +55,15 @@ server) — satisfied by our downloaded copy.
   one-shots (the Feb-2026 Gen-AI uploader-preference flag is non-binding but adds
   ambiguity; the CC0 GitHub kits are cleaner for an AI-generation product).
 
+**VSCO 2 CE (CC0, AI-use OK), verified 2026-07-09** — the premium orchestral path,
+live on the Modal/Linux build. Repo LICENSE = **CC0 1.0 Universal**
+(https://github.com/sgossner/VSCO-2-CE, same author as VCSL). `scripts/fetch_vsco.py`
+sparse-clones 3 folders (Trumpet susvib, Violin Section susVib, Glock) and GENERATES
+our own .sfz mappings (no maintained SFZ port exists); rendered by `sfizz_render`
+(BSD-2-Clause, built from source in the Modal image — we bundle nothing).
+
 ### Not used (and why)
-- **VSCO 2 CE / Sonatina** — SFZ-only (needs `sfizz`, not our SF2 renderer) and/or
-  CC Sampling Plus (restrictive). Reserved for the Modal/sfizz production build as the
-  premium upgrade path for trumpet/strings/bells.
+- **Sonatina** — CC Sampling Plus (restrictive). VSCO 2 CE covers the need as pure CC0.
 - **FreePats GM set** — GPL-v3-with-exception; the exception covers *output*, but
   bundling the GPL .sf2 file in a closed app is a gray area. Avoided.
 
