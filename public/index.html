@@ -2509,10 +2509,10 @@ async function _loadMelodicFolder(){
 // Per-note level for the sampled voices (peak-normalized at build to -1 dBFS).
 // Separate from the synth LEVEL map so the sample and synth paths tune apart.
 // NB sustained sources (strings) read much louder than transients at equal peak.
-const MELODIC_SAMPLE_LEVEL = { piano: 0.62, trumpet: 0.6, strings: 0.42, synth: 0.40, bass: 0.7, bells: 0.40 };
+const MELODIC_SAMPLE_LEVEL = { piano: 0.62, trumpet: 0.55, strings: 0.42, synth: 0.40, bass: 0.7, bells: 0.40 };
 // Note-end fade — what makes repeats legible. Piano = damper snap; strings = bow lift.
 // "bells" = the rave pad when sampled: slow bloom in the render, gentle release here.
-const MELODIC_RELEASE_S = { piano: 0.10, trumpet: 0.12, strings: 0.30, synth: 0.10, bass: 0.10, bells: 0.35 };
+const MELODIC_RELEASE_S = { piano: 0.10, trumpet: 0.15, strings: 0.30, synth: 0.10, bass: 0.10, bells: 0.35 };
 
 function playMelodicSample(instrument, freq, steps){
   const zones = melodicSampleKits[instrument];

@@ -42,6 +42,7 @@ PIANO_GRAND = KS / "VCSL-Grand-Piano-Kawai-CC0"     # acoustic grand (in use)
 PIANO_EP = KS / "VCSL-TX81Z-FM-Piano-CC0"           # FM electric piano (A/B alt)
 PIANO_SRC = PIANO_GRAND                              # <- active source for the piano voice
 STRINGS_SRC = KS / "VSCO2-Violin-Section-CC0"       # violin section susVib
+TRUMPET_SRC = KS / "VSCO2-Trumpet-CC0"              # trumpet susvib, takes v1 + take2/
 
 # public/samples relative to this file (tools/ -> repo root -> public/samples),
 # so it writes into whatever worktree the tool lives in.
@@ -58,9 +59,20 @@ LEAD_DB = -42.0          # strip leading silence up to first sample above this
 KITS = {
     "piano": {
         # 8 zones every ~4 semitones, G#3–C6, covering the grid (C4–C5) + keys.
+        # trim 6.0: a whole note at tempo 40 holds 6 s — 3.0 cut long notes off
+        # (user report). The Kawai sustains are 8-25 s long, so real decay all
+        # the way; the fade only smooths the last second.
         "files": [PIANO_SRC / f"{n}.wav" for n in
                   ["G#3", "C4", "E4", "G#4", "C5", "E5", "G#5", "C6"]],
-        "trim": 3.0, "fade": 0.22,
+        "trim": 6.0, "fade": 1.0,
+    },
+    "trumpet": {
+        # Real trumpet (VSCO susvib) replacing the thin saw+bandpass synth —
+        # 9 zones real A3-C6, dual-take stereo blend (same recipe as strings).
+        "files": [TRUMPET_SRC / f"{n}.wav" for n in
+                  ["A3", "C4", "D#4", "G4", "A#4", "D5", "F5", "A5", "C6"]],
+        "blend_take2": TRUMPET_SRC / "take2",
+        "trim": 5.0, "fade": 0.8,
     },
     "strings": {
         # 9 zones every ~3-4 semitones, G3–B5 — grid + every key-selector root.
