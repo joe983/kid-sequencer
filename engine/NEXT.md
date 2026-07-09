@@ -221,6 +221,46 @@ on Modal: sample riff (C, 120, techhouse) → I–V–vi–IV, 64 bars ≈ 128 s
   `bass_notes`, pad voicing/register in `pad_notes`, lite-section voice set
   `_LITE_VOICES`, per-layer gains stay in `master.py:GENRE_PRESETS`.
 
+## NEW — 3-minute songs + professional mix/master (2026-07-09, 6 increments)
+Full plan: `~/.claude/plans/the-modal-song-sounds-enchanted-lobster.md` (approved).
+All merged to main; every increment gated by `tests/test_master_gates.py` (+ test_fx.py).
+**Song length:** `plan_song` is cycle-based — build→drop cycle COUNT scales with tempo
+(1 cycle @40bpm … 4 @200), lands 3:05–3:20 across the app's whole 40–200 clamp.
+**Mix/master (was: dup-mono, no slotting, timid limiter):**
+- (1) **Stereo end-to-end** — all renderers emit (N,2) (tsf de-interleaved, sfizz via
+  `read_stereo`, Surge transposed); drum one-shots constant-power panned; bass hard-mono;
+  mono-below-120 fold; gates: genuine-stereo / mono-compat / sub-mono.
+- (2) **Master endgame** — DC → master EQ (HP24, genre low shelf, −280 mud, −3.2k
+  anti-fatigue, +11k air) → windowed-LUFS calibration (−16) → tempo-synced glue →
+  tanh clip → **drive-into-limiter LUFS convergence at 4x** → guards.
+  **`_brickwall` is OURS**: pedalboard's `Limiter` is a JUCE limiter WITH make-up gain
+  (ceiling ≠ threshold, measured +2.2 dBTP) — unusable. Ours: asymmetric max-filter +
+  Hann FIR with a hard gain guarantee. **Two traps fixed:** resample_poly edge-ringing
+  (pad/trim around the 4x sandwich) and content-dependent decimation ISP overshoot
+  (final-ceiling trim INSIDE the loop, else masters land 0.3+ dB off target).
+- (3) **Mix rebuild** — kick-slot FFT detection (`sample_kit.kick_slot_hz`); boards
+  slot drums AT/bass AWAY-FROM the kick fundamental; pads inverse-EQ'd at 3k; per-layer
+  LUFS calibration over ACTIVE regions (drums −18/riff −20/bass −21/pads −26 — genre
+  gains are now small creative offsets); sidechain 2.0 (dip→hold→tempo-synced recovery,
+  per-layer mults riff .5/pads 1.15, cap .65). **SWING is now in the engine**
+  (`drums.swung_step_offset`, funk .16/techhouse .08) — renderers AND pump share it.
+- (4) **Shared space** — ONE wet-only reverb return (HP300/LP7500, room .35–.50/genre,
+  20ms predelay; sends riff −14/pads −9/drums −22; intro riff rides −7 = "distant open"
+  via `riff_wet_spans`); parallel NY drum bus (−32dB 8:1 crush, LP8k, +6, −6..−10/genre).
+- (5) **Arrangement FX** (`render/fx.py` + build_song flags, each null-tested off):
+  riser/impact/crash/reverse-crash/downlifter (numpy-synthesized, seeded from the riff
+  via `fx.song_seed`), pre-drop GAP, build drum fills (16th snare rolls, rim-led for
+  drill/hiphop), LadderFilter automation (intro riff LP2.5k; builds sweep 900→18k
+  ending AT the drop; breaks close pads; **drops never touched — riff-verbatim null
+  test**), drop2+ escalation (kit/pads boost, pad octave-double, deeper gate, doubled
+  impact), **riff delay-throw into breaks auto-decided per track** (`fx.throw_fits`:
+  tail note + tempo ≤150 + ≤10 notes; owner chose per-track auto).
+- **Surge determinism caveat:** unison phase RNG isn't reseeded by VST reset — renders
+  are audibly identical but not bit-identical (retrigger enabled to minimize). Null
+  tests pin the SF2/synth fallback via `KIDSEQ_SURGE_VST3=nonexistent`.
+- Ear files in MAIN repo `engine/out/`: `modal_song_stereo/master2/mix3/mix4.mp3`
+  (increment A/Bs) + `song_<genre>.mp3` × 6 (full sweep, `::songs` entrypoint).
+
 ## Then — synths/orchestral ("right sounds", part 2, Modal build)
 User: don't accept GM placeholders for trumpet/strings/bells or the EDM lead/bass/pads — do it AFTER
 drums. This is the trigger to stand up the **Modal/Linux build** (soft synth via pedalboard VST

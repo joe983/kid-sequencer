@@ -43,6 +43,7 @@ PATCHES: dict[str, dict] = {
     # rave lead for the app's "synth" voice: detuned saw stack, snappy LP sweep, chorus
     "synth": {
         "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
         "a_osc_1_unison_voices": "5 voices",
         "a_osc_1_unison_detune": ("raw", 0.25),
         "a_filter_1_type": "LP 24 dB",
@@ -63,10 +64,12 @@ PATCHES: dict[str, dict] = {
     # reese/moog bass: 2-voice detuned saw + sine sub an octave down, ladder LP
     "bass": {
         "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
         "a_osc_1_unison_voices": "2 voices",
         "a_osc_1_unison_detune": ("raw", 0.35),
         "a_osc_2_mute": False,
         "a_osc_2_type": "Sine",
+        "a_osc_2_retrigger": True,
         "a_osc_2_octave": -1.0,
         "a_osc_2_volume": -6.0,
         "a_filter_1_type": "LP Vintage Ladder",
@@ -85,6 +88,7 @@ PATCHES: dict[str, dict] = {
     # supersaw pad — for the arrangement stage's pads layer (not a grid voice)
     "pad": {
         "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
         "a_osc_1_unison_voices": "7 voices",
         "a_osc_1_unison_detune": ("raw", 0.3),
         "a_filter_1_type": "LP 12 dB",

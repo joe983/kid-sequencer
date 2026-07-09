@@ -506,7 +506,8 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
             proc = proc + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
-        proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
+        if name != "fx":  # FX generators are peak-specified by design — no calibration
+            proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
 
