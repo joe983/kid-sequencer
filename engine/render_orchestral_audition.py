@@ -25,7 +25,7 @@ from kidseq_engine.render.drums import DRUM_PATTERNS  # noqa: E402
 from kidseq_engine.sequence import parse_sequence  # noqa: E402
 
 BARS = 4
-INSTRUMENTS = ("trumpet", "strings", "bells")
+INSTRUMENTS = ("trumpet", "strings", "bells", "synth", "bass")
 
 
 def main() -> None:

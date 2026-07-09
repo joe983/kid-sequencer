@@ -48,8 +48,8 @@ soundfont is present.
 | Instrument | Library now | License |
 |---|---|---|
 | piano | **Salamander Grand V3** (real Yamaha C5, multi-velocity) | CC-BY 3.0 |
-| synth | **FreePats SynthSquare** (matches the app's square lead) | CC0 |
-| bass | **FreePats Lately Bass** (punchy FM EDM bass) | CC0 |
+| synth | **Surge XT soft synth (Modal/Linux)** — rave lead patch; SynthSquare SF2 local fallback | GPL-3 (server-side) / CC0 |
+| bass | **Surge XT soft synth (Modal/Linux)** — reese+sub patch; Lately Bass SF2 local fallback | GPL-3 (server-side) / CC0 |
 | trumpet / strings / bells | **VSCO 2 CE via sfizz (Modal/Linux)**; GeneralUser GM local fallback | CC0 / GeneralUser v2.0 |
 | drums | real CC0 one-shot kits (Boochi/VCSL/Virtuosity); GM fallback | CC0 / GeneralUser v2.0 |
 

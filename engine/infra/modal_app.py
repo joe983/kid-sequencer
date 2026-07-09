@@ -56,6 +56,17 @@ image = (
         "find /tmp/sfizz-build -name sfizz_render -type f -exec cp {} /usr/local/bin/ ';'",
         "rm -rf /tmp/sfizz-src /tmp/sfizz-build",
     )
+    # Surge XT (GPL, server-side only): soft synth for the synth/bass voices,
+    # hosted headless by pedalboard. libasound2 is its one non-default runtime dep.
+    .apt_install("libasound2", "curl", "ca-certificates")
+    .run_commands(
+        "curl -sL -o /tmp/surge.deb https://github.com/surge-synthesizer/releases-xt/"
+        "releases/download/1.3.4/surge-xt-linux-x64-1.3.4.deb",
+        "apt-get update -q",
+        "dpkg -i /tmp/surge.deb || apt-get install -fy -q",
+        "dpkg -s surge-xt | grep 'Status: install ok installed'",
+        "rm /tmp/surge.deb",
+    )
     .pip_install_from_requirements(str(ENGINE_LOCAL / "requirements.txt"))
     .add_local_dir(
         str(ENGINE_LOCAL),
@@ -111,7 +122,7 @@ def run_tests() -> str:
     _wire_assets()
     out = ""
     for t in ("tests/test_sequence.py", "tests/test_master.py",
-              "tests/test_sample_kit.py", "tests/test_sfz.py"):
+              "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py"):
         out += _run(t)
     return out
 
