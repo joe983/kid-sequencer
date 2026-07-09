@@ -84,24 +84,45 @@ class Section:
     pads: bool
 
 
+_TARGET_S = 190.0          # aim; hard window is 180–240 s (kids-attention + ≥3 min)
+_BARS_PER_CYCLE = 44       # ≈ one build+drop+break; sets how many cycles a tempo needs
+
+
+def _r4(x: float, lo: int, hi: int) -> int:
+    """Round to the nearest multiple of 4, clamped to [lo, hi] (bar counts stay
+    phrase-aligned so sections line up on 4-bar boundaries)."""
+    return max(lo, min(hi, round(x / 4.0) * 4))
+
+
 def plan_song(tempo: float) -> list[Section]:
-    """intro→build→drop→break→build→drop→outro, drop/build bars sized by tempo
-    so total duration lands roughly in the 1:40–2:30 kids-attention window."""
-    if tempo <= 100:
-        drop, build = 12, 8
-    elif tempo <= 140:
-        drop, build = 16, 8
-    else:
-        drop, build = 20, 12
-    return [
-        Section("intro", 4, "sparse", "lite", bass=False, pads=False),
-        Section("build", build, "verbatim", "lite", bass=True, pads=True),
-        Section("drop", drop, "verbatim", "full", bass=True, pads=True),
-        Section("break", 8, "sparse_low", None, bass=False, pads=True),
-        Section("build2", build, "verbatim", "lite", bass=True, pads=True),
-        Section("drop2", drop, "verbatim", "full", bass=True, pads=True),
-        Section("outro", 4, "sparse", "lite", bass=False, pads=True),
-    ]
+    """Arrange N build→drop cycles so the song lands ≥3:00 (target ~190 s) at ANY
+    tempo in the app's 40–200 BPM range.
+
+    Rather than stretch one drop to fill time (unmusical), the cycle COUNT scales
+    with tempo: slow tempos need 1 cycle, typical 2, very fast 3–4. Each cycle's
+    build/drop bar counts are then sized to hit the duration target, phrase-aligned.
+    Structure: intro → (build → drop → break)×(C-1) → build → drop → outro. Every
+    drop keeps the verbatim riff + full kit (the fidelity guarantee)."""
+    bar_s = 4.0 * 60.0 / tempo
+    target_bars = round(_TARGET_S / bar_s / 4.0) * 4          # nearest 4 bars
+    cycles = max(1, min(4, round(target_bars / _BARS_PER_CYCLE)))
+
+    intro_bars = outro_bars = 4
+    break_bars = 8
+    overhead = intro_bars + outro_bars + (cycles - 1) * break_bars
+    per_cycle = max(4.0, (target_bars - overhead) / cycles)   # bars per build+drop
+    build_bars = _r4(per_cycle / 3.0, 4, 16)                  # build:drop ≈ 1:2
+    drop_bars = _r4(per_cycle * 2.0 / 3.0, 8, 32)
+
+    sections = [Section("intro", intro_bars, "sparse", "lite", bass=False, pads=False)]
+    for c in range(1, cycles + 1):
+        sfx = "" if c == 1 else str(c)
+        sections.append(Section(f"build{sfx}", build_bars, "verbatim", "lite", bass=True, pads=True))
+        sections.append(Section(f"drop{sfx}", drop_bars, "verbatim", "full", bass=True, pads=True))
+        if c < cycles:  # a break bridges cycles, never trails the final drop
+            sections.append(Section(f"break{sfx}", break_bars, "sparse_low", None, bass=False, pads=True))
+    sections.append(Section("outro", outro_bars, "sparse", "lite", bass=False, pads=True))
+    return sections
 
 
 def riff_variant(notes: list[Note], variant: str) -> list[Note]:
