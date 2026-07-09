@@ -54,6 +54,45 @@ def to_stereo(mono: np.ndarray) -> np.ndarray:
     return np.stack([mono, mono], axis=1)
 
 
+def as_stereo(a: np.ndarray) -> np.ndarray:
+    """Coerce any renderer output to (N, 2): duplicate mono, pass stereo through."""
+    a = np.asarray(a, dtype=np.float32)
+    if a.ndim == 1:
+        return to_stereo(a)
+    if a.shape[1] == 1:
+        return np.repeat(a, 2, axis=1)
+    return a
+
+
+def hard_mono(stereo: np.ndarray) -> np.ndarray:
+    """Collapse a stereo buffer to dual-mono (both channels = the average).
+    Used to lock low-end sources (bass) dead-centre."""
+    m = stereo.mean(axis=1)
+    return np.stack([m, m], axis=1).astype(np.float32)
+
+
+def pan_stereo(mono: np.ndarray, pan: float) -> np.ndarray:
+    """Constant-power pan a mono buffer to (N, 2). pan in [-1, 1]; 0 = centre
+    (equal-power −3 dB per side, mono-compatible)."""
+    theta = (float(pan) + 1.0) * (np.pi / 4.0)
+    return np.stack([mono * np.cos(theta), mono * np.sin(theta)], axis=1).astype(np.float32)
+
+
+def collapse_lows_to_mono(stereo: np.ndarray, sr: int, cutoff: float = 120.0) -> np.ndarray:
+    """Force everything below `cutoff` to mono while keeping the highs wide
+    (mid/side: strip the low band out of Side). Prevents phasey sub on club PAs
+    and mono playback. No-op above the cutoff."""
+    from scipy.signal import butter, sosfilt
+
+    L = stereo[:, 0].astype(np.float64)
+    R = stereo[:, 1].astype(np.float64)
+    mid = (L + R) * 0.5
+    side = (L - R) * 0.5
+    sos = butter(4, cutoff, btype="low", fs=sr, output="sos")
+    side = side - sosfilt(sos, side)  # remove low-freq energy from Side
+    return np.stack([mid + side, mid - side], axis=1).astype(np.float32)
+
+
 def _mono_at_rate(data: np.ndarray, nch: int, sr: int, target_sr: int) -> np.ndarray:
     if nch > 1:
         data = data.reshape(-1, nch).mean(axis=1)
@@ -99,6 +138,31 @@ def read_wav(path: str | Path, target_sr: int = SR) -> np.ndarray:
             sr = int(f.samplerate)
             audio = f.read(f.frames)  # (channels, frames) float32
         return _mono_at_rate(audio.T.reshape(-1), audio.shape[0], sr, target_sr)
+
+
+def read_stereo(path: str | Path, target_sr: int = SR) -> np.ndarray:
+    """Read an audio file to a stereo (N, 2) float32 buffer at `target_sr`.
+
+    Preserves the source's stereo image (unlike read_wav, which mono-sums).
+    Used for sfizz's stereo WAV renders. Mono sources are duplicated to 2ch.
+    """
+    from pedalboard.io import AudioFile
+
+    path = Path(path)
+    with AudioFile(str(path)) as f:
+        sr = int(f.samplerate)
+        audio = f.read(f.frames)  # (channels, frames) float32
+    st = audio.T  # (frames, channels)
+    if st.shape[1] == 1:
+        st = np.repeat(st, 2, axis=1)
+    elif st.shape[1] > 2:
+        st = st[:, :2]
+    if sr != target_sr and st.shape[0]:
+        m = int(round(st.shape[0] / sr * target_sr))
+        x_old = np.linspace(0.0, 1.0, st.shape[0], endpoint=False)
+        x_new = np.linspace(0.0, 1.0, m, endpoint=False)
+        st = np.stack([np.interp(x_new, x_old, st[:, c]) for c in range(2)], axis=1)
+    return st.astype(np.float32)
 
 
 def write_wav(path: str | Path, audio: np.ndarray, sr: int = SR) -> Path:

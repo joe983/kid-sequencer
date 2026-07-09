@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..audio import SR, read_wav, seconds_per_beat
+from ..audio import SR, read_stereo, seconds_per_beat
 
 _SFZ_DIR = Path(__file__).resolve().parents[2] / "assets" / "sfz"
 _TAIL_S = 0.8  # release/reverb tail, matches sf_render's total-length padding
@@ -108,11 +108,11 @@ def render_riff_sfz(notes, tempo: float, instrument: str, bars: int,
         )
         if r.returncode != 0 or not wav_p.exists():
             raise RuntimeError(f"sfizz_render failed for {instrument!r}: {r.stderr[-400:]}")
-        audio = read_wav(wav_p, target_sr=sr)
+        audio = read_stereo(wav_p, target_sr=sr)  # (N, 2) — preserve sfizz stereo
 
     audio = audio * _SFZ_GAIN.get(instrument, 1.0)
     if len(audio) < total_frames:
-        audio = np.pad(audio, (0, total_frames - len(audio)))
+        audio = np.pad(audio, ((0, total_frames - len(audio)), (0, 0)))
     return audio[:total_frames].astype(np.float32)
 
 

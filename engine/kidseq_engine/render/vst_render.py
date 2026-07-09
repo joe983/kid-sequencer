@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..audio import SR, seconds_per_beat
+from ..audio import SR, as_stereo, seconds_per_beat
 
 _TAIL_S = 0.8  # matches sf_render / sfz_render total-length padding
 
@@ -146,10 +146,10 @@ def render_patch(notes, tempo: float, patch_name: str, bars: int,
             msgs.append(Message("note_off", note=pitch, time=max(off_t, on_t + 0.01)))
 
     audio = plugin(msgs, duration=total_frames / sr, sample_rate=sr)
-    mono = audio.mean(axis=0).astype(np.float32)  # engine pipeline is mono
-    if len(mono) < total_frames:
-        mono = np.pad(mono, (0, total_frames - len(mono)))
-    return mono[:total_frames]
+    st = as_stereo(np.asarray(audio).T)  # plugin (channels, frames) -> (frames, 2)
+    if len(st) < total_frames:
+        st = np.pad(st, ((0, total_frames - len(st)), (0, 0)))
+    return st[:total_frames].astype(np.float32)
 
 
 def render_riff_vst(notes, tempo: float, instrument: str, bars: int,

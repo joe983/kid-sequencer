@@ -21,7 +21,12 @@ from pathlib import Path
 
 import numpy as np
 
-from ..audio import SR, add_at, normalize, read_wav, seconds_per_beat
+from ..audio import SR, add_at, normalize, pan_stereo, read_wav, seconds_per_beat
+
+# Constant-power stereo placement per voice: low-end / backbeat dead-centre for
+# mono-compatibility, hats & aux perc spread. (mono-below-120 fold is a backstop.)
+_PAN = {"kick": 0.0, "sub": 0.0, "snare": 0.0, "clap": 0.0,
+        "hatC": 0.25, "hatO": -0.20, "rim": -0.30, "shaker": 0.35, "cowbell": -0.15}
 
 DRUM_DIR = Path(__file__).resolve().parents[2] / "assets" / "drums"
 
@@ -134,13 +139,15 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
     spb = seconds_per_beat(tempo)
     bar_samples = int(4 * spb * sr)
     if not pat or not kit:
-        return np.zeros(bars * bar_samples + sr, dtype=np.float32)
+        return np.zeros((bars * bar_samples + sr, 2), dtype=np.float32)
     step_s = spb / 4.0  # 16 steps/bar
-    buf = np.zeros(bars * bar_samples + sr, dtype=np.float32)
-    voices = {name: _voice_buffer(name, kit[name]) for name in pat if name in kit}
+    buf = np.zeros((bars * bar_samples + sr, 2), dtype=np.float32)
+    # pan each mono one-shot to stereo once, up front (not per hit)
+    voices = {name: pan_stereo(_voice_buffer(name, kit[name]), _PAN.get(name, 0.0))
+              for name in pat if name in kit}
     for b in range(bars):
         for name, steps in pat.items():
-            one = voices.get(name)
+            one = voices.get(name)  # (M, 2)
             if one is None:
                 continue
             for i, vel in enumerate(steps):

@@ -34,6 +34,8 @@ from pedalboard import (
     Reverb,
 )
 
+from ..audio import as_stereo, collapse_lows_to_mono, hard_mono
+
 # ---------------------------------------------------------------------------
 # Genre presets: per-layer gain (dB) + pump depth + master target.
 # Only the layers that exist are used; missing layers are ignored.
@@ -86,6 +88,9 @@ GENRE_PRESETS: dict[str, GenrePreset] = {
 
 # Layers ducked by the sidechain pump (drums are the trigger, never ducked).
 _PUMPED_LAYERS = ("riff", "bass", "pads", "texture")
+
+# Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
+_MONO_LOCK = ("bass",)
 
 
 def preset_for(genre: str | None) -> GenrePreset:
@@ -219,9 +224,11 @@ class MasterResult:
     layers: tuple[str, ...]  # which layers were present
 
 
-def _process_mono(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
+def _process(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
+    """Run a stereo (N, 2) buffer through a pedalboard, shape-preserving.
+    (Was _process_mono + reshape(-1), which silently scrambled stereo.)"""
     out = board(audio.astype(np.float32), sr)
-    return np.asarray(out, dtype=np.float32).reshape(-1)
+    return np.asarray(out, dtype=np.float32)
 
 
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
@@ -238,31 +245,33 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     preset = preset_for(genre)
     target = lufs_target if lufs_target is not None else preset.lufs_target
 
-    n = max(buf.shape[0] for buf in layers.values() if buf.size)
+    # Coerce every layer to stereo (N, 2); mono inputs (e.g. tests) are upmixed.
+    st_layers = {name: as_stereo(buf) for name, buf in layers.items() if buf.size}
+    n = max(buf.shape[0] for buf in st_layers.values())
     pump = pump_envelope(n, sr, kick_onsets, preset.pump_depth, preset.pump_release_s)
+    pump2 = pump[:, None]  # (n, 1) → broadcasts across both channels
 
-    bus = np.zeros(n, dtype=np.float32)
-    for name, buf in layers.items():
-        if buf.size == 0:
-            continue
+    bus = np.zeros((n, 2), dtype=np.float32)
+    for name, buf in st_layers.items():
         board = _LAYER_BOARD.get(name, _generic_board)()
-        proc = _process_mono(buf, board, sr)
-        # pad/trim to n
+        proc = _process(buf, board, sr)  # (M, 2)
         if proc.shape[0] < n:
-            proc = np.pad(proc, (0, n - proc.shape[0]))
+            proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
             proc = proc[:n]
+        if name in _MONO_LOCK:      # lock low-end sources dead-centre
+            proc = hard_mono(proc)
         if name in _PUMPED_LAYERS:
-            proc = proc * pump
+            proc = proc * pump2
         gain = 10.0 ** (preset.layer_gain_db.get(name, -6.0) / 20.0)
         bus += proc * gain
 
     # bus glue compressor (gentle, slow)
     glue = Pedalboard([Compressor(threshold_db=-10.0, ratio=2.0, attack_ms=30.0, release_ms=220.0)])
-    bus = _process_mono(bus, glue, sr)
+    bus = _process(bus, glue, sr)
 
-    # to stereo (mono duplicated; real stereo width comes once layers are panned)
-    stereo = np.stack([bus, bus], axis=1).astype(np.float32)
+    # keep the sub mono (phasey lows fold to centre); highs stay wide
+    stereo = collapse_lows_to_mono(bus, sr, 120.0)
 
     # 1) consistent drive into the limiter: peak-normalise to ~-1 dBFS
     peak = float(np.max(np.abs(stereo)))
