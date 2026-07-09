@@ -61,7 +61,7 @@ def test_render_is_non_silent_and_right_length_when_assets_present():
     tempo, bars = 120, 4
     buf = sample_kit.render_drums_samples(style, tempo, bars, SR)
     expected = int(bars * 4 * seconds_per_beat(tempo) * SR)
-    assert buf.ndim == 1
+    assert buf.ndim == 2 and buf.shape[1] == 2  # stereo, constant-power panned
     assert abs(buf.shape[0] - expected) < SR  # within the tail allowance
     assert float(np.max(np.abs(buf))) > 0.05  # real hits, not silence
 

@@ -96,9 +96,9 @@ def _load(synth, loaded: dict[str, int], path: Path) -> int:
     return loaded[key]
 
 
-def _to_mono(floats: np.ndarray) -> np.ndarray:
-    a = floats.reshape(-1, 2)
-    return ((a[:, 0] + a[:, 1]) * 0.5).astype(np.float32)
+def _to_stereo_il(floats: np.ndarray) -> np.ndarray:
+    """tinysoundfont emits interleaved LRLR… stereo float32 → (N, 2)."""
+    return floats.reshape(-1, 2).astype(np.float32)
 
 
 def _render_timeline(setup, events, total_frames: int, sr: int, channels=(0, 9)) -> np.ndarray:
@@ -125,7 +125,7 @@ def _render_timeline(setup, events, total_frames: int, sr: int, channels=(0, 9))
     if total_frames > cur:
         chunks.append(np.frombuffer(synth.generate(total_frames - cur), dtype=np.float32).copy())
 
-    return _to_mono(np.concatenate(chunks)) if chunks else np.zeros(0, dtype=np.float32)
+    return _to_stereo_il(np.concatenate(chunks)) if chunks else np.zeros((0, 2), dtype=np.float32)
 
 
 def render_riff_sf(notes, tempo, instrument, bars, bar_beats=4.0, sr=SR) -> np.ndarray:

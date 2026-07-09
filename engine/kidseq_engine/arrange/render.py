@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..audio import SR, seconds_per_beat
+from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import Section, bass_notes, choose_progression, pad_notes, plan_song, riff_variant
 from ..render import riff_audio
@@ -34,13 +34,14 @@ def _lite_pattern(pattern: dict) -> dict:
 
 def _render_pads(notes, tempo: float, span_beats: float, sr: int) -> np.ndarray:
     if vst_render.SURGE_VST3.exists():
-        return vst_render.render_patch(notes, tempo, "pad", 1, span_beats, sr)
+        return as_stereo(vst_render.render_patch(notes, tempo, "pad", 1, span_beats, sr))
     if default_soundfont():
-        return render_riff_sf(notes, tempo, "pads", 1, span_beats, sr)
-    return np.zeros(0, dtype=np.float32)  # no pad fallback worth hearing
+        return as_stereo(render_riff_sf(notes, tempo, "pads", 1, span_beats, sr))
+    return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
 
 
 def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
+    # buf and sig are both (N, 2); slicing on axis 0 overlap-adds correctly.
     end = min(len(buf), start + len(sig))
     if end > start:
         buf[start:end] += sig[: end - start]
@@ -50,8 +51,8 @@ def build_song(riff: Riff, sr: int = SR):
     """Arrange + render the full song.
 
     Returns (layers, kick_onsets, plan, prog):
-      layers = {"riff","drums","bass","pads"} full-length mono float32 (empty
-      arrays dropped), kick_onsets = pump triggers only where a full kit plays.
+      layers = {"riff","drums","bass","pads"} full-length stereo (N, 2) float32
+      (empty arrays dropped), kick_onsets = pump triggers only where a full kit plays.
     """
     plan: list[Section] = plan_song(riff.tempo)
     prog = choose_progression(riff)
@@ -60,7 +61,7 @@ def build_song(riff: Riff, sr: int = SR):
 
     total_bars = sum(s.bars for s in plan)
     n = int((total_bars * bar_s + 1.0) * sr)
-    layers = {name: np.zeros(n, dtype=np.float32) for name in ("riff", "drums", "bass", "pads")}
+    layers = {name: np.zeros((n, 2), dtype=np.float32) for name in ("riff", "drums", "bass", "pads")}
     kick_onsets: list[int] = []
 
     pattern = DRUM_PATTERNS.get(riff.drum_style) if riff.drum_style else None

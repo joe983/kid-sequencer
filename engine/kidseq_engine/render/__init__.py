@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..audio import SR
+from ..audio import SR, as_stereo
 from ..sequence import Note
 from . import sample_kit, sfz_render, vst_render
 from .drums import DRUM_PATTERNS, render_drums
 from .sf_render import default_soundfont, render_drums_sf, render_riff_sf
 from .synth import render_riff_looped
+
+# Every dispatcher below returns stereo (N, 2). Native-stereo renderers (sfizz,
+# Surge, tinysoundfont, panned sample kits) pass through; the numpy-synth fallbacks
+# stay mono and are upmixed by as_stereo. master() and arrange/render assume (N, 2).
 
 
 def riff_audio(notes: list[Note], tempo: float, instrument: str, bars: int,
@@ -21,12 +25,14 @@ def riff_audio(notes: list[Note], tempo: float, instrument: str, bars: int,
     # Priority (Linux/Modal renderers first, each covers disjoint instruments):
     # sfz/sfizz (trumpet/strings/bells) & Surge VST (synth/bass) > SF2 > numpy synth.
     if sfz_render.sfz_available(instrument):
-        return sfz_render.render_riff_sfz(notes, tempo, instrument, bars, bar_beats, sr)
-    if vst_render.vst_available(instrument):
-        return vst_render.render_riff_vst(notes, tempo, instrument, bars, bar_beats, sr)
-    if default_soundfont():
-        return render_riff_sf(notes, tempo, instrument, bars, bar_beats, sr)
-    return render_riff_looped(notes, tempo, instrument, bars, bar_beats, sr)
+        out = sfz_render.render_riff_sfz(notes, tempo, instrument, bars, bar_beats, sr)
+    elif vst_render.vst_available(instrument):
+        out = vst_render.render_riff_vst(notes, tempo, instrument, bars, bar_beats, sr)
+    elif default_soundfont():
+        out = render_riff_sf(notes, tempo, instrument, bars, bar_beats, sr)
+    else:
+        out = render_riff_looped(notes, tempo, instrument, bars, bar_beats, sr)
+    return as_stereo(out)
 
 
 def riff_source(instrument: str) -> str:
@@ -42,12 +48,14 @@ def riff_source(instrument: str) -> str:
 
 def drums_audio(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray:
     pat = DRUM_PATTERNS.get(style)
-    # Priority: real CC0 one-shot kit > GM soundfont > numpy synth fallback.
+    # Priority: real CC0 one-shot kit (stereo-panned) > GM soundfont > numpy synth.
     if pat and sample_kit.kit_available(style):
-        return sample_kit.render_drums_samples(style, tempo, bars, sr)
-    if default_soundfont() and pat:
-        return render_drums_sf(pat, tempo, bars, sr)
-    return render_drums(style, tempo, bars, sr)
+        out = sample_kit.render_drums_samples(style, tempo, bars, sr)
+    elif default_soundfont() and pat:
+        out = render_drums_sf(pat, tempo, bars, sr)
+    else:
+        out = render_drums(style, tempo, bars, sr)
+    return as_stereo(out)
 
 
 def drums_audio_pattern(style: str, pattern: dict, tempo: float, bars: int,
@@ -55,10 +63,12 @@ def drums_audio_pattern(style: str, pattern: dict, tempo: float, bars: int,
     """drums_audio with an explicit (possibly subset) pattern — the arranger's
     lite/full section renders. Same renderer priority as drums_audio."""
     if sample_kit.kit_available(style):
-        return sample_kit.render_drums_samples(style, tempo, bars, sr, pattern=pattern)
-    if default_soundfont():
-        return render_drums_sf(pattern, tempo, bars, sr)
-    return render_drums(style, tempo, bars, sr, pattern=pattern)
+        out = sample_kit.render_drums_samples(style, tempo, bars, sr, pattern=pattern)
+    elif default_soundfont():
+        out = render_drums_sf(pattern, tempo, bars, sr)
+    else:
+        out = render_drums(style, tempo, bars, sr, pattern=pattern)
+    return as_stereo(out)
 
 
 def drum_source(style: str) -> str:
