@@ -1,5 +1,16 @@
 # Where we are / next session
 
+## NEW — Round 9: percussive de-reciped + battery re-cut (2026-07-10, NOT deployed)
+Owner: fixed per-category recipes would converge. Audit: minor never was one
+(it's the kid's key); percussive had two — fixed drone voice + static pedal.
+Now variation-driven: drone role per genre (_DRONE_ROLES), drone voicing ×3
+(drone_notes voicing=), pedal static-root vs root→fifth (percussive_pedal),
+percussive texture = genre's + drone/wash. 12 presses → 10 distinct
+percussive configs. Showcase uses per-genre variation numbers (1+i*7 etc.)
+— columns no longer share structures. Battery re-rendered: 24/24 distinct,
+23 changed vs R8 (1 same-draw = determinism), percussive spread visible in
+MODE lines. All 9 suites green. Ears: engine/out/showcase/.
+
 ## NEW — Round 8: tonality fix + SHOWCASE battery (2026-07-10 late night, NOT deployed)
 Owner caught percussive_dnb rendering with chord pads (tonality 0.579 =
 borderline; v3 tipped melodic; mode never printed in logs). Fixes:
