@@ -1,5 +1,25 @@
 # Where we are / next session
 
+## NEW — Round 6: palette explosion + discordance fix (2026-07-10 night, NOT deployed)
+Owner: intros samey; garage variation discordant; wants LOADS more sounds
+(twinkles/rave synths) per genre; asked re render-time UX + per-genre
+similarity risk.
+- **BUG FIX (the discordance)**: lead stack rendered the ORIGINAL riff looped
+  while the main voice played DEVELOPED phrases — two melodies at once. Stack
+  now renders the same developed span.
+- Intros: 5 characters (+fragment = opening question over pads; +high =
+  octave-up tease) × intro LPF nonce-varied {1500,2500,4000,open}.
+- Palette: +16 GM voices (celesta/musicbox/vibes/marimba/kalimba/harp/clav/
+  nylon/brass/choir/fmep/tubular + square/saw/calliope/fifths leads),
+  +7 Surge patches (lead_hoover, lead_acid, stab_rave, pad_glass, bell_glass,
+  bass_acid, bass_fm). LEAD_STACKS = 4/genre; pad roles 3-4/genre; bass 2-4/
+  genre; drum seasoning 3rd overlays (909 cowbell techhouse, shaker garage/
+  hiphop, woodblock reggaeton) + KITS aux voices.
+- **Render time measured**: 99 s wall incl CLI overhead (~75-85 s actual) vs
+  ~139 s pre-variety baseline — UX unchanged; async-jobs plan stays parked.
+- Diversity: 40 nonces → 31-37 distinct (pad,bass,stack,intro) combos/genre
+  on 4 of ~15 axes. All 9 suites green; 12 ear files hash-fresh delivered.
+
 ## NEW — Round 5: phrase-level motif DEVELOPMENT (2026-07-10 late, NOT deployed)
 Owner: R4 still read as one tiny variation / 16 bars; wants it REALLY
 interesting, motif intact. Root cause: variation was an exception (one bar
