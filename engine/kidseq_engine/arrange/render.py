@@ -60,6 +60,9 @@ def _render_pads(notes, tempo: float, span_beats: float, sr: int) -> np.ndarray:
 
 def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
     # buf and sig are both (N, 2); slicing on axis 0 overlap-adds correctly.
+    if start < 0:  # e.g. a reverse-crash into a cold-open drop at sample 0
+        sig = sig[-start:]
+        start = 0
     end = min(len(buf), start + len(sig))
     if end > start:
         buf[start:end] += sig[: end - start]
@@ -232,21 +235,24 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     layers["pads"][two:e2] = _lpf_sweep(layers["pads"][two:e2], sr, 4000.0, 4000.0)
             # drops + outro: never touched (riff-verbatim null test relies on it)
 
-    # drop2+ escalation: hotter kit/pads + pad octave-double (pads are not the riff)
-    for k, (idx, sec, a, e) in enumerate(drops):
-        if k == 0:
-            continue
-        e2 = min(e, n)
-        ramp = max(2, int(0.020 * sr))
-        for lname, db in (("drums", 0.8), ("pads", 1.0)):
-            g = np.full(e2 - a, 10.0 ** (db / 20.0), dtype=np.float32)
-            g[:ramp] = np.linspace(1.0, g[-1], ramp)
-            g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
-            layers[lname][a:e2] *= g[:, None]
-        if sec.pads:
-            hi = [dc_replace(nt, pitch=nt.pitch + 12) for nt in pad_notes(riff, prog, sec.bars)]
-            sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr)
-            _add_at(layers["pads"], sig * 0.5, a)
+    # drop2+ escalation: hotter kit/pads + pad octave-double (pads are not the
+    # riff). Mode from the style: "full" = both, "gain_only" = no octave
+    # double, "off" = later drops stay level with the first.
+    if style.structure.escalation != "off":
+        for k, (idx, sec, a, e) in enumerate(drops):
+            if k == 0:
+                continue
+            e2 = min(e, n)
+            ramp = max(2, int(0.020 * sr))
+            for lname, db in (("drums", 0.8), ("pads", 1.0)):
+                g = np.full(e2 - a, 10.0 ** (db / 20.0), dtype=np.float32)
+                g[:ramp] = np.linspace(1.0, g[-1], ramp)
+                g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
+                layers[lname][a:e2] *= g[:, None]
+            if sec.pads and style.structure.escalation == "full":
+                hi = [dc_replace(nt, pitch=nt.pitch + 12) for nt in pad_notes(riff, prog, sec.bars)]
+                sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr)
+                _add_at(layers["pads"], sig * 0.5, a)
 
     # riff delay-throw into breaks — auto-decided per track unless forced
     do_throw = fx.throw_fits(riff) if flags.throw is None else flags.throw

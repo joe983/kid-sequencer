@@ -59,21 +59,47 @@ def test_choose_progression_is_deterministic_and_covers_riff():
         assert 0 in prog, (key, prog)
 
 
+def _plan_ok(plan, tempo, ctx):
+    bars = sum(s.bars for s in plan)
+    dur = bars * 4 * 60.0 / tempo
+    assert 180.0 <= dur <= 240.0, (*ctx, bars, dur)
+    # cold_open shapes start straight on a drop; everything else on an intro
+    assert plan[0].name == "intro" or plan[0].name.startswith("drop"), ctx
+    assert plan[-1].name == "outro", ctx
+    # every drop keeps the verbatim riff + full kit — the fidelity guarantee
+    for s in plan:
+        if s.name.startswith("drop"):
+            assert s.riff_variant == "verbatim" and s.drums == "full", (*ctx, s)
+
+
 def test_plan_totals_land_in_the_attention_window():
     # every song must be >=3:00 (180 s) and <=4:00, across the app's 40-200 BPM
     # clamp AND every per-press variation nonce
     for tempo in (40, 60, 90, 120, 140, 170, 200):
-        for variation in (0, 1, 2, 3):
+        for variation in range(8):
             plan = plan_song(tempo, variation)
-            bars = sum(s.bars for s in plan)
-            dur = bars * 4 * 60.0 / tempo
-            assert 180.0 <= dur <= 240.0, (tempo, variation, bars, dur)
-            assert [s.name for s in plan][0] == "intro"
-            assert plan[-1].name == "outro"
-            # every drop keeps the verbatim riff + full kit — the fidelity guarantee
-            for s in plan:
-                if s.name.startswith("drop"):
-                    assert s.riff_variant == "verbatim" and s.drums == "full"
+            _plan_ok(plan, tempo, (tempo, variation))
+
+
+def test_every_shape_and_length_combo_fits_the_window():
+    # exhaustive skeleton sweep: the corrective loop must hold the window for
+    # EVERY shape x length combination the style layer can emit, at every tempo
+    from kidseq_engine.arrange.style import SONG_SHAPES, StructureStyle
+
+    for tempo in (40, 60, 90, 120, 140, 170, 200):
+        for shape in SONG_SHAPES:
+            for frac in (1 / 5.0, 1 / 4.0, 1 / 3.0, 2 / 5.0, 1 / 2.0):
+                for bias in ("short", "normal", "long"):
+                    for intro_b, break_b, outro_b in ((4, 8, 4), (8, 4, 8), (8, 8, 4)):
+                        st = StructureStyle(
+                            song_shape=shape, intro_bars=intro_b,
+                            break_bars=break_b, outro_bars=outro_b,
+                            build_frac=frac, drop_bias=bias,
+                            intro_character="sparse", escalation="full")
+                        plan = plan_song(tempo, 0, structure=st)
+                        _plan_ok(plan, tempo, (tempo, shape, frac, bias))
+                        if shape == "cold_open":
+                            assert plan[0].name.startswith("drop"), (tempo, frac, bias)
 
 
 def test_variation_changes_the_arrangement_not_the_riff():
@@ -81,11 +107,12 @@ def test_variation_changes_the_arrangement_not_the_riff():
     # deterministic per nonce
     assert choose_progression(riff, 0) == choose_progression(riff, 0)
     assert choose_progression(riff, 1) == choose_progression(riff, 1)
-    # different nonces vary the plan's build:drop split at a typical tempo
-    p0, p1 = plan_song(120, 0), plan_song(120, 1)
-    assert [s.bars for s in p0] != [s.bars for s in p1]
-    # both progressions still contain the tonic chord (riff coverage holds)
-    assert 0 in choose_progression(riff, 0) and 0 in choose_progression(riff, 1)
+    # nonces produce genuinely different skeletons at a typical tempo
+    plans = [tuple((s.name, s.bars) for s in plan_song(120, v)) for v in range(8)]
+    assert len(set(plans)) >= 3, sorted(set(plans))
+    # progressions still contain the tonic chord (riff coverage holds)
+    for v in range(4):
+        assert 0 in choose_progression(riff, v), v
 
 
 def test_riff_variants_are_deterministic_and_never_touch_verbatim():

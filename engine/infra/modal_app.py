@@ -177,6 +177,28 @@ def render_song() -> bytes:
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
 
 
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_variations(nonces: str = "0,1,2,3,4,5") -> dict[str, bytes]:
+    """Same riff x several nonces — the per-press variety ear check."""
+    _wire_assets()
+    out = Path(ENGINE_REMOTE) / "out"
+    files: dict[str, bytes] = {}
+    for n in [s.strip() for s in nonces.split(",") if s.strip()]:
+        _run("smoke_song.py", "examples/sample_riff.json", n)
+        files[f"var_{n}.mp3"] = (out / "song.mp3").read_bytes()
+    return files
+
+
+@app.local_entrypoint()
+def variations(nonces: str = "0,1,2,3,4,5") -> None:
+    files = render_variations.remote(nonces)
+    dst_dir = ENGINE_LOCAL / "out"
+    dst_dir.mkdir(exist_ok=True)
+    for name, data in files.items():
+        (dst_dir / name).write_bytes(data)
+        print(f"saved {dst_dir / name} ({len(data):,} bytes)")
+
+
 # ---------------------------------------------------------------------------
 # Production endpoint — the app's generateAiTrack Cloud Function POSTs the
 # user's sequence here and gets the finished MP3 back. Deployed persistently

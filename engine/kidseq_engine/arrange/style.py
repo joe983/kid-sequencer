@@ -141,20 +141,30 @@ def _menu_for(genre: str | None) -> dict[str, list]:
 # ---------------------------------------------------------------------------
 
 
-def choose_structure(variation: int = 0) -> StructureStyle:
-    """Skeleton choices from the nonce alone.
+#: song shapes plan_song understands (see its docstring for the grammars)
+SONG_SHAPES = ("classic", "cold_open", "double_drop", "late_break")
 
-    Increment 1: reproduces the legacy formulas exactly (build_frac was
-    `(1/3, 1/4, 2/5)[variation % 3]`; everything else was hardcoded)."""
+
+def choose_structure(variation: int = 0) -> StructureStyle:
+    """Skeleton choices from the nonce alone — the section skeleton itself
+    varies per press: different song shapes, shorter or longer builds and
+    drops, different intro/break/outro sizes. plan_song's corrective loop
+    keeps every combination inside the 180–240 s window."""
     return StructureStyle(
-        song_shape="classic",
-        intro_bars=4,
-        break_bars=8,
-        outro_bars=4,
-        build_frac=(1 / 3.0, 1 / 4.0, 2 / 5.0)[variation % 3],
-        drop_bias="normal",
-        intro_character="sparse",
-        escalation="full",
+        song_shape=_pick(variation, "song_shape", list(SONG_SHAPES),
+                         [0.40, 0.20, 0.20, 0.20]),
+        intro_bars=_pick(variation, "intro_bars", [4, 8], [0.60, 0.40]),
+        break_bars=_pick(variation, "break_bars", [8, 4], [0.60, 0.40]),
+        outro_bars=_pick(variation, "outro_bars", [4, 8], [0.70, 0.30]),
+        build_frac=_pick(variation, "build_frac",
+                         [1 / 3.0, 1 / 4.0, 2 / 5.0, 1 / 5.0, 1 / 2.0],
+                         [0.30, 0.20, 0.20, 0.15, 0.15]),
+        drop_bias=_pick(variation, "drop_bias", ["normal", "short", "long"],
+                        [0.50, 0.25, 0.25]),
+        intro_character=_pick(variation, "intro_character",
+                              ["sparse", "pad_open", "low"], [0.50, 0.30, 0.20]),
+        escalation=_pick(variation, "escalation", ["full", "gain_only", "off"],
+                         [0.60, 0.25, 0.15]),
     )
 
 
@@ -170,7 +180,10 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     menu = _menu_for(riff.drum_style)
     return ArrangeStyle(
         structure=choose_structure(variation),
-        prog_pick=variation % 2,   # legacy top-2 alternation (widened later)
+        # index into choose_progression's quality-floored candidates (up to 4;
+        # clamped there) — best colour favoured, all candidates cover the riff
+        prog_pick=_pick(seed, "progression", [0, 1, 2, 3],
+                        [0.40, 0.30, 0.20, 0.10]),
         bass_patch=_pick(seed, "bass_patch", menu["bass_patch"]),
         bass_feel=_pick(seed, "bass_feel", menu["bass_feel"]),
         pad_role=_pick(seed, "pad_role", menu["pad_role"]),
