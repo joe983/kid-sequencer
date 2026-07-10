@@ -1,5 +1,17 @@
 # Where we are / next session
 
+## NEW — Round 5: phrase-level motif DEVELOPMENT (2026-07-10 late, NOT deployed)
+Owner: R4 still read as one tiny variation / 16 bars; wants it REALLY
+interesting, motif intact. Root cause: variation was an exception (one bar
+per cadence). Now `develop_phrase` treats EVERY 4-bar phrase: statement
+(~1/3, pure anchor) / vary_end (final-bar rewrite) / octave_up (whole phrase
++12) / call_response (2nd half a diatonic 3rd down) / sparse_breath (bars
+2+4 thinned). Seeded per-phrase sequence (`_phrase_treatment`, no repeated
+developments back-to-back); drop 1 opens with 2 forced pure phrases;
+`ornament_every` removed. Tuning: `_TREATMENT_W` in arrange/render.py +
+pure_phrases count. All 9 suites green; 12 ear files hash-fresh in main-repo
+engine/out/. Deploy gated on owner ears.
+
 ## NEW — Round 4: REAL riff variations (2026-07-10 late, NOT yet deployed)
 Owner (3rd riff complaint): R2/R3 "ornaments" only added quiet notes/velocity
 — inaudible. R4 rewrites the bar on the cadence (`vary_bar`): ending_fill
