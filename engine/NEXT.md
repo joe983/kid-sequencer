@@ -1,5 +1,42 @@
 # Where we are / next session
 
+## NEW — Genre authenticity + per-press variety (2026-07-10, 7 increments, NOT yet deployed)
+Full plan: `~/.claude/plans/sounds-graet-now-we-delightful-tarjan.md`. All on
+`claude/sess-67239ccc`; all 9 suites pass remotely; **ears pending** on:
+main-repo `engine/out/`: `var_0..5.mp3` (same riff × 6 nonces — the variety
+check), `song_<genre>.mp3` × 6 (authenticity check), `dnb_drums_172.mp3` vs
+`dnb_drums_virtuosity_172.mp3` (kit A/B) + drill/hiphop/reggaeton/techhouse
+drums. **`modal deploy` NOT run — prod still serves the old engine until the
+owner signs off.**
+- **style.py = the ONE place the nonce is spent** (`choose_style` → frozen
+  `ArrangeStyle`; named decorrelated sub-streams; per-genre `_GENRE_MENU`,
+  signature-first ~50%). Structure fields derive from variation ONLY.
+- **Song shapes**: classic / cold_open (drop first) / double_drop /
+  late_break + build_frac {1/5..1/2} + drop_bias clamps + intro/break/outro
+  4|8 + intro character (sparse/pad_open/low) + escalation modes.
+  `_fit_window` corrective loop = 180–240 s structural (exhaustive test).
+- **Drums = app pack for ALL genres** (fetch_appkit all-genre + layered dnb
+  kick + baked trimMs; techhouse hybrid keeps bounce kick/sub). Seasoning
+  overlays `DRUM_VARIANTS`/`pattern_for` (hats/rim/shaker only — skeleton
+  pinned by test). Fill shapes ×3 (techhouse fills were silently missing a
+  snare voice — now roll the CLAP).
+- **Pads per genre**: garage=organ skank, techhouse=pluck stabs, drill=dark,
+  hiphop=epiano, reggaeton=pizz, dnb=supersaw; `_PAD_RHYTHMS` comping ×2.
+  **Bass per genre**: bass_pluck / bass_sub808 / reese + `_BASS_FEELS`
+  (2-step bounce, kick-locked 808s, tresillo, roller…), variant 0 = legacy.
+- **Textures** (−30 LUFS slot): hiphop/garage crackle, techhouse wash,
+  drill tonic drone; dnb/reggaeton none. **FX palette** seeded per genre
+  (hiphop risers default OFF; impact f0/f1 per genre; downlifter/
+  reverse-crash/throw nonce-gated). Riff break variants octave_echo /
+  call_response (octave-only transforms).
+- **Progressions**: banks 4→7/mode (all contain degree 0), quality floor
+  ≥0.8×best (2–4 candidates), seeded pick.
+- Determinism fix: synth-drum `_noise` was unseeded (broke same-nonce⇒same-
+  track on the no-assets fallback path).
+- Tuning levers: menu weights in `style.py` (`_pick` signature-first 50%),
+  `_IMPACT`/`_FILL_MENU`, `_PAD_RHYTHMS`/`_BASS_FEELS` tables, overlay rows
+  in `DRUM_VARIANTS`, texture levels in fx.py generators.
+
 ## Mental model (important)
 The HTML app stays the front-end. The track engine is a **back-end service** the app calls —
 exactly like the current "Make AI track" already calls a Firebase Function → Stable Audio.

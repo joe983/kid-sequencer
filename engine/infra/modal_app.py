@@ -125,8 +125,8 @@ def run_tests() -> str:
     out = ""
     for t in ("tests/test_sequence.py", "tests/test_master.py",
               "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
-              "tests/test_arrange.py", "tests/test_master_gates.py",
-              "tests/test_fx.py"):
+              "tests/test_arrange.py", "tests/test_style.py",
+              "tests/test_master_gates.py", "tests/test_fx.py"):
         out += _run(t)
     return out
 
