@@ -392,9 +392,9 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     seed = fx.song_seed(riff, variation)
     menu = _menu_for(riff.drum_style)
     tone = riff_tonality(riff)
-    if tone < 0.55:
+    if tone < 0.45:
         mode = "percussive"
-    elif tone < 0.65:
+    elif tone < 0.60:
         mode = _pick(seed, "production_mode", ["melodic", "percussive"],
                      [0.6, 0.4])
     else:

@@ -396,7 +396,11 @@ def riff_tonality(riff: Riff) -> float:
                 if abs(a.pitch - b.pitch) % 12 in (1, 2, 10, 11):
                     rubs += 1
     cluster = rubs / pairs if pairs else 0.0
-    return max(0.0, min(1.0, 0.6 * explain + 0.4 * (1.0 - cluster)))
+    # MULTIPLICATIVE, cluster-dominant: in a diatonic grid even heavy clusters
+    # keep decent triad coverage, so an additive blend under-detects (a real
+    # cluster riff scored 0.58 and rendered with chord pads — owner caught it).
+    # Squaring the cluster penalty makes simultaneous seconds tank the score.
+    return max(0.0, min(1.0, explain * (1.0 - cluster) ** 2))
 
 
 def drone_notes(riff: Riff, bars: int) -> list[Note]:

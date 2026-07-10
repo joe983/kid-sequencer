@@ -47,7 +47,8 @@ def main() -> None:
           + f"  = {total_bars} bars ≈ {total_bars * 4 * 60 / riff.tempo:.0f}s")
     from kidseq_engine.arrange.style import choose_style
     st = choose_style(riff, variation)
-    print(f"style: shape={st.structure.song_shape} frac={st.structure.build_frac:.2f} "
+    print(f"style: MODE={st.production_mode} shape={st.structure.song_shape} "
+          f"frac={st.structure.build_frac:.2f} "
           f"bias={st.structure.drop_bias} intro={st.structure.intro_character} "
           f"esc={st.structure.escalation} pad={st.pad_role} "
           f"bass={st.bass_patch}/{st.bass_feel} tex={st.texture} prog_pick={st.prog_pick}")

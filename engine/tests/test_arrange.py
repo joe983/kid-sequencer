@@ -209,6 +209,24 @@ def test_production_mode_follows_tonality():
         assert choose_style(_cluster_riff(), v).texture is not None, v
 
 
+def test_shipped_cluster_example_is_percussive_at_every_variation():
+    # regression: the demo file rendered MELODIC once (tonality 0.58 sat in
+    # the borderline band and variation 3 tipped it) — chord pads under a
+    # cluster pattern. Pin the ACTUAL example file, end to end.
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.arrange import riff_tonality
+    from kidseq_engine.arrange.style import choose_style
+    from kidseq_engine.sequence import parse_sequence
+
+    src = Path(__file__).resolve().parents[1] / "examples" / "cluster_riff.json"
+    riff = parse_sequence(json.loads(src.read_text(encoding="utf-8")))
+    assert riff_tonality(riff) < 0.45, riff_tonality(riff)
+    for v in range(8):
+        assert choose_style(riff, v).production_mode == "percussive", v
+
+
 def test_develop_phrase_transforms_but_keeps_the_motif():
     from kidseq_engine.arrange import PHRASE_TREATMENTS, develop_phrase
 

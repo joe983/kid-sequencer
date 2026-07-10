@@ -247,6 +247,45 @@ _GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "garage": 132,
                  "drill": 142, "hiphop": 92, "reggaeton": 96}
 
 
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_showcase_item(riff_file: str, style: str, tempo: int,
+                         variation: int) -> bytes:
+    """One showcase render: any example riff x genre x variation number."""
+    import json
+
+    _wire_assets()
+    src = Path(ENGINE_REMOTE) / riff_file
+    payload = json.loads(src.read_text(encoding="utf-8"))
+    payload["drumStyle"] = style
+    payload["tempo"] = tempo
+    tmp = Path(ENGINE_REMOTE) / "out" / f"_riff_{style}_{variation}.json"
+    tmp.parent.mkdir(exist_ok=True)
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    _run("smoke_song.py", str(tmp), str(variation))
+    return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+@app.local_entrypoint()
+def showcase() -> None:
+    """The variety demo: per genre — two contrasting major-key takes, a
+    minor-key take, and a percussive (cluster-riff) take. 24 files."""
+    plan = []   # (riff_file, style, tempo, variation) + display tag
+    tags = []
+    for style, tempo in _GENRE_TEMPOS.items():
+        plan += [("examples/sample_riff.json", style, tempo, 1),
+                 ("examples/sample_riff.json", style, tempo, 5),
+                 ("examples/minor_riff.json", style, tempo, 2),
+                 ("examples/cluster_riff.json", style, tempo, 4)]
+        tags += [f"{style}_major_a", f"{style}_major_b",
+                 f"{style}_minor", f"{style}_percussive"]
+    dst_dir = ENGINE_LOCAL / "out" / "showcase"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    for tag, mp3 in zip(tags, render_showcase_item.starmap(plan)):
+        dst = dst_dir / f"{tag}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
 def render_song_genre(style: str, tempo: int, variation: int = 0) -> bytes:
     """Full arranged song for one genre at its representative tempo."""
