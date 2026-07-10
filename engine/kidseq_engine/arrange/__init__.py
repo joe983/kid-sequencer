@@ -280,6 +280,103 @@ def ornament_riff(notes: list[Note], kind: str) -> list[Note]:
     raise ValueError(f"unknown ornament {kind!r}")
 
 
+def _scale_ladder(key: str, around: int) -> list[int]:
+    """All in-scale MIDI pitches within +-2 octaves of `around`, sorted."""
+    semi, steps = _scale_steps(key)
+    pcs = {(semi + s) % 12 for s in steps}
+    return [p for p in range(max(0, around - 24), min(128, around + 25))
+            if p % 12 in pcs]
+
+
+def _diatonic_shift(pitch: int, key: str, degrees: int) -> int:
+    """Move a pitch by scale DEGREES (snapping into the key first)."""
+    ladder = _scale_ladder(key, pitch)
+    if not ladder:
+        return pitch
+    idx = min(range(len(ladder)), key=lambda i: abs(ladder[i] - pitch))
+    return ladder[max(0, min(len(ladder) - 1, idx + degrees))]
+
+
+def vary_bar(notes: list[Note], kind: str, key: str,
+             target_pitch: int | None = None) -> list[Note]:
+    """One VARIATION BAR of the riff — a real change to the pattern, the way a
+    musician varies a repeated phrase. Bar-end focused; always in key; at
+    least the bar's opening notes survive so the riff stays recognisable.
+
+    Light kinds (echo/octave_pop/push/cadence) delegate to ornament_riff.
+    Bold kinds:
+      ending_fill  final beat replaced by a stepwise scale run toward the next
+                   bar's first note (the classic turnaround fill)
+      rest_gap     final-beat notes dropped — a breath before the next bar
+      retrigger    the last note re-struck as a quick double at the bar end
+      answer       the bar's second half re-pitched a diatonic third down
+                   (call unchanged, response answers lower)"""
+    if not notes or kind == "none":
+        return notes
+    if kind in ("echo", "octave_pop", "push", "cadence"):
+        return ornament_riff(notes, kind)
+    if kind == "rest_gap":
+        kept = [n for n in notes if n.start_beats < 3.0]
+        return kept or notes
+    if kind == "retrigger":
+        last = max(notes, key=lambda n: n.start_beats + n.dur_beats)
+        if last.start_beats + last.dur_beats <= 3.0:
+            # room after the phrase: ratatat into the next bar
+            return notes + [
+                replace(last, start_beats=3.0, dur_beats=0.22,
+                        velocity=max(1, int(last.velocity * 0.82))),
+                replace(last, start_beats=3.5, dur_beats=0.4,
+                        velocity=max(1, int(last.velocity * 0.95)))]
+        # bar end occupied: split the last note into a quick double
+        rest = [n for n in notes if n is not last]
+        half = last.dur_beats / 2.0
+        return rest + [
+            replace(last, dur_beats=max(0.15, half * 0.9),
+                    velocity=max(1, int(last.velocity * 0.8))),
+            replace(last, start_beats=last.start_beats + half,
+                    dur_beats=last.dur_beats - half)]
+    if kind == "ending_fill":
+        head = [n for n in notes if n.start_beats < 3.0]
+        if not head:
+            return notes
+        cur = max(head, key=lambda n: n.start_beats + n.dur_beats).pitch
+        target = target_pitch if target_pitch is not None else cur
+        step = 1 if target >= cur else -1
+        vel = max(1, int(max(n.velocity for n in head) * 0.9))
+        run = []
+        p = cur
+        for i, beat in enumerate((3.0, 3.5)):
+            p = _diatonic_shift(p, key, step)
+            run.append(Note(pitch=p, velocity=vel, start_beats=beat,
+                            dur_beats=0.45))
+        return head + run
+    if kind == "answer":
+        call = [n for n in notes if n.start_beats < 2.0]
+        resp = [replace(n, pitch=_diatonic_shift(n.pitch, key, -2))
+                for n in notes if n.start_beats >= 2.0]
+        return (call + resp) if resp else notes
+    raise ValueError(f"unknown variation {kind!r}")
+
+
+def resolve_clashes(notes: list[Note], chord_pcs: set[int]) -> list[Note]:
+    """On VARIATION bars: notes a semitone against a chord tone are SNAPPED to
+    that chord tone (+-1 semitone) — makes discordant riffs work with the
+    progression. Only ever a semitone move, only on clash notes."""
+    out: list[Note] = []
+    for n in notes:
+        pc = n.pitch % 12
+        if pc not in chord_pcs:
+            for d in (1, -1):
+                if (pc + d) % 12 in chord_pcs:
+                    out.append(replace(n, pitch=n.pitch + d))
+                    break
+            else:
+                out.append(n)
+        else:
+            out.append(n)
+    return out
+
+
 def chord_pcs_for_bar(riff: Riff, prog: list[int], bar: int) -> set[int]:
     """Absolute pitch classes of the chord under a (section-local) bar."""
     semi, steps = _scale_steps(riff.key)

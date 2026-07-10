@@ -133,6 +133,51 @@ def test_riff_ornaments_are_octave_velocity_only_and_deterministic():
     assert ornament_riff(notes, "none") is notes               # identity
 
 
+def test_vary_bar_bold_kinds_rewrite_the_pattern_in_key():
+    from kidseq_engine.arrange import _scale_ladder, vary_bar
+
+    for key in ("C", "Am", "F", "Em"):
+        riff = _riff(key)
+        notes = riff.notes
+        in_key = set(_scale_ladder(key, 60) + _scale_ladder(key, 84))
+        for kind in ("ending_fill", "answer", "retrigger", "rest_gap"):
+            a = vary_bar(notes, kind, key)
+            assert a == vary_bar(notes, kind, key), kind      # deterministic
+            assert a, kind                                     # never empties the bar
+            assert a != notes, (key, kind)                     # ACTUALLY varies
+            # the bar's opening survives — the riff stays recognisable
+            first = min(notes, key=lambda n: n.start_beats)
+            assert any(n.pitch == first.pitch and
+                       n.start_beats == first.start_beats for n in a), kind
+            for n in a:
+                assert 0.0 <= n.start_beats and \
+                    n.start_beats + n.dur_beats <= 4.0 + 1e-6, (kind, n)
+            # scale-derived riffs stay in key under diatonic rewrites
+            assert all(n.pitch in in_key for n in a), (key, kind)
+        # answer keeps the call (first half) untouched
+        ans = vary_bar(notes, "answer", key)
+        call = [n for n in notes if n.start_beats < 2.0]
+        assert all(n in ans for n in call)
+        # rest_gap actually breathes: fewer notes than the source bar
+        assert len(vary_bar(notes, "rest_gap", key)) < len(notes)
+
+
+def test_resolve_clashes_snaps_semitone_rubs_to_chord_tones():
+    from kidseq_engine.arrange import chord_pcs_for_bar, resolve_clashes
+    from kidseq_engine.sequence import Note as _N
+
+    riff = _riff()
+    prog = choose_progression(riff)
+    pcs = chord_pcs_for_bar(riff, prog, 0)
+    root = next(iter(pcs))
+    rub = _N(pitch=60 + ((root + 1) % 12), start_beats=0.0, dur_beats=1.0)
+    fixed = resolve_clashes([rub], pcs)[0]
+    assert fixed.pitch % 12 in pcs and abs(fixed.pitch - rub.pitch) == 1
+    # chord tones and non-rub notes pass through untouched
+    tone = _N(pitch=60 + root, start_beats=1.0, dur_beats=1.0)
+    assert resolve_clashes([tone], pcs)[0] == tone
+
+
 def test_soften_clashes_is_velocity_only_and_targets_semitone_rubs():
     from kidseq_engine.arrange import chord_pcs_for_bar, soften_clashes
 

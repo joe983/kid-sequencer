@@ -100,8 +100,9 @@ class ArrangeStyle:
     texture: str | None            # "crackle" | "wash" | "drone" | None
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
-    riff_ornament: str             # phrase-end embellishment (post-hook sections)
-    ornament_every: int            # cadence: ornament every 4 | 8 | 16 bars
+    riff_ornament: str             # primary variation-bar kind (vary_bar)
+    riff_ornament_b: str           # secondary kind — alternates with primary
+    ornament_every: int            # cadence: variation bar every 4 | 8 | 16 bars
     lead_stack: int                # index into the genre's LEAD_STACKS recipes
     fx_palette: FxPalette
 
@@ -168,8 +169,12 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
     ],
 }
 
-#: riff phrase-end ornaments (arrange.ornament_riff kinds + "none")
-RIFF_ORNAMENTS = ("none", "echo", "octave_pop", "push", "cadence")
+#: riff variation-bar kinds (arrange.vary_bar) — bold pattern rewrites first,
+#: light decorations after. "none" is no longer offered: every track varies
+#: its riff on the cadence (the owner's spec — the hook still owns drop 1's
+#: opening bars and every non-variation bar).
+RIFF_ORNAMENTS = ("ending_fill", "answer", "retrigger", "rest_gap",
+                  "cadence", "echo", "octave_pop", "push", "none")
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +191,8 @@ _BASE_MENU: dict[str, list] = {
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
-    "riff_ornament": ["echo", "cadence", "octave_pop", "push", "none"],
+    "riff_ornament": ["ending_fill", "answer", "cadence", "retrigger",
+                      "rest_gap", "echo"],
 }
 
 
@@ -345,10 +351,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         texture=_pick(seed, "texture", menu["texture"]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
-        riff_ornament=_pick(seed, "riff_ornament", menu["riff_ornament"],
-                            [0.25, 0.25, 0.20, 0.15, 0.15]),
+        riff_ornament=(_orn := _pick(seed, "riff_ornament",
+                                     menu["riff_ornament"],
+                                     [0.25, 0.20, 0.20, 0.15, 0.10, 0.10])),
+        riff_ornament_b=_pick(seed, "riff_ornament_b",
+                              [k for k in menu["riff_ornament"] if k != _orn]),
         ornament_every=_pick(seed, "ornament_every", [4, 8, 16],
-                             [0.40, 0.35, 0.25]),
+                             [0.45, 0.40, 0.15]),
         lead_stack=_pick(seed, "lead_stack",
                          list(range(len(LEAD_STACKS.get(riff.drum_style or "",
                                                         [[]]))))),

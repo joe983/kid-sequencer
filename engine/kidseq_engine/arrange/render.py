@@ -20,8 +20,8 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
-               chord_pcs_for_bar, ornament_riff, pad_notes, pad_rhythm_for,
-               plan_song, riff_variant, soften_clashes)
+               chord_pcs_for_bar, pad_notes, pad_rhythm_for, plan_song,
+               resolve_clashes, riff_variant, soften_clashes, vary_bar)
 from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, choose_style
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
@@ -244,30 +244,39 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if is_drop:
                 drop_seen += 1
             if sec.riff_variant == "verbatim":
-                # THE HOOK RULE: the first drop states the riff pure verbatim,
-                # looped. Everywhere else the riff stays PROMINENT but may
-                # carry tasteful per-bar touches: an ornament on cadence bars
-                # (every ornament_every bars, at the phrase end) and chord-
-                # aware velocity shading of semitone rubs (helps discordant
-                # riffs sit against the progression). Octave/velocity only.
-                pure = is_drop and drop_seen == 1
+                # THE HOOK RULE, revised per the owner: the first drop opens
+                # with (up to) 8 PURE bars of the riff — the hook statement.
+                # After that, VARIATION BARS land on the style's cadence
+                # (every 4/8/16 bars, at the phrase end): real pattern changes
+                # — ending fills, answers, retriggers, rests — alternating two
+                # kinds so the variations themselves don't repeat. On those
+                # bars clash notes snap to chord tones; every other post-hook
+                # bar keeps the riff verbatim with only velocity shading of
+                # semitone rubs. The riff stays the prominent voice.
+                pure_bars = min(8, sec.bars) if (is_drop and drop_seen == 1) else 0
                 every = style.ornament_every
-                if not pure:  # softening always applies post-hook; ornaments per cadence
-                    span_notes = []
-                    for b in range(sec.bars):
-                        bar_notes = riff.notes
-                        if style.riff_ornament != "none" and b % every == every - 1:
-                            bar_notes = ornament_riff(bar_notes, style.riff_ornament)
-                        bar_notes = soften_clashes(
-                            bar_notes, chord_pcs_for_bar(riff, prog, b))
-                        span_notes += [dc_replace(nt, start_beats=nt.start_beats
-                                                  + b * riff.bar_beats)
-                                       for nt in bar_notes]
-                    sig = riff_audio(span_notes, riff.tempo, riff.instrument,
-                                     1, span_beats, sr)
-                else:
-                    sig = riff_audio(riff.notes, riff.tempo, riff.instrument,
-                                     sec.bars, riff.bar_beats, sr)
+                target = min(riff.notes, key=lambda n: n.start_beats).pitch
+                span_notes = []
+                var_i = 0
+                for b in range(sec.bars):
+                    bar_notes = riff.notes
+                    if b >= pure_bars:
+                        if b % every == every - 1:
+                            kind = style.riff_ornament if var_i % 2 == 0 \
+                                else style.riff_ornament_b
+                            var_i += 1
+                            bar_notes = vary_bar(bar_notes, kind, riff.key,
+                                                 target_pitch=target)
+                            bar_notes = resolve_clashes(
+                                bar_notes, chord_pcs_for_bar(riff, prog, b))
+                        else:
+                            bar_notes = soften_clashes(
+                                bar_notes, chord_pcs_for_bar(riff, prog, b))
+                    span_notes += [dc_replace(nt, start_beats=nt.start_beats
+                                              + b * riff.bar_beats)
+                                   for nt in bar_notes]
+                sig = riff_audio(span_notes, riff.tempo, riff.instrument,
+                                 1, span_beats, sr)
                 _add_at(layers["riff"], sig, at)
                 # the genre lead STACK: always-on texture layers under the
                 # kid's instrument (>=9 dB down each — the riff stays on top)
