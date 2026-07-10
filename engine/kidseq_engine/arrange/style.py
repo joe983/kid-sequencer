@@ -100,9 +100,8 @@ class ArrangeStyle:
     texture: str | None            # "crackle" | "wash" | "drone" | None
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
-    riff_ornament: str             # primary variation-bar kind (vary_bar)
+    riff_ornament: str             # primary vary_end bar kind (vary_bar)
     riff_ornament_b: str           # secondary kind — alternates with primary
-    ornament_every: int            # cadence: variation bar every 4 | 8 | 16 bars
     lead_stack: int                # index into the genre's LEAD_STACKS recipes
     fx_palette: FxPalette
 
@@ -356,8 +355,6 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                                      [0.25, 0.20, 0.20, 0.15, 0.10, 0.10])),
         riff_ornament_b=_pick(seed, "riff_ornament_b",
                               [k for k in menu["riff_ornament"] if k != _orn]),
-        ornament_every=_pick(seed, "ornament_every", [4, 8, 16],
-                             [0.45, 0.40, 0.15]),
         lead_stack=_pick(seed, "lead_stack",
                          list(range(len(LEAD_STACKS.get(riff.drum_style or "",
                                                         [[]]))))),

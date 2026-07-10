@@ -100,7 +100,6 @@ def test_style_fields_are_decorrelated_across_nonces():
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
     assert set(picks("lead_stack")) == set(range(len(LEAD_STACKS["techhouse"])))
-    assert set(picks("ornament_every")) == {4, 8, 16}
 
     # structure: build_frac must not determine prog_pick (or vice versa) once
     # both have >1 option. Guarded so it activates as menus widen.

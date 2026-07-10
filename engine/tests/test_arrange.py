@@ -162,6 +162,32 @@ def test_vary_bar_bold_kinds_rewrite_the_pattern_in_key():
         assert len(vary_bar(notes, "rest_gap", key)) < len(notes)
 
 
+def test_develop_phrase_transforms_but_keeps_the_motif():
+    from kidseq_engine.arrange import PHRASE_TREATMENTS, develop_phrase
+
+    riff = _riff()
+    notes = riff.notes
+    for t in PHRASE_TREATMENTS:
+        bars = develop_phrase(notes, t, riff.key)
+        assert len(bars) == 4 and all(b for b in bars), t   # never empties a bar
+        assert bars == develop_phrase(notes, t, riff.key), t  # deterministic
+    # statement = the pure riff every bar
+    assert all(b == notes for b in develop_phrase(notes, "statement", riff.key))
+    # vary_end changes ONLY the final bar
+    ve = develop_phrase(notes, "vary_end", riff.key)
+    assert ve[:3] == [notes] * 3 and ve[3] != notes
+    # octave_up lifts every note exactly +12 (same motif, new register)
+    for b in develop_phrase(notes, "octave_up", riff.key):
+        assert [n.pitch for n in b] == [n.pitch + 12 for n in notes]
+    # call_response: first half pure, second half a diatonic third down
+    cr = develop_phrase(notes, "call_response", riff.key)
+    assert cr[0] == notes and cr[1] == notes
+    assert cr[2] != notes and all(a.pitch < b.pitch for a, b in zip(cr[2], notes))
+    # sparse_breath thins bars 2 and 4
+    sb = develop_phrase(notes, "sparse_breath", riff.key)
+    assert len(sb[1]) < len(notes) and len(sb[3]) < len(notes)
+
+
 def test_resolve_clashes_snaps_semitone_rubs_to_chord_tones():
     from kidseq_engine.arrange import chord_pcs_for_bar, resolve_clashes
     from kidseq_engine.sequence import Note as _N

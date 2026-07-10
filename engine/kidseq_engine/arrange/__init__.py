@@ -358,6 +358,50 @@ def vary_bar(notes: list[Note], kind: str, key: str,
     raise ValueError(f"unknown variation {kind!r}")
 
 
+#: phrase treatments — how a 4-bar phrase develops the motif
+PHRASE_TREATMENTS = ("statement", "vary_end", "octave_up",
+                     "call_response", "sparse_breath")
+
+
+def develop_phrase(notes: list[Note], treatment: str, key: str,
+                   vary_kind: str = "ending_fill",
+                   target_pitch: int | None = None,
+                   phrase_bars: int = 4) -> list[list[Note]]:
+    """Per-bar note lists for ONE PHRASE of the riff — motif development, the
+    way a producer keeps a 1-bar motif interesting for 3 minutes. The motif
+    always stays recognisable: statements anchor, developments transform.
+
+      statement      the pure riff, every bar
+      vary_end       bars 1..n-1 pure, final bar rewritten (vary_bar kind)
+      octave_up      the whole phrase an octave up — same motif, new register
+      call_response  first half states, second half answers a diatonic third
+                     down
+      sparse_breath  bars 2 and n thinned at the tail — space and groove
+    """
+    if treatment == "statement":
+        return [list(notes) for _ in range(phrase_bars)]
+    if treatment == "vary_end":
+        bars = [list(notes) for _ in range(phrase_bars)]
+        bars[-1] = vary_bar(notes, vary_kind, key, target_pitch=target_pitch)
+        return bars
+    if treatment == "octave_up":
+        up = [replace(n, pitch=min(115, n.pitch + 12)) for n in notes]
+        return [list(up) for _ in range(phrase_bars)]
+    if treatment == "call_response":
+        resp = [replace(n, pitch=_diatonic_shift(n.pitch, key, -2)) for n in notes]
+        half = max(1, phrase_bars // 2)
+        return [list(notes) for _ in range(half)] + \
+               [list(resp) for _ in range(phrase_bars - half)]
+    if treatment == "sparse_breath":
+        gap = vary_bar(notes, "rest_gap", key)
+        bars = [list(notes) for _ in range(phrase_bars)]
+        bars[-1] = list(gap)
+        if phrase_bars >= 3:
+            bars[1] = list(gap)
+        return bars
+    raise ValueError(f"unknown treatment {treatment!r}")
+
+
 def resolve_clashes(notes: list[Note], chord_pcs: set[int]) -> list[Note]:
     """On VARIATION bars: notes a semitone against a chord tone are SNAPPED to
     that chord tone (+-1 semitone) — makes discordant riffs work with the

@@ -20,9 +20,23 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
-               chord_pcs_for_bar, pad_notes, pad_rhythm_for, plan_song,
-               resolve_clashes, riff_variant, soften_clashes, vary_bar)
-from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, choose_style
+               chord_pcs_for_bar, develop_phrase, pad_notes, pad_rhythm_for,
+               plan_song, resolve_clashes, riff_variant, soften_clashes)
+from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, _sub_rng, choose_style
+
+# phrase-treatment draw weights: statements anchor (~1/3), the rest develop
+_TREATMENT_W = {"statement": 0.34, "vary_end": 0.26, "octave_up": 0.12,
+                "call_response": 0.15, "sparse_breath": 0.13}
+
+
+def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str) -> str:
+    """Seeded per-phrase treatment; the same development never runs twice in a
+    row (a repeated statement is fine — that's the anchor)."""
+    rng = _sub_rng(seed, f"phrase:{sec_name}:{pi}")
+    opts = list(_TREATMENT_W)
+    w = np.asarray([_TREATMENT_W[o] for o in opts])
+    t = opts[int(rng.choice(len(opts), p=w / w.sum()))]
+    return "statement" if (t == prev and t != "statement") else t
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
 from ..render import vst_render
@@ -244,37 +258,44 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if is_drop:
                 drop_seen += 1
             if sec.riff_variant == "verbatim":
-                # THE HOOK RULE, revised per the owner: the first drop opens
-                # with (up to) 8 PURE bars of the riff — the hook statement.
-                # After that, VARIATION BARS land on the style's cadence
-                # (every 4/8/16 bars, at the phrase end): real pattern changes
-                # — ending fills, answers, retriggers, rests — alternating two
-                # kinds so the variations themselves don't repeat. On those
-                # bars clash notes snap to chord tones; every other post-hook
-                # bar keeps the riff verbatim with only velocity shading of
-                # semitone rubs. The riff stays the prominent voice.
-                pure_bars = min(8, sec.bars) if (is_drop and drop_seen == 1) else 0
-                every = style.ornament_every
+                # MOTIF DEVELOPMENT: the riff is developed PHRASE BY PHRASE
+                # (4 bars), the way a producer keeps a 1-bar motif interesting
+                # for 3 minutes — statements anchor (~1/3, and the first two
+                # phrases of drop 1 are always pure: the hook), the rest
+                # transform: varied endings, whole-phrase octave lifts,
+                # call-and-response answers, breathing space. Rewritten bars
+                # snap clash notes to chord tones; pure post-hook bars get
+                # velocity-only shading. The motif is never lost.
+                pure_phrases = 2 if (is_drop and drop_seen == 1) else 0
                 target = min(riff.notes, key=lambda n: n.start_beats).pitch
                 span_notes = []
                 var_i = 0
-                for b in range(sec.bars):
-                    bar_notes = riff.notes
-                    if b >= pure_bars:
-                        if b % every == every - 1:
-                            kind = style.riff_ornament if var_i % 2 == 0 \
-                                else style.riff_ornament_b
-                            var_i += 1
-                            bar_notes = vary_bar(bar_notes, kind, riff.key,
-                                                 target_pitch=target)
-                            bar_notes = resolve_clashes(
-                                bar_notes, chord_pcs_for_bar(riff, prog, b))
-                        else:
-                            bar_notes = soften_clashes(
-                                bar_notes, chord_pcs_for_bar(riff, prog, b))
-                    span_notes += [dc_replace(nt, start_beats=nt.start_beats
-                                              + b * riff.bar_beats)
-                                   for nt in bar_notes]
+                prev_t = ""
+                for pi in range(max(1, sec.bars // 4)):
+                    if pi < pure_phrases:
+                        treatment = "statement"
+                    else:
+                        treatment = _phrase_treatment(seed, sec.name, pi, prev_t)
+                    prev_t = treatment
+                    if treatment == "vary_end":
+                        kind = style.riff_ornament if var_i % 2 == 0 \
+                            else style.riff_ornament_b
+                        var_i += 1
+                    else:
+                        kind = style.riff_ornament
+                    pbars = develop_phrase(riff.notes, treatment, riff.key,
+                                           vary_kind=kind, target_pitch=target,
+                                           phrase_bars=min(4, sec.bars - pi * 4))
+                    for bi, bar_notes in enumerate(pbars):
+                        b = pi * 4 + bi
+                        if b >= pure_phrases * 4:
+                            pcs = chord_pcs_for_bar(riff, prog, b)
+                            bar_notes = resolve_clashes(bar_notes, pcs) \
+                                if bar_notes != riff.notes else \
+                                soften_clashes(bar_notes, pcs)
+                        span_notes += [dc_replace(nt, start_beats=nt.start_beats
+                                                  + b * riff.bar_beats)
+                                       for nt in bar_notes]
                 sig = riff_audio(span_notes, riff.tempo, riff.instrument,
                                  1, span_beats, sr)
                 _add_at(layers["riff"], sig, at)
