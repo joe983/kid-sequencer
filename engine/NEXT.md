@@ -1,5 +1,23 @@
 # Where we are / next session
 
+## NEW — Round 8: tonality fix + SHOWCASE battery (2026-07-10 late night, NOT deployed)
+Owner caught percussive_dnb rendering with chord pads (tonality 0.579 =
+borderline; v3 tipped melodic; mode never printed in logs). Fixes:
+- riff_tonality now MULTIPLICATIVE (explain × (1−cluster)²) — cluster riff
+  0.58→0.21, percussive at ALL variation numbers, pinned by a regression
+  test on the SHIPPED examples/cluster_riff.json. Thresholds 0.45/0.60.
+- smoke_song prints MODE=… (verify renders by log, never assume).
+- **SHOWCASE battery** (owner: Suno-style variety demos): `modal run
+  infra/modal_app.py::showcase` renders 24 MP3s in parallel — per genre:
+  major_a(v1)/major_b(v5)/minor(Am riff, v2)/percussive(cluster riff, v4)
+  → main-repo engine/out/showcase/. All 24 hash-distinct; 6 percussive
+  MODE lines confirmed in logs. Extend by adding rows to the plan in
+  `showcase()` — this is the standing demo battery for future changes.
+- Known cosmetic: same variation number ⇒ same structure across genres
+  (structure derives from variation only) — use different numbers per genre
+  if the battery should show structural spread per column.
+- Say "variation number", not "nonce" (owner).
+
 ## NEW — Round 7: percussive production mode (2026-07-10 night, NOT deployed)
 Owner: discordant user patterns (early-Photek ref) shouldn't get chords
 forced under them; intros too samey; asked what "nonce" means (say
