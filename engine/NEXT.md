@@ -1,5 +1,18 @@
 # Where we are / next session
 
+## NEW — Round 4: REAL riff variations (2026-07-10 late, NOT yet deployed)
+Owner (3rd riff complaint): R2/R3 "ornaments" only added quiet notes/velocity
+— inaudible. R4 rewrites the bar on the cadence (`vary_bar`): ending_fill
+(scale run into next bar), answer (2nd half diatonic 3rd down), retrigger,
+rest_gap + light kinds. TWO kinds per track alternate across variation bars;
+"none" removed; every ∈ {4,8,16} favouring 4/8. Clash notes SNAP to chord
+tones on variation bars (`resolve_clashes`); velocity softening elsewhere.
+Drop 1 pure for its FIRST 8 BARS only (was whole drop). Proven at note level
++ all 9 suites green on Modal. Ear files (all hash-fresh, watch for stale
+copies — one variations run died on network mid-save and nearly shipped R3
+files): var_0..5 + song_<genre> in main-repo engine/out/. Deploy gated on
+owner ears.
+
 ## NEW — Round 3: the LEAD is the fix (2026-07-10 eve, NOT yet deployed)
 Owner on round 2: genre songs still sound alike. Diagnosis (probe): the riff/
 lead is the LOUDEST melodic layer (−4.8 dBFS peak vs pads −12.7) and was
