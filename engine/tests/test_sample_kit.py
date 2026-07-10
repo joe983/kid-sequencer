@@ -44,13 +44,39 @@ def test_read_wav_resamples_to_target():
 
 
 def test_every_genre_kit_covers_its_pattern_voices():
-    # the registry must define a sample for every voice each genre actually triggers,
-    # else those hits render silent. This is a static check — no assets required.
+    # the registry must define a sample for every voice each genre actually
+    # triggers — INCLUDING every seasoning-variant overlay — else those hits
+    # render silent. This is a static check — no assets required.
+    from kidseq_engine.render.drums import DRUM_VARIANTS, pattern_for
+
     for style, pat in DRUM_PATTERNS.items():
         kit = sample_kit.KITS.get(style)
         assert kit is not None, f"no sample kit defined for genre {style!r}"
-        missing = [v for v in pat if v not in kit]
-        assert not missing, f"{style}: pattern voices with no sample mapping: {missing}"
+        n_variants = 1 + len(DRUM_VARIANTS.get(style, []))
+        for variant in range(n_variants):
+            p = pattern_for(style, variant)
+            missing = [v for v in p if v not in kit]
+            assert not missing, (style, variant, missing)
+
+
+def test_drum_variants_never_touch_the_genre_skeleton():
+    # overlays are seasoning: hats/rim/shaker/cowbell only. kick/snare/clap/sub
+    # ARE the genre — replacing them would break authenticity (and the pump).
+    from kidseq_engine.render.drums import DRUM_VARIANTS, pattern_for
+
+    skeleton = {"kick", "snare", "clap", "sub"}
+    for style, variants in DRUM_VARIANTS.items():
+        base = DRUM_PATTERNS[style]
+        for i, overlay in enumerate(variants):
+            assert not (set(overlay) & skeleton), (style, i, sorted(overlay))
+            merged = pattern_for(style, i + 1)
+            for voice in skeleton & set(base):
+                assert merged[voice] == base[voice], (style, i, voice)
+            for voice, steps in overlay.items():
+                assert len(steps) == 16, (style, i, voice)
+    # variant 0 is the base object untouched
+    for style in DRUM_PATTERNS:
+        assert pattern_for(style, 0) is DRUM_PATTERNS[style]
 
 
 def test_render_is_non_silent_and_right_length_when_assets_present():

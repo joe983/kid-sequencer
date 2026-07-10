@@ -28,9 +28,9 @@ DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
         "snare": [0,0,0,.20, 1,0,.18,0, 0,.20,0,0, 1,0,.19,0],
         "hatC":  [.22,0,.15,0, .22,0,.15,0, .22,0,.15,0, .22,0,.17,0],
     },
-    # "funk" slot = UK Garage 2-step (2026-07-02). Mirrors the app (which also
-    # applies a heavy 0.16 swing to this style in playDrumsAtStep).
-    "funk": {
+    # "garage" slot = UK Garage 2-step. Mirrors the app (which also applies a
+    # heavy 0.16 swing to this style). Key was "funk" before 2026-07-10.
+    "garage": {
         "kick":  [1,0,0,0, 0,0,.90,0, 0,0,.85,0, 0,0,0,0],
         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
         "rim":   [0,0,0,.25, 0,0,0,0, 0,.25,0,0, 0,0,0,.30],
@@ -75,8 +75,13 @@ def _sub(sr: int) -> np.ndarray:
 
 
 def _noise(dur: float, sr: int, decay: float) -> np.ndarray:
+    # Seeded per (dur, decay, sr): a synth one-shot is a fixed "sample", so the
+    # same hit renders the same bytes every time. The old unseeded global RNG
+    # broke the same-(riff, nonce)-=>-same-track guarantee whenever this
+    # fallback path fired (no kit assets on disk).
+    rng = np.random.default_rng([int(dur * 1e6), int(decay * 1000), sr])
     n = int(dur * sr); t = np.arange(n) / sr
-    return (np.random.uniform(-1, 1, n) * np.exp(-t * decay)).astype(np.float32)
+    return (rng.uniform(-1, 1, n) * np.exp(-t * decay)).astype(np.float32)
 
 
 def _snare(sr: int) -> np.ndarray:
@@ -123,9 +128,82 @@ def _voice(name: str, sr: int) -> np.ndarray:
 _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
          "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
 
+# Seasoning overlays: per-genre pattern VARIANTS that replace only hat / rim /
+# shaker / cowbell rows — NEVER kick/snare/clap/sub (kick+snare = the genre's
+# skeleton; hats are the seasoning). Variant 0 = the base pattern untouched;
+# style.drum_variant picks. pattern_for() merges.
+_SEASONING_VOICES = {"hatC", "hatO", "rim", "shaker", "cowbell"}
+
+DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
+    "techhouse": [
+        # open-hat shuffle: the offbeat answer moves around the bar
+        {"hatO": [0, 0, .24, 0, 0, .20, 0, 0, 0, 0, .24, 0, 0, .20, 0, 0]},
+        # shaker 16ths riding under the hats
+        {"shaker": [.18] * 16},
+        # the classic 909 cowbell on the offbeats
+        {"cowbell": [0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0]},
+    ],
+    "dnb": [
+        # offbeat-8th hats only (rolling top)
+        {"hatC": [0, 0, .22, 0, 0, 0, .22, 0, 0, 0, .22, 0, 0, 0, .22, 0]},
+        # light 16ths
+        {"hatC": [.20, .10, .14, .10, .20, .10, .14, .10,
+                  .20, .10, .14, .10, .20, .10, .16, .10]},
+    ],
+    "garage": [
+        # rim skips displaced (the 2-step chatter moves)
+        {"rim": [0, .25, 0, 0, 0, 0, 0, .25, 0, 0, .25, 0, 0, .30, 0, 0]},
+        # denser open-hat offbeats
+        {"hatO": [0, 0, .22, 0, 0, .18, .22, 0, 0, 0, .22, 0, 0, .18, .22, 0]},
+        # shaker 16ths under the swing
+        {"shaker": [.16] * 16},
+    ],
+    "drill": [
+        # the triplet-feel hat stutter on the back half
+        {"hatC": [.25, .18, .25, .45, .25, 0, .35, .35,
+                  .25, .18, .25, .45, .25, 0, .35, .35]},
+        # sparser hats (more menace, more space)
+        {"hatC": [.25, 0, .25, 0, .25, 0, .28, .18, .25, 0, .25, 0, .25, 0, .28, .18]},
+    ],
+    "hiphop": [
+        # 8th hats instead of 16ths (classic head-nod space)
+        {"hatC": [.26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0]},
+        # busier rim conversation
+        {"rim": [0, 0, .30, 0, 0, .25, 0, 0, 0, 0, .30, 0, 0, .25, 0, .30]},
+        # lazy shaker 8ths under the hats
+        {"shaker": [.15, 0, .12, 0, .15, 0, .12, 0, .15, 0, .12, 0, .15, 0, .12, 0]},
+    ],
+    "reggaeton": [
+        # cowbell answering on beat 3
+        {"cowbell": [.35, 0, 0, 0, 0, 0, .30, 0, .35, 0, 0, 0, 0, 0, .30, 0]},
+        # shaker dembow accents
+        {"shaker": [.28, .22, .28, .22, .28, .30, .28, .22,
+                    .28, .22, .28, .22, .28, .30, .28, .22]},
+        # woodblock rim on the dembow skips
+        {"rim": [0, 0, 0, .30, 0, 0, .28, 0, 0, 0, 0, .30, 0, 0, .28, 0]},
+    ],
+}
+
+
+def pattern_for(style: str | None, variant: int = 0) -> dict | None:
+    """The genre's DRUM_PATTERNS entry with a seasoning overlay merged in.
+    Variant 0 (or an unknown style) = the base pattern object untouched."""
+    base = DRUM_PATTERNS.get(style or "")
+    if base is None or variant <= 0:
+        return base
+    variants = DRUM_VARIANTS.get(style or "")
+    if not variants:
+        return base
+    overlay = variants[(variant - 1) % len(variants)]
+    assert set(overlay) <= _SEASONING_VOICES, (style, sorted(overlay))
+    merged = dict(base)
+    merged.update(overlay)
+    return merged
+
+
 # Per-style swing (mirrors the app's SWING map in playDrumsAtStep): odd 16th
-# steps are delayed by swing x one step. funk = UK Garage's defining shuffle.
-SWING: dict[str, float] = {"funk": 0.16, "techhouse": 0.08}
+# steps are delayed by swing x one step. garage = UK Garage's defining shuffle.
+SWING: dict[str, float] = {"garage": 0.16, "techhouse": 0.08}
 
 
 def swung_step_offset(style: str | None, step: int) -> float:

@@ -33,50 +33,67 @@ DRUM_DIR = Path(__file__).resolve().parents[2] / "assets" / "drums"
 # genre -> voice -> [(relpath under assets/drums, layer_gain), ...]
 # Voices MUST cover every voice present in that genre's DRUM_PATTERNS entry, or
 # those hits render silent.
+#
+# ALL genres now reuse the APP's approved drums.pack samples (owner feedback:
+# an AI track's drums should match what the kid hears on play — never bespoke
+# CC0 kits). Unpacked to assets/drums/<genre>/ by scripts/fetch_appkit.py.
+# Voice balance lives in _GAIN (each one-shot is peak-normalised first);
+# multi-layer voices carry the pack's relative layer gains here.
 KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
+    # techhouse: app deliberately uses a SYNTH kick (owner pick) — the pack has
+    # no kick/sub, so those stay on the Boochi bounce one-shots (Modal volume);
+    # clap/hats are the app's real TR-909.
     "techhouse": {
         "kick": [("bounce/kick.wav", 1.0)],
         "sub":  [("bounce/sub.wav", 1.0)],
-        "clap": [("bounce/clap.wav", 1.0)],
-        "hatC": [("bounce/hatC.wav", 1.0)],
-        "hatO": [("bounce/hatO.wav", 1.0)],
+        "clap": [("techhouse/clap.wav", 1.0)],
+        "hatC": [("techhouse/hatC.wav", 1.0)],
+        "hatO": [("techhouse/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
+        "cowbell": [("perc/cowbell.wav", 1.0)],  # seasoning-variant voice
     },
-    # DnB = breakbeat DNA: real acoustic kit (Virtuosity, CC0), NOT electro one-shots.
-    # Snare is layered: full centre hit + rimshot on top for the DnB crack.
+    # dnb: the app's kit — layered soft kick (VEH1 004 + 005 at 0.5, the pack's
+    # relative gains), DC_Kit14 snare + 75ms-trimmed hat (trim baked at unpack).
     "dnb": {
-        "kick":  [("virtuosity/kick.wav", 1.0)],
-        "snare": [("virtuosity/snare.wav", 1.0), ("virtuosity/rim.wav", 0.55)],
-        "hatC":  [("virtuosity/hatC.wav", 1.0)],
-        "hatO":  [("virtuosity/hatO.wav", 1.0)],
+        "kick":  [("dnb/kick.wav", 1.0), ("dnb/kick.1.wav", 0.5)],
+        "snare": [("dnb/snare.wav", 1.0)],
+        "hatC":  [("dnb/hatC.wav", 1.0)],
     },
+    # drill: Jay Cactus Greeze (Big Kick / Psycho 808 / Brickz / Ruckus rim) +
+    # TrapLordz hat — the exact app kit.
     "drill": {
-        "kick":  [("hard-trap/kick.wav", 1.0)],
-        "sub":   [("hard-trap/sub.wav", 1.0)],
-        "snare": [("hard-trap/snare.wav", 1.0)],
-        "rim":   [("perc/woodblock.wav", 0.8)],
-        "hatC":  [("hard-trap/hatC.wav", 1.0)],
-        "hatO":  [("hard-trap/hatO.wav", 1.0)],
+        "kick":  [("drill/kick.wav", 1.0)],
+        "sub":   [("drill/sub.wav", 1.0)],
+        "snare": [("drill/snare.wav", 1.0)],
+        "rim":   [("drill/rim.wav", 1.0)],
+        "hatC":  [("drill/hatC.wav", 1.0)],
+        "hatO":  [("drill/hatO.wav", 1.0)],
     },
+    # hiphop: The Source boom-bap kit (was lofi Boochi bounce).
     "hiphop": {
-        "kick":  [("bounce/kick.wav", 1.0)],
-        "snare": [("bounce/snare.wav", 1.0)],
-        "hatC":  [("bounce/hatC.wav", 1.0)],
-        "hatO":  [("bounce/hatO.wav", 1.0)],
-        "rim":   [("perc/woodblock.wav", 0.85)],
+        "kick":  [("hiphop/kick.wav", 1.0)],
+        "snare": [("hiphop/snare.wav", 1.0)],
+        "hatC":  [("hiphop/hatC.wav", 1.0)],
+        "hatO":  [("hiphop/hatO.wav", 1.0)],
+        "rim":   [("hiphop/rim.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
+    # reggaeton: dancehall Kit C + Source shaker + 808 cowbell (was Boochi).
     "reggaeton": {
-        "kick":    [("bounce/kick.wav", 1.0)],
-        "snare":   [("bounce/snare.wav", 1.0)],
-        "shaker":  [("perc/shaker.wav", 0.9)],
-        "cowbell": [("perc/cowbell.wav", 0.8)],
+        "kick":    [("reggaeton/kick.wav", 1.0)],
+        "snare":   [("reggaeton/snare.wav", 1.0)],
+        "shaker":  [("reggaeton/shaker.wav", 1.0)],
+        "cowbell": [("reggaeton/cowbell.wav", 1.0)],
+        "rim":     [("perc/woodblock.wav", 1.0)],  # seasoning-variant voice
     },
-    # "funk" slot = UK Garage: bounce kit + woodblock rim skip
-    "funk": {
-        "kick":  [("bounce/kick.wav", 1.0)],
-        "snare": [("bounce/snare.wav", 1.0)],
-        "rim":   [("perc/woodblock.wav", 0.8)],
-        "hatC":  [("bounce/hatC.wav", 1.0)],
-        "hatO":  [("bounce/hatO.wav", 1.0)],
+    # garage: Candy kick/snare/rim + TR-909 hats. Key was "funk" pre-2026-07-10.
+    "garage": {
+        "kick":  [("garage/kick.wav", 1.0)],
+        "snare": [("garage/snare.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)],
+        "hatC":  [("garage/hatC.wav", 1.0)],
+        "hatO":  [("garage/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
 }
 

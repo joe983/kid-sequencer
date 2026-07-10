@@ -1,5 +1,174 @@
 # Where we are / next session
 
+## NEW — Round 9: percussive de-reciped + battery re-cut (2026-07-10, NOT deployed)
+Owner: fixed per-category recipes would converge. Audit: minor never was one
+(it's the kid's key); percussive had two — fixed drone voice + static pedal.
+Now variation-driven: drone role per genre (_DRONE_ROLES), drone voicing ×3
+(drone_notes voicing=), pedal static-root vs root→fifth (percussive_pedal),
+percussive texture = genre's + drone/wash. 12 presses → 10 distinct
+percussive configs. Showcase uses per-genre variation numbers (1+i*7 etc.)
+— columns no longer share structures. Battery re-rendered: 24/24 distinct,
+23 changed vs R8 (1 same-draw = determinism), percussive spread visible in
+MODE lines. All 9 suites green. Ears: engine/out/showcase/.
+
+## NEW — Round 8: tonality fix + SHOWCASE battery (2026-07-10 late night, NOT deployed)
+Owner caught percussive_dnb rendering with chord pads (tonality 0.579 =
+borderline; v3 tipped melodic; mode never printed in logs). Fixes:
+- riff_tonality now MULTIPLICATIVE (explain × (1−cluster)²) — cluster riff
+  0.58→0.21, percussive at ALL variation numbers, pinned by a regression
+  test on the SHIPPED examples/cluster_riff.json. Thresholds 0.45/0.60.
+- smoke_song prints MODE=… (verify renders by log, never assume).
+- **SHOWCASE battery** (owner: Suno-style variety demos): `modal run
+  infra/modal_app.py::showcase` renders 24 MP3s in parallel — per genre:
+  major_a(v1)/major_b(v5)/minor(Am riff, v2)/percussive(cluster riff, v4)
+  → main-repo engine/out/showcase/. All 24 hash-distinct; 6 percussive
+  MODE lines confirmed in logs. Extend by adding rows to the plan in
+  `showcase()` — this is the standing demo battery for future changes.
+- Known cosmetic: same variation number ⇒ same structure across genres
+  (structure derives from variation only) — use different numbers per genre
+  if the battery should show structural spread per column.
+- Say "variation number", not "nonce" (owner).
+
+## NEW — Round 7: percussive production mode (2026-07-10 night, NOT deployed)
+Owner: discordant user patterns (early-Photek ref) shouldn't get chords
+forced under them; intros too samey; asked what "nonce" means (say
+"variation number"!).
+- `riff_tonality(riff)` 0..1 = 0.6×chord-explainability + 0.4×(1−cluster
+  fraction of overlapping 2nds/7ths). <0.55 → PERCUSSIVE mode; 0.55–0.65
+  variation-number-tipped; else melodic. Same tune ⇒ same character family.
+- PERCUSSIVE (`style.production_mode`): prog=[0,0,0,0] root pedal; pads →
+  open-FIFTH drone (no third) on the dark role; chord soften/snap skipped;
+  rhythm-led treatment weights (_TREATMENT_W_PERC); each drop rotates drum
+  seasoning overlay; texture forced on + rendered edge-to-edge.
+- Intros: 7 characters (menu widened in THIS commit — that re-picks intros
+  for existing variation numbers; harmless, audited: v2 flipped high→low,
+  divergence confined to intro+build tail; techhouse v1/dnb v4/var_4 renders
+  byte-identical R6→R7 = determinism working).
+- examples/cluster_riff.json + ::song --args/--name for arbitrary-riff
+  auditions. EAR FILE: engine/out/percussive_dnb_170.mp3 (cluster riff, dnb
+  170 — the Photek check) + re-rendered var_0..5 + song_<genre>.
+- All 9 suites green on Modal. Tuning: tonality thresholds in choose_style,
+  _TREATMENT_W_PERC, drone_notes voicing.
+
+## NEW — Round 6: palette explosion + discordance fix (2026-07-10 night, NOT deployed)
+Owner: intros samey; garage variation discordant; wants LOADS more sounds
+(twinkles/rave synths) per genre; asked re render-time UX + per-genre
+similarity risk.
+- **BUG FIX (the discordance)**: lead stack rendered the ORIGINAL riff looped
+  while the main voice played DEVELOPED phrases — two melodies at once. Stack
+  now renders the same developed span.
+- Intros: 5 characters (+fragment = opening question over pads; +high =
+  octave-up tease) × intro LPF nonce-varied {1500,2500,4000,open}.
+- Palette: +16 GM voices (celesta/musicbox/vibes/marimba/kalimba/harp/clav/
+  nylon/brass/choir/fmep/tubular + square/saw/calliope/fifths leads),
+  +7 Surge patches (lead_hoover, lead_acid, stab_rave, pad_glass, bell_glass,
+  bass_acid, bass_fm). LEAD_STACKS = 4/genre; pad roles 3-4/genre; bass 2-4/
+  genre; drum seasoning 3rd overlays (909 cowbell techhouse, shaker garage/
+  hiphop, woodblock reggaeton) + KITS aux voices.
+- **Render time measured**: 99 s wall incl CLI overhead (~75-85 s actual) vs
+  ~139 s pre-variety baseline — UX unchanged; async-jobs plan stays parked.
+- Diversity: 40 nonces → 31-37 distinct (pad,bass,stack,intro) combos/genre
+  on 4 of ~15 axes. All 9 suites green; 12 ear files hash-fresh delivered.
+
+## NEW — Round 5: phrase-level motif DEVELOPMENT (2026-07-10 late, NOT deployed)
+Owner: R4 still read as one tiny variation / 16 bars; wants it REALLY
+interesting, motif intact. Root cause: variation was an exception (one bar
+per cadence). Now `develop_phrase` treats EVERY 4-bar phrase: statement
+(~1/3, pure anchor) / vary_end (final-bar rewrite) / octave_up (whole phrase
++12) / call_response (2nd half a diatonic 3rd down) / sparse_breath (bars
+2+4 thinned). Seeded per-phrase sequence (`_phrase_treatment`, no repeated
+developments back-to-back); drop 1 opens with 2 forced pure phrases;
+`ornament_every` removed. Tuning: `_TREATMENT_W` in arrange/render.py +
+pure_phrases count. All 9 suites green; 12 ear files hash-fresh in main-repo
+engine/out/. Deploy gated on owner ears.
+
+## NEW — Round 4: REAL riff variations (2026-07-10 late, NOT yet deployed)
+Owner (3rd riff complaint): R2/R3 "ornaments" only added quiet notes/velocity
+— inaudible. R4 rewrites the bar on the cadence (`vary_bar`): ending_fill
+(scale run into next bar), answer (2nd half diatonic 3rd down), retrigger,
+rest_gap + light kinds. TWO kinds per track alternate across variation bars;
+"none" removed; every ∈ {4,8,16} favouring 4/8. Clash notes SNAP to chord
+tones on variation bars (`resolve_clashes`); velocity softening elsewhere.
+Drop 1 pure for its FIRST 8 BARS only (was whole drop). Proven at note level
++ all 9 suites green on Modal. Ear files (all hash-fresh, watch for stale
+copies — one variations run died on network mid-save and nearly shipped R3
+files): var_0..5 + song_<genre> in main-repo engine/out/. Deploy gated on
+owner ears.
+
+## NEW — Round 3: the LEAD is the fix (2026-07-10 eve, NOT yet deployed)
+Owner on round 2: genre songs still sound alike. Diagnosis (probe): the riff/
+lead is the LOUDEST melodic layer (−4.8 dBFS peak vs pads −12.7) and was
+identical across genres + unlayered — round 2's variety sat 6–13 dB under it.
+Also the ::songs demo rendered every genre at variation 0 (each genre's
+plainest take). Round 3:
+- **LEAD_STACKS (always-on)**: per-genre lead texture UNDER the kid's
+  untouched instrument (techhouse rave-unison+shimmer, dnb unison/strings,
+  garage shimmer+keys, drill dark-body−12+string-whisper, hiphop Rhodes,
+  reggaeton shimmer+keys; 2 recipes/genre nonce-picked; every layer ≥8 dB
+  down — pinned; riff LUFS calibration keeps composite level).
+- **Ornament cadence** (owner spec): `ornament_every` ∈ {4,8,16} bars, fires
+  at phrase-end bars in builds AND drop 2+; new "cadence" pickup ornament.
+  **soften_clashes**: chord-aware velocity ×0.85 on semitone-rub notes in
+  post-hook sections (helps discordant riffs; velocity only). Drop 1 pure.
+- **::songs fixed**: per-genre nonces 1,4,7,10,13,16 (sizes now differ —
+  different skeletons visible). Fresh ear files in main-repo engine/out/
+  (all 12 hash-new): var_0..5 + song_<genre>.
+All 9 suites green on Modal. Deploy still gated on owner ears.
+
+## NEW — Round 2 after owner ears (2026-07-10 pm, NOT yet deployed)
+Owner verdict on round 1: good but palettes converge across genres, riff too
+static, lead too plain. Round 2 (4 commits, all suites green local+Modal):
+- **Riff ornaments** (`ornament_riff`): echo / octave_pop / push on PHRASE-END
+  bars of drop 2+ only; **drop 1 always pure verbatim** (the hook rule).
+  Octave/velocity only; melody notes never removed/re-timed (pinned).
+- **Lead layering** (`LEAD_LAYERS`): sparkle (+12 pluck −11 dB) / shadow
+  (dark unison −15 dB) under the riff in full-riff sections; drill/hiphop
+  shadow-only. GM fallbacks.
+- **Palette spread**: pad voicings close/first_inv/alt; new roles strings_pad
+  (GM 49 — drill string-loop DNA)/newage (GM 88); bass_round patch; octave-pop
+  bass feels (4-tuple feel slots; register test now 36–59).
+- **Swoosh character**: riser f0/f1 bands per genre (drill/hiphop dark
+  200-2500, dnb 400-12k); NEW `fx.spinback` vinyl brake (garage/hiphop menus).
+- Fresh ear files in main-repo engine/out/ (all 12 re-rendered, hashes differ
+  from round 1): var_0..5.mp3 + song_<genre>.mp3.
+
+## NEW — Genre authenticity + per-press variety (2026-07-10, 7 increments, NOT yet deployed)
+Full plan: `~/.claude/plans/sounds-graet-now-we-delightful-tarjan.md`. All on
+`claude/sess-67239ccc`; all 9 suites pass remotely; **ears pending** on:
+main-repo `engine/out/`: `var_0..5.mp3` (same riff × 6 nonces — the variety
+check), `song_<genre>.mp3` × 6 (authenticity check), `dnb_drums_172.mp3` vs
+`dnb_drums_virtuosity_172.mp3` (kit A/B) + drill/hiphop/reggaeton/techhouse
+drums. **`modal deploy` NOT run — prod still serves the old engine until the
+owner signs off.**
+- **style.py = the ONE place the nonce is spent** (`choose_style` → frozen
+  `ArrangeStyle`; named decorrelated sub-streams; per-genre `_GENRE_MENU`,
+  signature-first ~50%). Structure fields derive from variation ONLY.
+- **Song shapes**: classic / cold_open (drop first) / double_drop /
+  late_break + build_frac {1/5..1/2} + drop_bias clamps + intro/break/outro
+  4|8 + intro character (sparse/pad_open/low) + escalation modes.
+  `_fit_window` corrective loop = 180–240 s structural (exhaustive test).
+- **Drums = app pack for ALL genres** (fetch_appkit all-genre + layered dnb
+  kick + baked trimMs; techhouse hybrid keeps bounce kick/sub). Seasoning
+  overlays `DRUM_VARIANTS`/`pattern_for` (hats/rim/shaker only — skeleton
+  pinned by test). Fill shapes ×3 (techhouse fills were silently missing a
+  snare voice — now roll the CLAP).
+- **Pads per genre**: garage=organ skank, techhouse=pluck stabs, drill=dark,
+  hiphop=epiano, reggaeton=pizz, dnb=supersaw; `_PAD_RHYTHMS` comping ×2.
+  **Bass per genre**: bass_pluck / bass_sub808 / reese + `_BASS_FEELS`
+  (2-step bounce, kick-locked 808s, tresillo, roller…), variant 0 = legacy.
+- **Textures** (−30 LUFS slot): hiphop/garage crackle, techhouse wash,
+  drill tonic drone; dnb/reggaeton none. **FX palette** seeded per genre
+  (hiphop risers default OFF; impact f0/f1 per genre; downlifter/
+  reverse-crash/throw nonce-gated). Riff break variants octave_echo /
+  call_response (octave-only transforms).
+- **Progressions**: banks 4→7/mode (all contain degree 0), quality floor
+  ≥0.8×best (2–4 candidates), seeded pick.
+- Determinism fix: synth-drum `_noise` was unseeded (broke same-nonce⇒same-
+  track on the no-assets fallback path).
+- Tuning levers: menu weights in `style.py` (`_pick` signature-first 50%),
+  `_IMPACT`/`_FILL_MENU`, `_PAD_RHYTHMS`/`_BASS_FEELS` tables, overlay rows
+  in `DRUM_VARIANTS`, texture levels in fx.py generators.
+
 ## Mental model (important)
 The HTML app stays the front-end. The track engine is a **back-end service** the app calls —
 exactly like the current "Make AI track" already calls a Firebase Function → Stable Audio.

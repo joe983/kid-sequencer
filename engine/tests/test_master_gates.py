@@ -27,7 +27,7 @@ from kidseq_engine.mixmaster import kick_onsets_from_pattern, master  # noqa: E4
 from kidseq_engine.mixmaster.master import preset_for  # noqa: E402
 from kidseq_engine.render.drums import DRUM_PATTERNS  # noqa: E402
 
-GENRES = list(DRUM_PATTERNS)  # techhouse, dnb, funk, drill, hiphop, reggaeton
+GENRES = list(DRUM_PATTERNS)  # techhouse, dnb, garage, drill, hiphop, reggaeton
 _SECONDS = 8.0
 _TEMPO = 120.0
 

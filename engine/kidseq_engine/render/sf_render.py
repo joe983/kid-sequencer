@@ -40,6 +40,31 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     "strings": (GENERALUSER_SF, 0, 48),  # GM String Ensemble 1
     "bells": (GENERALUSER_SF, 0, 9),     # GM Glockenspiel
     "pads": (GENERALUSER_SF, 0, 50),     # GM Synth Strings 1 — arranger pad fallback
+    # arranger pad ROLES (genre-authentic keys-family sounds; see arrange/style.py
+    # PAD_ROLES — Surge handles the synth-family roles)
+    "pad_organ": (GENERALUSER_SF, 0, 17),   # GM Percussive Organ — garage skank
+    "pad_epiano": (GENERALUSER_SF, 0, 4),   # GM Electric Piano 1 — hiphop keys
+    "pad_pizz": (GENERALUSER_SF, 0, 45),    # GM Pizzicato Strings — reggaeton pluck
+    "pad_warm": (GENERALUSER_SF, 0, 89),    # GM Pad 2 (warm) — soft alternate
+    "pad_strings": (GENERALUSER_SF, 0, 49), # GM String Ensemble 2 — cinematic alt
+    "pad_newage": (GENERALUSER_SF, 0, 88),  # GM Pad 1 (new age) — bell-glass alt
+    # extended palette (real GM samples — twinkles, keys, plucks, sections):
+    "pad_celesta": (GENERALUSER_SF, 0, 8),     # twinkle
+    "pad_musicbox": (GENERALUSER_SF, 0, 10),   # twinkle
+    "pad_vibes": (GENERALUSER_SF, 0, 11),      # vibraphone
+    "pad_marimba": (GENERALUSER_SF, 0, 12),
+    "pad_tubular": (GENERALUSER_SF, 0, 14),    # tubular bells
+    "pad_fmep": (GENERALUSER_SF, 0, 5),        # FM tines (EP2)
+    "pad_clav": (GENERALUSER_SF, 0, 7),        # clavinet — funky comping
+    "pad_harp": (GENERALUSER_SF, 0, 46),       # orchestral harp — twinkly arps
+    "pad_nylon": (GENERALUSER_SF, 0, 24),      # nylon guitar
+    "pad_brass": (GENERALUSER_SF, 0, 61),      # brass section stabs
+    "pad_choir": (GENERALUSER_SF, 0, 52),      # choir aahs
+    "pad_kalimba": (GENERALUSER_SF, 0, 108),
+    "lead_square": (GENERALUSER_SF, 0, 80),    # GM square lead
+    "lead_sawgm": (GENERALUSER_SF, 0, 81),     # GM saw lead
+    "lead_calliope": (GENERALUSER_SF, 0, 82),
+    "lead_fifths": (GENERALUSER_SF, 0, 86),    # rave-y fifths lead
 }
 _DRUM_SF = (GENERALUSER_SF, 128, 0)
 
@@ -64,7 +89,13 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
         # fall back to the GM preset on GeneralUser for this instrument
         from .drums import DRUM_PATTERNS  # noqa: F401  (avoid unused import lints elsewhere)
         gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48,
-              "bells": 9, "pads": 50}
+              "bells": 9, "pads": 50, "pad_organ": 17, "pad_epiano": 4,
+              "pad_pizz": 45, "pad_warm": 89, "pad_strings": 49, "pad_newage": 88,
+              "pad_celesta": 8, "pad_musicbox": 10, "pad_vibes": 11,
+              "pad_marimba": 12, "pad_tubular": 14, "pad_fmep": 5,
+              "pad_clav": 7, "pad_harp": 46, "pad_nylon": 24, "pad_brass": 61,
+              "pad_choir": 52, "pad_kalimba": 108, "lead_square": 80,
+              "lead_sawgm": 81, "lead_calliope": 82, "lead_fifths": 86}
         return GENERALUSER_SF, 0, gm.get(instrument, 0)
     return path, bank, preset
 

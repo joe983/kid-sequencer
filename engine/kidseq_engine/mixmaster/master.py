@@ -66,8 +66,8 @@ GENRE_PRESETS: dict[str, GenrePreset] = {
                              pump_depth=0.50, pump_release_s=0.18),
     "dnb": GenrePreset(layer_gain_db={"drums": 1.0, "bass": 0.5, "pads": -1.0},
                        pump_depth=0.35, pump_release_s=0.10),
-    "funk": GenrePreset(layer_gain_db={},
-                        pump_depth=0.30, pump_release_s=0.12),
+    "garage": GenrePreset(layer_gain_db={},
+                          pump_depth=0.30, pump_release_s=0.12),
     "drill": GenrePreset(layer_gain_db={"bass": 1.0, "riff": -0.5},
                          pump_depth=0.25, pump_release_s=0.14),
     "hiphop": GenrePreset(layer_gain_db={},
@@ -100,11 +100,11 @@ _MONO_LOCK = ("bass",)
 _SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
-              "funk": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
+              "garage": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
 _PREDELAY_S = 0.020
 
 # parallel drum crush, summed under the dry kit (dB by genre)
-_NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "funk": -9.0,
+_NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
                "reggaeton": -8.0, "dnb": -10.0}
 
 

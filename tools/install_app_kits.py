@@ -51,9 +51,9 @@ KITS = {
         "hatO":  [(SOURCE / "Open-Hats" / "The Source - Chamber Open Hat.wav", 0.5, None)],
         "rim":   [(SOURCE / "Rimshots" / "The Source - Clean Rim.wav", 0.6, None)],
     },
-    # "funk" slot = UK Garage (2026-07-02): Candy kick/snare/rim + 909 hats
-    # (garage's house lineage — the 909 hats are period-correct)
-    "funk": {
+    # "garage" slot = UK Garage: Candy kick/snare/rim + 909 hats (garage's house
+    # lineage — the 909 hats are period-correct). Key was "funk" before 2026-07-10.
+    "garage": {
         "kick":  [(CANDY / "Kicks" / "Candy - Chunky Kick (C).wav", 1.0, None)],
         "snare": [(CANDY / "Snares" / "Candy - Hitter Snare.wav", 0.85, None)],
         "rim":   [(CANDY / "Rims" / "Candy - Straight Rim.wav", 0.6, None)],

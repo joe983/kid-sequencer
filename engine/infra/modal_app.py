@@ -110,6 +110,7 @@ def populate_assets(force_vsco: bool = False) -> str:
         (Path(ASSETS_MOUNT) / sub).mkdir(parents=True, exist_ok=True)
     out = _run("scripts/fetch_soundfonts.py")
     out += _run("scripts/fetch_drumkits.py")
+    out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())
@@ -124,8 +125,8 @@ def run_tests() -> str:
     out = ""
     for t in ("tests/test_sequence.py", "tests/test_master.py",
               "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
-              "tests/test_arrange.py", "tests/test_master_gates.py",
-              "tests/test_fx.py"):
+              "tests/test_arrange.py", "tests/test_style.py",
+              "tests/test_master_gates.py", "tests/test_fx.py"):
         out += _run(t)
     return out
 
@@ -169,11 +170,34 @@ def render_orchestral() -> dict[str, bytes]:
 
 
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
-def render_song() -> bytes:
-    """Full arranged song (structure + progression + bass + pads); returns MP3."""
+def render_song(args: str = "") -> bytes:
+    """Full arranged song; optional `args` = smoke_song.py CLI args
+    (e.g. "examples/cluster_riff.json 3")."""
     _wire_assets()
-    _run("smoke_song.py")
+    _run("smoke_song.py", *args.split())
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_variations(nonces: str = "0,1,2,3,4,5") -> dict[str, bytes]:
+    """Same riff x several nonces — the per-press variety ear check."""
+    _wire_assets()
+    out = Path(ENGINE_REMOTE) / "out"
+    files: dict[str, bytes] = {}
+    for n in [s.strip() for s in nonces.split(",") if s.strip()]:
+        _run("smoke_song.py", "examples/sample_riff.json", n)
+        files[f"var_{n}.mp3"] = (out / "song.mp3").read_bytes()
+    return files
+
+
+@app.local_entrypoint()
+def variations(nonces: str = "0,1,2,3,4,5") -> None:
+    files = render_variations.remote(nonces)
+    dst_dir = ENGINE_LOCAL / "out"
+    dst_dir.mkdir(exist_ok=True)
+    for name, data in files.items():
+        (dst_dir / name).write_bytes(data)
+        print(f"saved {dst_dir / name} ({len(data):,} bytes)")
 
 
 # ---------------------------------------------------------------------------
@@ -219,12 +243,54 @@ def render(payload: dict):
 
 
 # representative tempo per genre for the full-song ear sweep
-_GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "funk": 132,
+_GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "garage": 132,
                  "drill": 142, "hiphop": 92, "reggaeton": 96}
 
 
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
+def render_showcase_item(riff_file: str, style: str, tempo: int,
+                         variation: int) -> bytes:
+    """One showcase render: any example riff x genre x variation number."""
+    import json
+
+    _wire_assets()
+    src = Path(ENGINE_REMOTE) / riff_file
+    payload = json.loads(src.read_text(encoding="utf-8"))
+    payload["drumStyle"] = style
+    payload["tempo"] = tempo
+    tmp = Path(ENGINE_REMOTE) / "out" / f"_riff_{style}_{variation}.json"
+    tmp.parent.mkdir(exist_ok=True)
+    tmp.write_text(json.dumps(payload), encoding="utf-8")
+    _run("smoke_song.py", str(tmp), str(variation))
+    return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
+
+
+@app.local_entrypoint()
+def showcase() -> None:
+    """The variety demo: per genre — two contrasting major-key takes, a
+    minor-key take, and a percussive (cluster-riff) take. 24 files."""
+    plan = []   # (riff_file, style, tempo, variation) + display tag
+    tags = []
+    # per-genre variation numbers: columns must NOT share structures — the
+    # battery should show the spread a real user would get
+    for i, (style, tempo) in enumerate(_GENRE_TEMPOS.items()):
+        base = 1 + i * 7
+        plan += [("examples/sample_riff.json", style, tempo, base),
+                 ("examples/sample_riff.json", style, tempo, base + 3),
+                 ("examples/minor_riff.json", style, tempo, base + 5),
+                 ("examples/cluster_riff.json", style, tempo, base + 1)]
+        tags += [f"{style}_major_a", f"{style}_major_b",
+                 f"{style}_minor", f"{style}_percussive"]
+    dst_dir = ENGINE_LOCAL / "out" / "showcase"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    for tag, mp3 in zip(tags, render_showcase_item.starmap(plan)):
+        dst = dst_dir / f"{tag}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
-def render_song_genre(style: str, tempo: int) -> bytes:
+def render_song_genre(style: str, tempo: int, variation: int = 0) -> bytes:
     """Full arranged song for one genre at its representative tempo."""
     import json
 
@@ -236,26 +302,30 @@ def render_song_genre(style: str, tempo: int) -> bytes:
     tmp = Path(ENGINE_REMOTE) / "out" / f"_riff_{style}.json"
     tmp.parent.mkdir(exist_ok=True)
     tmp.write_text(json.dumps(payload), encoding="utf-8")
-    _run("smoke_song.py", str(tmp))
+    _run("smoke_song.py", str(tmp), str(variation))
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
 
 
 @app.local_entrypoint()
 def songs() -> None:
-    """Render the full-song genre sweep (6 tracks, in parallel) and pull local."""
+    """Render the full-song genre sweep (6 tracks, in parallel) and pull local.
+
+    Each genre renders at a DIFFERENT nonce — an all-variation-0 sweep showed
+    every genre's single plainest take and hid the per-press spread."""
     dst_dir = ENGINE_LOCAL / "out"
     dst_dir.mkdir(exist_ok=True)
-    args = list(_GENRE_TEMPOS.items())
-    for (style, _), mp3 in zip(args, render_song_genre.starmap(args)):
+    args = [(style, tempo, 1 + i * 3)
+            for i, (style, tempo) in enumerate(_GENRE_TEMPOS.items())]
+    for (style, _, nonce), mp3 in zip(args, render_song_genre.starmap(args)):
         dst = dst_dir / f"song_{style}.mp3"
         dst.write_bytes(mp3)
-        print(f"saved {dst} ({len(mp3):,} bytes)")
+        print(f"saved {dst} (variation={nonce}, {len(mp3):,} bytes)")
 
 
 @app.local_entrypoint()
-def song() -> None:
-    mp3 = render_song.remote()
-    dst = ENGINE_LOCAL / "out" / "modal_song.mp3"
+def song(args: str = "", name: str = "modal_song.mp3") -> None:
+    mp3 = render_song.remote(args)
+    dst = ENGINE_LOCAL / "out" / name
     dst.parent.mkdir(exist_ok=True)
     dst.write_bytes(mp3)
     print(f"saved {dst} ({len(mp3):,} bytes)")
@@ -270,7 +340,7 @@ def render_drums(style: str, tempo: int) -> bytes:
 
 
 @app.local_entrypoint()
-def drums(styles: str = "funk,reggaeton") -> None:
+def drums(styles: str = "garage,reggaeton") -> None:
     """Drums-only auditions for a comma-list of genres -> out/<style>_drums.mp3."""
     dst_dir = ENGINE_LOCAL / "out"
     dst_dir.mkdir(exist_ok=True)

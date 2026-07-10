@@ -22,7 +22,7 @@ from kidseq_engine.render.drums import DRUM_PATTERNS  # noqa: E402
 from kidseq_engine.sequence import parse_sequence  # noqa: E402
 
 BARS = 4
-GENRES = ["techhouse", "dnb", "funk", "drill", "hiphop", "reggaeton"]
+GENRES = ["techhouse", "dnb", "garage", "drill", "hiphop", "reggaeton"]
 
 
 def main() -> None:

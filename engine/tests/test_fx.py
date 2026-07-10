@@ -67,6 +67,39 @@ def test_generators_shapes_levels_determinism():
     assert abs(_peak_db(dl) - (-16.0)) < 0.8
     # riser ends silent (the drop must start clean)
     assert float(np.max(np.abs(r1[-8:]))) < 1e-3
+    # parameterised impact: defaults unchanged; genre-tuned booms hold level
+    deep = fx.impact(SR, f0=60.0, f1=28.0)
+    assert deep.shape == imp.shape and abs(_peak_db(deep) - (-6.0)) < 0.8
+    assert not np.array_equal(deep, imp)
+    # parameterised riser band: default level holds; dark band differs
+    dark = fx.riser(2.0, SR, seed=7, gate_hz=8.0, f0=200.0, f1=2500.0)
+    assert dark.shape == r1.shape and abs(_peak_db(dark) - (-12.0)) < 1.5
+    assert not np.array_equal(dark, r1)
+    # spinback: level pin, determinism, clean end into the drop
+    sb = fx.spinback(1.5, SR, seed=5)
+    assert sb.shape == (int(1.5 * SR), 2)
+    assert np.array_equal(sb, fx.spinback(1.5, SR, seed=5))
+    assert abs(_peak_db(sb) - (-14.0)) < 0.8
+    assert float(np.max(np.abs(sb[-8:]))) < 1e-3
+
+
+def test_texture_generators_shapes_levels_determinism():
+    for gen, kwargs, want_db in (
+        (fx.vinyl_crackle, {"seed": 5}, -24.0),
+        (fx.noise_wash, {"seed": 5}, -26.0),
+        (fx.dark_drone, {"seed": 5, "root_hz": 65.41}, -26.0),
+    ):
+        a = gen(3.0, SR, **kwargs)
+        b = gen(3.0, SR, **kwargs)
+        assert a.shape == (3 * SR, 2) and np.array_equal(a, b), gen.__name__
+        assert abs(_peak_db(a) - want_db) < 1.5, (gen.__name__, _peak_db(a))
+        assert np.all(np.isfinite(a)), gen.__name__
+        # edge fades: section boundaries must not click
+        assert float(np.max(np.abs(a[:4]))) < 0.02, gen.__name__
+        assert float(np.max(np.abs(a[-4:]))) < 0.02, gen.__name__
+    # crackle rate knob (garage runs lighter than hiphop)
+    dusty = fx.vinyl_crackle(3.0, SR, seed=5, ticks_per_s=4.0)
+    assert not np.array_equal(dusty, fx.vinyl_crackle(3.0, SR, seed=5))
 
 
 def test_throw_fits_heuristic():
