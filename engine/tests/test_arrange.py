@@ -162,6 +162,53 @@ def test_vary_bar_bold_kinds_rewrite_the_pattern_in_key():
         assert len(vary_bar(notes, "rest_gap", key)) < len(notes)
 
 
+def _cluster_riff(key="C", tempo=170.0, drum_style="dnb") -> Riff:
+    """A percussive/discordant grid pattern: overlapping seconds, no chord."""
+    semi, steps = _scale_steps(key)
+    tonic = _C4_MIDI + semi
+    notes = [
+        Note(pitch=tonic, start_beats=0.0, dur_beats=4.0),
+        Note(pitch=tonic + steps[1], start_beats=0.0, dur_beats=4.0),
+        Note(pitch=tonic + steps[2], start_beats=2.0, dur_beats=2.0),
+        Note(pitch=tonic + steps[3], start_beats=2.0, dur_beats=2.0),
+        Note(pitch=tonic - 1, start_beats=1.0, dur_beats=1.0),
+    ]
+    return Riff(notes=notes, tempo=tempo, key=key, instrument="piano",
+                drum_style=drum_style)
+
+
+def test_riff_tonality_separates_melodic_from_percussive_patterns():
+    from kidseq_engine.arrange import drone_notes, riff_tonality
+
+    melodic = _riff()
+    cluster = _cluster_riff()
+    assert riff_tonality(melodic) == riff_tonality(melodic)   # deterministic
+    assert riff_tonality(melodic) > 0.65, riff_tonality(melodic)
+    assert riff_tonality(cluster) < 0.55, riff_tonality(cluster)
+    # too-short riffs are treated as melodic, never mode-flipped
+    short = Riff(notes=melodic.notes[:2], tempo=120, key="C",
+                 instrument="piano", drum_style="techhouse")
+    assert riff_tonality(short) == 1.0
+    # the percussive-mode drone: root + fifth ONLY (no third to clash)
+    dn = drone_notes(cluster, bars=2)
+    assert len(dn) == 4 and all(n.dur_beats == 4.0 for n in dn)
+    pcs = {n.pitch % 12 for n in dn}
+    root = dn[0].pitch % 12
+    assert pcs == {root, (root + 7) % 12}
+
+
+def test_production_mode_follows_tonality():
+    from kidseq_engine.arrange.style import choose_style
+
+    for v in range(6):
+        assert choose_style(_riff(), v).production_mode == "melodic", v
+    modes = {choose_style(_cluster_riff(), v).production_mode for v in range(6)}
+    assert modes == {"percussive"}
+    # percussive tracks always carry a texture bed
+    for v in range(6):
+        assert choose_style(_cluster_riff(), v).texture is not None, v
+
+
 def test_develop_phrase_transforms_but_keeps_the_motif():
     from kidseq_engine.arrange import PHRASE_TREATMENTS, develop_phrase
 

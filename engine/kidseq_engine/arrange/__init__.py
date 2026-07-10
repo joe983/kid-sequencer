@@ -121,6 +121,8 @@ _INTRO_CHARACTER: dict[str, tuple[str, str | None, bool]] = {
     "low": ("sparse_low", "lite", False),     # sub-octave murmur
     "fragment": ("fragment", None, True),     # the riff's opening question, on pads
     "high": ("sparse_high", "lite", False),   # octave-up music-box tease
+    "drums_first": (None, "lite", False),     # percussion only — no riff yet
+    "atmos": ("fragment", None, True),        # fragment floating in atmosphere
 }
 
 # drop_bias -> (lo, hi) clamps for the drop bar count
@@ -358,6 +360,57 @@ def vary_bar(notes: list[Note], kind: str, key: str,
                 for n in notes if n.start_beats >= 2.0]
         return (call + resp) if resp else notes
     raise ValueError(f"unknown variation {kind!r}")
+
+
+def riff_tonality(riff: Riff) -> float:
+    """How tonal/melodic the riff is, 0..1. Two signals:
+
+      explainability  how much of the riff's weight ANY single diatonic triad
+                      can cover (kids' grids are in-key by construction, so
+                      discordance is against CHORDS, not the key)
+      clusters        fraction of OVERLAPPING note pairs a 2nd/7th apart —
+                      simultaneous seconds are what reads as "discordant"
+
+    Low scores mean the pattern is percussive/textural rather than harmonic —
+    the arranger switches production mode instead of forcing chords under it."""
+    notes = riff.notes
+    if len(notes) < 3:
+        return 1.0  # too short to judge — treat as melodic
+    semi, steps = _scale_steps(riff.key)
+    tonic = _C4_MIDI + semi
+    weights: dict[int, float] = {}
+    for n in notes:
+        pc = (n.pitch - tonic) % 12
+        weights[pc] = weights.get(pc, 0.0) + n.dur_beats + 1.0
+    total = sum(weights.values())
+    best = max(sum(w for pc, w in weights.items() if pc in _triad_pcs(d, steps))
+               for d in range(7))
+    explain = best / total if total else 1.0
+
+    rubs = pairs = 0
+    for i, a in enumerate(notes):
+        for b in notes[i + 1:]:
+            lo, hi = sorted((a, b), key=lambda n: n.start_beats)
+            if hi.start_beats < lo.start_beats + lo.dur_beats:  # sounding together
+                pairs += 1
+                if abs(a.pitch - b.pitch) % 12 in (1, 2, 10, 11):
+                    rubs += 1
+    cluster = rubs / pairs if pairs else 0.0
+    return max(0.0, min(1.0, 0.6 * explain + 0.4 * (1.0 - cluster)))
+
+
+def drone_notes(riff: Riff, bars: int) -> list[Note]:
+    """Open-fifth drone on the KEY root (no third — nothing to clash with a
+    discordant riff), whole-bar, C4 region. The percussive-mode pad."""
+    semi, _ = _scale_steps(riff.key)
+    root = _fold(60 + semi % 12, 60, 71)
+    fifth = root + 7
+    out: list[Note] = []
+    for b in range(bars):
+        for pitch in (root, fifth):
+            out.append(Note(pitch=pitch, velocity=76,
+                            start_beats=b * 4.0, dur_beats=4.0))
+    return out
 
 
 #: phrase treatments — how a 4-bar phrase develops the motif

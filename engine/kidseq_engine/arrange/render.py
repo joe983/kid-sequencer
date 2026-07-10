@@ -20,21 +20,28 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
-               chord_pcs_for_bar, develop_phrase, pad_notes, pad_rhythm_for,
-               plan_song, resolve_clashes, riff_variant, soften_clashes)
+               chord_pcs_for_bar, develop_phrase, drone_notes, pad_notes,
+               pad_rhythm_for, plan_song, resolve_clashes, riff_variant,
+               soften_clashes)
 from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, _sub_rng, choose_style
 
 # phrase-treatment draw weights: statements anchor (~1/3), the rest develop
 _TREATMENT_W = {"statement": 0.34, "vary_end": 0.26, "octave_up": 0.12,
                 "call_response": 0.15, "sparse_breath": 0.13}
+# percussive mode: rhythm-led development — more rests/end-rewrites, fewer
+# melodic transforms (the pattern is a groove, not a tune)
+_TREATMENT_W_PERC = {"statement": 0.30, "vary_end": 0.30, "octave_up": 0.10,
+                     "call_response": 0.10, "sparse_breath": 0.20}
 
 
-def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str) -> str:
+def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str,
+                      weights: dict | None = None) -> str:
     """Seeded per-phrase treatment; the same development never runs twice in a
     row (a repeated statement is fine — that's the anchor)."""
+    w_map = weights or _TREATMENT_W
     rng = _sub_rng(seed, f"phrase:{sec_name}:{pi}")
-    opts = list(_TREATMENT_W)
-    w = np.asarray([_TREATMENT_W[o] for o in opts])
+    opts = list(w_map)
+    w = np.asarray([w_map[o] for o in opts])
     t = opts[int(rng.choice(len(opts), p=w / w.sum()))]
     return "statement" if (t == prev and t != "statement") else t
 from ..render import fx, riff_audio
@@ -230,6 +237,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             for s in plan]
     flags = flags if flags is not None else FxFlags()
     prog = choose_progression(riff, variation, pick=style.prog_pick)
+    percussive = style.production_mode == "percussive"
+    if percussive:
+        # Photek move: no chord movement under a non-harmonic pattern —
+        # everything sits on the key root (bass pedals, drone instead of pads)
+        prog = [0, 0, 0, 0]
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
     seed = fx.song_seed(riff, variation)
@@ -275,7 +287,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     if pi < pure_phrases:
                         treatment = "statement"
                     else:
-                        treatment = _phrase_treatment(seed, sec.name, pi, prev_t)
+                        treatment = _phrase_treatment(
+                            seed, sec.name, pi, prev_t,
+                            _TREATMENT_W_PERC if percussive else None)
                     prev_t = treatment
                     if treatment == "vary_end":
                         kind = style.riff_ornament if var_i % 2 == 0 \
@@ -288,7 +302,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                            phrase_bars=min(4, sec.bars - pi * 4))
                     for bi, bar_notes in enumerate(pbars):
                         b = pi * 4 + bi
-                        if b >= pure_phrases * 4:
+                        # percussive mode: no chords to clash with — leave the
+                        # pattern's own character alone
+                        if b >= pure_phrases * 4 and not percussive:
                             pcs = chord_pcs_for_bar(riff, prog, b)
                             bar_notes = resolve_clashes(bar_notes, pcs) \
                                 if bar_notes != riff.notes else \
@@ -317,7 +333,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     _add_at(layers["riff"], sig, at)
 
         if sec.drums and pattern:
-            pat = pattern if sec.drums == "full" else _lite_pattern(pattern)
+            base_pat = pattern
+            if percussive and sec.name.startswith("drop"):
+                # drum-led evolution: each drop rotates to a different
+                # seasoning overlay (the kit does the developing)
+                base_pat = pattern_for(riff.drum_style,
+                                       style.drum_variant + (drop_seen - 1))
+            pat = base_pat if sec.drums == "full" else _lite_pattern(base_pat)
             if pat:
                 from ..render import drums_audio_pattern
                 sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, sec.bars, sr)
@@ -334,19 +356,28 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:
-            rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
-            notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
-                              voicing=style.pad_voicing)
-            sig = _render_pads(notes, riff.tempo, span_beats, sr, style.pad_role)
+            if percussive:
+                # open-fifth drone (no third — nothing for a discordant riff
+                # to clash with), on a dark sustained role
+                notes = drone_notes(riff, sec.bars)
+                sig = _render_pads(notes, riff.tempo, span_beats, sr, "dark")
+            else:
+                rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
+                notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
+                                  voicing=style.pad_voicing)
+                sig = _render_pads(notes, riff.tempo, span_beats, sr, style.pad_role)
             _add_at(layers["pads"], sig, at)
 
         bar += sec.bars
 
-    # ---- genre texture bed (builds+drops only — stays out of the fragile
-    # intro/outro; the -30 LUFS layer calibration keeps it subliminal) --------
+    # ---- genre texture bed (builds+drops; percussive mode runs it edge to
+    # edge — intro/outro included — as the sound-development bed). The -30
+    # LUFS layer calibration keeps it subliminal. --------------------------
     if style.texture:
+        tex_names = ("build", "drop", "intro", "outro") if percussive \
+            else ("build", "drop")
         for s, a, e in bounds:
-            if s.name.startswith(("build", "drop")):
+            if s.name.startswith(tex_names):
                 sig = _render_texture(style.texture, (e - a) / sr, sr, seed, riff)
                 _add_at(layers["texture"], sig, a)
 

@@ -91,6 +91,7 @@ class FxPalette:
 @dataclass(frozen=True)
 class ArrangeStyle:
     """Everything the nonce decides for one render."""
+    production_mode: str           # "melodic" | "percussive" (from riff_tonality)
     structure: StructureStyle
     prog_pick: int                 # index into choose_progression's candidates
     bass_patch: str                # Surge patch for the bass LAYER
@@ -312,8 +313,9 @@ def choose_structure(variation: int = 0) -> StructureStyle:
         drop_bias=_pick(variation, "drop_bias", ["normal", "short", "long"],
                         [0.50, 0.25, 0.25]),
         intro_character=_pick(variation, "intro_character",
-                              ["sparse", "pad_open", "fragment", "high", "low"],
-                              [0.30, 0.20, 0.20, 0.15, 0.15]),
+                              ["sparse", "pad_open", "fragment", "high", "low",
+                               "drums_first", "atmos"],
+                              [0.24, 0.16, 0.16, 0.12, 0.12, 0.10, 0.10]),
         escalation=_pick(variation, "escalation", ["full", "gain_only", "off"],
                          [0.60, 0.25, 0.15]),
     )
@@ -378,10 +380,30 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
 
 def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     """Derive every nonce-driven decision for one render. Deterministic:
-    same (riff, variation) => equal ArrangeStyle."""
+    same (riff, variation) => equal ArrangeStyle.
+
+    PRODUCTION MODE comes from the riff itself (riff_tonality): a pattern the
+    diatonic triads can't explain gets the PERCUSSIVE treatment — rhythm and
+    sound-development driven (root pedal, open-fifth drone, no chord pads) —
+    instead of having chords forced under it. Borderline riffs let the nonce
+    tip the choice, so re-presses can explore both readings."""
+    from . import riff_tonality  # local import avoids a module cycle
+
     seed = fx.song_seed(riff, variation)
     menu = _menu_for(riff.drum_style)
+    tone = riff_tonality(riff)
+    if tone < 0.55:
+        mode = "percussive"
+    elif tone < 0.65:
+        mode = _pick(seed, "production_mode", ["melodic", "percussive"],
+                     [0.6, 0.4])
+    else:
+        mode = "melodic"
+    # percussive tracks always run an atmosphere bed (sound-development driven)
+    texture_menu = menu["texture"] if mode == "melodic" else \
+        [t for t in menu["texture"] if t] or ["drone"]
     return ArrangeStyle(
+        production_mode=mode,
         structure=choose_structure(variation),
         # index into choose_progression's quality-floored candidates (up to 4;
         # clamped there) — best colour favoured, all candidates cover the riff
@@ -392,7 +414,7 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         pad_role=_pick(seed, "pad_role", menu["pad_role"]),
         pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
-        texture=_pick(seed, "texture", menu["texture"]),
+        texture=_pick(seed, "texture", texture_menu),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",

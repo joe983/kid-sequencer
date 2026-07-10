@@ -1,0 +1,17 @@
+{
+  "riff": {
+    "notes": [
+      { "row": 7, "start": 0,  "len": 16 },
+      { "row": 6, "start": 0,  "len": 16 },
+      { "row": 4, "start": 8,  "len": 8 },
+      { "row": 3, "start": 8,  "len": 8 },
+      { "row": 5, "start": 4,  "len": 4 },
+      { "row": 6, "start": 12, "len": 2 },
+      { "row": 5, "start": 14, "len": 2 }
+    ]
+  },
+  "key": "C",
+  "tempo": 170,
+  "instrument": "synth",
+  "drumStyle": "dnb"
+}

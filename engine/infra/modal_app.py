@@ -170,10 +170,11 @@ def render_orchestral() -> dict[str, bytes]:
 
 
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=1800)
-def render_song() -> bytes:
-    """Full arranged song (structure + progression + bass + pads); returns MP3."""
+def render_song(args: str = "") -> bytes:
+    """Full arranged song; optional `args` = smoke_song.py CLI args
+    (e.g. "examples/cluster_riff.json 3")."""
     _wire_assets()
-    _run("smoke_song.py")
+    _run("smoke_song.py", *args.split())
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
 
 
@@ -280,9 +281,9 @@ def songs() -> None:
 
 
 @app.local_entrypoint()
-def song() -> None:
-    mp3 = render_song.remote()
-    dst = ENGINE_LOCAL / "out" / "modal_song.mp3"
+def song(args: str = "", name: str = "modal_song.mp3") -> None:
+    mp3 = render_song.remote(args)
+    dst = ENGINE_LOCAL / "out" / name
     dst.parent.mkdir(exist_ok=True)
     dst.write_bytes(mp3)
     print(f"saved {dst} ({len(mp3):,} bytes)")
