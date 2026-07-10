@@ -85,6 +85,7 @@ class FxPalette:
     reverse_crash_on: bool = True
     fill_shape: int = 0            # index into the fill-shape menu
     throw: bool | None = None      # None = auto via fx.throw_fits
+    intro_lpf: float = 2500.0      # intro riff filter (>=15k = wide open)
 
 
 @dataclass(frozen=True)
@@ -120,6 +121,12 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
     "warm": ("sf", "pad_warm"),
     "strings_pad": ("sf", "pad_strings"),
     "newage": ("sf", "pad_newage"),
+    "glass": ("vst", "pad_glass"),
+    "choir": ("sf", "pad_choir"),
+    "brass_stab": ("sf", "pad_brass"),
+    "clav": ("sf", "pad_clav"),
+    "nylon": ("sf", "pad_nylon"),
+    "fmep": ("sf", "pad_fmep"),
 }
 
 #: pad triad voicings pad_notes understands
@@ -134,6 +141,20 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "glass": ("sf", "pad_newage"),     # GM bell-glass
     "keys": ("sf", "pad_epiano"),      # GM Rhodes doubling — boom-bap keys
     "strings": ("sf", "pad_strings"),  # GM string section whisper
+    # twinkles
+    "twinkle": ("sf", "pad_celesta"),
+    "musicbox": ("sf", "pad_musicbox"),
+    "vibes": ("sf", "pad_vibes"),
+    "marimba": ("sf", "pad_marimba"),
+    "kalimba": ("sf", "pad_kalimba"),
+    "harp": ("sf", "pad_harp"),
+    "bellglass": ("vst", "bell_glass"),
+    # ravey synths
+    "hoover": ("vst", "lead_hoover"),
+    "acid": ("vst", "lead_acid"),
+    "rave_stab": ("vst", "stab_rave"),
+    "fifths": ("sf", "lead_fifths"),
+    "square": ("sf", "lead_square"),
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -145,26 +166,38 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
     "techhouse": [
         [("unison", 0, -9.0), ("shimmer", 12, -13.0)],
         [("shimmer", 12, -9.0), ("body", -12, -14.0)],
+        [("rave_stab", 0, -9.0), ("twinkle", 12, -13.0)],
+        [("acid", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
     "dnb": [
         [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
         [("strings", 12, -11.0), ("body", 0, -14.0)],
+        [("hoover", 0, -10.0)],
+        [("bellglass", 12, -11.0), ("body", -12, -14.0)],
     ],
     "garage": [
         [("shimmer", 12, -9.0), ("keys", 0, -13.0)],
         [("keys", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("vibes", 0, -10.0), ("twinkle", 12, -14.0)],
+        [("bellglass", 12, -10.0), ("keys", 0, -13.0)],
     ],
     "drill": [
         [("body", -12, -10.0), ("strings", 12, -15.0)],
         [("body", 0, -9.0)],
+        [("bellglass", 12, -13.0), ("body", -12, -10.0)],
+        [("harp", 12, -11.0), ("body", -12, -13.0)],
     ],
     "hiphop": [
         [("keys", 0, -9.0)],
         [("body", -12, -11.0), ("keys", 0, -13.0)],
+        [("vibes", 0, -10.0)],
+        [("musicbox", 12, -12.0), ("body", -12, -12.0)],
     ],
     "reggaeton": [
         [("shimmer", 12, -10.0), ("keys", 0, -14.0)],
         [("keys", 0, -10.0)],
+        [("marimba", 0, -10.0), ("twinkle", 12, -14.0)],
+        [("kalimba", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
 }
 
@@ -204,39 +237,47 @@ def _menu(**over) -> dict[str, list]:
 _GENRE_MENU: dict[str, dict[str, list]] = {
     # pluck stabs are the tech-house signature; the supersaw wash is the alt.
     # Bass: plucky rolling line first, reese as the darker alt.
-    "techhouse": _menu(pad_role=["pluck", "supersaw", "newage"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
-                       drum_variant=[0, 1, 2], texture=["wash", None],
+    "techhouse": _menu(pad_role=["pluck", "supersaw", "newage", "glass"],
+                       pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass", "bass_acid"],
+                       bass_feel=[0, 1, 2],
+                       drum_variant=[0, 1, 2, 3], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
-    # dnb: supersaw wash (its pad identity) + cinematic strings alt; the reese
-    # IS dnb bass — feels vary (two-step / roller / drone / octave answer)
-    "dnb": _menu(pad_role=["supersaw", "strings_pad"], pad_rhythm=[0, 1],
-                 bass_patch=["bass"], bass_feel=[0, 1, 2, 3],
+    # dnb: supersaw wash (its pad identity) + cinematic strings/choir/glass;
+    # the reese IS dnb bass — feels vary; acid as the neuro-ish alt
+    "dnb": _menu(pad_role=["supersaw", "strings_pad", "choir", "glass"],
+                 pad_rhythm=[0, 1],
+                 bass_patch=["bass", "bass_acid"], bass_feel=[0, 1, 2, 3],
                  drum_variant=[0, 1, 2],
                  riff_break_variant=["sparse_low", "octave_echo"]),
-    # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass
-    # with octave pops.
-    "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
-                    drum_variant=[0, 1, 2], texture=["crackle", None],
+    # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
+    # with octave pops; FM knock as the alt colour.
+    "garage": _menu(pad_role=["organ", "pluck", "clav", "brass_stab"],
+                    pad_rhythm=[0, 1],
+                    bass_patch=["bass_pluck", "bass_fm", "bass"],
+                    bass_feel=[0, 1, 2],
+                    drum_variant=[0, 1, 2, 3], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
-    # drill: dark closed-down sustain; cinematic strings as the second colour
-    # (UK drill's string-loop DNA). 808 sub only. Breaks stay low.
-    "drill": _menu(pad_role=["dark", "strings_pad"], pad_rhythm=[0, 1],
-                   bass_patch=["bass_sub808"], bass_feel=[0, 1],
+    # drill: dark closed-down sustain; cinematic strings + dark choir
+    # (UK drill's string/choir-loop DNA). 808 sub + round alt. Breaks stay low.
+    "drill": _menu(pad_role=["dark", "strings_pad", "choir"], pad_rhythm=[0, 1],
+                   bass_patch=["bass_sub808", "bass_round"], bass_feel=[0, 1],
                    drum_variant=[0, 1, 2], texture=["drone", None],
                    riff_break_variant=["sparse_low", "call_response"]),
-    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt.
-    # 808 / round sub / reese bass colours.
-    "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_sub808", "bass_round", "bass"], bass_feel=[0, 1],
-                    drum_variant=[0, 1, 2], texture=["crackle", None],
+    # hiphop: e-piano comping (boom-bap keys); warm pad / FM tines / clav.
+    # 808 / round sub / FM knock / reese bass colours.
+    "hiphop": _menu(pad_role=["epiano", "warm", "fmep", "clav"], pad_rhythm=[0, 1],
+                    bass_patch=["bass_sub808", "bass_round", "bass_fm", "bass"],
+                    bass_feel=[0, 1],
+                    drum_variant=[0, 1, 2, 3], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "call_response"]),
-    # reggaeton: pizzicato dembow-accent plucks; warm wash / strings alts.
-    # Tresillo bass with an octave-answer variant.
-    "reggaeton": _menu(pad_role=["pizz", "warm", "strings_pad"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
-                       drum_variant=[0, 1, 2],
+    # reggaeton: pizzicato dembow-accent plucks; nylon guitar (the reggaeton
+    # sound) / warm / strings alts. Tresillo bass with an octave answer.
+    "reggaeton": _menu(pad_role=["pizz", "nylon", "warm", "strings_pad"],
+                       pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass_round", "bass"],
+                       bass_feel=[0, 1, 2],
+                       drum_variant=[0, 1, 2, 3],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
@@ -271,7 +312,8 @@ def choose_structure(variation: int = 0) -> StructureStyle:
         drop_bias=_pick(variation, "drop_bias", ["normal", "short", "long"],
                         [0.50, 0.25, 0.25]),
         intro_character=_pick(variation, "intro_character",
-                              ["sparse", "pad_open", "low"], [0.50, 0.30, 0.20]),
+                              ["sparse", "pad_open", "fragment", "high", "low"],
+                              [0.30, 0.20, 0.20, 0.15, 0.15]),
         escalation=_pick(variation, "escalation", ["full", "gain_only", "off"],
                          [0.60, 0.25, 0.15]),
     )
@@ -328,6 +370,9 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
         fill_shape=_pick(seed, "fill_shape", _FILL_MENU.get(g, [0])),
         # None = auto (fx.throw_fits decides); False = suppressed this take
         throw=_pick(seed, "throw", [None, False], [0.75, 0.25]),
+        # varied intro colour: dark tease .. wide open (>=15k skips the filter)
+        intro_lpf=_pick(seed, "intro_lpf", [2500.0, 1500.0, 4000.0, 18000.0],
+                        [0.35, 0.25, 0.25, 0.15]),
     )
 
 

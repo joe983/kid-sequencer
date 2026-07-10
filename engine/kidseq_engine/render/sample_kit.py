@@ -50,6 +50,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "hatC": [("techhouse/hatC.wav", 1.0)],
         "hatO": [("techhouse/hatO.wav", 1.0)],
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
+        "cowbell": [("perc/cowbell.wav", 1.0)],  # seasoning-variant voice
     },
     # dnb: the app's kit — layered soft kick (VEH1 004 + 005 at 0.5, the pack's
     # relative gains), DC_Kit14 snare + 75ms-trimmed hat (trim baked at unpack).
@@ -75,6 +76,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "hatC":  [("hiphop/hatC.wav", 1.0)],
         "hatO":  [("hiphop/hatO.wav", 1.0)],
         "rim":   [("hiphop/rim.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
     # reggaeton: dancehall Kit C + Source shaker + 808 cowbell (was Boochi).
     "reggaeton": {
@@ -82,6 +84,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "snare":   [("reggaeton/snare.wav", 1.0)],
         "shaker":  [("reggaeton/shaker.wav", 1.0)],
         "cowbell": [("reggaeton/cowbell.wav", 1.0)],
+        "rim":     [("perc/woodblock.wav", 1.0)],  # seasoning-variant voice
     },
     # garage: Candy kick/snare/rim + TR-909 hats. Key was "funk" pre-2026-07-10.
     "garage": {
@@ -90,6 +93,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "rim":   [("garage/rim.wav", 1.0)],
         "hatC":  [("garage/hatC.wav", 1.0)],
         "hatO":  [("garage/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
 }
 

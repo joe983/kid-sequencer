@@ -119,6 +119,8 @@ _INTRO_CHARACTER: dict[str, tuple[str, str | None, bool]] = {
     "sparse": ("sparse", "lite", False),      # the classic filtered tease
     "pad_open": ("verbatim", None, True),     # full riff over open pads, no kit
     "low": ("sparse_low", "lite", False),     # sub-octave murmur
+    "fragment": ("fragment", None, True),     # the riff's opening question, on pads
+    "high": ("sparse_high", "lite", False),   # octave-up music-box tease
 }
 
 # drop_bias -> (lo, hi) clamps for the drop bar count
@@ -455,6 +457,12 @@ def riff_variant(notes: list[Note], variant: str) -> list[Note]:
         return picked or notes[:1]
     if variant == "sparse_low":
         return [replace(n, pitch=n.pitch - 12) for n in riff_variant(notes, "sparse")]
+    if variant == "sparse_high":
+        return [replace(n, pitch=n.pitch + 12) for n in riff_variant(notes, "sparse")]
+    if variant == "fragment":
+        # just the riff's opening half — a question the drop answers
+        picked = [n for n in notes if n.start_beats < 2.0]
+        return picked or notes[:1]
     if variant == "octave_echo":
         # sparse statement answered two beats later, an octave up and softer
         base = riff_variant(notes, "sparse")

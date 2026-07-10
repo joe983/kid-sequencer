@@ -140,6 +140,8 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         {"hatO": [0, 0, .24, 0, 0, .20, 0, 0, 0, 0, .24, 0, 0, .20, 0, 0]},
         # shaker 16ths riding under the hats
         {"shaker": [.18] * 16},
+        # the classic 909 cowbell on the offbeats
+        {"cowbell": [0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0]},
     ],
     "dnb": [
         # offbeat-8th hats only (rolling top)
@@ -153,6 +155,8 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         {"rim": [0, .25, 0, 0, 0, 0, 0, .25, 0, 0, .25, 0, 0, .30, 0, 0]},
         # denser open-hat offbeats
         {"hatO": [0, 0, .22, 0, 0, .18, .22, 0, 0, 0, .22, 0, 0, .18, .22, 0]},
+        # shaker 16ths under the swing
+        {"shaker": [.16] * 16},
     ],
     "drill": [
         # the triplet-feel hat stutter on the back half
@@ -166,6 +170,8 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         {"hatC": [.26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0]},
         # busier rim conversation
         {"rim": [0, 0, .30, 0, 0, .25, 0, 0, 0, 0, .30, 0, 0, .25, 0, .30]},
+        # lazy shaker 8ths under the hats
+        {"shaker": [.15, 0, .12, 0, .15, 0, .12, 0, .15, 0, .12, 0, .15, 0, .12, 0]},
     ],
     "reggaeton": [
         # cowbell answering on beat 3
@@ -173,6 +179,8 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         # shaker dembow accents
         {"shaker": [.28, .22, .28, .22, .28, .30, .28, .22,
                     .28, .22, .28, .22, .28, .30, .28, .22]},
+        # woodblock rim on the dembow skips
+        {"rim": [0, 0, 0, .30, 0, 0, .28, 0, 0, 0, 0, .30, 0, 0, .28, 0]},
     ],
 }
 

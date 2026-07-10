@@ -300,9 +300,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                  1, span_beats, sr)
                 _add_at(layers["riff"], sig, at)
                 # the genre lead STACK: always-on texture layers under the
-                # kid's instrument (>=9 dB down each — the riff stays on top)
-                stk = _render_lead_stack(riff.notes, riff.tempo, sec.bars,
-                                         riff.bar_beats, sr, riff.drum_style,
+                # kid's instrument (>=9 dB down each — the riff stays on top).
+                # CRITICAL: the stack renders the SAME developed span as the
+                # main voice — doubling the original riff against a developed
+                # phrase played two melodies at once (owner heard it as
+                # discordance in the garage take).
+                stk = _render_lead_stack(span_notes, riff.tempo, 1,
+                                         span_beats, sr, riff.drum_style,
                                          style.lead_stack)
                 _add_at(layers["riff"], stk, at)
             else:
@@ -397,8 +401,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     if flags.automation:
         for sec, a, e in bounds:
             e2 = min(e, n)
-            if sec.name == "intro":
-                layers["riff"][a:e2] = _lpf_sweep(layers["riff"][a:e2], sr, 2500.0, 2500.0)
+            if sec.name == "intro" and pal.intro_lpf < 15000.0:
+                layers["riff"][a:e2] = _lpf_sweep(layers["riff"][a:e2], sr,
+                                                  pal.intro_lpf, pal.intro_lpf)
             elif sec.name.startswith("build"):
                 for lname in ("riff", "pads"):
                     layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
