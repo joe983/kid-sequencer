@@ -159,6 +159,89 @@ def downlifter(dur_s: float = 2.0, sr: int = SR, peak_db: float = -16.0) -> np.n
     return _peak_scale(np.stack([mono, mono], axis=1), peak_db)
 
 
+# ---------------------------------------------------------------------------
+# Texture beds — subliminal genre-flavour layers (builds+drops only; the mix
+# calibrates the "texture" layer to -30 LUFS so these sit UNDER everything)
+# ---------------------------------------------------------------------------
+
+
+def _edge_fades(x: np.ndarray, sr: int, fade_s: float = 0.05) -> np.ndarray:
+    n = min(len(x), max(2, int(fade_s * sr)))
+    x[:n] *= _cos_edge(n, up=True)[:, None]
+    x[-n:] *= _cos_edge(n, up=False)[:, None]
+    return x
+
+
+def vinyl_crackle(dur_s: float, sr: int = SR, seed: int = 0,
+                  peak_db: float = -24.0, ticks_per_s: float = 8.0) -> np.ndarray:
+    """Dusty record bed: sparse bandpassed ticks + a soft hiss floor.
+    hiphop's signature texture; garage runs it at half tick rate."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    sos = butter(2, [1200.0, 8000.0], btype="band", fs=sr, output="sos")
+    ch = []
+    for _ in range(2):  # independent ticks per channel = real width
+        imp = np.zeros(n)
+        mask = rng.random(n) < (ticks_per_s / sr)
+        imp[mask] = rng.uniform(0.3, 1.0, int(mask.sum())) * \
+            rng.choice([-1.0, 1.0], int(mask.sum()))
+        ticks = sosfilt(sos, imp)
+        hiss = sosfilt(sos, rng.standard_normal(n)) * 0.03
+        ch.append(ticks + hiss)
+    x = _peak_scale(np.stack(ch, axis=1), peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
+def noise_wash(dur_s: float, sr: int = SR, seed: int = 0,
+               peak_db: float = -26.0) -> np.ndarray:
+    """Slow-breathing filtered noise bed (bandpass centre LFOs 400 Hz–2 kHz at
+    0.25 Hz) — the tech-house 'air' behind the kit."""
+    from scipy.signal import butter, sosfilt, sosfilt_zi
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    ch = []
+    for _ in range(2):
+        noise = rng.standard_normal(n)
+        out = np.empty(n)
+        blk = 1024
+        zi = None
+        for s in range(0, n, blk):
+            e = min(n, s + blk)
+            t = (s + blk * 0.5) / sr
+            f = 400.0 * (2000.0 / 400.0) ** (0.5 + 0.5 * np.sin(2 * np.pi * 0.25 * t))
+            sos = butter(2, [f / 1.4, min(f * 1.4, sr / 2 * 0.95)],
+                         btype="band", fs=sr, output="sos")
+            if zi is None:
+                zi = sosfilt_zi(sos) * 0.0
+            out[s:e], zi = sosfilt(sos, noise[s:e], zi=zi)
+        ch.append(out)
+    x = _peak_scale(np.stack(ch, axis=1), peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
+def dark_drone(dur_s: float, sr: int = SR, seed: int = 0,
+               root_hz: float = 65.41, peak_db: float = -26.0) -> np.ndarray:
+    """Detuned low sine pair on the song's tonic + dark noise — drill's
+    under-the-floor unease. Tonal, so it must sit on the key's root."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    t = np.arange(n) / sr
+    wob = 1.0 + 0.15 * np.sin(2 * np.pi * 0.11 * t)   # slow amplitude breathing
+    a = np.sin(2 * np.pi * root_hz * t)
+    b = np.sin(2 * np.pi * root_hz * 1.007 * t + 0.7)  # detune + phase offset
+    sos = butter(2, 400.0, btype="low", fs=sr, output="sos")
+    murk = sosfilt(sos, rng.standard_normal(n)) * 0.06
+    left = (a + 0.7 * b) * wob + murk
+    right = (a * 0.7 + b) * wob + murk
+    x = _peak_scale(np.stack([left, right], axis=1), peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
 def throw_fits(riff: Riff) -> bool:
     """Per-track auto-decision for the riff delay-throw into breaks: needs a
     note sounding near the bar end (something worth echoing), a tempo where

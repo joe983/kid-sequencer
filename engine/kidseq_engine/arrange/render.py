@@ -67,6 +67,22 @@ def _render_pads(notes, tempo: float, span_beats: float, sr: int,
     return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
 
 
+def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.ndarray:
+    """Genre texture bed for one section (the mix calibrates the layer to
+    -30 LUFS — subliminal flavour, never a feature)."""
+    if kind == "crackle":
+        ticks = 4.0 if riff.drum_style == "garage" else 8.0  # garage runs dustier-lighter
+        return fx.vinyl_crackle(dur_s, sr, seed + 300, ticks_per_s=ticks)
+    if kind == "wash":
+        return fx.noise_wash(dur_s, sr, seed + 301)
+    if kind == "drone":
+        from ..sequence import _scale_steps
+        semi, _ = _scale_steps(riff.key)
+        root_hz = 440.0 * 2.0 ** ((36 + semi - 69) / 12.0)  # tonic around C2
+        return fx.dark_drone(dur_s, sr, seed + 302, root_hz=root_hz)
+    return np.zeros((0, 2), dtype=np.float32)
+
+
 def _render_bass(notes, tempo: float, span_beats: float, sr: int,
                  bass_patch: str = "bass") -> np.ndarray:
     """Render the bass LAYER with the style's genre patch (Surge). Falls back
@@ -172,7 +188,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     total_bars = sum(s.bars for s in plan)
     n = int((total_bars * bar_s + 1.0) * sr)
     layers = {name: np.zeros((n, 2), dtype=np.float32)
-              for name in ("riff", "drums", "bass", "pads", "fx")}
+              for name in ("riff", "drums", "bass", "pads", "texture", "fx")}
     kick_onsets: list[int] = []
 
     from ..render.drums import pattern_for
@@ -218,6 +234,14 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             _add_at(layers["pads"], sig, at)
 
         bar += sec.bars
+
+    # ---- genre texture bed (builds+drops only — stays out of the fragile
+    # intro/outro; the -30 LUFS layer calibration keeps it subliminal) --------
+    if style.texture:
+        for s, a, e in bounds:
+            if s.name.startswith(("build", "drop")):
+                sig = _render_texture(style.texture, (e - a) / sr, sr, seed, riff)
+                _add_at(layers["texture"], sig, a)
 
     # ---- arrangement FX on top of the base ---------------------------------
     drops = [(i, s, a, e) for i, (s, a, e) in enumerate(bounds) if s.name.startswith("drop")]

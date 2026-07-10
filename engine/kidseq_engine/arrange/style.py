@@ -141,7 +141,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     # Bass: plucky rolling line first, reese as the darker alt.
     "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1],
                        bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
-                       drum_variant=[0, 1, 2],
+                       drum_variant=[0, 1, 2], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # dnb keeps the supersaw wash (its pad identity); the reese IS dnb bass —
     # feels vary (two-step / roller / whole-bar drone)
@@ -152,18 +152,18 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass.
     "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1],
                     bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
-                    drum_variant=[0, 1, 2],
+                    drum_variant=[0, 1, 2], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # drill: dark closed-down sustain only — bright pads read wrong. 808 sub.
     # Breaks stay low (sparse_low / deep call-response — no bright echoes).
     "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1],
                    bass_patch=["bass_sub808"], bass_feel=[0, 1],
-                   drum_variant=[0, 1, 2],
+                   drum_variant=[0, 1, 2], texture=["drone", None],
                    riff_break_variant=["sparse_low", "call_response"]),
     # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt. 808.
     "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
                     bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1],
-                    drum_variant=[0, 1, 2],
+                    drum_variant=[0, 1, 2], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "call_response"]),
     # reggaeton: pizzicato dembow-accent plucks; warm wash alt. Tresillo bass.
     "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1],
