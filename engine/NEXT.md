@@ -1,5 +1,25 @@
 # Where we are / next session
 
+## NEW — Round 3: the LEAD is the fix (2026-07-10 eve, NOT yet deployed)
+Owner on round 2: genre songs still sound alike. Diagnosis (probe): the riff/
+lead is the LOUDEST melodic layer (−4.8 dBFS peak vs pads −12.7) and was
+identical across genres + unlayered — round 2's variety sat 6–13 dB under it.
+Also the ::songs demo rendered every genre at variation 0 (each genre's
+plainest take). Round 3:
+- **LEAD_STACKS (always-on)**: per-genre lead texture UNDER the kid's
+  untouched instrument (techhouse rave-unison+shimmer, dnb unison/strings,
+  garage shimmer+keys, drill dark-body−12+string-whisper, hiphop Rhodes,
+  reggaeton shimmer+keys; 2 recipes/genre nonce-picked; every layer ≥8 dB
+  down — pinned; riff LUFS calibration keeps composite level).
+- **Ornament cadence** (owner spec): `ornament_every` ∈ {4,8,16} bars, fires
+  at phrase-end bars in builds AND drop 2+; new "cadence" pickup ornament.
+  **soften_clashes**: chord-aware velocity ×0.85 on semitone-rub notes in
+  post-hook sections (helps discordant riffs; velocity only). Drop 1 pure.
+- **::songs fixed**: per-genre nonces 1,4,7,10,13,16 (sizes now differ —
+  different skeletons visible). Fresh ear files in main-repo engine/out/
+  (all 12 hash-new): var_0..5 + song_<genre>.
+All 9 suites green on Modal. Deploy still gated on owner ears.
+
 ## NEW — Round 2 after owner ears (2026-07-10 pm, NOT yet deployed)
 Owner verdict on round 1: good but palettes converge across genres, riff too
 static, lead too plain. Round 2 (4 commits, all suites green local+Modal):
