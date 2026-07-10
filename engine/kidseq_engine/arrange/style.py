@@ -96,6 +96,8 @@ class ArrangeStyle:
     texture: str | None            # "crackle" | "wash" | "drone" | None
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
+    riff_ornament: str             # phrase-end embellishment for drop 2+
+    lead_layer: str | None         # texture double under the riff (LEAD_LAYERS)
     fx_palette: FxPalette
 
 
@@ -113,6 +115,16 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
     "warm": ("sf", "pad_warm"),
 }
 
+# lead double kind -> (Surge patch, GM fallback role, semitone shift, gain dB).
+# A quiet texture layer UNDER the kid's riff — never replaces their instrument.
+LEAD_LAYERS: dict[str, tuple[str, str, int, float]] = {
+    "sparkle": ("pad_pluck", "pad_pizz", 12, -11.0),   # octave-up glassy pluck
+    "shadow": ("pad_dark", "pad_warm", 0, -15.0),      # dark unison thickener
+}
+
+#: riff phrase-end ornaments (arrange.ornament_riff kinds + "none")
+RIFF_ORNAMENTS = ("none", "echo", "octave_pop", "push")
+
 
 # ---------------------------------------------------------------------------
 # Genre menus (signature option FIRST — it carries ~50% of the weight)
@@ -127,6 +139,8 @@ _BASE_MENU: dict[str, list] = {
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
+    "riff_ornament": ["none", "echo", "octave_pop", "push"],
+    "lead_layer": [None, "sparkle"],
 }
 
 
@@ -159,12 +173,14 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1],
                    bass_patch=["bass_sub808"], bass_feel=[0, 1],
                    drum_variant=[0, 1, 2], texture=["drone", None],
-                   riff_break_variant=["sparse_low", "call_response"]),
+                   riff_break_variant=["sparse_low", "call_response"],
+                   lead_layer=[None, "shadow"]),
     # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt. 808.
     "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
                     bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1],
                     drum_variant=[0, 1, 2], texture=["crackle", None],
-                    riff_break_variant=["sparse_low", "call_response"]),
+                    riff_break_variant=["sparse_low", "call_response"],
+                    lead_layer=[None, "shadow"]),
     # reggaeton: pizzicato dembow-accent plucks; warm wash alt. Tresillo bass.
     "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1],
                        bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
@@ -264,5 +280,8 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         texture=_pick(seed, "texture", menu["texture"]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
+        riff_ornament=_pick(seed, "riff_ornament", menu["riff_ornament"],
+                            [0.30, 0.25, 0.25, 0.20]),
+        lead_layer=_pick(seed, "lead_layer", menu["lead_layer"]),
         fx_palette=_choose_fx_palette(seed, riff.drum_style),
     )

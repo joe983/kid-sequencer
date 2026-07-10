@@ -64,6 +64,11 @@ def test_every_genre_has_a_menu_and_options_are_renderable():
             assert t in (None, "crackle", "wash", "drone"), (genre, t)
         for rv in menu["riff_break_variant"]:
             assert rv in ("sparse_low", "octave_echo", "call_response"), (genre, rv)
+        from kidseq_engine.arrange.style import LEAD_LAYERS, RIFF_ORNAMENTS
+        for o in menu["riff_ornament"]:
+            assert o in RIFF_ORNAMENTS, (genre, o)
+        for ll in menu["lead_layer"]:
+            assert ll is None or ll in LEAD_LAYERS, (genre, ll)
 
 
 def test_style_fields_are_decorrelated_across_nonces():

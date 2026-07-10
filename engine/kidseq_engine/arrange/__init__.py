@@ -235,6 +235,42 @@ def _fit_window(sections: list[Section], bar_s: float,
     return secs
 
 
+# ---------------------------------------------------------------------------
+# Riff ornaments — tasteful per-bar embellishments for LATER sections. The
+# first drop always states the hook PURE VERBATIM; from drop 2 (and long
+# builds) phrase-end bars may carry one of these. Octave/velocity transforms
+# only — pitch classes never leave the riff's own set (± an octave).
+# ---------------------------------------------------------------------------
+
+
+def ornament_riff(notes: list[Note], kind: str) -> list[Note]:
+    """One ornamented BAR of the riff. Deterministic; octave/velocity only."""
+    if not notes or kind == "none":
+        return notes
+    if kind == "echo":
+        # the bar's last note answered an octave up in the gap after it
+        last = max(notes, key=lambda n: n.start_beats + n.dur_beats)
+        at = last.start_beats + last.dur_beats
+        if at < 3.6:
+            echo = replace(last, start_beats=at, pitch=last.pitch + 12,
+                           dur_beats=min(last.dur_beats, 4.0 - at),
+                           velocity=max(1, int(last.velocity * 0.55)))
+            return notes + [echo]
+        return notes
+    if kind == "octave_pop":
+        # the bar's highest note doubled an octave up — a sparkle on top
+        hi = max(notes, key=lambda n: n.pitch)
+        pop = replace(hi, pitch=hi.pitch + 12,
+                      velocity=max(1, int(hi.velocity * 0.5)))
+        return notes + [pop]
+    if kind == "push":
+        # gentle velocity phrasing: swell across the bar (0.88 -> 1.06)
+        return [replace(n, velocity=max(1, min(127, int(
+            n.velocity * (0.88 + 0.18 * min(n.start_beats, 4.0) / 4.0)))))
+            for n in notes]
+    raise ValueError(f"unknown ornament {kind!r}")
+
+
 def riff_variant(notes: list[Note], variant: str) -> list[Note]:
     """Deterministic riff transforms for non-drop sections. DROPS use riff.notes
     untouched — never route a drop through this function. All transforms are

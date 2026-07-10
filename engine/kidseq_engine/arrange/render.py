@@ -20,8 +20,8 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
-               pad_notes, pad_rhythm_for, plan_song, riff_variant)
-from .style import PAD_ROLES, choose_style
+               ornament_riff, pad_notes, pad_rhythm_for, plan_song, riff_variant)
+from .style import LEAD_LAYERS, PAD_ROLES, choose_style
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
 from ..render import vst_render
@@ -81,6 +81,23 @@ def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.nda
         root_hz = 440.0 * 2.0 ** ((36 + semi - 69) / 12.0)  # tonic around C2
         return fx.dark_drone(dur_s, sr, seed + 302, root_hz=root_hz)
     return np.zeros((0, 2), dtype=np.float32)
+
+
+def _render_lead_double(notes, tempo: float, bars: int, bar_beats: float,
+                        sr: int, kind: str) -> np.ndarray:
+    """A quiet texture layer doubling the riff (LEAD_LAYERS kind): Surge patch
+    first, GM role fallback, silence if neither renderer exists."""
+    patch, sf_role, semi, gain_db = LEAD_LAYERS[kind]
+    shifted = [dc_replace(n, pitch=min(127, n.pitch + semi)) for n in notes]
+    if vst_render.SURGE_VST3.exists():
+        sig = as_stereo(vst_render.render_patch(shifted, tempo, patch, bars,
+                                                bar_beats, sr))
+    elif default_soundfont():
+        sig = as_stereo(render_riff_sf(shifted, tempo, sf_role, bars,
+                                       bar_beats, sr))
+    else:
+        return np.zeros((0, 2), dtype=np.float32)
+    return sig * np.float32(10.0 ** (gain_db / 20.0))
 
 
 def _render_bass(notes, tempo: float, span_beats: float, sr: int,
@@ -197,6 +214,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     # ---- base section renders + boundary map -------------------------------
     bounds: list[tuple[Section, int, int]] = []   # (section, start, end) samples
     bar = 0
+    drop_seen = 0   # drop 1 = the pure verbatim hook statement (never ornamented)
     for sec in plan:
         at = int(bar * bar_s * sr)
         end = int((bar + sec.bars) * bar_s * sr)
@@ -204,11 +222,39 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         span_beats = sec.bars * riff.bar_beats
 
         if sec.riff_variant:
-            notes = riff.notes if sec.riff_variant == "verbatim" else \
-                riff_variant(riff.notes, sec.riff_variant)
-            if notes:
-                sig = riff_audio(notes, riff.tempo, riff.instrument, sec.bars, riff.bar_beats, sr)
+            is_drop = sec.name.startswith("drop")
+            if is_drop:
+                drop_seen += 1
+            if sec.riff_variant == "verbatim":
+                # THE HOOK RULE: the first drop states the riff pure verbatim,
+                # looped. From drop 2, phrase-end bars (every 4th) may carry a
+                # tasteful ornament — octave/velocity only, never a rewrite.
+                if is_drop and drop_seen >= 2 and style.riff_ornament != "none":
+                    span_notes = []
+                    for b in range(sec.bars):
+                        bar_notes = ornament_riff(riff.notes, style.riff_ornament) \
+                            if b % 4 == 3 else riff.notes
+                        span_notes += [dc_replace(nt, start_beats=nt.start_beats
+                                                  + b * riff.bar_beats)
+                                       for nt in bar_notes]
+                    sig = riff_audio(span_notes, riff.tempo, riff.instrument,
+                                     1, span_beats, sr)
+                else:
+                    sig = riff_audio(riff.notes, riff.tempo, riff.instrument,
+                                     sec.bars, riff.bar_beats, sr)
                 _add_at(layers["riff"], sig, at)
+                # texture double UNDER the lead (quiet, never replaces the
+                # kid's instrument) — full-riff sections only
+                if style.lead_layer:
+                    dbl = _render_lead_double(riff.notes, riff.tempo, sec.bars,
+                                              riff.bar_beats, sr, style.lead_layer)
+                    _add_at(layers["riff"], dbl, at)
+            else:
+                notes = riff_variant(riff.notes, sec.riff_variant)
+                if notes:
+                    sig = riff_audio(notes, riff.tempo, riff.instrument,
+                                     sec.bars, riff.bar_beats, sr)
+                    _add_at(layers["riff"], sig, at)
 
         if sec.drums and pattern:
             pat = pattern if sec.drums == "full" else _lite_pattern(pattern)

@@ -115,6 +115,24 @@ def test_variation_changes_the_arrangement_not_the_riff():
         assert 0 in choose_progression(riff, v), v
 
 
+def test_riff_ornaments_are_octave_velocity_only_and_deterministic():
+    from kidseq_engine.arrange import ornament_riff
+
+    notes = _riff().notes
+    base_pcs = {n.pitch % 12 for n in notes}
+    for kind in ("echo", "octave_pop", "push"):
+        a = ornament_riff(notes, kind)
+        assert a == ornament_riff(notes, kind), kind           # deterministic
+        assert {n.pitch % 12 for n in a} <= base_pcs, kind     # octave-only
+        # ornaments never remove or re-time the original melody
+        for orig in notes:
+            assert any(n.pitch % 12 == orig.pitch % 12
+                       and n.start_beats == orig.start_beats for n in a), (kind, orig)
+        # everything stays inside the bar
+        assert all(n.start_beats + n.dur_beats <= 4.0 + 1e-6 for n in a), kind
+    assert ornament_riff(notes, "none") is notes               # identity
+
+
 def test_riff_variants_are_deterministic_and_never_touch_verbatim():
     notes = _riff().notes
     assert riff_variant(notes, "verbatim") is notes  # same object, not a copy
