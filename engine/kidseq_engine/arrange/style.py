@@ -100,6 +100,7 @@ class ArrangeStyle:
     pad_rhythm: int                # per-genre rhythm variant index
     pad_voicing: str               # "close" | "first_inv" | "alt"
     texture: str | None            # "crackle" | "wash" | "drone" | None
+    percussive_pedal: int          # 0 = static root pedal, 1 = root->fifth
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
     riff_ornament: str             # primary vary_end bar kind (vary_bar)
@@ -287,6 +288,17 @@ def _menu_for(genre: str | None) -> dict[str, list]:
     return _GENRE_MENU.get(genre or "", _GENRE_MENU["techhouse"])
 
 
+# percussive-mode drone roles per genre (no chord-implying comping sounds)
+_DRONE_ROLES: dict[str, list[str]] = {
+    "drill": ["dark", "choir"],
+    "hiphop": ["dark", "choir", "warm"],
+    "dnb": ["dark", "glass", "strings_pad"],
+    "techhouse": ["dark", "glass"],
+    "garage": ["dark", "glass", "warm"],
+    "reggaeton": ["dark", "warm"],
+}
+
+
 # ---------------------------------------------------------------------------
 # Choosers
 # ---------------------------------------------------------------------------
@@ -399,9 +411,15 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                      [0.6, 0.4])
     else:
         mode = "melodic"
-    # percussive tracks always run an atmosphere bed (sound-development driven)
+    # percussive tracks always run an atmosphere bed (sound-development
+    # driven) — the genre's own textures plus drone/wash so no genre is
+    # locked to a single bed
     texture_menu = menu["texture"] if mode == "melodic" else \
-        [t for t in menu["texture"] if t] or ["drone"]
+        list(dict.fromkeys([t for t in menu["texture"] if t] + ["drone", "wash"]))
+    # percussive drone ROLE varies too (owner: fixed recipes make every
+    # percussive track converge) — dark is the anchor, colours per genre
+    pad_menu = menu["pad_role"] if mode == "melodic" else \
+        _DRONE_ROLES.get(riff.drum_style or "", ["dark", "glass"])
     return ArrangeStyle(
         production_mode=mode,
         structure=choose_structure(variation),
@@ -411,10 +429,11 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                         [0.40, 0.30, 0.20, 0.10]),
         bass_patch=_pick(seed, "bass_patch", menu["bass_patch"]),
         bass_feel=_pick(seed, "bass_feel", menu["bass_feel"]),
-        pad_role=_pick(seed, "pad_role", menu["pad_role"]),
+        pad_role=_pick(seed, "pad_role", pad_menu),
         pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
         texture=_pick(seed, "texture", texture_menu),
+        percussive_pedal=_pick(seed, "percussive_pedal", [0, 1], [0.6, 0.4]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",

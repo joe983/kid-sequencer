@@ -403,15 +403,22 @@ def riff_tonality(riff: Riff) -> float:
     return max(0.0, min(1.0, explain * (1.0 - cluster) ** 2))
 
 
-def drone_notes(riff: Riff, bars: int) -> list[Note]:
+def drone_notes(riff: Riff, bars: int, voicing: int = 0) -> list[Note]:
     """Open-fifth drone on the KEY root (no third — nothing to clash with a
-    discordant riff), whole-bar, C4 region. The percussive-mode pad."""
+    discordant riff), whole-bar, C4 region. The percussive-mode pad.
+
+    Voicings (variation-picked so percussive tracks don't share one drone):
+      0  root + fifth (the classic)
+      1  root + fifth + octave (wider, brighter)
+      2  low root + fifth an octave up (hollow, widest)"""
     semi, _ = _scale_steps(riff.key)
     root = _fold(60 + semi % 12, 60, 71)
-    fifth = root + 7
+    chords = ((root, root + 7),
+              (root, root + 7, root + 12),
+              (root - 12, root + 7))[voicing % 3]
     out: list[Note] = []
     for b in range(bars):
-        for pitch in (root, fifth):
+        for pitch in chords:
             out.append(Note(pitch=pitch, velocity=76,
                             start_beats=b * 4.0, dur_beats=4.0))
     return out

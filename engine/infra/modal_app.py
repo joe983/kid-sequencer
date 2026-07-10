@@ -271,11 +271,14 @@ def showcase() -> None:
     minor-key take, and a percussive (cluster-riff) take. 24 files."""
     plan = []   # (riff_file, style, tempo, variation) + display tag
     tags = []
-    for style, tempo in _GENRE_TEMPOS.items():
-        plan += [("examples/sample_riff.json", style, tempo, 1),
-                 ("examples/sample_riff.json", style, tempo, 5),
-                 ("examples/minor_riff.json", style, tempo, 2),
-                 ("examples/cluster_riff.json", style, tempo, 4)]
+    # per-genre variation numbers: columns must NOT share structures — the
+    # battery should show the spread a real user would get
+    for i, (style, tempo) in enumerate(_GENRE_TEMPOS.items()):
+        base = 1 + i * 7
+        plan += [("examples/sample_riff.json", style, tempo, base),
+                 ("examples/sample_riff.json", style, tempo, base + 3),
+                 ("examples/minor_riff.json", style, tempo, base + 5),
+                 ("examples/cluster_riff.json", style, tempo, base + 1)]
         tags += [f"{style}_major_a", f"{style}_major_b",
                  f"{style}_minor", f"{style}_percussive"]
     dst_dir = ENGINE_LOCAL / "out" / "showcase"

@@ -239,9 +239,10 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     prog = choose_progression(riff, variation, pick=style.prog_pick)
     percussive = style.production_mode == "percussive"
     if percussive:
-        # Photek move: no chord movement under a non-harmonic pattern —
-        # everything sits on the key root (bass pedals, drone instead of pads)
-        prog = [0, 0, 0, 0]
+        # Photek move: no chord movement under a non-harmonic pattern — the
+        # bass PEDALS (static root, or a root->fifth pedal shift for motion
+        # without harmony; variation-picked), drone instead of chord pads
+        prog = ([0, 0, 0, 0], [0, 0, 4, 4])[style.percussive_pedal % 2]
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
     seed = fx.song_seed(riff, variation)
@@ -358,9 +359,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         if sec.pads:
             if percussive:
                 # open-fifth drone (no third — nothing for a discordant riff
-                # to clash with), on a dark sustained role
-                notes = drone_notes(riff, sec.bars)
-                sig = _render_pads(notes, riff.tempo, span_beats, sr, "dark")
+                # to clash with); role + voicing vary per press so percussive
+                # tracks don't all share one drone sound
+                notes = drone_notes(riff, sec.bars, voicing=style.pad_rhythm)
+                sig = _render_pads(notes, riff.tempo, span_beats, sr,
+                                   style.pad_role)
             else:
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
