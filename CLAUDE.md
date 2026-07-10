@@ -25,7 +25,7 @@ firebase hosting:channel:deploy preview
 ```
 public/
   index.html          ← entire app (HTML + inline CSS + inline JS ~3500 lines)
-  css/styles.css      ← extracted styles (linked from index.html, currently ?v=45)
+  css/styles.css      ← extracted styles (linked from index.html, currently ?v=59)
   js/firebase-init.js ← Firebase config + exports (auth, db, storage)
   login.html          ← deprecated; redirects to index.html (auth now inline)
   samples/drums.pack  ← packed drum-kit bundle (committed, hosting-served — real
@@ -305,7 +305,7 @@ node serve.js   # → http://localhost:3000
 - `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
 
 ### CSS cache busting
-The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=45`).
+The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=59` — check `public/index.html` for the live number; this doc note lags).
 
 ---
 
