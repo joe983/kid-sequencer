@@ -100,8 +100,9 @@ class ArrangeStyle:
     texture: str | None            # "crackle" | "wash" | "drone" | None
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
-    riff_ornament: str             # phrase-end embellishment for drop 2+
-    lead_layer: str | None         # texture double under the riff (LEAD_LAYERS)
+    riff_ornament: str             # phrase-end embellishment (post-hook sections)
+    ornament_every: int            # cadence: ornament every 4 | 8 | 16 bars
+    lead_stack: int                # index into the genre's LEAD_STACKS recipes
     fx_palette: FxPalette
 
 
@@ -124,15 +125,51 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
 #: pad triad voicings pad_notes understands
 PAD_VOICINGS = ("close", "first_inv", "alt")
 
-# lead double kind -> (Surge patch, GM fallback role, semitone shift, gain dB).
-# A quiet texture layer UNDER the kid's riff — never replaces their instrument.
-LEAD_LAYERS: dict[str, tuple[str, str, int, float]] = {
-    "sparkle": ("pad_pluck", "pad_pizz", 12, -11.0),   # octave-up glassy pluck
-    "shadow": ("pad_dark", "pad_warm", 0, -15.0),      # dark unison thickener
+# Lead-stack voices: texture layers rendered UNDER the kid's riff (never
+# replacing their instrument) -> (renderer, patch-or-preset name).
+LEAD_VOICES: dict[str, tuple[str, str]] = {
+    "shimmer": ("vst", "pad_pluck"),   # glassy pluck (octave-up sparkle)
+    "unison": ("vst", "synth"),        # the rave lead as unison body — EDM girth
+    "body": ("vst", "pad_dark"),       # dark thickener (unison or -12)
+    "glass": ("sf", "pad_newage"),     # GM bell-glass
+    "keys": ("sf", "pad_epiano"),      # GM Rhodes doubling — boom-bap keys
+    "strings": ("sf", "pad_strings"),  # GM string section whisper
+}
+
+# Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
+# of (voice, semitone_shift, gain_db) layered under the main riff voice; the
+# main voice renders untouched on top, and the riff layer's LUFS calibration
+# holds the composite level — the lead gets RICHER, not louder. Signature
+# stack first; style.lead_stack picks per press.
+LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
+    "techhouse": [
+        [("unison", 0, -9.0), ("shimmer", 12, -13.0)],
+        [("shimmer", 12, -9.0), ("body", -12, -14.0)],
+    ],
+    "dnb": [
+        [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
+        [("strings", 12, -11.0), ("body", 0, -14.0)],
+    ],
+    "garage": [
+        [("shimmer", 12, -9.0), ("keys", 0, -13.0)],
+        [("keys", 0, -9.0), ("shimmer", 12, -14.0)],
+    ],
+    "drill": [
+        [("body", -12, -10.0), ("strings", 12, -15.0)],
+        [("body", 0, -9.0)],
+    ],
+    "hiphop": [
+        [("keys", 0, -9.0)],
+        [("body", -12, -11.0), ("keys", 0, -13.0)],
+    ],
+    "reggaeton": [
+        [("shimmer", 12, -10.0), ("keys", 0, -14.0)],
+        [("keys", 0, -10.0)],
+    ],
 }
 
 #: riff phrase-end ornaments (arrange.ornament_riff kinds + "none")
-RIFF_ORNAMENTS = ("none", "echo", "octave_pop", "push")
+RIFF_ORNAMENTS = ("none", "echo", "octave_pop", "push", "cadence")
 
 
 # ---------------------------------------------------------------------------
@@ -149,8 +186,7 @@ _BASE_MENU: dict[str, list] = {
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
-    "riff_ornament": ["none", "echo", "octave_pop", "push"],
-    "lead_layer": [None, "sparkle"],
+    "riff_ornament": ["echo", "cadence", "octave_pop", "push", "none"],
 }
 
 
@@ -184,15 +220,13 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     "drill": _menu(pad_role=["dark", "strings_pad"], pad_rhythm=[0, 1],
                    bass_patch=["bass_sub808"], bass_feel=[0, 1],
                    drum_variant=[0, 1, 2], texture=["drone", None],
-                   riff_break_variant=["sparse_low", "call_response"],
-                   lead_layer=[None, "shadow"]),
+                   riff_break_variant=["sparse_low", "call_response"]),
     # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt.
     # 808 / round sub / reese bass colours.
     "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
                     bass_patch=["bass_sub808", "bass_round", "bass"], bass_feel=[0, 1],
                     drum_variant=[0, 1, 2], texture=["crackle", None],
-                    riff_break_variant=["sparse_low", "call_response"],
-                    lead_layer=[None, "shadow"]),
+                    riff_break_variant=["sparse_low", "call_response"]),
     # reggaeton: pizzicato dembow-accent plucks; warm wash / strings alts.
     # Tresillo bass with an octave-answer variant.
     "reggaeton": _menu(pad_role=["pizz", "warm", "strings_pad"], pad_rhythm=[0, 1],
@@ -312,7 +346,11 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=_pick(seed, "riff_ornament", menu["riff_ornament"],
-                            [0.30, 0.25, 0.25, 0.20]),
-        lead_layer=_pick(seed, "lead_layer", menu["lead_layer"]),
+                            [0.25, 0.25, 0.20, 0.15, 0.15]),
+        ornament_every=_pick(seed, "ornament_every", [4, 8, 16],
+                             [0.40, 0.35, 0.25]),
+        lead_stack=_pick(seed, "lead_stack",
+                         list(range(len(LEAD_STACKS.get(riff.drum_style or "",
+                                                        [[]]))))),
         fx_palette=_choose_fx_palette(seed, riff.drum_style),
     )

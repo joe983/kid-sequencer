@@ -64,14 +64,21 @@ def test_every_genre_has_a_menu_and_options_are_renderable():
             assert t in (None, "crackle", "wash", "drone"), (genre, t)
         for rv in menu["riff_break_variant"]:
             assert rv in ("sparse_low", "octave_echo", "call_response"), (genre, rv)
-        from kidseq_engine.arrange.style import (LEAD_LAYERS, PAD_VOICINGS,
-                                                 RIFF_ORNAMENTS)
+        from kidseq_engine.arrange.style import (LEAD_STACKS, LEAD_VOICES,
+                                                 PAD_VOICINGS, RIFF_ORNAMENTS)
         for o in menu["riff_ornament"]:
             assert o in RIFF_ORNAMENTS, (genre, o)
-        for ll in menu["lead_layer"]:
-            assert ll is None or ll in LEAD_LAYERS, (genre, ll)
         for v in menu["pad_voicing"]:
             assert v in PAD_VOICINGS, (genre, v)
+        # every genre has 1+ lead stacks; every stack layer is renderable,
+        # sits at least 8 dB under the main voice, and shifts by octaves only
+        stacks = LEAD_STACKS[genre]
+        assert stacks, genre
+        for stack in stacks:
+            for voice, semi, gain_db in stack:
+                assert voice in LEAD_VOICES, (genre, voice)
+                assert semi in (-12, 0, 12), (genre, voice, semi)
+                assert gain_db <= -8.0, (genre, voice, gain_db)
 
 
 def test_style_fields_are_decorrelated_across_nonces():
@@ -87,10 +94,13 @@ def test_style_fields_are_decorrelated_across_nonces():
     menu = _GENRE_MENU["techhouse"]
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
                   "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
-                  "riff_ornament", "lead_layer"):
+                  "riff_ornament"):
         seen = set(picks(field))
         want = set(menu[field])
         assert seen == want, (field, seen, want)
+    from kidseq_engine.arrange.style import LEAD_STACKS
+    assert set(picks("lead_stack")) == set(range(len(LEAD_STACKS["techhouse"])))
+    assert set(picks("ornament_every")) == {4, 8, 16}
 
     # structure: build_frac must not determine prog_pick (or vice versa) once
     # both have >1 option. Guarded so it activates as menus widen.

@@ -268,7 +268,38 @@ def ornament_riff(notes: list[Note], kind: str) -> list[Note]:
         return [replace(n, velocity=max(1, min(127, int(
             n.velocity * (0.88 + 0.18 * min(n.start_beats, 4.0) / 4.0)))))
             for n in notes]
+    if kind == "cadence":
+        # end-of-bar pickup: the last note repeated as a quiet 8th leading into
+        # the next bar — only when the bar end is actually free
+        last = max(notes, key=lambda n: n.start_beats + n.dur_beats)
+        if last.start_beats + last.dur_beats <= 3.4:
+            pick = replace(last, start_beats=3.5, dur_beats=0.45,
+                           velocity=max(1, int(last.velocity * 0.6)))
+            return notes + [pick]
+        return notes
     raise ValueError(f"unknown ornament {kind!r}")
+
+
+def chord_pcs_for_bar(riff: Riff, prog: list[int], bar: int) -> set[int]:
+    """Absolute pitch classes of the chord under a (section-local) bar."""
+    semi, steps = _scale_steps(riff.key)
+    return {(semi + pc) % 12 for pc in _triad_pcs(_chord_for_bar(bar, prog), steps)}
+
+
+def soften_clashes(notes: list[Note], chord_pcs: set[int],
+                   amount: float = 0.85) -> list[Note]:
+    """Chord-aware shading: notes a semitone against a chord tone get their
+    velocity eased (x amount) so discordant riffs sit better against the
+    progression. Velocity ONLY — pitches and timing are never touched, and
+    the riff stays the prominent voice."""
+    out: list[Note] = []
+    for n in notes:
+        pc = n.pitch % 12
+        rub = pc not in chord_pcs and any(
+            (pc - c) % 12 in (1, 11) for c in chord_pcs)
+        out.append(replace(n, velocity=max(1, int(n.velocity * amount)))
+                   if rub else n)
+    return out
 
 
 def riff_variant(notes: list[Note], variant: str) -> list[Note]:

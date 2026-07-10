@@ -247,7 +247,7 @@ _GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "garage": 132,
 
 
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
-def render_song_genre(style: str, tempo: int) -> bytes:
+def render_song_genre(style: str, tempo: int, variation: int = 0) -> bytes:
     """Full arranged song for one genre at its representative tempo."""
     import json
 
@@ -259,20 +259,24 @@ def render_song_genre(style: str, tempo: int) -> bytes:
     tmp = Path(ENGINE_REMOTE) / "out" / f"_riff_{style}.json"
     tmp.parent.mkdir(exist_ok=True)
     tmp.write_text(json.dumps(payload), encoding="utf-8")
-    _run("smoke_song.py", str(tmp))
+    _run("smoke_song.py", str(tmp), str(variation))
     return (Path(ENGINE_REMOTE) / "out" / "song.mp3").read_bytes()
 
 
 @app.local_entrypoint()
 def songs() -> None:
-    """Render the full-song genre sweep (6 tracks, in parallel) and pull local."""
+    """Render the full-song genre sweep (6 tracks, in parallel) and pull local.
+
+    Each genre renders at a DIFFERENT nonce — an all-variation-0 sweep showed
+    every genre's single plainest take and hid the per-press spread."""
     dst_dir = ENGINE_LOCAL / "out"
     dst_dir.mkdir(exist_ok=True)
-    args = list(_GENRE_TEMPOS.items())
-    for (style, _), mp3 in zip(args, render_song_genre.starmap(args)):
+    args = [(style, tempo, 1 + i * 3)
+            for i, (style, tempo) in enumerate(_GENRE_TEMPOS.items())]
+    for (style, _, nonce), mp3 in zip(args, render_song_genre.starmap(args)):
         dst = dst_dir / f"song_{style}.mp3"
         dst.write_bytes(mp3)
-        print(f"saved {dst} ({len(mp3):,} bytes)")
+        print(f"saved {dst} (variation={nonce}, {len(mp3):,} bytes)")
 
 
 @app.local_entrypoint()

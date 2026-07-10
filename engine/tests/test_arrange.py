@@ -120,7 +120,7 @@ def test_riff_ornaments_are_octave_velocity_only_and_deterministic():
 
     notes = _riff().notes
     base_pcs = {n.pitch % 12 for n in notes}
-    for kind in ("echo", "octave_pop", "push"):
+    for kind in ("echo", "octave_pop", "push", "cadence"):
         a = ornament_riff(notes, kind)
         assert a == ornament_riff(notes, kind), kind           # deterministic
         assert {n.pitch % 12 for n in a} <= base_pcs, kind     # octave-only
@@ -131,6 +131,31 @@ def test_riff_ornaments_are_octave_velocity_only_and_deterministic():
         # everything stays inside the bar
         assert all(n.start_beats + n.dur_beats <= 4.0 + 1e-6 for n in a), kind
     assert ornament_riff(notes, "none") is notes               # identity
+
+
+def test_soften_clashes_is_velocity_only_and_targets_semitone_rubs():
+    from kidseq_engine.arrange import chord_pcs_for_bar, soften_clashes
+
+    riff = _riff()
+    prog = choose_progression(riff)
+    pcs = chord_pcs_for_bar(riff, prog, 0)
+    assert len(pcs) == 3
+    out = soften_clashes(riff.notes, pcs)
+    assert len(out) == len(riff.notes)
+    for orig, new in zip(riff.notes, out):
+        # pitch + timing NEVER change; only clashing velocities ease
+        assert new.pitch == orig.pitch and new.start_beats == orig.start_beats
+        assert new.dur_beats == orig.dur_beats
+        pc = orig.pitch % 12
+        rub = pc not in pcs and any((pc - c) % 12 in (1, 11) for c in pcs)
+        if rub:
+            assert new.velocity < orig.velocity, orig
+        else:
+            assert new.velocity == orig.velocity, orig
+    # chord tones themselves are never softened
+    tone = [n for n in riff.notes if n.pitch % 12 in pcs]
+    assert tone and all(a.velocity == b.velocity for a, b in
+                        zip(tone, [n for n in out if n.pitch % 12 in pcs]))
 
 
 def test_riff_variants_are_deterministic_and_never_touch_verbatim():

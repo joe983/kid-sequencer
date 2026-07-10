@@ -20,8 +20,9 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
-               ornament_riff, pad_notes, pad_rhythm_for, plan_song, riff_variant)
-from .style import LEAD_LAYERS, PAD_ROLES, choose_style
+               chord_pcs_for_bar, ornament_riff, pad_notes, pad_rhythm_for,
+               plan_song, riff_variant, soften_clashes)
+from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, choose_style
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
 from ..render import vst_render
@@ -83,21 +84,38 @@ def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.nda
     return np.zeros((0, 2), dtype=np.float32)
 
 
-def _render_lead_double(notes, tempo: float, bars: int, bar_beats: float,
-                        sr: int, kind: str) -> np.ndarray:
-    """A quiet texture layer doubling the riff (LEAD_LAYERS kind): Surge patch
-    first, GM role fallback, silence if neither renderer exists."""
-    patch, sf_role, semi, gain_db = LEAD_LAYERS[kind]
-    shifted = [dc_replace(n, pitch=min(127, n.pitch + semi)) for n in notes]
-    if vst_render.SURGE_VST3.exists():
-        sig = as_stereo(vst_render.render_patch(shifted, tempo, patch, bars,
-                                                bar_beats, sr))
-    elif default_soundfont():
-        sig = as_stereo(render_riff_sf(shifted, tempo, sf_role, bars,
-                                       bar_beats, sr))
-    else:
+def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
+                       sr: int, genre: str | None, stack_i: int) -> np.ndarray:
+    """The genre's lead-texture stack: LEAD_STACKS layers summed at their
+    per-layer gains, rendered UNDER the main riff voice (which stays untouched
+    and dominant — every layer sits >=9 dB down). Each voice routes Surge or
+    GM per LEAD_VOICES; a missing renderer just drops that layer."""
+    stacks = LEAD_STACKS.get(genre or "")
+    if not stacks:
         return np.zeros((0, 2), dtype=np.float32)
-    return sig * np.float32(10.0 ** (gain_db / 20.0))
+    stack = stacks[stack_i % len(stacks)]
+    out: np.ndarray | None = None
+    for voice, semi, gain_db in stack:
+        kind, name = LEAD_VOICES[voice]
+        shifted = [dc_replace(n, pitch=min(127, max(0, n.pitch + semi)))
+                   for n in notes]
+        if kind == "vst" and vst_render.SURGE_VST3.exists():
+            sig = as_stereo(vst_render.render_patch(shifted, tempo, name, bars,
+                                                    bar_beats, sr))
+        elif default_soundfont():
+            sf_name = name if kind == "sf" else "pads"
+            sig = as_stereo(render_riff_sf(shifted, tempo, sf_name, bars,
+                                           bar_beats, sr))
+        else:
+            continue
+        sig = sig * np.float32(10.0 ** (gain_db / 20.0))
+        if out is None:
+            out = sig.copy()
+        else:
+            if sig.shape[0] > out.shape[0]:
+                out = np.pad(out, ((0, sig.shape[0] - out.shape[0]), (0, 0)))
+            out[: sig.shape[0]] += sig
+    return out if out is not None else np.zeros((0, 2), dtype=np.float32)
 
 
 def _render_bass(notes, tempo: float, span_beats: float, sr: int,
@@ -227,13 +245,21 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 drop_seen += 1
             if sec.riff_variant == "verbatim":
                 # THE HOOK RULE: the first drop states the riff pure verbatim,
-                # looped. From drop 2, phrase-end bars (every 4th) may carry a
-                # tasteful ornament — octave/velocity only, never a rewrite.
-                if is_drop and drop_seen >= 2 and style.riff_ornament != "none":
+                # looped. Everywhere else the riff stays PROMINENT but may
+                # carry tasteful per-bar touches: an ornament on cadence bars
+                # (every ornament_every bars, at the phrase end) and chord-
+                # aware velocity shading of semitone rubs (helps discordant
+                # riffs sit against the progression). Octave/velocity only.
+                pure = is_drop and drop_seen == 1
+                every = style.ornament_every
+                if not pure:  # softening always applies post-hook; ornaments per cadence
                     span_notes = []
                     for b in range(sec.bars):
-                        bar_notes = ornament_riff(riff.notes, style.riff_ornament) \
-                            if b % 4 == 3 else riff.notes
+                        bar_notes = riff.notes
+                        if style.riff_ornament != "none" and b % every == every - 1:
+                            bar_notes = ornament_riff(bar_notes, style.riff_ornament)
+                        bar_notes = soften_clashes(
+                            bar_notes, chord_pcs_for_bar(riff, prog, b))
                         span_notes += [dc_replace(nt, start_beats=nt.start_beats
                                                   + b * riff.bar_beats)
                                        for nt in bar_notes]
@@ -243,12 +269,12 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     sig = riff_audio(riff.notes, riff.tempo, riff.instrument,
                                      sec.bars, riff.bar_beats, sr)
                 _add_at(layers["riff"], sig, at)
-                # texture double UNDER the lead (quiet, never replaces the
-                # kid's instrument) — full-riff sections only
-                if style.lead_layer:
-                    dbl = _render_lead_double(riff.notes, riff.tempo, sec.bars,
-                                              riff.bar_beats, sr, style.lead_layer)
-                    _add_at(layers["riff"], dbl, at)
+                # the genre lead STACK: always-on texture layers under the
+                # kid's instrument (>=9 dB down each — the riff stays on top)
+                stk = _render_lead_stack(riff.notes, riff.tempo, sec.bars,
+                                         riff.bar_beats, sr, riff.drum_style,
+                                         style.lead_stack)
+                _add_at(layers["riff"], stk, at)
             else:
                 notes = riff_variant(riff.notes, sec.riff_variant)
                 if notes:
