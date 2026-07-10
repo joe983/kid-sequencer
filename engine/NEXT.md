@@ -1,5 +1,22 @@
 # Where we are / next session
 
+## NEW — Round 2 after owner ears (2026-07-10 pm, NOT yet deployed)
+Owner verdict on round 1: good but palettes converge across genres, riff too
+static, lead too plain. Round 2 (4 commits, all suites green local+Modal):
+- **Riff ornaments** (`ornament_riff`): echo / octave_pop / push on PHRASE-END
+  bars of drop 2+ only; **drop 1 always pure verbatim** (the hook rule).
+  Octave/velocity only; melody notes never removed/re-timed (pinned).
+- **Lead layering** (`LEAD_LAYERS`): sparkle (+12 pluck −11 dB) / shadow
+  (dark unison −15 dB) under the riff in full-riff sections; drill/hiphop
+  shadow-only. GM fallbacks.
+- **Palette spread**: pad voicings close/first_inv/alt; new roles strings_pad
+  (GM 49 — drill string-loop DNA)/newage (GM 88); bass_round patch; octave-pop
+  bass feels (4-tuple feel slots; register test now 36–59).
+- **Swoosh character**: riser f0/f1 bands per genre (drill/hiphop dark
+  200-2500, dnb 400-12k); NEW `fx.spinback` vinyl brake (garage/hiphop menus).
+- Fresh ear files in main-repo engine/out/ (all 12 re-rendered, hashes differ
+  from round 1): var_0..5.mp3 + song_<genre>.mp3.
+
 ## NEW — Genre authenticity + per-press variety (2026-07-10, 7 increments, NOT yet deployed)
 Full plan: `~/.claude/plans/sounds-graet-now-we-delightful-tarjan.md`. All on
 `claude/sess-67239ccc`; all 9 suites pass remotely; **ears pending** on:
