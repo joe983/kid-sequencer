@@ -139,19 +139,38 @@ def test_bass_notes_are_chord_roots_in_register():
                 assert n.pitch % 12 == root_pc, (key, style, bar, n)
 
 
-def test_pad_notes_are_triads_one_per_bar():
+def test_pad_notes_are_diatonic_triads_in_register_for_every_genre_rhythm():
+    from kidseq_engine.arrange import pad_rhythm_for
+    from kidseq_engine.render.drums import DRUM_PATTERNS
+
     for key in _KEYS:
         riff = _riff(key)
         prog = choose_progression(riff)
         semi, steps = _scale_steps(key)
-        notes = pad_notes(riff, prog, bars=4)
-        assert len(notes) == 12  # 3 voices x 4 bars
-        for b in range(4):
-            bar_notes = [n for n in notes if n.start_beats == b * 4.0]
-            assert len(bar_notes) == 3
-            want = {(semi + pc) % 12 for pc in _triad_pcs(prog[b], steps)}
-            assert {n.pitch % 12 for n in bar_notes} == want, (key, b)
-            assert all(n.dur_beats == 4.0 and 60 <= n.pitch < 84 for n in bar_notes)
+        for genre in DRUM_PATTERNS:
+            for variant in (0, 1):
+                rhythm = pad_rhythm_for(genre, variant)
+                notes = pad_notes(riff, prog, bars=4, rhythm=rhythm)
+                assert len(notes) == 3 * len(rhythm) * 4, (genre, variant)
+                for b in range(4):
+                    bar_notes = [n for n in notes if b * 4.0 <= n.start_beats < (b + 1) * 4.0]
+                    want = {(semi + pc) % 12 for pc in _triad_pcs(prog[b], steps)}
+                    # every chord onset voices exactly the bar's triad
+                    assert {n.pitch % 12 for n in bar_notes} == want, (key, genre, b)
+                    for n in bar_notes:
+                        assert 60 <= n.pitch < 84, (key, genre, n)
+                        assert n.dur_beats > 0, (key, genre, n)
+                        # onsets stay inside their bar
+                        assert n.start_beats + n.dur_beats <= (b + 1) * 4.0 + 0.5, (genre, n)
+
+
+def test_default_pad_notes_keep_the_whole_bar_wash():
+    # no rhythm argument = the original whole-bar behaviour (fallback callers)
+    riff = _riff()
+    prog = choose_progression(riff)
+    notes = pad_notes(riff, prog, bars=2)
+    assert len(notes) == 6
+    assert all(n.dur_beats == 4.0 for n in notes)
 
 
 if __name__ == "__main__":

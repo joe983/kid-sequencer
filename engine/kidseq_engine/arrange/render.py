@@ -19,8 +19,9 @@ import numpy as np
 
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
-from . import Section, bass_notes, choose_progression, pad_notes, plan_song, riff_variant
-from .style import choose_style
+from . import (Section, bass_notes, choose_progression, pad_notes,
+               pad_rhythm_for, plan_song, riff_variant)
+from .style import PAD_ROLES, choose_style
 from ..render import fx, riff_audio
 from ..render.drums import DRUM_PATTERNS
 from ..render.sf_render import default_soundfont, render_riff_sf
@@ -50,7 +51,16 @@ def _lite_pattern(pattern: dict) -> dict:
     return {k: v for k, v in pattern.items() if k in _LITE_VOICES}
 
 
-def _render_pads(notes, tempo: float, span_beats: float, sr: int) -> np.ndarray:
+def _render_pads(notes, tempo: float, span_beats: float, sr: int,
+                 pad_role: str = "supersaw") -> np.ndarray:
+    """Render the pads layer with the style's genre role: Surge patches for
+    synth-family roles, GM presets for keys-family (organ/e-piano/pizz).
+    Cross-fallbacks keep SOME pad when a renderer is missing."""
+    kind, name = PAD_ROLES.get(pad_role, ("vst", "pad"))
+    if kind == "vst" and vst_render.SURGE_VST3.exists():
+        return as_stereo(vst_render.render_patch(notes, tempo, name, 1, span_beats, sr))
+    if kind == "sf" and default_soundfont():
+        return as_stereo(render_riff_sf(notes, tempo, name, 1, span_beats, sr))
     if vst_render.SURGE_VST3.exists():
         return as_stereo(vst_render.render_patch(notes, tempo, "pad", 1, span_beats, sr))
     if default_soundfont():
@@ -175,8 +185,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:
-            notes = pad_notes(riff, prog, sec.bars)
-            sig = _render_pads(notes, riff.tempo, span_beats, sr)
+            rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
+            notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm)
+            sig = _render_pads(notes, riff.tempo, span_beats, sr, style.pad_role)
             _add_at(layers["pads"], sig, at)
 
         bar += sec.bars
@@ -250,8 +261,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
                 layers[lname][a:e2] *= g[:, None]
             if sec.pads and style.structure.escalation == "full":
-                hi = [dc_replace(nt, pitch=nt.pitch + 12) for nt in pad_notes(riff, prog, sec.bars)]
-                sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr)
+                rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
+                hi = [dc_replace(nt, pitch=nt.pitch + 12)
+                      for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm)]
+                sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr,
+                                   style.pad_role)
                 _add_at(layers["pads"], sig * 0.5, a)
 
     # riff delay-throw into breaks — auto-decided per track unless forced

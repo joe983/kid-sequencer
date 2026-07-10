@@ -40,6 +40,12 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     "strings": (GENERALUSER_SF, 0, 48),  # GM String Ensemble 1
     "bells": (GENERALUSER_SF, 0, 9),     # GM Glockenspiel
     "pads": (GENERALUSER_SF, 0, 50),     # GM Synth Strings 1 — arranger pad fallback
+    # arranger pad ROLES (genre-authentic keys-family sounds; see arrange/style.py
+    # PAD_ROLES — Surge handles the synth-family roles)
+    "pad_organ": (GENERALUSER_SF, 0, 17),   # GM Percussive Organ — garage skank
+    "pad_epiano": (GENERALUSER_SF, 0, 4),   # GM Electric Piano 1 — hiphop keys
+    "pad_pizz": (GENERALUSER_SF, 0, 45),    # GM Pizzicato Strings — reggaeton pluck
+    "pad_warm": (GENERALUSER_SF, 0, 89),    # GM Pad 2 (warm) — soft alternate
 }
 _DRUM_SF = (GENERALUSER_SF, 128, 0)
 
@@ -64,7 +70,8 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
         # fall back to the GM preset on GeneralUser for this instrument
         from .drums import DRUM_PATTERNS  # noqa: F401  (avoid unused import lints elsewhere)
         gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48,
-              "bells": 9, "pads": 50}
+              "bells": 9, "pads": 50, "pad_organ": 17, "pad_epiano": 4,
+              "pad_pizz": 45, "pad_warm": 89}
         return GENERALUSER_SF, 0, gm.get(instrument, 0)
     return path, bank, preset
 

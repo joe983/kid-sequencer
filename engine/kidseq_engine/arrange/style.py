@@ -99,10 +99,18 @@ class ArrangeStyle:
     fx_palette: FxPalette
 
 
-# pad role -> (renderer, patch-or-preset name). Grown per increment; the menu
-# validity test walks this so a menu can never name an unrenderable role.
+# pad role -> (renderer, patch-or-preset name). The menu validity test walks
+# this so a menu can never name an unrenderable role. Synth-family roles are
+# Surge patches; keys-family roles are GM presets (real samples read truer for
+# organs/e-pianos than a subtractive synth).
 PAD_ROLES: dict[str, tuple[str, str]] = {
     "supersaw": ("vst", "pad"),
+    "pluck": ("vst", "pad_pluck"),
+    "dark": ("vst", "pad_dark"),
+    "organ": ("sf", "pad_organ"),
+    "epiano": ("sf", "pad_epiano"),
+    "pizz": ("sf", "pad_pizz"),
+    "warm": ("sf", "pad_warm"),
 }
 
 
@@ -110,25 +118,35 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
 # Genre menus (signature option FIRST — it carries ~50% of the weight)
 # ---------------------------------------------------------------------------
 
-# Increment 1: every menu holds exactly today's behaviour, so the style layer
-# is a pure refactor (output bit-identical). Later increments widen the menus.
+# Menus widen per increment; fields not yet genre-differentiated share _BASE.
 _BASE_MENU: dict[str, list] = {
     "bass_patch": ["bass"],
     "bass_feel": [0],
-    "pad_role": ["supersaw"],
-    "pad_rhythm": [0],
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
 }
 
+
+def _menu(**over) -> dict[str, list]:
+    m = dict(_BASE_MENU)
+    m.update(over)
+    return m
+
+
 _GENRE_MENU: dict[str, dict[str, list]] = {
-    "techhouse": dict(_BASE_MENU),
-    "dnb": dict(_BASE_MENU),
-    "garage": dict(_BASE_MENU),
-    "drill": dict(_BASE_MENU),
-    "hiphop": dict(_BASE_MENU),
-    "reggaeton": dict(_BASE_MENU),
+    # pluck stabs are the tech-house signature; the supersaw wash is the alt
+    "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1]),
+    # dnb keeps the supersaw wash (its pad identity); rhythm swells vary
+    "dnb": _menu(pad_role=["supersaw"], pad_rhythm=[0, 1]),
+    # organ skank IS UK garage; pluck as the alternate colour
+    "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1]),
+    # drill: dark closed-down sustain only — bright pads read wrong
+    "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1]),
+    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt
+    "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1]),
+    # reggaeton: pizzicato dembow-accent plucks; warm wash alt
+    "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1]),
 }
 
 

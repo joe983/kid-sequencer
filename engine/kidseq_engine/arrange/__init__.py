@@ -290,8 +290,49 @@ def bass_notes(riff: Riff, prog: list[int], bars: int) -> list[Note]:
     return out
 
 
-def pad_notes(riff: Riff, prog: list[int], bars: int) -> list[Note]:
-    """Whole-bar triad voicings around C4–B4 (root position, folded into range)."""
+# Per-genre pad RHYTHMS: list of variants, each a list of (start_beat, dur)
+# chord onsets within one bar. Variant 0 = the genre's signature comping;
+# style.pad_rhythm picks. Sustained genres keep the whole-bar wash.
+_PAD_RHYTHMS: dict[str, list[list[tuple[float, float]]]] = {
+    "garage": [  # organ skank: offbeat 8th stabs / 2-step displaced comping
+        [(0.5, 0.4), (1.5, 0.4), (2.5, 0.4), (3.5, 0.4)],
+        [(0.5, 0.4), (2.0, 0.3), (2.75, 0.4), (3.75, 0.25)],
+    ],
+    "techhouse": [  # pluck stabs on the &s / 16th-push comping
+        [(1.5, 0.35), (3.5, 0.35)],
+        [(0.75, 0.3), (1.5, 0.3), (2.75, 0.3), (3.5, 0.3)],
+    ],
+    "drill": [  # dark sustain / re-struck tail
+        [(0.0, 4.0)],
+        [(0.0, 3.0), (3.0, 1.0)],
+    ],
+    "hiphop": [  # e-piano comping
+        [(0.0, 1.75), (2.5, 1.25)],
+        [(0.0, 1.0), (1.75, 0.75), (2.5, 1.25)],
+    ],
+    "reggaeton": [  # dembow-accent plucks / warm wash
+        [(0.0, 0.75), (0.75, 0.5), (2.0, 0.75), (2.75, 0.5)],
+        [(0.0, 4.0)],
+    ],
+    "dnb": [  # supersaw wash / half-bar swells
+        [(0.0, 4.0)],
+        [(0.0, 2.0), (2.0, 2.0)],
+    ],
+}
+_PAD_RHYTHM_DEFAULT: list[tuple[float, float]] = [(0.0, 4.0)]
+
+
+def pad_rhythm_for(genre: str | None, variant: int = 0) -> list[tuple[float, float]]:
+    variants = _PAD_RHYTHMS.get(genre or "", [_PAD_RHYTHM_DEFAULT])
+    return variants[variant % len(variants)]
+
+
+def pad_notes(riff: Riff, prog: list[int], bars: int,
+              rhythm: list[tuple[float, float]] | None = None) -> list[Note]:
+    """Diatonic triad voicings around C4–B4 (root position, folded into range),
+    comped per `rhythm` — a list of (start_beat, dur) chord onsets within one
+    bar (default: one whole-bar wash). Short stabs hit slightly harder."""
+    rhythm = rhythm if rhythm is not None else _PAD_RHYTHM_DEFAULT
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
     for b in range(bars):
@@ -300,6 +341,9 @@ def pad_notes(riff: Riff, prog: list[int], bars: int) -> list[Note]:
         root = _fold(60 + (semi + root_pc) % 12, 60, 71)
         third = _fold(60 + (semi + third_pc) % 12, root, root + 11)
         fifth = _fold(60 + (semi + fifth_pc) % 12, third, third + 11)
-        for pitch in (root, third, fifth):
-            out.append(Note(pitch=pitch, velocity=88, start_beats=b * 4.0, dur_beats=4.0))
+        for start, dur in rhythm:
+            vel = 96 if dur < 1.0 else 88
+            for pitch in (root, third, fifth):
+                out.append(Note(pitch=pitch, velocity=vel,
+                                start_beats=b * 4.0 + start, dur_beats=dur))
     return out

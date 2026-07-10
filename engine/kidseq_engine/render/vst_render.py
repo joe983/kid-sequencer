@@ -100,6 +100,43 @@ PATCHES: dict[str, dict] = {
         "fx_a1_fx_type": "Chorus",
         "character": "Neutral",
     },
+    # plucky stab pad (techhouse/garage alternate) — short filter+amp envelopes,
+    # zero sustain: chords hit and get out of the riff's way
+    "pad_pluck": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "3 voices",
+        "a_osc_1_unison_detune": ("raw", 0.18),
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 900.0,
+        "a_filter_1_resonance": 18.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.55),
+        "a_filter_eg_attack": ("raw", _env(0.004)),
+        "a_filter_eg_decay": ("raw", _env(0.12)),
+        "a_filter_eg_sustain": 0.0,
+        "a_filter_eg_release": ("raw", _env(0.15)),
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.25)),
+        "a_amp_eg_sustain": 0.0,
+        "a_amp_eg_release": ("raw", _env(0.15)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Bright",
+    },
+    # dark sustained pad (drill) — closed-down LP12, slow bloom, warm
+    "pad_dark": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "5 voices",
+        "a_osc_1_unison_detune": ("raw", 0.22),
+        "a_filter_1_type": "LP 12 dB",
+        "a_filter_1_cutoff": 700.0,
+        "a_filter_1_resonance": 10.0,
+        "a_amp_eg_attack": ("raw", _env(0.8)),
+        "a_amp_eg_sustain": 100.0,
+        "a_amp_eg_release": ("raw", _env(1.5)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Warm",
+    },
 }
 
 # grid instruments served by this renderer (pad is arrangement-only)
