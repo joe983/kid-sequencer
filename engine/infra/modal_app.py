@@ -261,6 +261,26 @@ def song() -> None:
     print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
+@app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=900)
+def render_drums(style: str, tempo: int) -> bytes:
+    """Drums-only audition for one genre (judge the kit, no melody)."""
+    _wire_assets()
+    _run("render_drums_audition.py", style, str(tempo))
+    return (Path(ENGINE_REMOTE) / "out" / f"{style}_drums_{tempo}.mp3").read_bytes()
+
+
+@app.local_entrypoint()
+def drums(styles: str = "funk,reggaeton") -> None:
+    """Drums-only auditions for a comma-list of genres -> out/<style>_drums.mp3."""
+    dst_dir = ENGINE_LOCAL / "out"
+    dst_dir.mkdir(exist_ok=True)
+    pairs = [(s, _GENRE_TEMPOS.get(s, 120)) for s in styles.split(",")]
+    for (style, _), mp3 in zip(pairs, render_drums.starmap(pairs)):
+        dst = dst_dir / f"{style}_drums.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
 @app.local_entrypoint()
 def orchestral() -> None:
     files = render_orchestral.remote()
