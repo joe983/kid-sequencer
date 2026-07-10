@@ -75,8 +75,13 @@ def _sub(sr: int) -> np.ndarray:
 
 
 def _noise(dur: float, sr: int, decay: float) -> np.ndarray:
+    # Seeded per (dur, decay, sr): a synth one-shot is a fixed "sample", so the
+    # same hit renders the same bytes every time. The old unseeded global RNG
+    # broke the same-(riff, nonce)-=>-same-track guarantee whenever this
+    # fallback path fired (no kit assets on disk).
+    rng = np.random.default_rng([int(dur * 1e6), int(decay * 1000), sr])
     n = int(dur * sr); t = np.arange(n) / sr
-    return (np.random.uniform(-1, 1, n) * np.exp(-t * decay)).astype(np.float32)
+    return (rng.uniform(-1, 1, n) * np.exp(-t * decay)).astype(np.float32)
 
 
 def _snare(sr: int) -> np.ndarray:

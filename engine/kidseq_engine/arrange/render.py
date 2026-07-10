@@ -20,6 +20,7 @@ import numpy as np
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import Section, bass_notes, choose_progression, pad_notes, plan_song, riff_variant
+from .style import choose_style
 from ..render import fx, riff_audio
 from ..render.drums import DRUM_PATTERNS
 from ..render.sf_render import default_soundfont, render_riff_sf
@@ -121,9 +122,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
       `variation` is the per-press nonce: progression colour, build:drop split
       and every FX seed vary with it — the riff itself NEVER does.
     """
-    plan = plan if plan is not None else plan_song(riff.tempo, variation)
+    style = choose_style(riff, variation)
+    plan = plan if plan is not None else plan_song(riff.tempo, variation,
+                                                   structure=style.structure)
     flags = flags if flags is not None else FxFlags()
-    prog = choose_progression(riff, variation)
+    prog = choose_progression(riff, variation, pick=style.prog_pick)
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
     seed = fx.song_seed(riff, variation)

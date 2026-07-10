@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ..sequence import _C4_MIDI, Note, Riff, _scale_steps
+from .style import StructureStyle, choose_structure
 
 # ---------------------------------------------------------------------------
 # Progressions (0-based scale degrees, 4 chords = a 4-bar loop)
@@ -41,14 +42,16 @@ def _triad_pcs(degree: int, steps: list[int]) -> tuple[int, int, int]:
     return tuple(steps[(degree + i) % 7] % 12 for i in (0, 2, 4))
 
 
-def choose_progression(riff: Riff, variation: int = 0) -> list[int]:
+def choose_progression(riff: Riff, variation: int = 0,
+                       pick: int | None = None) -> list[int]:
     """Pick a bank progression whose chords cover the riff's notes well.
 
     Notes are weighted by duration (+1 for on-beat starts); the first chord is
     weighted double because it sits under the riff's strongest statement (bar 1
-    of every drop). Deterministic: ties break by bank order. `variation`
-    alternates between the two BEST-scoring progressions (both cover the riff;
-    which harmonic colour you get varies per press)."""
+    of every drop). Deterministic: ties break by bank order. `pick` (from
+    ArrangeStyle.prog_pick) indexes the ranked candidates; without it the
+    legacy `variation` alternation between the two BEST-scoring progressions
+    applies (both cover the riff; the harmonic colour varies per press)."""
     semi, steps = _scale_steps(riff.key)
     bank = _MINOR_BANK if riff.key.endswith("m") else _MAJOR_BANK
     tonic = _C4_MIDI + semi
@@ -68,7 +71,8 @@ def choose_progression(riff: Riff, variation: int = 0) -> list[int]:
         return total
 
     ranked = sorted(bank, key=score, reverse=True)
-    return ranked[variation % 2]
+    idx = (variation % 2) if pick is None else pick
+    return ranked[idx % len(ranked)]
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +100,8 @@ def _r4(x: float, lo: int, hi: int) -> int:
     return max(lo, min(hi, round(x / 4.0) * 4))
 
 
-def plan_song(tempo: float, variation: int = 0) -> list[Section]:
+def plan_song(tempo: float, variation: int = 0,
+              structure: StructureStyle | None = None) -> list[Section]:
     """Arrange N build→drop cycles so the song lands ≥3:00 (target ~190 s) at ANY
     tempo in the app's 40–200 BPM range.
 
@@ -106,19 +111,20 @@ def plan_song(tempo: float, variation: int = 0) -> list[Section]:
     Structure: intro → (build → drop → break)×(C-1) → build → drop → outro. Every
     drop keeps the verbatim riff + full kit (the fidelity guarantee).
 
-    `variation` shifts the build:drop split (longer builds vs longer drops) —
-    total bars stay the same, so the duration window holds for every nonce."""
+    The skeleton numbers come from a `StructureStyle` (derived from `variation`
+    alone — never the riff — so the same nonce gives the same skeleton for any
+    tune). Total bars stay inside the duration window for every nonce."""
+    st = structure if structure is not None else choose_structure(variation)
     bar_s = 4.0 * 60.0 / tempo
     target_bars = round(_TARGET_S / bar_s / 4.0) * 4          # nearest 4 bars
     cycles = max(1, min(4, round(target_bars / _BARS_PER_CYCLE)))
 
-    intro_bars = outro_bars = 4
-    break_bars = 8
+    intro_bars, outro_bars = st.intro_bars, st.outro_bars
+    break_bars = st.break_bars
     overhead = intro_bars + outro_bars + (cycles - 1) * break_bars
     per_cycle = max(4.0, (target_bars - overhead) / cycles)   # bars per build+drop
-    build_frac = (1 / 3.0, 1 / 4.0, 2 / 5.0)[variation % 3]   # per-press feel
-    build_bars = _r4(per_cycle * build_frac, 4, 16)
-    drop_bars = _r4(per_cycle * (1.0 - build_frac), 8, 32)
+    build_bars = _r4(per_cycle * st.build_frac, 4, 16)
+    drop_bars = _r4(per_cycle * (1.0 - st.build_frac), 8, 32)
 
     sections = [Section("intro", intro_bars, "sparse", "lite", bass=False, pads=False)]
     for c in range(1, cycles + 1):
