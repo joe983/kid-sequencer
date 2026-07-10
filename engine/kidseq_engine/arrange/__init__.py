@@ -333,16 +333,24 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         # rolling 8th-pairs, alternating accents
         [(0.5, 0.2, 104), (0.75, 0.2, 86), (1.5, 0.2, 104), (1.75, 0.2, 86),
          (2.5, 0.2, 104), (2.75, 0.2, 86), (3.5, 0.2, 104), (3.75, 0.2, 86)],
+        # offbeats answering an octave up (4th tuple slot = octave shift)
+        [(0.5, 0.45, 104, 0), (1.5, 0.45, 100, 12),
+         (2.5, 0.45, 104, 0), (3.5, 0.45, 100, 12)],
     ],
     "garage": [
         _FEEL_OFFBEAT,
         # 2-step bounce: long-short pairing around the swung skip
         [(0.0, 0.9, 106), (1.75, 0.45, 98), (2.5, 0.9, 104), (3.5, 0.45, 98)],
+        # 2-step with octave pops on the skips
+        [(0.0, 0.9, 106, 0), (1.75, 0.45, 98, 12),
+         (2.5, 0.9, 104, 0), (3.5, 0.45, 98, 12)],
     ],
     "reggaeton": [
         _FEEL_OFFBEAT,
         # tresillo — the dembow's 3+3+2 pulse
         [(0.0, 1.4, 106), (1.5, 1.4, 100), (3.0, 0.9, 98)],
+        # tresillo with the last push answered an octave up
+        [(0.0, 1.4, 106, 0), (1.5, 1.4, 100, 0), (3.0, 0.9, 98, 12)],
     ],
     "dnb": [
         _FEEL_DNB_TWOSTEP,
@@ -350,6 +358,8 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         [(0.0, 1.4, 106), (2.0, 0.9, 102), (3.0, 0.9, 98)],
         # whole-bar reese drone
         [(0.0, 3.9, 104)],
+        # two-step with the answer an octave up
+        [(0.0, 1.5, 106, 0), (2.5, 1.0, 100, 12)],
     ],
     "drill": [
         _FEEL_LONG_SUB,
@@ -380,11 +390,13 @@ def bass_feel_for(genre: str | None, variant: int = 0) -> list[tuple[float, floa
 
 
 def bass_notes(riff: Riff, prog: list[int], bars: int,
-               feel: list[tuple[float, float, int]] | None = None) -> list[Note]:
+               feel: list[tuple] | None = None) -> list[Note]:
     """Chord roots around C2–B2 in a genre feel — `feel` is a list of
-    (start_beat, dur, vel) hits per bar (default: the genre's legacy bucket).
-    Pitches are absolute (no -24 shift downstream — these are not grid notes),
-    and always the chord ROOT (the register/root-pc test relies on it)."""
+    (start_beat, dur, vel[, octave_shift]) hits per bar (default: the genre's
+    legacy bucket). The optional 4th element lifts a hit an octave (C3–B3 —
+    the classic octave-pop bassline move); the pitch CLASS is always the chord
+    root (the root-pc test relies on it). Pitches are absolute (no -24 shift
+    downstream — these are not grid notes)."""
     feel = feel if feel is not None else _default_feel(riff.drum_style)
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
@@ -392,8 +404,10 @@ def bass_notes(riff: Riff, prog: list[int], bars: int,
         root_pc = (semi + steps[_chord_for_bar(b, prog)]) % 12
         pitch = _fold(36 + root_pc, 36, 47)  # C2..B2
         bar0 = b * 4.0
-        for start, dur, vel in feel:
-            out.append(Note(pitch=pitch, velocity=vel,
+        for hit in feel:
+            start, dur, vel = hit[0], hit[1], hit[2]
+            shift = hit[3] if len(hit) > 3 else 0
+            out.append(Note(pitch=pitch + shift, velocity=vel,
                             start_beats=bar0 + start, dur_beats=dur))
     return out
 
@@ -436,10 +450,16 @@ def pad_rhythm_for(genre: str | None, variant: int = 0) -> list[tuple[float, flo
 
 
 def pad_notes(riff: Riff, prog: list[int], bars: int,
-              rhythm: list[tuple[float, float]] | None = None) -> list[Note]:
-    """Diatonic triad voicings around C4–B4 (root position, folded into range),
-    comped per `rhythm` — a list of (start_beat, dur) chord onsets within one
-    bar (default: one whole-bar wash). Short stabs hit slightly harder."""
+              rhythm: list[tuple[float, float]] | None = None,
+              voicing: str = "close") -> list[Note]:
+    """Diatonic triad voicings around C4–B5, comped per `rhythm` — a list of
+    (start_beat, dur) chord onsets within one bar (default: one whole-bar
+    wash). Short stabs hit slightly harder.
+
+    `voicing`: "close" = root position (legacy); "first_inv" = root lifted an
+    octave (brighter colour, same pitch classes); "alt" = alternate the two
+    per bar (harmonic movement without leaving the triad). All voicings stay
+    inside MIDI 60–83."""
     rhythm = rhythm if rhythm is not None else _PAD_RHYTHM_DEFAULT
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
@@ -449,9 +469,11 @@ def pad_notes(riff: Riff, prog: list[int], bars: int,
         root = _fold(60 + (semi + root_pc) % 12, 60, 71)
         third = _fold(60 + (semi + third_pc) % 12, root, root + 11)
         fifth = _fold(60 + (semi + fifth_pc) % 12, third, third + 11)
+        invert = voicing == "first_inv" or (voicing == "alt" and b % 2 == 1)
+        chord = (root + 12, third, fifth) if invert else (root, third, fifth)
         for start, dur in rhythm:
             vel = 96 if dur < 1.0 else 88
-            for pitch in (root, third, fifth):
+            for pitch in chord:
                 out.append(Note(pitch=pitch, velocity=vel,
                                 start_beats=b * 4.0 + start, dur_beats=dur))
     return out

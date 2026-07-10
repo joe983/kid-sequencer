@@ -46,6 +46,8 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     "pad_epiano": (GENERALUSER_SF, 0, 4),   # GM Electric Piano 1 — hiphop keys
     "pad_pizz": (GENERALUSER_SF, 0, 45),    # GM Pizzicato Strings — reggaeton pluck
     "pad_warm": (GENERALUSER_SF, 0, 89),    # GM Pad 2 (warm) — soft alternate
+    "pad_strings": (GENERALUSER_SF, 0, 49), # GM String Ensemble 2 — cinematic alt
+    "pad_newage": (GENERALUSER_SF, 0, 88),  # GM Pad 1 (new age) — bell-glass alt
 }
 _DRUM_SF = (GENERALUSER_SF, 128, 0)
 
@@ -71,7 +73,7 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
         from .drums import DRUM_PATTERNS  # noqa: F401  (avoid unused import lints elsewhere)
         gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48,
               "bells": 9, "pads": 50, "pad_organ": 17, "pad_epiano": 4,
-              "pad_pizz": 45, "pad_warm": 89}
+              "pad_pizz": 45, "pad_warm": 89, "pad_strings": 49, "pad_newage": 88}
         return GENERALUSER_SF, 0, gm.get(instrument, 0)
     return path, bank, preset
 

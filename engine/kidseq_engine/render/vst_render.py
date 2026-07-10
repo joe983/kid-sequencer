@@ -132,6 +132,22 @@ PATCHES: dict[str, dict] = {
         "a_amp_eg_release": ("raw", _env(0.3)),
         "character": "Warm",
     },
+    # round bass (hiphop alt) — sub sine + quiet octave-up sine for definition:
+    # softer attack than the 808, more melodic presence than pure sub
+    "bass_round": {
+        "a_osc_1_type": "Sine",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_2_mute": False,
+        "a_osc_2_type": "Sine",
+        "a_osc_2_retrigger": True,
+        "a_osc_2_octave": 1.0,
+        "a_osc_2_volume": -14.0,
+        "a_amp_eg_attack": ("raw", _env(0.008)),
+        "a_amp_eg_decay": ("raw", _env(0.8)),
+        "a_amp_eg_sustain": 70.0,
+        "a_amp_eg_release": ("raw", _env(0.2)),
+        "character": "Warm",
+    },
     # plucky bassline (garage/techhouse/reggaeton) — single saw, tight filter
     # envelope, short release: the bouncing 8th-note bass that stays out of the
     # kick's way

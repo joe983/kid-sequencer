@@ -93,6 +93,7 @@ class ArrangeStyle:
     bass_feel: int                 # per-genre rhythm variant index
     pad_role: str                  # key into PAD_ROLES
     pad_rhythm: int                # per-genre rhythm variant index
+    pad_voicing: str               # "close" | "first_inv" | "alt"
     texture: str | None            # "crackle" | "wash" | "drone" | None
     drum_variant: int              # seasoning overlay index (0 = base pattern)
     riff_break_variant: str        # riff transform used in breaks
@@ -113,7 +114,12 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
     "epiano": ("sf", "pad_epiano"),
     "pizz": ("sf", "pad_pizz"),
     "warm": ("sf", "pad_warm"),
+    "strings_pad": ("sf", "pad_strings"),
+    "newage": ("sf", "pad_newage"),
 }
+
+#: pad triad voicings pad_notes understands
+PAD_VOICINGS = ("close", "first_inv", "alt")
 
 # lead double kind -> (Surge patch, GM fallback role, semitone shift, gain dB).
 # A quiet texture layer UNDER the kid's riff — never replaces their instrument.
@@ -136,6 +142,7 @@ _BASE_MENU: dict[str, list] = {
     "bass_feel": [0],
     "pad_role": ["supersaw"],
     "pad_rhythm": [0],
+    "pad_voicing": ["close", "first_inv", "alt"],
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
@@ -153,37 +160,40 @@ def _menu(**over) -> dict[str, list]:
 _GENRE_MENU: dict[str, dict[str, list]] = {
     # pluck stabs are the tech-house signature; the supersaw wash is the alt.
     # Bass: plucky rolling line first, reese as the darker alt.
-    "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+    "techhouse": _menu(pad_role=["pluck", "supersaw", "newage"], pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
                        drum_variant=[0, 1, 2], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
-    # dnb keeps the supersaw wash (its pad identity); the reese IS dnb bass —
-    # feels vary (two-step / roller / whole-bar drone)
-    "dnb": _menu(pad_role=["supersaw"], pad_rhythm=[0, 1],
-                 bass_patch=["bass"], bass_feel=[0, 1, 2],
+    # dnb: supersaw wash (its pad identity) + cinematic strings alt; the reese
+    # IS dnb bass — feels vary (two-step / roller / drone / octave answer)
+    "dnb": _menu(pad_role=["supersaw", "strings_pad"], pad_rhythm=[0, 1],
+                 bass_patch=["bass"], bass_feel=[0, 1, 2, 3],
                  drum_variant=[0, 1, 2],
                  riff_break_variant=["sparse_low", "octave_echo"]),
-    # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass.
+    # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass
+    # with octave pops.
     "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
                     drum_variant=[0, 1, 2], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
-    # drill: dark closed-down sustain only — bright pads read wrong. 808 sub.
-    # Breaks stay low (sparse_low / deep call-response — no bright echoes).
-    "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1],
+    # drill: dark closed-down sustain; cinematic strings as the second colour
+    # (UK drill's string-loop DNA). 808 sub only. Breaks stay low.
+    "drill": _menu(pad_role=["dark", "strings_pad"], pad_rhythm=[0, 1],
                    bass_patch=["bass_sub808"], bass_feel=[0, 1],
                    drum_variant=[0, 1, 2], texture=["drone", None],
                    riff_break_variant=["sparse_low", "call_response"],
                    lead_layer=[None, "shadow"]),
-    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt. 808.
+    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt.
+    # 808 / round sub / reese bass colours.
     "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1],
+                    bass_patch=["bass_sub808", "bass_round", "bass"], bass_feel=[0, 1],
                     drum_variant=[0, 1, 2], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "call_response"],
                     lead_layer=[None, "shadow"]),
-    # reggaeton: pizzicato dembow-accent plucks; warm wash alt. Tresillo bass.
-    "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+    # reggaeton: pizzicato dembow-accent plucks; warm wash / strings alts.
+    # Tresillo bass with an octave-answer variant.
+    "reggaeton": _menu(pad_role=["pizz", "warm", "strings_pad"], pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1, 2],
                        drum_variant=[0, 1, 2],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
@@ -277,6 +287,7 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         bass_feel=_pick(seed, "bass_feel", menu["bass_feel"]),
         pad_role=_pick(seed, "pad_role", menu["pad_role"]),
         pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
+        pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
         texture=_pick(seed, "texture", menu["texture"]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),

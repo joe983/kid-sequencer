@@ -64,11 +64,14 @@ def test_every_genre_has_a_menu_and_options_are_renderable():
             assert t in (None, "crackle", "wash", "drone"), (genre, t)
         for rv in menu["riff_break_variant"]:
             assert rv in ("sparse_low", "octave_echo", "call_response"), (genre, rv)
-        from kidseq_engine.arrange.style import LEAD_LAYERS, RIFF_ORNAMENTS
+        from kidseq_engine.arrange.style import (LEAD_LAYERS, PAD_VOICINGS,
+                                                 RIFF_ORNAMENTS)
         for o in menu["riff_ornament"]:
             assert o in RIFF_ORNAMENTS, (genre, o)
         for ll in menu["lead_layer"]:
             assert ll is None or ll in LEAD_LAYERS, (genre, ll)
+        for v in menu["pad_voicing"]:
+            assert v in PAD_VOICINGS, (genre, v)
 
 
 def test_style_fields_are_decorrelated_across_nonces():
@@ -83,7 +86,8 @@ def test_style_fields_are_decorrelated_across_nonces():
 
     menu = _GENRE_MENU["techhouse"]
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
-                  "bass_feel", "pad_rhythm", "drum_variant"):
+                  "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
+                  "riff_ornament", "lead_layer"):
         seen = set(picks(field))
         want = set(menu[field])
         assert seen == want, (field, seen, want)

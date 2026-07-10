@@ -275,7 +275,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
 
         if sec.pads:
             rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
-            notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm)
+            notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
+                              voicing=style.pad_voicing)
             sig = _render_pads(notes, riff.tempo, span_beats, sr, style.pad_role)
             _add_at(layers["pads"], sig, at)
 
@@ -364,7 +365,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if sec.pads and style.structure.escalation == "full":
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 hi = [dc_replace(nt, pitch=nt.pitch + 12)
-                      for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm)]
+                      for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm,
+                                          voicing=style.pad_voicing)]
                 sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr,
                                    style.pad_role)
                 _add_at(layers["pads"], sig * 0.5, a)

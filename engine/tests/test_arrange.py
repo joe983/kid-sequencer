@@ -167,12 +167,13 @@ def test_bass_notes_are_chord_roots_in_register():
             riff = _riff(key, drum_style=style)
             prog = choose_progression(riff)
             semi, steps = _scale_steps(key)
-            for variant in (0, 1, 2):  # indices wrap per-genre
+            for variant in (0, 1, 2, 3):  # indices wrap per-genre
                 feel = bass_feel_for(style, variant)
                 notes = bass_notes(riff, prog, bars=8, feel=feel)
                 assert notes
                 for n in notes:
-                    assert 36 <= n.pitch <= 47, (key, style, variant, n)
+                    # base register C2-B2; octave-pop hits may sit C3-B3
+                    assert 36 <= n.pitch <= 59, (key, style, variant, n)
                     bar = int(n.start_beats // 4)
                     root_pc = (semi + steps[prog[bar % 4]]) % 12
                     assert n.pitch % 12 == root_pc, (key, style, variant, bar, n)
@@ -202,19 +203,22 @@ def test_pad_notes_are_diatonic_triads_in_register_for_every_genre_rhythm():
         semi, steps = _scale_steps(key)
         for genre in DRUM_PATTERNS:
             for variant in (0, 1):
-                rhythm = pad_rhythm_for(genre, variant)
-                notes = pad_notes(riff, prog, bars=4, rhythm=rhythm)
-                assert len(notes) == 3 * len(rhythm) * 4, (genre, variant)
-                for b in range(4):
-                    bar_notes = [n for n in notes if b * 4.0 <= n.start_beats < (b + 1) * 4.0]
-                    want = {(semi + pc) % 12 for pc in _triad_pcs(prog[b], steps)}
-                    # every chord onset voices exactly the bar's triad
-                    assert {n.pitch % 12 for n in bar_notes} == want, (key, genre, b)
-                    for n in bar_notes:
-                        assert 60 <= n.pitch < 84, (key, genre, n)
-                        assert n.dur_beats > 0, (key, genre, n)
-                        # onsets stay inside their bar
-                        assert n.start_beats + n.dur_beats <= (b + 1) * 4.0 + 0.5, (genre, n)
+                for voicing in ("close", "first_inv", "alt"):
+                    rhythm = pad_rhythm_for(genre, variant)
+                    notes = pad_notes(riff, prog, bars=4, rhythm=rhythm,
+                                      voicing=voicing)
+                    assert len(notes) == 3 * len(rhythm) * 4, (genre, variant)
+                    for b in range(4):
+                        bar_notes = [n for n in notes
+                                     if b * 4.0 <= n.start_beats < (b + 1) * 4.0]
+                        want = {(semi + pc) % 12 for pc in _triad_pcs(prog[b], steps)}
+                        # every chord onset voices exactly the bar's triad
+                        assert {n.pitch % 12 for n in bar_notes} == want, (key, genre, b, voicing)
+                        for n in bar_notes:
+                            assert 60 <= n.pitch < 84, (key, genre, voicing, n)
+                            assert n.dur_beats > 0, (key, genre, n)
+                            # onsets stay inside their bar
+                            assert n.start_beats + n.dur_beats <= (b + 1) * 4.0 + 0.5, (genre, n)
 
 
 def test_default_pad_notes_keep_the_whole_bar_wash():
