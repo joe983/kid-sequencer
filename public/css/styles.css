@@ -992,7 +992,12 @@ body.loggedIn #robotLogo{
     .aiModal.show{ display:flex; }
     .aiModal .aiCard{
       position:relative;
-      width:min(420px,94vw); max-height:90vh; overflow-y:auto;
+      /* svh = the VISIBLE viewport on iOS Safari (vh is the taller layout
+         viewport, so 90vh let the card extend below the browser chrome and
+         hid its bottom — e.g. the "Make another track" button). Capping to
+         svh keeps the whole card on-screen so overflow-y:auto can reach it. */
+      width:min(420px,94vw); max-height:90vh; max-height:90svh; overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
       background:#fff;
       border:4px solid #1d1d1d;
       border-radius:22px;
