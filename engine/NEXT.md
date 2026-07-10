@@ -1,5 +1,26 @@
 # Where we are / next session
 
+## NEW — Round 7: percussive production mode (2026-07-10 night, NOT deployed)
+Owner: discordant user patterns (early-Photek ref) shouldn't get chords
+forced under them; intros too samey; asked what "nonce" means (say
+"variation number"!).
+- `riff_tonality(riff)` 0..1 = 0.6×chord-explainability + 0.4×(1−cluster
+  fraction of overlapping 2nds/7ths). <0.55 → PERCUSSIVE mode; 0.55–0.65
+  variation-number-tipped; else melodic. Same tune ⇒ same character family.
+- PERCUSSIVE (`style.production_mode`): prog=[0,0,0,0] root pedal; pads →
+  open-FIFTH drone (no third) on the dark role; chord soften/snap skipped;
+  rhythm-led treatment weights (_TREATMENT_W_PERC); each drop rotates drum
+  seasoning overlay; texture forced on + rendered edge-to-edge.
+- Intros: 7 characters (menu widened in THIS commit — that re-picks intros
+  for existing variation numbers; harmless, audited: v2 flipped high→low,
+  divergence confined to intro+build tail; techhouse v1/dnb v4/var_4 renders
+  byte-identical R6→R7 = determinism working).
+- examples/cluster_riff.json + ::song --args/--name for arbitrary-riff
+  auditions. EAR FILE: engine/out/percussive_dnb_170.mp3 (cluster riff, dnb
+  170 — the Photek check) + re-rendered var_0..5 + song_<genre>.
+- All 9 suites green on Modal. Tuning: tonality thresholds in choose_style,
+  _TREATMENT_W_PERC, drone_notes voicing.
+
 ## NEW — Round 6: palette explosion + discordance fix (2026-07-10 night, NOT deployed)
 Owner: intros samey; garage variation discordant; wants LOADS more sounds
 (twinkles/rave synths) per genre; asked re render-time UX + per-genre
