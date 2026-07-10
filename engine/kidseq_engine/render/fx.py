@@ -67,11 +67,13 @@ def _swept_noise(dur_s: float, sr: int, rng: np.random.Generator,
 
 
 def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = None,
-          gate_depth: float = 0.5, peak_db: float = -12.0) -> np.ndarray:
-    """Noise sweep 300 Hz→8 kHz with (t/T)^2.5 crescendo + a sine riser two
-    octaves up underneath. Optional 16th-note gating over the final bar
-    (gate_hz = 16ths per second) with 3 ms cosine edges. Ends in a 10 ms fade
-    so the drop downbeat starts clean."""
+          gate_depth: float = 0.5, peak_db: float = -12.0,
+          f0: float = 300.0, f1: float = 8000.0) -> np.ndarray:
+    """Noise sweep f0→f1 (default 300 Hz→8 kHz) with (t/T)^2.5 crescendo + a
+    sine riser two octaves up underneath. Genres tune the band: dark low-mid
+    sweeps for drill/hiphop, wide fast sweeps for dnb. Optional 16th-note
+    gating over the final bar (gate_hz = 16ths per second) with 3 ms cosine
+    edges. Ends in a 10 ms fade so the drop downbeat starts clean."""
     rng = np.random.default_rng(seed)
     n = int(dur_s * sr)
     t = np.arange(n) / sr
@@ -79,7 +81,7 @@ def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = Non
 
     ch = []
     for _ in range(2):  # independent noise per channel = real width
-        ch.append(_swept_noise(dur_s, sr, rng, 300.0, 8000.0) * env)
+        ch.append(_swept_noise(dur_s, sr, rng, f0, f1) * env)
     x = np.stack(ch, axis=1)
     x = _peak_scale(x, peak_db)
 
@@ -128,6 +130,29 @@ def impact(sr: int = SR, peak_db: float = -6.0, f0: float = 80.0,
 
     mono = np.tanh(1.5 * (boom + 0.8 * burst))
     return _peak_scale(np.stack([mono, mono], axis=1), peak_db)
+
+
+def spinback(dur_s: float = 1.5, sr: int = SR, seed: int = 0,
+             peak_db: float = -14.0) -> np.ndarray:
+    """Vinyl/tape spinback into a drop: a pitched cluster + noise spiralling
+    down as the 'record' brakes — the garage/hiphop alternative to a noise
+    riser. Ends in a fade so the drop downbeat starts clean."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    t = np.arange(n) / sr
+    fall = (1.0 - t / dur_s) ** 1.6            # braking curve
+    mono = np.zeros(n)
+    for mult, amp in ((1.0, 1.0), (1.5, 0.5), (2.02, 0.35)):
+        f = 420.0 * mult * (0.12 + 0.88 * fall)
+        mono += amp * np.sin(np.cumsum(2 * np.pi * f / sr))
+    sos = butter(2, [300.0, 3500.0], btype="band", fs=sr, output="sos")
+    mono = (mono + sosfilt(sos, rng.standard_normal(n)) * 0.5) * (0.35 + 0.65 * fall)
+    x = np.stack([mono, mono], axis=1)
+    fade = max(2, int(0.012 * sr))
+    x[-fade:] *= _cos_edge(fade, up=False)[:, None]
+    return _peak_scale(x, peak_db)
 
 
 def crash(sr: int = SR, seed: int = 0, peak_db: float = -14.0) -> np.ndarray:

@@ -303,11 +303,16 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             prev = bounds[idx - 1] if idx > 0 else None
             if pal.riser_on and prev and prev[0].name.startswith("build"):
                 b_sec, b_a, b_e = prev
-                riser_bars = min(pal.riser_bars, b_sec.bars)
-                dur = riser_bars * bar_s
-                depth = min(0.85, pal.gate_depth + (0.2 if later else 0.0))
-                sig = fx.riser(dur, sr, seed + idx, gate_hz=4.0 / spb,
-                               gate_depth=depth)
+                if pal.riser_kind == "spinback":
+                    # vinyl brake into the drop — short, ends AT the downbeat
+                    sig = fx.spinback(min(2.0, 2 * bar_s), sr, seed + idx)
+                else:
+                    riser_bars = min(pal.riser_bars, b_sec.bars)
+                    dur = riser_bars * bar_s
+                    depth = min(0.85, pal.gate_depth + (0.2 if later else 0.0))
+                    sig = fx.riser(dur, sr, seed + idx, gate_hz=4.0 / spb,
+                                   gate_depth=depth,
+                                   f0=pal.riser_f0, f1=pal.riser_f1)
                 _add_at(layers["fx"], sig * fx_g, a - sig.shape[0])
             cr = fx.crash(sr, seed + 100 + idx)
             _add_at(layers["fx"], cr * fx_g, a)

@@ -71,6 +71,16 @@ def test_generators_shapes_levels_determinism():
     deep = fx.impact(SR, f0=60.0, f1=28.0)
     assert deep.shape == imp.shape and abs(_peak_db(deep) - (-6.0)) < 0.8
     assert not np.array_equal(deep, imp)
+    # parameterised riser band: default level holds; dark band differs
+    dark = fx.riser(2.0, SR, seed=7, gate_hz=8.0, f0=200.0, f1=2500.0)
+    assert dark.shape == r1.shape and abs(_peak_db(dark) - (-12.0)) < 1.5
+    assert not np.array_equal(dark, r1)
+    # spinback: level pin, determinism, clean end into the drop
+    sb = fx.spinback(1.5, SR, seed=5)
+    assert sb.shape == (int(1.5 * SR), 2)
+    assert np.array_equal(sb, fx.spinback(1.5, SR, seed=5))
+    assert abs(_peak_db(sb) - (-14.0)) < 0.8
+    assert float(np.max(np.abs(sb[-8:]))) < 1e-3
 
 
 def test_texture_generators_shapes_levels_determinism():

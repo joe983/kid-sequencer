@@ -73,7 +73,10 @@ class StructureStyle:
 class FxPalette:
     """Arrangement-FX dressing choices."""
     riser_on: bool = True
+    riser_kind: str = "noise"      # "noise" sweep | "spinback" (tape brake)
     riser_bars: int = 8            # cap; still clamped to the build length
+    riser_f0: float = 300.0        # noise-riser sweep band (genre character)
+    riser_f1: float = 8000.0
     gate_depth: float = 0.5        # first-drop riser gate (later drops deepen)
     impact_f0: float = 80.0
     impact_f1: float = 35.0
@@ -251,6 +254,19 @@ _FILL_MENU: dict[str, list[int]] = {
     "drill": [1], "hiphop": [1], "dnb": [0],
 }
 
+# genre -> noise-riser sweep band: dark low-mid swells for drill/hiphop,
+# wide fast sweeps for dnb, classic white for the four-to-floor styles
+_RISER_BAND: dict[str, tuple[float, float]] = {
+    "drill": (200.0, 2500.0), "hiphop": (200.0, 2500.0),
+    "dnb": (400.0, 12000.0), "garage": (300.0, 6000.0),
+}
+
+# genre -> riser-kind menu (spinback = vinyl brake, the garage/hiphop move)
+_RISER_KIND: dict[str, tuple[list, list]] = {
+    "garage": (["noise", "spinback"], [0.60, 0.40]),
+    "hiphop": (["spinback", "noise"], [0.60, 0.40]),
+}
+
 
 def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
     """Seeded dressing choices within the genre's taste. Boom-bap doesn't ride
@@ -259,9 +275,13 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
     riser_menu = ([False, True], [0.70, 0.30]) if g == "hiphop" else \
         ([True, False], [0.85, 0.15])
     f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
+    rf0, rf1 = _RISER_BAND.get(g, (300.0, 8000.0))
+    kind_menu = _RISER_KIND.get(g, (["noise"], None))
     return FxPalette(
         riser_on=_pick(seed, "riser_on", *riser_menu),
+        riser_kind=_pick(seed, "riser_kind", *kind_menu),
         riser_bars=_pick(seed, "riser_bars", [8, 4], [0.65, 0.35]),
+        riser_f0=rf0, riser_f1=rf1,
         gate_depth=_pick(seed, "gate_depth", [0.5, 0.7], [0.6, 0.4]),
         impact_f0=f0, impact_f1=f1, impact_db=db,
         downlifter_on=_pick(seed, "downlifter_on", [True, False], [0.8, 0.2]),
