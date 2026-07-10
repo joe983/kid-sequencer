@@ -123,6 +123,22 @@ def test_riff_variants_are_deterministic_and_never_touch_verbatim():
     low = riff_variant(notes, "sparse_low")
     assert [n.pitch + 12 for n in low] == [n.pitch for n in sparse]
 
+    # octave_echo: sparse statement + soft +12 echoes two beats later, in-bar
+    echo = riff_variant(notes, "octave_echo")
+    assert echo[:len(sparse)] == sparse
+    for n in echo[len(sparse):]:
+        src = next(s for s in sparse if s.start_beats + 2.0 == n.start_beats)
+        assert n.pitch == src.pitch + 12 and n.velocity < src.velocity
+        assert n.start_beats < 4.0
+    # call_response: first-half notes verbatim + soft -12 answers, octave-only
+    cr = riff_variant(notes, "call_response")
+    call = [n for n in notes if n.start_beats < 2.0]
+    assert cr[:len(call)] == call
+    for n in cr[len(call):]:
+        assert n.pitch % 12 in {c.pitch % 12 for c in call}  # octave transforms only
+        assert n.start_beats < 4.0
+    assert riff_variant(notes, "octave_echo") == riff_variant(notes, "octave_echo")
+
 
 def test_bass_notes_are_chord_roots_in_register():
     from kidseq_engine.arrange import bass_feel_for

@@ -237,7 +237,9 @@ def _fit_window(sections: list[Section], bar_s: float,
 
 def riff_variant(notes: list[Note], variant: str) -> list[Note]:
     """Deterministic riff transforms for non-drop sections. DROPS use riff.notes
-    untouched — never route a drop through this function."""
+    untouched — never route a drop through this function. All transforms are
+    octave / timing / velocity ONLY (never off-octave re-pitching), so every
+    variant stays inside the riff's own harmony."""
     if variant == "verbatim":
         return notes
     if variant == "sparse":
@@ -245,6 +247,20 @@ def riff_variant(notes: list[Note], variant: str) -> list[Note]:
         return picked or notes[:1]
     if variant == "sparse_low":
         return [replace(n, pitch=n.pitch - 12) for n in riff_variant(notes, "sparse")]
+    if variant == "octave_echo":
+        # sparse statement answered two beats later, an octave up and softer
+        base = riff_variant(notes, "sparse")
+        echo = [replace(n, start_beats=n.start_beats + 2.0, pitch=n.pitch + 12,
+                        velocity=max(1, int(n.velocity * 0.6)))
+                for n in base if n.start_beats + 2.0 < 4.0]
+        return base + echo
+    if variant == "call_response":
+        # first half of the bar verbatim, answered an octave down and softer
+        call = [n for n in notes if n.start_beats < 2.0]
+        resp = [replace(n, start_beats=n.start_beats + 2.0, pitch=n.pitch - 12,
+                        velocity=max(1, int(n.velocity * 0.75)))
+                for n in call if n.start_beats + 2.0 < 4.0]
+        return (call + resp) or notes[:1]
     raise ValueError(f"unknown riff variant {variant!r}")
 
 

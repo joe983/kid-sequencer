@@ -23,7 +23,6 @@ from . import (Section, bass_feel_for, bass_notes, choose_progression,
                pad_notes, pad_rhythm_for, plan_song, riff_variant)
 from .style import PAD_ROLES, choose_style
 from ..render import fx, riff_audio
-from ..render.drums import DRUM_PATTERNS
 from ..render.sf_render import default_soundfont, render_riff_sf
 from ..render import vst_render
 from ..mixmaster import kick_onsets_from_pattern
@@ -89,15 +88,24 @@ def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
         buf[start:end] += sig[: end - start]
 
 
-def _fill_pattern(style: str | None) -> dict:
-    """Snare-roll fill for the last bar of a build: 8ths → 16ths, ramping
-    velocity; the final 16th stays EMPTY (it butts into the Gap). drill/hiphop
-    lead with rim then land on snare."""
+def _fill_pattern(style: str | None, shape: int | None = None) -> dict:
+    """Build-tail fill (last bar of a build), by shape: 0 = backbeat roll
+    (8ths → 16ths, ramping velocity), 1 = rim-led landing on the backbeat,
+    2 = hat-roll landing on the backbeat. The final 16th ALWAYS stays EMPTY
+    (it butts into the Gap). Techhouse's backbeat voice is the CLAP — its kit
+    has no snare (rolling a missing voice rendered silence)."""
     ramp8 = [0.45, 0, 0.52, 0, 0.60, 0, 0.68, 0]
     ramp16 = [0.72, 0.76, 0.81, 0.85, 0.90, 0.94, 0.98, 0.0]
-    if style in ("drill", "hiphop"):
-        return {"rim": ramp8 + [0.0] * 8, "snare": [0.0] * 8 + ramp16}
-    return {"snare": ramp8 + ramp16}
+    lead = "clap" if style == "techhouse" else "snare"
+    if shape is None:  # legacy auto-shape
+        shape = 1 if style in ("drill", "hiphop") else 0
+    if shape == 1:
+        return {"rim": ramp8 + [0.0] * 8, lead: [0.0] * 8 + ramp16}
+    if shape == 2:
+        return {"hatC": [.50, .55, .60, .65, .70, .75, .80, .85,
+                         .88, .90, .92, .94, .96, .98, 1.0, 0.0],
+                lead: [0.0] * 12 + [0.85, 0.90, 0.95, 0.0]}
+    return {lead: ramp8 + ramp16}
 
 
 def _lpf_sweep(seg: np.ndarray, sr: int, f0: float, f1: float) -> np.ndarray:
@@ -147,8 +155,14 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
       and every FX seed vary with it — the riff itself NEVER does.
     """
     style = choose_style(riff, variation)
+    pal = style.fx_palette
     plan = plan if plan is not None else plan_song(riff.tempo, variation,
                                                    structure=style.structure)
+    # breaks take the style's riff transform (octave_echo / call_response /
+    # sparse_low); drops are untouchable and intros keep their character
+    plan = [dc_replace(s, riff_variant=style.riff_break_variant)
+            if s.name.startswith("break") and s.riff_variant == "sparse_low" else s
+            for s in plan]
     flags = flags if flags is not None else FxFlags()
     prog = choose_progression(riff, variation, pick=style.prog_pick)
     spb = seconds_per_beat(riff.tempo)
@@ -161,7 +175,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
               for name in ("riff", "drums", "bass", "pads", "fx")}
     kick_onsets: list[int] = []
 
-    pattern = DRUM_PATTERNS.get(riff.drum_style) if riff.drum_style else None
+    from ..render.drums import pattern_for
+    pattern = pattern_for(riff.drum_style, style.drum_variant) if riff.drum_style else None
 
     # ---- base section renders + boundary map -------------------------------
     bounds: list[tuple[Section, int, int]] = []   # (section, start, end) samples
@@ -215,22 +230,25 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         for k, (idx, sec, a, e) in enumerate(drops):
             later = k >= 1  # drop2 onwards escalates
             prev = bounds[idx - 1] if idx > 0 else None
-            if prev and prev[0].name.startswith("build"):
+            if pal.riser_on and prev and prev[0].name.startswith("build"):
                 b_sec, b_a, b_e = prev
-                riser_bars = min(8, b_sec.bars)
+                riser_bars = min(pal.riser_bars, b_sec.bars)
                 dur = riser_bars * bar_s
+                depth = min(0.85, pal.gate_depth + (0.2 if later else 0.0))
                 sig = fx.riser(dur, sr, seed + idx, gate_hz=4.0 / spb,
-                               gate_depth=0.7 if later else 0.5)
+                               gate_depth=depth)
                 _add_at(layers["fx"], sig * fx_g, a - sig.shape[0])
             cr = fx.crash(sr, seed + 100 + idx)
             _add_at(layers["fx"], cr * fx_g, a)
-            _add_at(layers["fx"], fx.reverse_crash(cr, sr), a - cr.shape[0])
-            imp = fx.impact(sr)
+            if pal.reverse_crash_on:
+                _add_at(layers["fx"], fx.reverse_crash(cr, sr), a - cr.shape[0])
+            imp = fx.impact(sr, peak_db=pal.impact_db,
+                            f0=pal.impact_f0, f1=pal.impact_f1)
             _add_at(layers["fx"], imp, a)
             if later:  # doubled impact on later drops
                 _add_at(layers["fx"], imp * 0.5, a + int(0.010 * sr))
             nxt = bounds[idx + 1] if idx + 1 < len(bounds) else None
-            if nxt and nxt[0].name.startswith("break"):
+            if pal.downlifter_on and nxt and nxt[0].name.startswith("break"):
                 _add_at(layers["fx"], fx.downlifter(2 * bar_s, sr), nxt[1])
         for sec, a, e in breaks:
             _add_at(layers["fx"], fx.crash(sr, seed + 200) * fx_g, a)
@@ -239,7 +257,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         from ..render import drums_audio_pattern
         for i, (b_sec, b_a, b_e) in builds.items():
             fill_at = b_e - int(bar_s * sr)
-            sig = drums_audio_pattern(riff.drum_style, _fill_pattern(riff.drum_style),
+            sig = drums_audio_pattern(riff.drum_style,
+                                      _fill_pattern(riff.drum_style, pal.fill_shape),
                                       riff.tempo, 1, sr)
             _add_at(layers["drums"], sig, fill_at)
 
@@ -280,8 +299,14 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                    style.pad_role)
                 _add_at(layers["pads"], sig * 0.5, a)
 
-    # riff delay-throw into breaks — auto-decided per track unless forced
-    do_throw = fx.throw_fits(riff) if flags.throw is None else flags.throw
+    # riff delay-throw into breaks — auto-decided per track unless forced.
+    # flags.throw (tests) wins; then the palette may suppress an eligible throw
+    if flags.throw is not None:
+        do_throw = flags.throw
+    elif pal.throw is False:
+        do_throw = False
+    else:
+        do_throw = fx.throw_fits(riff)
     if do_throw and breaks:
         # the riff's final half-bar (beats 2..4), shifted to start at zero
         half_bar = riff.bar_beats / 2.0

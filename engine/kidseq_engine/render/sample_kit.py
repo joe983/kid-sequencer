@@ -49,6 +49,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "clap": [("techhouse/clap.wav", 1.0)],
         "hatC": [("techhouse/hatC.wav", 1.0)],
         "hatO": [("techhouse/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
     # dnb: the app's kit — layered soft kick (VEH1 004 + 005 at 0.5, the pack's
     # relative gains), DC_Kit14 snare + 75ms-trimmed hat (trim baked at unpack).

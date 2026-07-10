@@ -107,12 +107,15 @@ def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = Non
     return x.astype(np.float32)
 
 
-def impact(sr: int = SR, peak_db: float = -6.0) -> np.ndarray:
-    """Drop-downbeat boom: 80→35 Hz sine drop + 80 ms LP noise burst, tanh'd."""
+def impact(sr: int = SR, peak_db: float = -6.0, f0: float = 80.0,
+           f1: float = 35.0) -> np.ndarray:
+    """Drop-downbeat boom: f0→f1 Hz sine drop + 80 ms LP noise burst, tanh'd.
+    Defaults = the original signature sound; genres tune the depth via the
+    style's FxPalette (drill/hiphop dive to ~28 Hz, garage sits lighter)."""
     dur = 2.0
     n = int(dur * sr)
     t = np.arange(n) / sr
-    f = 80.0 * (35.0 / 80.0) ** np.minimum(t / 0.5, 1.0)
+    f = f0 * (f1 / f0) ** np.minimum(t / 0.5, 1.0)
     boom = np.sin(np.cumsum(2 * np.pi * f / sr)) * np.exp(-t / 0.7)
 
     from scipy.signal import butter, sosfilt

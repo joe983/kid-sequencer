@@ -140,23 +140,36 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     # pluck stabs are the tech-house signature; the supersaw wash is the alt.
     # Bass: plucky rolling line first, reese as the darker alt.
     "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+                       drum_variant=[0, 1, 2],
+                       riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # dnb keeps the supersaw wash (its pad identity); the reese IS dnb bass —
     # feels vary (two-step / roller / whole-bar drone)
     "dnb": _menu(pad_role=["supersaw"], pad_rhythm=[0, 1],
-                 bass_patch=["bass"], bass_feel=[0, 1, 2]),
+                 bass_patch=["bass"], bass_feel=[0, 1, 2],
+                 drum_variant=[0, 1, 2],
+                 riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass.
     "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
+                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+                    drum_variant=[0, 1, 2],
+                    riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # drill: dark closed-down sustain only — bright pads read wrong. 808 sub.
+    # Breaks stay low (sparse_low / deep call-response — no bright echoes).
     "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1],
-                   bass_patch=["bass_sub808"], bass_feel=[0, 1]),
+                   bass_patch=["bass_sub808"], bass_feel=[0, 1],
+                   drum_variant=[0, 1, 2],
+                   riff_break_variant=["sparse_low", "call_response"]),
     # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt. 808.
     "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1]),
+                    bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1],
+                    drum_variant=[0, 1, 2],
+                    riff_break_variant=["sparse_low", "call_response"]),
     # reggaeton: pizzicato dembow-accent plucks; warm wash alt. Tresillo bass.
     "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1],
+                       drum_variant=[0, 1, 2],
+                       riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
 
@@ -196,9 +209,41 @@ def choose_structure(variation: int = 0) -> StructureStyle:
     )
 
 
+# genre -> impact boom (f0, f1, level dB). drill/hiphop dive deeper (they
+# already run quiet_fx_db -5); garage keeps it light; dnb slightly higher f0.
+_IMPACT: dict[str, tuple[float, float, float]] = {
+    "drill": (60.0, 28.0, -6.0),
+    "hiphop": (60.0, 28.0, -6.0),
+    "dnb": (70.0, 35.0, -6.0),
+    "garage": (80.0, 35.0, -9.0),
+}
+
+# genre -> allowed fill shapes (see arrange/render.py _fill_pattern):
+# 0 = snare roll, 1 = rim-led into snare, 2 = hat-roll landing on snare
+_FILL_MENU: dict[str, list[int]] = {
+    "techhouse": [0, 2], "garage": [0, 2], "reggaeton": [0],
+    "drill": [1], "hiphop": [1], "dnb": [0],
+}
+
+
 def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
-    """Increment 1: the legacy constants for every genre."""
-    return FxPalette()
+    """Seeded dressing choices within the genre's taste. Boom-bap doesn't ride
+    white-noise risers — hiphop defaults them OFF (reverse crash still swells)."""
+    g = genre or ""
+    riser_menu = ([False, True], [0.70, 0.30]) if g == "hiphop" else \
+        ([True, False], [0.85, 0.15])
+    f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
+    return FxPalette(
+        riser_on=_pick(seed, "riser_on", *riser_menu),
+        riser_bars=_pick(seed, "riser_bars", [8, 4], [0.65, 0.35]),
+        gate_depth=_pick(seed, "gate_depth", [0.5, 0.7], [0.6, 0.4]),
+        impact_f0=f0, impact_f1=f1, impact_db=db,
+        downlifter_on=_pick(seed, "downlifter_on", [True, False], [0.8, 0.2]),
+        reverse_crash_on=_pick(seed, "reverse_crash_on", [True, False], [0.8, 0.2]),
+        fill_shape=_pick(seed, "fill_shape", _FILL_MENU.get(g, [0])),
+        # None = auto (fx.throw_fits decides); False = suppressed this take
+        throw=_pick(seed, "throw", [None, False], [0.75, 0.25]),
+    )
 
 
 def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:

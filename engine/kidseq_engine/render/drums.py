@@ -128,6 +128,71 @@ def _voice(name: str, sr: int) -> np.ndarray:
 _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
          "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
 
+# Seasoning overlays: per-genre pattern VARIANTS that replace only hat / rim /
+# shaker / cowbell rows — NEVER kick/snare/clap/sub (kick+snare = the genre's
+# skeleton; hats are the seasoning). Variant 0 = the base pattern untouched;
+# style.drum_variant picks. pattern_for() merges.
+_SEASONING_VOICES = {"hatC", "hatO", "rim", "shaker", "cowbell"}
+
+DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
+    "techhouse": [
+        # open-hat shuffle: the offbeat answer moves around the bar
+        {"hatO": [0, 0, .24, 0, 0, .20, 0, 0, 0, 0, .24, 0, 0, .20, 0, 0]},
+        # shaker 16ths riding under the hats
+        {"shaker": [.18] * 16},
+    ],
+    "dnb": [
+        # offbeat-8th hats only (rolling top)
+        {"hatC": [0, 0, .22, 0, 0, 0, .22, 0, 0, 0, .22, 0, 0, 0, .22, 0]},
+        # light 16ths
+        {"hatC": [.20, .10, .14, .10, .20, .10, .14, .10,
+                  .20, .10, .14, .10, .20, .10, .16, .10]},
+    ],
+    "garage": [
+        # rim skips displaced (the 2-step chatter moves)
+        {"rim": [0, .25, 0, 0, 0, 0, 0, .25, 0, 0, .25, 0, 0, .30, 0, 0]},
+        # denser open-hat offbeats
+        {"hatO": [0, 0, .22, 0, 0, .18, .22, 0, 0, 0, .22, 0, 0, .18, .22, 0]},
+    ],
+    "drill": [
+        # the triplet-feel hat stutter on the back half
+        {"hatC": [.25, .18, .25, .45, .25, 0, .35, .35,
+                  .25, .18, .25, .45, .25, 0, .35, .35]},
+        # sparser hats (more menace, more space)
+        {"hatC": [.25, 0, .25, 0, .25, 0, .28, .18, .25, 0, .25, 0, .25, 0, .28, .18]},
+    ],
+    "hiphop": [
+        # 8th hats instead of 16ths (classic head-nod space)
+        {"hatC": [.26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0, .26, 0, .24, 0]},
+        # busier rim conversation
+        {"rim": [0, 0, .30, 0, 0, .25, 0, 0, 0, 0, .30, 0, 0, .25, 0, .30]},
+    ],
+    "reggaeton": [
+        # cowbell answering on beat 3
+        {"cowbell": [.35, 0, 0, 0, 0, 0, .30, 0, .35, 0, 0, 0, 0, 0, .30, 0]},
+        # shaker dembow accents
+        {"shaker": [.28, .22, .28, .22, .28, .30, .28, .22,
+                    .28, .22, .28, .22, .28, .30, .28, .22]},
+    ],
+}
+
+
+def pattern_for(style: str | None, variant: int = 0) -> dict | None:
+    """The genre's DRUM_PATTERNS entry with a seasoning overlay merged in.
+    Variant 0 (or an unknown style) = the base pattern object untouched."""
+    base = DRUM_PATTERNS.get(style or "")
+    if base is None or variant <= 0:
+        return base
+    variants = DRUM_VARIANTS.get(style or "")
+    if not variants:
+        return base
+    overlay = variants[(variant - 1) % len(variants)]
+    assert set(overlay) <= _SEASONING_VOICES, (style, sorted(overlay))
+    merged = dict(base)
+    merged.update(overlay)
+    return merged
+
+
 # Per-style swing (mirrors the app's SWING map in playDrumsAtStep): odd 16th
 # steps are delayed by swing x one step. garage = UK Garage's defining shuffle.
 SWING: dict[str, float] = {"garage": 0.16, "techhouse": 0.08}
