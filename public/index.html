@@ -121,8 +121,8 @@
   <rect x="16.5" y="12" width="5" height="9" rx="1.8" fill="#1d1d1d"/>
 </svg>
 </button>
-<button aria-label="UK Garage" aria-pressed="false" class="drumStyleBtn" id="drumStyleFunk">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="Funk">  <path d="M12 1.6 L14.6 9.2 L22.6 9.2 L16.1 13.9 L18.7 21.5 L12 16.8 L5.3 21.5 L7.9 13.9 L1.4 9.2 L9.4 9.2 Z" fill="#1d1d1d"/>
+<button aria-label="UK Garage" aria-pressed="false" class="drumStyleBtn" id="drumStyleGarage">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="UK Garage">  <path d="M12 1.6 L14.6 9.2 L22.6 9.2 L16.1 13.9 L18.7 21.5 L12 16.8 L5.3 21.5 L7.9 13.9 L1.4 9.2 L9.4 9.2 Z" fill="#1d1d1d"/>
 </svg>
 </button>
 <button aria-label="Reggaeton" aria-pressed="false" class="drumStyleBtn" id="drumStyleReggaeton">
@@ -672,10 +672,10 @@ const DRUM_PATTERNS = {
     snare: [0,0,0,0.20,  1,0,0.18,0,  0,0.20,0,0,  1,0,0.19,0],
     hatC:  [0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.15,0,  0.22,0,0.17,0]
   },
-  funk: {
-    // UK Garage 2-step (replaced funk, 2026-07-02): kick on 1 + and-of-2 +
-    // and-of-3, snare on 2 & 4, rim skips, open hat on the offbeats. Heavy
-    // swing applied in playDrumsAtStep (the shuffle IS the garage feel).
+  garage: {
+    // UK Garage 2-step: kick on 1 + and-of-2 + and-of-3, snare on 2 & 4, rim
+    // skips, open hat on the offbeats. Heavy swing applied in playDrumsAtStep
+    // (the shuffle IS the garage feel). Key was "funk" before 2026-07-10.
     kick:  [1,0,0,0,    0,0,0.90,0,  0,0,0.85,0,  0,0,0,0],
     snare: [0,0,0,0,    1,0,0,0,     0,0,0,0,     1,0,0,0],
     rim:   [0,0,0,0.25, 0,0,0,0,     0,0.25,0,0,  0,0,0,0.30],
@@ -778,7 +778,7 @@ const drumMuteBtnEl = document.getElementById("drumMuteBtn");
 const drumStatusEl  = document.getElementById("drumStatus");
 const drumStyleTechEl      = document.getElementById("drumStyleTech");
 const drumStyleDnBEl       = document.getElementById("drumStyleDnB");
-const drumStyleFunkEl      = document.getElementById("drumStyleFunk");
+const drumStyleGarageEl    = document.getElementById("drumStyleGarage");
 const drumStyleDrillEl     = document.getElementById("drumStyleDrill");
 const drumStyleHipHopEl    = document.getElementById("drumStyleHipHop");
 const drumStyleReggaetonEl = document.getElementById("drumStyleReggaeton");
@@ -787,16 +787,19 @@ const drumStyleReggaetonEl = document.getElementById("drumStyleReggaeton");
 const DRUM_STYLE_AUDIO = {
   techno:    "techhouse",
   dnb:       "dnb",
-  funk:      "funk",
+  garage:    "garage",
   drill:     "drill",
   hiphop:    "hiphop",
   reggaeton: "reggaeton"
 };
-// drumStyle (audio engine key) -> activeDrumStyle (UI key) — used by load
+// drumStyle (audio engine key) -> activeDrumStyle (UI key) — used by load.
+// "funk" is the legacy audio key for UK Garage (renamed 2026-07-10) — kept here
+// so old saved sequences that stored drumStyle:"funk" still map to the button.
 const DRUM_STYLE_UI = {
   techhouse: "techno",
   dnb:       "dnb",
-  funk:      "funk",
+  garage:    "garage",
+  funk:      "garage",
   drill:     "drill",
   hiphop:    "hiphop",
   reggaeton: "reggaeton"
@@ -804,7 +807,7 @@ const DRUM_STYLE_UI = {
 const DRUM_STYLE_BUTTONS = () => ({
   techno:    drumStyleTechEl,
   dnb:       drumStyleDnBEl,
-  funk:      drumStyleFunkEl,
+  garage:    drumStyleGarageEl,
   drill:     drumStyleDrillEl,
   hiphop:    drumStyleHipHopEl,
   reggaeton: drumStyleReggaetonEl
@@ -854,7 +857,7 @@ function setDrumsMuted(m){
 }
 
 /*
-  The audio engine uses drumStyle (techhouse | dnb | funk | drill | hiphop | reggaeton).
+  The audio engine uses drumStyle (techhouse | dnb | garage | drill | hiphop | reggaeton).
   Map activeDrumStyle -> drumStyle, and update button visuals.
 */
 function syncAudioAndUI(){
@@ -893,7 +896,7 @@ function handleDrumClick(clickedStyle){
 
 if(drumStyleTechEl)      drumStyleTechEl.onclick      = () => handleDrumClick("techno");
 if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => handleDrumClick("dnb");
-if(drumStyleFunkEl)      drumStyleFunkEl.onclick      = () => handleDrumClick("funk");
+if(drumStyleGarageEl)    drumStyleGarageEl.onclick    = () => handleDrumClick("garage");
 if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("drill"); };
 if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("hiphop"); };
 if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => handleDrumClick("reggaeton");
@@ -2388,6 +2391,9 @@ async function _loadDrumPack(){
         if(loaded.length) kits[style][voice] = loaded;
       }
     }
+    // Legacy pack key: UK Garage was "funk" before 2026-07-10. If a stale CDN
+    // copy still ships "funk", surface it under "garage" so the current key finds it.
+    if(kits.funk && !kits.garage){ kits.garage = kits.funk; }
     return kits;
   }catch(e){ return null; }
 }
@@ -2583,8 +2589,8 @@ function playDrumsAtStep(s){
   const stepDur = stepDurationSec();
 
   // Per-style shuffle on the odd 16ths (keeps the playhead/grid exact).
-  // funk (= UK Garage) swings hard — the shuffle is the 2-step feel.
-  const SWING = { techhouse: 0.08, funk: 0.16 };
+  // garage (UK Garage) swings hard — the shuffle is the 2-step feel.
+  const SWING = { techhouse: 0.08, garage: 0.16 };
   const swing = SWING[drumStyle] || 0.0;
   const offs = (swing && (s % 2 === 1)) ? (stepDur * swing) : 0;
 
@@ -3687,7 +3693,7 @@ function playInstrument(freq, steps){
   // Octave placement for bass/bells. NB the "bells" slot is the rave PAD when
   // its sample kit is loaded (plays at grid pitch); the synth fallback is still
   // the old glockenspiel 2 octaves up. Internal key stays "bells" so old saved
-  // sequences load (same pattern as the funk/UK Garage drum key).
+  // sequences load (same backward-compat pattern as the garage drum key alias).
   const hasKit = melodicSampleKits && melodicSampleKits[instrument];
   const f = instrument === "bass"  ? freq * 0.25          // 2 octaves down -> C2-C3
           : instrument === "bells" ? (hasKit ? freq : freq * 4)

@@ -94,6 +94,8 @@ def parse_sequence(payload: dict) -> Riff:
     tempo = float(payload.get("tempo", 120))
     instrument = str(payload.get("instrument", "piano"))
     drum_style = payload.get("drumStyle") or None
+    if drum_style == "funk":  # legacy key for UK Garage (renamed 2026-07-10)
+        drum_style = "garage"
 
     raw = (payload.get("riff") or {}).get("notes", [])
     notes: list[Note] = []

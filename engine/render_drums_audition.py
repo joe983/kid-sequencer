@@ -21,7 +21,7 @@ from kidseq_engine.mixmaster.master import write_mp3  # noqa: E402
 from kidseq_engine.render import drum_source, drums_audio  # noqa: E402
 from kidseq_engine.render.drums import DRUM_PATTERNS  # noqa: E402
 
-_DEFAULT_BPM = {"techhouse": 124, "dnb": 172, "funk": 132, "drill": 142,
+_DEFAULT_BPM = {"techhouse": 124, "dnb": 172, "garage": 132, "drill": 142,
                 "hiphop": 92, "reggaeton": 96}
 
 

@@ -149,7 +149,7 @@ def riff_variant(notes: list[Note], variant: str) -> list[Note]:
 # ---------------------------------------------------------------------------
 
 # genres with a four-on-the-floor feel get offbeat 8ths; the rest get long roots
-_OFFBEAT_GENRES = {"techhouse", "funk", "reggaeton"}
+_OFFBEAT_GENRES = {"techhouse", "garage", "reggaeton"}
 
 
 def _chord_for_bar(bar: int, prog: list[int]) -> int:

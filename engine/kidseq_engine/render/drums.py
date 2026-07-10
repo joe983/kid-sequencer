@@ -28,9 +28,9 @@ DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
         "snare": [0,0,0,.20, 1,0,.18,0, 0,.20,0,0, 1,0,.19,0],
         "hatC":  [.22,0,.15,0, .22,0,.15,0, .22,0,.15,0, .22,0,.17,0],
     },
-    # "funk" slot = UK Garage 2-step (2026-07-02). Mirrors the app (which also
-    # applies a heavy 0.16 swing to this style in playDrumsAtStep).
-    "funk": {
+    # "garage" slot = UK Garage 2-step. Mirrors the app (which also applies a
+    # heavy 0.16 swing to this style). Key was "funk" before 2026-07-10.
+    "garage": {
         "kick":  [1,0,0,0, 0,0,.90,0, 0,0,.85,0, 0,0,0,0],
         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
         "rim":   [0,0,0,.25, 0,0,0,0, 0,.25,0,0, 0,0,0,.30],
@@ -124,8 +124,8 @@ _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
          "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
 
 # Per-style swing (mirrors the app's SWING map in playDrumsAtStep): odd 16th
-# steps are delayed by swing x one step. funk = UK Garage's defining shuffle.
-SWING: dict[str, float] = {"funk": 0.16, "techhouse": 0.08}
+# steps are delayed by swing x one step. garage = UK Garage's defining shuffle.
+SWING: dict[str, float] = {"garage": 0.16, "techhouse": 0.08}
 
 
 def swung_step_offset(style: str | None, step: int) -> float:

@@ -70,13 +70,16 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "shaker":  [("perc/shaker.wav", 0.9)],
         "cowbell": [("perc/cowbell.wav", 0.8)],
     },
-    # "funk" slot = UK Garage: bounce kit + woodblock rim skip
-    "funk": {
-        "kick":  [("bounce/kick.wav", 1.0)],
-        "snare": [("bounce/snare.wav", 1.0)],
-        "rim":   [("perc/woodblock.wav", 0.8)],
-        "hatC":  [("bounce/hatC.wav", 1.0)],
-        "hatO":  [("bounce/hatO.wav", 1.0)],
+    # "garage" slot = UK Garage. Reuses the APP's approved drums.pack samples
+    # (Candy kick/snare/rim + TR-909 hats), unpacked to assets/drums/garage/ by
+    # scripts/fetch_appkit.py — the app preset the owner signed off on, not a
+    # bespoke CC0 kit. Key was "funk" before 2026-07-10.
+    "garage": {
+        "kick":  [("garage/kick.wav", 1.0)],
+        "snare": [("garage/snare.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)],
+        "hatC":  [("garage/hatC.wav", 1.0)],
+        "hatO":  [("garage/hatO.wav", 1.0)],
     },
 }
 

@@ -110,6 +110,7 @@ def populate_assets(force_vsco: bool = False) -> str:
         (Path(ASSETS_MOUNT) / sub).mkdir(parents=True, exist_ok=True)
     out = _run("scripts/fetch_soundfonts.py")
     out += _run("scripts/fetch_drumkits.py")
+    out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())
@@ -219,7 +220,7 @@ def render(payload: dict):
 
 
 # representative tempo per genre for the full-song ear sweep
-_GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "funk": 132,
+_GENRE_TEMPOS = {"techhouse": 124, "dnb": 172, "garage": 132,
                  "drill": 142, "hiphop": 92, "reggaeton": 96}
 
 
@@ -270,7 +271,7 @@ def render_drums(style: str, tempo: int) -> bytes:
 
 
 @app.local_entrypoint()
-def drums(styles: str = "funk,reggaeton") -> None:
+def drums(styles: str = "garage,reggaeton") -> None:
     """Drums-only auditions for a comma-list of genres -> out/<style>_drums.mp3."""
     dst_dir = ENGINE_LOCAL / "out"
     dst_dir.mkdir(exist_ok=True)
