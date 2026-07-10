@@ -268,25 +268,81 @@ def _fold(pitch: int, lo: int, hi: int) -> int:
     return pitch
 
 
-def bass_notes(riff: Riff, prog: list[int], bars: int) -> list[Note]:
-    """Chord roots around C2–B2 in a genre feel. Pitches are absolute (no -24
-    shift downstream — these are not grid notes)."""
+# Legacy per-genre-bucket feels (variant 0 keeps today's exact behaviour)
+_FEEL_OFFBEAT = [(0.5, 0.45, 104), (1.5, 0.45, 104), (2.5, 0.45, 104), (3.5, 0.45, 104)]
+_FEEL_DNB_TWOSTEP = [(0.0, 1.5, 106), (2.5, 1.0, 100)]
+_FEEL_LONG_SUB = [(0.0, 3.0, 106), (3.0, 1.0, 98)]
+
+# Per-genre bass FEELS: list of variants, each a list of (start, dur, vel)
+# root hits within one bar. Variant 0 = the genre's current signature.
+_BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
+    "techhouse": [
+        _FEEL_OFFBEAT,
+        # rolling 8th-pairs, alternating accents
+        [(0.5, 0.2, 104), (0.75, 0.2, 86), (1.5, 0.2, 104), (1.75, 0.2, 86),
+         (2.5, 0.2, 104), (2.75, 0.2, 86), (3.5, 0.2, 104), (3.75, 0.2, 86)],
+    ],
+    "garage": [
+        _FEEL_OFFBEAT,
+        # 2-step bounce: long-short pairing around the swung skip
+        [(0.0, 0.9, 106), (1.75, 0.45, 98), (2.5, 0.9, 104), (3.5, 0.45, 98)],
+    ],
+    "reggaeton": [
+        _FEEL_OFFBEAT,
+        # tresillo — the dembow's 3+3+2 pulse
+        [(0.0, 1.4, 106), (1.5, 1.4, 100), (3.0, 0.9, 98)],
+    ],
+    "dnb": [
+        _FEEL_DNB_TWOSTEP,
+        # roller: three pushes across the bar
+        [(0.0, 1.4, 106), (2.0, 0.9, 102), (3.0, 0.9, 98)],
+        # whole-bar reese drone
+        [(0.0, 3.9, 104)],
+    ],
+    "drill": [
+        _FEEL_LONG_SUB,
+        # kick-locked 808s (mirrors the drill kick placement)
+        [(0.0, 1.4, 106), (1.5, 1.4, 102), (3.0, 0.7, 100), (3.75, 0.25, 96)],
+    ],
+    "hiphop": [
+        _FEEL_LONG_SUB,
+        # kick-locked boom-bap roots
+        [(0.0, 2.4, 106), (2.5, 1.4, 100)],
+    ],
+}
+
+
+def _default_feel(genre: str | None) -> list[tuple[float, float, int]]:
+    if genre in _OFFBEAT_GENRES:
+        return _FEEL_OFFBEAT
+    if genre == "dnb":
+        return _FEEL_DNB_TWOSTEP
+    return _FEEL_LONG_SUB
+
+
+def bass_feel_for(genre: str | None, variant: int = 0) -> list[tuple[float, float, int]]:
+    variants = _BASS_FEELS.get(genre or "")
+    if not variants:
+        return _default_feel(genre)
+    return variants[variant % len(variants)]
+
+
+def bass_notes(riff: Riff, prog: list[int], bars: int,
+               feel: list[tuple[float, float, int]] | None = None) -> list[Note]:
+    """Chord roots around C2–B2 in a genre feel — `feel` is a list of
+    (start_beat, dur, vel) hits per bar (default: the genre's legacy bucket).
+    Pitches are absolute (no -24 shift downstream — these are not grid notes),
+    and always the chord ROOT (the register/root-pc test relies on it)."""
+    feel = feel if feel is not None else _default_feel(riff.drum_style)
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
     for b in range(bars):
         root_pc = (semi + steps[_chord_for_bar(b, prog)]) % 12
         pitch = _fold(36 + root_pc, 36, 47)  # C2..B2
         bar0 = b * 4.0
-        if riff.drum_style in _OFFBEAT_GENRES:
-            for beat in (0.5, 1.5, 2.5, 3.5):  # classic house offbeat 8ths
-                out.append(Note(pitch=pitch, velocity=104, start_beats=bar0 + beat,
-                                dur_beats=0.45))
-        elif riff.drum_style == "dnb":
-            out.append(Note(pitch=pitch, velocity=106, start_beats=bar0, dur_beats=1.5))
-            out.append(Note(pitch=pitch, velocity=100, start_beats=bar0 + 2.5, dur_beats=1.0))
-        else:  # drill / hiphop / unknown: long sub roots
-            out.append(Note(pitch=pitch, velocity=106, start_beats=bar0, dur_beats=3.0))
-            out.append(Note(pitch=pitch, velocity=98, start_beats=bar0 + 3.0, dur_beats=1.0))
+        for start, dur, vel in feel:
+            out.append(Note(pitch=pitch, velocity=vel,
+                            start_beats=bar0 + start, dur_beats=dur))
     return out
 
 

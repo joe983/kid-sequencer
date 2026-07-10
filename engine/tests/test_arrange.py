@@ -125,18 +125,37 @@ def test_riff_variants_are_deterministic_and_never_touch_verbatim():
 
 
 def test_bass_notes_are_chord_roots_in_register():
+    from kidseq_engine.arrange import bass_feel_for
+    from kidseq_engine.render.drums import DRUM_PATTERNS
+
     for key in _KEYS:
-        for style in ("techhouse", "dnb", "drill"):
+        for style in DRUM_PATTERNS:
             riff = _riff(key, drum_style=style)
             prog = choose_progression(riff)
             semi, steps = _scale_steps(key)
-            notes = bass_notes(riff, prog, bars=8)
-            assert notes
-            for n in notes:
-                assert 36 <= n.pitch <= 47, (key, style, n)
-                bar = int(n.start_beats // 4)
-                root_pc = (semi + steps[prog[bar % 4]]) % 12
-                assert n.pitch % 12 == root_pc, (key, style, bar, n)
+            for variant in (0, 1, 2):  # indices wrap per-genre
+                feel = bass_feel_for(style, variant)
+                notes = bass_notes(riff, prog, bars=8, feel=feel)
+                assert notes
+                for n in notes:
+                    assert 36 <= n.pitch <= 47, (key, style, variant, n)
+                    bar = int(n.start_beats // 4)
+                    root_pc = (semi + steps[prog[bar % 4]]) % 12
+                    assert n.pitch % 12 == root_pc, (key, style, variant, bar, n)
+                    assert n.start_beats + n.dur_beats <= (bar + 1) * 4.0 + 0.5, (style, n)
+
+
+def test_bass_feel_variant0_matches_legacy_default():
+    # variant 0 must reproduce the pre-style behaviour for every genre bucket
+    from kidseq_engine.arrange import bass_feel_for
+
+    riff = _riff()
+    prog = choose_progression(riff)
+    for style in ("techhouse", "garage", "reggaeton", "dnb", "drill", "hiphop"):
+        r = _riff(drum_style=style)
+        legacy = bass_notes(r, prog, bars=2)          # default feel branch
+        v0 = bass_notes(r, prog, bars=2, feel=bass_feel_for(style, 0))
+        assert legacy == v0, style
 
 
 def test_pad_notes_are_diatonic_triads_in_register_for_every_genre_rhythm():

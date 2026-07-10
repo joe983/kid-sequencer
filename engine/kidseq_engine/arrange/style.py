@@ -122,6 +122,8 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
 _BASE_MENU: dict[str, list] = {
     "bass_patch": ["bass"],
     "bass_feel": [0],
+    "pad_role": ["supersaw"],
+    "pad_rhythm": [0],
     "texture": [None],
     "drum_variant": [0],
     "riff_break_variant": ["sparse_low"],
@@ -135,18 +137,26 @@ def _menu(**over) -> dict[str, list]:
 
 
 _GENRE_MENU: dict[str, dict[str, list]] = {
-    # pluck stabs are the tech-house signature; the supersaw wash is the alt
-    "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1]),
-    # dnb keeps the supersaw wash (its pad identity); rhythm swells vary
-    "dnb": _menu(pad_role=["supersaw"], pad_rhythm=[0, 1]),
-    # organ skank IS UK garage; pluck as the alternate colour
-    "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1]),
-    # drill: dark closed-down sustain only — bright pads read wrong
-    "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1]),
-    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt
-    "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1]),
-    # reggaeton: pizzicato dembow-accent plucks; warm wash alt
-    "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1]),
+    # pluck stabs are the tech-house signature; the supersaw wash is the alt.
+    # Bass: plucky rolling line first, reese as the darker alt.
+    "techhouse": _menu(pad_role=["pluck", "supersaw"], pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
+    # dnb keeps the supersaw wash (its pad identity); the reese IS dnb bass —
+    # feels vary (two-step / roller / whole-bar drone)
+    "dnb": _menu(pad_role=["supersaw"], pad_rhythm=[0, 1],
+                 bass_patch=["bass"], bass_feel=[0, 1, 2]),
+    # organ skank IS UK garage; pluck as the alternate colour. Bouncy bass.
+    "garage": _menu(pad_role=["organ", "pluck"], pad_rhythm=[0, 1],
+                    bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
+    # drill: dark closed-down sustain only — bright pads read wrong. 808 sub.
+    "drill": _menu(pad_role=["dark"], pad_rhythm=[0, 1],
+                   bass_patch=["bass_sub808"], bass_feel=[0, 1]),
+    # hiphop: e-piano comping (boom-bap keys); warm pad as the soft alt. 808.
+    "hiphop": _menu(pad_role=["epiano", "warm"], pad_rhythm=[0, 1],
+                    bass_patch=["bass_sub808", "bass"], bass_feel=[0, 1]),
+    # reggaeton: pizzicato dembow-accent plucks; warm wash alt. Tresillo bass.
+    "reggaeton": _menu(pad_role=["pizz", "warm"], pad_rhythm=[0, 1],
+                       bass_patch=["bass_pluck", "bass"], bass_feel=[0, 1]),
 }
 
 

@@ -19,8 +19,8 @@ import numpy as np
 
 from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
-from . import (Section, bass_notes, choose_progression, pad_notes,
-               pad_rhythm_for, plan_song, riff_variant)
+from . import (Section, bass_feel_for, bass_notes, choose_progression,
+               pad_notes, pad_rhythm_for, plan_song, riff_variant)
 from .style import PAD_ROLES, choose_style
 from ..render import fx, riff_audio
 from ..render.drums import DRUM_PATTERNS
@@ -66,6 +66,17 @@ def _render_pads(notes, tempo: float, span_beats: float, sr: int,
     if default_soundfont():
         return as_stereo(render_riff_sf(notes, tempo, "pads", 1, span_beats, sr))
     return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
+
+
+def _render_bass(notes, tempo: float, span_beats: float, sr: int,
+                 bass_patch: str = "bass") -> np.ndarray:
+    """Render the bass LAYER with the style's genre patch (Surge). Falls back
+    to the grid-voice chain (SF2 Lately Bass / numpy synth) without Surge —
+    the kid's own 'bass' grid instrument is untouched by this."""
+    if vst_render.SURGE_VST3.exists() and bass_patch in vst_render.PATCHES:
+        return as_stereo(vst_render.render_patch(notes, tempo, bass_patch, 1,
+                                                 span_beats, sr))
+    return riff_audio(notes, tempo, "bass", 1, span_beats, sr)
 
 
 def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
@@ -180,8 +191,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                                           style=riff.drum_style)]
 
         if sec.bass:
-            notes = bass_notes(riff, prog, sec.bars)
-            sig = riff_audio(notes, riff.tempo, "bass", 1, span_beats, sr)
+            feel = bass_feel_for(riff.drum_style, style.bass_feel)
+            notes = bass_notes(riff, prog, sec.bars, feel=feel)
+            sig = _render_bass(notes, riff.tempo, span_beats, sr, style.bass_patch)
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:

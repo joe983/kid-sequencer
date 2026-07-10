@@ -122,6 +122,36 @@ PATCHES: dict[str, dict] = {
         "fx_a1_fx_type": "Chorus",
         "character": "Bright",
     },
+    # 808-style sub bass (drill/hiphop) — pure sine, long natural decay
+    "bass_sub808": {
+        "a_osc_1_type": "Sine",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(1.2)),
+        "a_amp_eg_sustain": 60.0,
+        "a_amp_eg_release": ("raw", _env(0.3)),
+        "character": "Warm",
+    },
+    # plucky bassline (garage/techhouse/reggaeton) — single saw, tight filter
+    # envelope, short release: the bouncing 8th-note bass that stays out of the
+    # kick's way
+    "bass_pluck": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 500.0,
+        "a_filter_1_resonance": 20.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.5),
+        "a_filter_eg_attack": ("raw", _env(0.004)),
+        "a_filter_eg_decay": ("raw", _env(0.09)),
+        "a_filter_eg_sustain": 10.0,
+        "a_filter_eg_release": ("raw", _env(0.08)),
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.4)),
+        "a_amp_eg_sustain": 40.0,
+        "a_amp_eg_release": ("raw", _env(0.08)),
+        "character": "Warm",
+    },
     # dark sustained pad (drill) — closed-down LP12, slow bloom, warm
     "pad_dark": {
         "a_osc_1_type": "Classic",
