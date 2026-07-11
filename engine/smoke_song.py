@@ -52,6 +52,14 @@ def main() -> None:
           f"bias={st.structure.drop_bias} intro={st.structure.intro_character} "
           f"esc={st.structure.escalation} pad={st.pad_role} "
           f"bass={st.bass_patch}/{st.bass_feel} tex={st.texture} prog_pick={st.prog_pick}")
+    p = st.fx_palette
+    print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
+          f"starve={p.bass_starve_bars} "
+          f"riser={p.riser_kind}/{p.riser_style}"
+          f"{'/restraint' if p.riser_restraint else ''} "
+          f"candy={p.earcandy_every or 0} swell={p.swell_kind} "
+          f"bomb={p.bomb_on} scratch={p.scratch_on} open={p.drop_open} "
+          f"rumble={p.rumble_on} odd={p.odd_loop_on} fill={p.fill_shape}")
     print(f"layers: {sorted(layers)} | kicks={len(kick_onsets)}")
 
     # the intro rides a wetter riff send — "distant" open that dries up at the
