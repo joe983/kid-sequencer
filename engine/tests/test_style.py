@@ -111,6 +111,66 @@ def test_style_fields_are_decorrelated_across_nonces():
             "build_frac and prog_pick look locked together", sorted(combos))
 
 
+def test_fx_palette_r10_menu_coverage():
+    """R10 transition-core palette fields: every menu option occurs across 200
+    variations, and genre vocabularies hold (drill keeps rolls + shepard out)."""
+    r = _riff()  # techhouse
+    pals = [choose_style(r, v).fx_palette for v in range(200)]
+    assert {p.gap_beats for p in pals} == {2.0, 1.0, 0.15}
+    assert {p.gap_carry for p in pals} == {None, "texture"}
+    assert {p.bass_starve_bars for p in pals} == {0, 1, 2}
+    assert {p.riser_restraint for p in pals} == {True, False}
+    assert {p.riser_style for p in pals} == {"classic", "shepard"}
+    assert {p.fill_shape for p in pals} == {0, 2, 3, 4}
+    d = [choose_style(_riff(drum_style="drill"), v).fx_palette
+         for v in range(200)]
+    assert {p.riser_style for p in d} == {"classic"}
+    assert {p.fill_shape for p in d} == {1}
+    assert {p.gap_beats for p in d} == {1.0, 0.15}
+
+
+def test_fx_palette_r11_menu_coverage():
+    """R11 ear-candy/vocabulary fields: coverage + genre gating (scratch is
+    hiphop-only, drop_open garage-only, hiphop runs no candy cadence)."""
+    from kidseq_engine.arrange.style import _CANDY_MENU
+    from kidseq_engine.render.fx import CANDY_LEVELS
+
+    per_genre = {g: [choose_style(_riff(drum_style=g), v).fx_palette
+                     for v in range(200)]
+                 for g in DRUM_PATTERNS}
+    assert {p.earcandy_every for p in per_genre["techhouse"]} == {8, 4, 0}
+    assert {p.earcandy_every for p in per_genre["hiphop"]} == {0}
+    assert {p.earcandy_every for p in per_genre["reggaeton"]} == {8, 4}
+    assert {p.swell_kind for p in per_genre["dnb"]} == {"delay", "reverb", None}
+    assert {p.swell_kind for p in per_genre["techhouse"]} == {None}
+    assert {p.scratch_on for p in per_genre["hiphop"]} == {True, False}
+    assert {p.scratch_on for p in per_genre["techhouse"]} == {False}
+    assert {p.drop_open for p in per_genre["garage"]} == {"no_pads", None}
+    assert {p.drop_open for p in per_genre["dnb"]} == {None}
+    assert {p.bomb_on for p in per_genre["dnb"]} == {True, False}
+    # every candy-menu kind is either a fx.candy_blip kind or a placement kind
+    placement_kinds = {"kick_fill", "drum_stop", "rev_swell_riff",
+                       "rev_swell_delay"}
+    for g, menu in _CANDY_MENU.items():
+        for kind in menu:
+            assert kind in CANDY_LEVELS or kind in placement_kinds, (g, kind)
+
+
+def test_fx_palette_r12_menu_coverage():
+    """R12 beds: rumble is techhouse-only, odd loop techhouse/garage; dnb and
+    reggaeton finally have a texture menu."""
+    per_genre = {g: [choose_style(_riff(drum_style=g), v).fx_palette
+                     for v in range(200)]
+                 for g in DRUM_PATTERNS}
+    assert {p.rumble_on for p in per_genre["techhouse"]} == {True, False}
+    assert {p.rumble_on for p in per_genre["dnb"]} == {False}
+    assert {p.odd_loop_on for p in per_genre["techhouse"]} == {True, False}
+    assert {p.odd_loop_on for p in per_genre["garage"]} == {True, False}
+    assert {p.odd_loop_on for p in per_genre["drill"]} == {False}
+    assert set(_GENRE_MENU["dnb"]["texture"]) == {"wash", None}
+    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", None}
+
+
 def test_arrange_style_is_frozen_and_hashable():
     s = choose_style(_riff(), 0)
     assert isinstance(s, ArrangeStyle)

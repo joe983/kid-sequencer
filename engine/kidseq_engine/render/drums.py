@@ -149,6 +149,9 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         # light 16ths
         {"hatC": [.20, .10, .14, .10, .20, .10, .14, .10,
                   .20, .10, .14, .10, .20, .10, .16, .10]},
+        # shaker 16ths riding under the hats (Matador: thickness = layered
+        # tops, not more EQ on one lane)
+        {"shaker": [.12] * 16},
     ],
     "garage": [
         # rim skips displaced (the 2-step chatter moves)
@@ -181,8 +184,35 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
                     .28, .22, .28, .22, .28, .30, .28, .22]},
         # woodblock rim on the dembow skips
         {"rim": [0, 0, 0, .30, 0, 0, .28, 0, 0, 0, 0, .30, 0, 0, .28, 0]},
+        # ghost closed hats between the shaker (a second top layer)
+        {"hatC": [.14, 0, .10, 0, .14, 0, .10, 0,
+                  .14, 0, .10, 0, .14, 0, .12, 0]},
     ],
 }
+
+
+def render_odd_cell(style: str | None, tempo: float, dur_s: float,
+                    sr: int = SR, voice: str = "shaker",
+                    cell_beats: float = 3.0) -> np.ndarray:
+    """KiNK's odd-length loop: a 3-beat percussion cell tiled edge to edge so
+    it mutates against the 4/4 kit and re-aligns every 3 bars — deterministic
+    hypnosis. An ADDED quiet lane only (the skeleton never mutates); the
+    caller mixes it well under the kit."""
+    spb = seconds_per_beat(tempo)
+    n = int(dur_s * sr)
+    buf = np.zeros(n, dtype=np.float32)
+    one = _voice(voice, sr) * _GAIN.get(voice, 0.4)
+    hits = (0.0, 1.5, 2.25)          # the cell's internal rhythm
+    vels = (0.9, 0.6, 0.75)
+    cell_s = cell_beats * spb
+    c = 0
+    while c * cell_s < dur_s:
+        for h, v in zip(hits, vels):
+            at = int((c * cell_s + h * spb) * sr)
+            if at < n:
+                add_at(buf, one * v, at)
+        c += 1
+    return buf
 
 
 def pattern_for(style: str | None, variant: int = 0) -> dict | None:

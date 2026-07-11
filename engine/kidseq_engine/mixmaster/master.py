@@ -24,6 +24,7 @@ import numpy as np
 import pyloudnorm as pyln
 from pedalboard import (
     Compressor,
+    Distortion,
     Gain,
     HighpassFilter,
     HighShelfFilter,
@@ -79,25 +80,38 @@ GENRE_PRESETS: dict[str, GenrePreset] = {
 # Layers ducked by the sidechain pump (drums are the trigger, never ducked),
 # with per-layer depth multipliers: pads/texture pump hardest (the EDM wash),
 # the riff only breathes (it must stay legible — it IS the song).
-_PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5, "fx": 1.0}
+_PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5,
+              "fx": 1.0, "fx_sub": 1.0, "rumble": 1.25}
 _PUMPED_LAYERS = tuple(_PUMP_MULT)
 _PUMP_DEPTH_CAP = 0.65
 
 # Post-board layer LUFS targets (active regions only) — the calibrated mix
-# balance genre gains offset from.
+# balance genre gains offset from. rumble pumps hardest AND sits deepest —
+# it ducks out of the dry kick's way like Hades' sidechained return.
 _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
-               "texture": -30.0}
+               "texture": -30.0, "rumble": -31.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
-_MONO_LOCK = ("bass",)
+_MONO_LOCK = ("bass", "fx_sub", "rumble")
+
+# Haas-on-sides width (Camo & Krooked): a delayed mono copy added as pure
+# Side on the WIDTH layers only — mono sum bit-unchanged by construction,
+# drums/bass/riff core stays untouched. Per-genre side level (dB): drill/
+# hiphop stay narrower (width belongs to ear-candy layers only — MixedByAli).
+_HAAS_LAYERS = ("pads", "texture")
+_HAAS_SIDE_DB = {"drill": -18.0, "hiphop": -18.0, "reggaeton": -15.0}
+_HAAS_DEFAULT_DB = -14.0
+_HAAS_DELAY_MS = 12.0
 
 # ---------------------------------------------------------------------------
 # Shared space (one wet-only reverb return replaces every insert reverb) and
 # the parallel "NY" drum compression bus.
 # ---------------------------------------------------------------------------
 
-# post-board send levels into the shared reverb (dB); everything else stays dry
-_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0}
+# post-board send levels into the shared reverb (dB); everything else stays
+# dry. fx is deliberately wet (Aisher/Attack: risers sit in a hall — a dry
+# riser reads pasted-on; tails also wash 1-2 bars across section boundaries)
+_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0, "fx": -16.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
               "garage": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
@@ -107,6 +121,27 @@ _PREDELAY_S = 0.020
 _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
                "reggaeton": -8.0, "dnb": -10.0}
 
+# parallel distorted 'room' bus under the kit (Noisia's overhead-mics trick:
+# programmed drums read as a kit in a space). drill/hiphop stay OFF — their
+# 'drums just need to knock' (Metro Boomin's engineer).
+_ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
+                 "reggaeton": -18.0}
+
+# drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
+# peaks without transient-dulling pump). Memoryless tanh(k*x)/tanh(k); the
+# layer LUFS calibration restores level, so only crest/harmonics change.
+_DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
+                "reggaeton": 1.15, "drill": 1.1, "hiphop": 1.1}
+
+# Bob Katz's over-compression alarm: PLR (true peak - integrated LUFS) floor
+# per genre. Breach = one bounded re-convergence at a lowered target.
+_PLR_FLOOR = {"default": 7.0, "dnb": 7.5, "techhouse": 7.5, "garage": 7.0,
+              "reggaeton": 7.0, "drill": 8.0, "hiphop": 8.0}
+
+# +0.5 dB whole-mix push inside drops (DJ Swivel, 'Closer') — pre-soft-clip,
+# 30 ms ramps, exactly half a decibel; the short-term LUFS guard backstops it.
+_DROP_PUSH_DB = 0.5
+
 
 def _reverb_return_board(genre: str | None) -> Pedalboard:
     room = _ROOM_SIZE.get(genre or "", 0.40)
@@ -115,6 +150,38 @@ def _reverb_return_board(genre: str | None) -> Pedalboard:
         LowpassFilter(cutoff_frequency_hz=7500.0),
         Reverb(room_size=room, damping=0.55, wet_level=1.0, dry_level=0.0, width=1.0),
     ])
+
+
+def _room_bus_board() -> Pedalboard:
+    """Noisia's distorted 'overheads': HP keeps kick sub off the drive (punch
+    stays dry), heavy distortion + a SHORT wet-only room + LP against fizz —
+    summed quietly under the kit for shared-space glue. Smear is the point:
+    this bus is deliberately NOT impulse-aligned (unlike the NY crush)."""
+    return Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=250.0),
+        Distortion(drive_db=12.0),
+        Reverb(room_size=0.25, damping=0.6, wet_level=1.0, dry_level=0.0,
+               width=0.6),
+        LowpassFilter(cutoff_frequency_hz=6000.0),
+    ])
+
+
+def _haas_sides(x: np.ndarray, sr: int, delay_ms: float = 12.0,
+                side_db: float = -14.0) -> np.ndarray:
+    """Haas width on the SIDES only: a delayed mono copy added antisymmetric
+    (+L/-R). (L+s)+(R-s) == L+R — the mono fold is unchanged by construction,
+    so this cannot break mono compatibility; it only adds side energy."""
+    d = int(delay_ms / 1000.0 * sr)
+    if d <= 0 or x.shape[0] <= d:
+        return x
+    mono = x.mean(axis=1)
+    side = np.zeros_like(mono)
+    side[d:] = mono[:-d]
+    side *= np.float32(10.0 ** (side_db / 20.0))
+    out = x.copy()
+    out[:, 0] += side
+    out[:, 1] -= side
+    return out
 
 
 def _ny_crush_board() -> Pedalboard:
@@ -197,6 +264,14 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
             HighpassFilter(cutoff_frequency_hz=400.0),
             Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0),
         ])
+    if name == "fx_sub":
+        # the Bomb's path: sub weight is the whole point — rumble guard only
+        return Pedalboard([HighpassFilter(cutoff_frequency_hz=28.0)])
+    if name == "rumble":
+        # the techno rumble bed: strictly low-band (the drums keep the slot
+        # boost; this is the space BETWEEN the kicks)
+        return Pedalboard([HighpassFilter(cutoff_frequency_hz=30.0),
+                           LowpassFilter(cutoff_frequency_hz=110.0)])
     if name == "fx":
         return Pedalboard([HighpassFilter(cutoff_frequency_hz=150.0)])
     return Pedalboard([Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0)])
@@ -293,15 +368,54 @@ def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
 def _master_eq(genre: str | None) -> Pedalboard:
     """Master tone shape, applied BEFORE every nonlinearity (HP first so
     subsonics don't eat clipper/limiter headroom). The 3.2 kHz dip is the
-    kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud."""
-    low_hz, low_db, low_q = (60.0, 1.5, 0.8) if genre in ("drill", "hiphop") else (100.0, 1.2, 0.71)
+    kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud.
+    Hawkes moves (R13): 30 Hz HP makes the low end punch harder, not thinner
+    (drill/hiphop keep 24 for 808 tails); DnB weight lives ~60 Hz; the top
+    lift is TWO small cascaded shelves, never one big boost."""
+    if genre in ("drill", "hiphop"):
+        hp_hz, low = 24.0, (60.0, 1.5, 0.8)
+    elif genre == "dnb":
+        hp_hz, low = 30.0, (65.0, 1.5, 0.8)
+    else:
+        hp_hz, low = 30.0, (100.0, 1.2, 0.71)
     return Pedalboard([
-        HighpassFilter(cutoff_frequency_hz=24.0),
-        LowShelfFilter(cutoff_frequency_hz=low_hz, gain_db=low_db, q=low_q),
+        HighpassFilter(cutoff_frequency_hz=hp_hz),
+        LowShelfFilter(cutoff_frequency_hz=low[0], gain_db=low[1], q=low[2]),
         PeakFilter(cutoff_frequency_hz=280.0, gain_db=-1.5, q=1.1),
         PeakFilter(cutoff_frequency_hz=3200.0, gain_db=-1.0, q=1.4),
-        HighShelfFilter(cutoff_frequency_hz=11000.0, gain_db=1.5, q=0.71),
+        HighShelfFilter(cutoff_frequency_hz=9500.0, gain_db=1.0, q=0.71),
+        HighShelfFilter(cutoff_frequency_hz=13500.0, gain_db=0.8, q=0.71),
     ])
+
+
+def _dynamic_guard(x: np.ndarray, sr: int, lo: float = 6000.0,
+                   hi: float = 9000.0, max_cut_db: float = 2.5) -> np.ndarray:
+    """Beau Thomas' movable dynamics band: catch harsh snare/hat transients
+    in the 6-9 kHz zone BEFORE the nonlinearities exaggerate them. Downward
+    only, max 2.5 dB, threshold auto-set ~6 dB above the band's programme
+    average; subtractive application so quiet content passes bit-identical.
+    Vectorized (the _brickwall idiom): max-filter hold + Hann smooth."""
+    from scipy.ndimage import maximum_filter1d
+    from scipy.signal import butter, fftconvolve, sosfilt
+
+    sos = butter(4, [lo, hi], btype="band", fs=sr, output="sos")
+    band = sosfilt(sos, x, axis=0).astype(np.float32)
+    lvl = np.abs(band).max(axis=1).astype(np.float64)
+    win = np.hanning(max(3, int(0.005 * sr)))
+    lvl = fftconvolve(lvl, win / win.sum(), mode="same")
+    active = lvl[lvl > 1e-5]
+    if active.size == 0:
+        return x
+    thresh = float(active.mean()) * 2.0
+    over = np.maximum(lvl / max(thresh, 1e-12), 1.0)
+    cut_db = np.minimum(20.0 * np.log10(over), max_cut_db)
+    if float(cut_db.max()) <= 1e-6:
+        return x
+    rel = max(2, int(0.080 * sr))
+    cut_db = maximum_filter1d(cut_db, size=rel)
+    cut_db = fftconvolve(cut_db, win / win.sum(), mode="same")
+    gain = (10.0 ** (-cut_db / 20.0)).astype(np.float32)
+    return (x - band * (1.0 - gain[:, None])).astype(np.float32)
 
 
 def _windowed_lufs_calibrate(stereo: np.ndarray, sr: int, ref_lufs: float = -16.0) -> np.ndarray:
@@ -473,10 +587,42 @@ def _process(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
     return np.asarray(out, dtype=np.float32)
 
 
+# per-section reverb-send rides for pads/fx (Rødhåd's wet-fader move / Eric J
+# Dubowsky's return automation): wet blooms in breaks and the final build bar,
+# snaps drier inside drops for clarity. Keys are section-name prefixes.
+_SEND_RIDE_DB = {"break": 4.0, "build_tail": 4.0, "drop": -2.0}
+
+
+def _ride_curve(n: int, sr: int, base_db: float,
+                section_spans: list[tuple[str, int, int]]) -> np.ndarray:
+    """Per-sample send gain from a base level + per-section deltas, smoothed
+    with a 50 ms window so rides never click."""
+    curve = np.full(n, 10.0 ** (base_db / 20.0), dtype=np.float64)
+    for name, s0, s1 in section_spans:
+        delta = None
+        for k, v in _SEND_RIDE_DB.items():
+            if name.startswith(k):
+                delta = v
+                break
+        if delta is None:
+            continue
+        s0c, s1c = max(0, s0), min(n, s1)
+        if s1c > s0c:
+            curve[s0c:s1c] = 10.0 ** ((base_db + delta) / 20.0)
+    from scipy.signal import fftconvolve
+
+    ramp = max(2, int(0.050 * sr))
+    win = np.ones(ramp) / ramp
+    padded = np.concatenate([np.full(ramp, curve[0]), curve,
+                             np.full(ramp, curve[-1])])
+    return fftconvolve(padded, win, mode="same")[ramp:-ramp].astype(np.float32)
+
+
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            kick_onsets: list[int], lufs_target: float | None = None,
            tempo: float = 120.0,
-           riff_wet_spans: list[tuple[int, int]] | None = None) -> MasterResult:
+           riff_wet_spans: list[tuple[int, int]] | None = None,
+           section_spans: list[tuple[str, int, int]] | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -486,6 +632,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     riff_wet_spans: (start, end) sample ranges where the riff's reverb send is
             raised to _RIFF_WET_DB (the arranger passes the intro — a "distant"
             open that dries up when the band arrives).
+    section_spans: (section_name, start, end) sample ranges; when given, the
+            pads/fx reverb sends ride per section (_SEND_RIDE_DB — wet breaks,
+            drier drops). None = static sends (fixtures/tests unchanged).
     """
     if "riff" not in layers or layers["riff"].size == 0:
         raise ValueError("master() needs a non-empty 'riff' layer")
@@ -512,12 +661,28 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         else:
             proc = proc[:n]
         if name == "drums":
+            # clip the kit, don't limit it (Sub Focus): gentle memoryless
+            # drive shaves peaks; calibration below restores the level
+            k = _DRUM_CLIP_K.get(genre or "", 1.15)
+            proc = (np.tanh(k * proc) / np.tanh(k)).astype(np.float32)
+            dry = proc
             # parallel NY crush under the dry kit (density without killing punch)
-            crushed = _process(proc, _ny_crush_board(), sr)[:n]
+            crushed = _process(dry, _ny_crush_board(), sr)[:n]
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
-            proc = proc + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
-        if name != "fx":  # FX generators are peak-specified by design — no calibration
+            proc = dry + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
+            # parallel distorted 'room' (Noisia's overheads) — fed from the
+            # DRY kit so the crush and the room stay independent colours
+            room_db = _ROOM_GAIN_DB.get(genre or "")
+            if room_db is not None:
+                room = _process(dry, _room_bus_board(), sr)[:n]
+                if room.shape[0] < n:
+                    room = np.pad(room, ((0, n - room.shape[0]), (0, 0)))
+                proc = proc + room * (10.0 ** (room_db / 20.0))
+        if name in _HAAS_LAYERS:
+            proc = _haas_sides(proc, sr, _HAAS_DELAY_MS,
+                               _HAAS_SIDE_DB.get(genre or "", _HAAS_DEFAULT_DB))
+        if not name.startswith("fx"):  # FX layers are peak-specified by design — no calibration
             proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
@@ -530,12 +695,26 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                 for s0, s1 in riff_wet_spans:
                     curve[max(0, s0):max(0, s1)] = 10.0 ** (_RIFF_WET_DB / 20.0)
                 send_acc += proc * curve[:, None]
+            elif name in ("pads", "fx") and section_spans:
+                curve = _ride_curve(n, sr, send_db, section_spans)
+                send_acc += proc * curve[:, None]
             else:
                 send_acc += proc * (10.0 ** (send_db / 20.0))
 
         if name in _PUMPED_LAYERS:
             depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
-            proc = proc * (1.0 - depth * shape)[:, None]
+            if name == "bass":
+                # multiband duck (Pretolesi: 'fix the bass, not the kick') —
+                # only the band clashing with the kick ducks fully; the
+                # bass's harmonics keep sustaining at 0.35x depth.
+                # Subtractive split: bit-identical null when shape == 0.
+                from scipy.signal import butter, sosfilt
+                sos = butter(4, 170.0, btype="low", fs=sr, output="sos")
+                low = sosfilt(sos, proc, axis=0).astype(np.float32)
+                duck = (depth * shape).astype(np.float32)[:, None]
+                proc = proc - low * duck - (proc - low) * (0.35 * duck)
+            else:
+                proc = proc * (1.0 - depth * shape)[:, None]
         gain = 10.0 ** (preset.layer_gain_db.get(name, 0.0) / 20.0)
         bus += proc * gain
 
@@ -556,8 +735,10 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = bus - bus.mean(axis=0, keepdims=True).astype(np.float32)
     bus = _process(bus, _master_eq(genre), sr)
 
-    # 2) keep the sub mono (phasey lows fold to centre); highs stay wide
-    stereo = collapse_lows_to_mono(bus, sr, 120.0)
+    # 2) keep the lows mono (phasey lows fold to centre); highs stay wide.
+    #    250 Hz per Pretolesi/Reznikov width discipline (was 120): the
+    #    100-300 Hz zone stops clouding the kick, width lives above.
+    stereo = collapse_lows_to_mono(bus, sr, 250.0)
 
     # 3) level staging by LOUDNESS, not peaks — glue then behaves consistently
     stereo = _windowed_lufs_calibrate(stereo, sr, -16.0)
@@ -566,9 +747,30 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                                   release_ms=glue_release)])
     stereo = _process(stereo, glue, sr)
 
+    # 3b) dynamic guard band (Beau Thomas): tame harsh snare/hat pokes in
+    #     6-9 kHz BEFORE the nonlinearities exaggerate them
+    stereo = _dynamic_guard(stereo, sr)
+
+    # 3c) +0.5 dB whole-mix push inside drops (DJ Swivel), 30 ms ramps —
+    #     drops read bigger without re-balancing; the -8 LUFS short-term
+    #     guard below backstops the trade
+    if section_spans:
+        from scipy.signal import fftconvolve
+        g = np.ones(stereo.shape[0], dtype=np.float64)
+        for sname, s0, s1 in section_spans:
+            if sname.startswith("drop"):
+                g[max(0, s0):min(stereo.shape[0], s1)] = \
+                    10.0 ** (_DROP_PUSH_DB / 20.0)
+        ramp = max(2, int(0.030 * sr))
+        win = np.ones(ramp) / ramp
+        padded = np.concatenate([np.full(ramp, g[0]), g, np.full(ramp, g[-1])])
+        g = fftconvolve(padded, win, mode="same")[ramp:-ramp]
+        stereo = (stereo * g[:, None].astype(np.float32)).astype(np.float32)
+
     # 4) density: full-band soft clip, then drive INTO the oversampled limiter
     #    until integrated loudness converges on target
     stereo = _soft_clip(stereo, genre) * (10.0 ** (-0.5 / 20.0))
+    pre_limit = stereo  # the clean input every re-convergence starts from
     stereo = _limit_to_lufs(stereo, sr, target, ceiling_db=-1.2)
 
     # 5) true-peak check (limiter ran at 4x, so this should already hold)
@@ -584,7 +786,24 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         stereo = _limit_to_lufs(stereo, sr, target - (worst + 8.0), ceiling_db=-1.2)
         tp = _true_peak_db(stereo, sr)
 
+    # 7) PLR floor (Bob Katz's over-compression alarm): if true peak minus
+    #    integrated loudness falls under the genre floor, the LIMITER is
+    #    eating transients — one bounded re-convergence at a lowered target.
+    #    Guarded on the pre-limiter PLR: content that is intrinsically dense
+    #    (its own crest already under the floor) cannot be "fixed" by backing
+    #    off, so it is left at target (test fixtures, steady tones).
     final_lufs = _integrated_lufs(stereo, sr)
+    plr_floor = _PLR_FLOOR.get(genre or "", _PLR_FLOOR["default"])
+    if np.isfinite(final_lufs) and (tp - final_lufs) < plr_floor - 0.05:
+        pre_lufs = _integrated_lufs(pre_limit, sr)
+        pre_plr = _true_peak_db(pre_limit, sr) - pre_lufs
+        if np.isfinite(pre_lufs) and pre_plr >= plr_floor:
+            stereo = _limit_to_lufs(pre_limit, sr,
+                                    target - (plr_floor - (tp - final_lufs)),
+                                    ceiling_db=-1.2)
+            tp = _true_peak_db(stereo, sr)
+            final_lufs = _integrated_lufs(stereo, sr)
+
     stereo = np.clip(stereo, -1.0, 1.0)
 
     return MasterResult(audio=stereo, sr=sr, lufs=final_lufs, true_peak_db=tp,

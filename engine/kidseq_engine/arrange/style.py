@@ -86,6 +86,26 @@ class FxPalette:
     fill_shape: int = 0            # index into the fill-shape menu
     throw: bool | None = None      # None = auto via fx.throw_fits
     intro_lpf: float = 2500.0      # intro riff filter (>=15k = wide open)
+    # R10 transition core — the pro pre-drop moves (Noisia / KSHMR / Attack):
+    gap_beats: float = 0.15        # pre-drop silence, in beats (clamped 1.1 s;
+    #                                0.15 = the legacy 0.6-of-a-16th breath)
+    gap_carry: str | None = None   # layer exempt from the gap (KSHMR: keep one
+    #                                element running through the silence)
+    bass_starve_bars: int = 0      # HP the bass for the build's final N bars —
+    #                                the drop's low end lands as pure contrast
+    riser_restraint: bool = True   # only drop 1 gets the full prominent riser;
+    #                                later drops get half/reverse-only/none
+    riser_style: str = "classic"   # "classic" | "shepard" (first riser only)
+    # R11 ear candy + genre FX vocabularies (all breath-level — Tumay):
+    earcandy_every: int = 0        # 0 = off; 4|8 = phrase-boundary event cadence
+    earcandy_menu: tuple = ()      # the genre's event kinds (fixed per genre)
+    swell_kind: str | None = None  # "reverb"|"delay" reverse-riff swell, drops 2+
+    scratch_on: bool = False       # hiphop: ONE turntable gesture per track
+    drop_open: str | None = None   # garage: "no_pads" 2-bar drop opening
+    bomb_on: bool = False          # breakdown-entry sub impact (fx_sub layer)
+    # R12 beds (FxFlags.beds): the fullness layers under the kit
+    rumble_on: bool = False        # techno rumble bed under drop kicks (Hades)
+    odd_loop_on: bool = False      # 3-beat perc cell against the 4/4 (KiNK)
 
 
 @dataclass(frozen=True)
@@ -250,7 +270,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     "dnb": _menu(pad_role=["supersaw", "strings_pad", "choir", "glass"],
                  pad_rhythm=[0, 1],
                  bass_patch=["bass", "bass_acid"], bass_feel=[0, 1, 2, 3],
-                 drum_variant=[0, 1, 2],
+                 drum_variant=[0, 1, 2, 3], texture=["wash", None],
                  riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
     # with octave pops; FM knock as the alt colour.
@@ -279,7 +299,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                        pad_rhythm=[0, 1],
                        bass_patch=["bass_pluck", "bass_round", "bass"],
                        bass_feel=[0, 1, 2],
-                       drum_variant=[0, 1, 2, 3],
+                       drum_variant=[0, 1, 2, 3, 4], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
@@ -343,11 +363,82 @@ _IMPACT: dict[str, tuple[float, float, float]] = {
 }
 
 # genre -> allowed fill shapes (see arrange/render.py _fill_pattern):
-# 0 = snare roll, 1 = rim-led into snare, 2 = hat-roll landing on snare
+# 0 = snare roll, 1 = rim-led into snare, 2 = hat-roll landing on snare,
+# 3 = 2-bar subdivision-doubling roll (quarters->8ths->16ths — Adam Douglas'
+# build mechanics), 4 = rug-pull 16th roll that stops dead at beat 3.
+# Rolls are not the drill/hiphop vocabulary — they keep the rim fill.
 _FILL_MENU: dict[str, list[int]] = {
-    "techhouse": [0, 2], "garage": [0, 2], "reggaeton": [0],
-    "drill": [1], "hiphop": [1], "dnb": [0],
+    "techhouse": [0, 2, 3, 4], "garage": [0, 2, 3], "reggaeton": [0, 3],
+    "drill": [1], "hiphop": [1], "dnb": [0, 3, 4],
 }
+
+# genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
+# slow tempos never read as broken). The pros cut a real breath — 2 beats in
+# the Attack "Good Life" analysis; 0.15 is the legacy micro-gap. Drill/hiphop
+# stay subtler (their drops are less EDM-shaped).
+_GAP_BEATS: dict[str, tuple[list, list]] = {
+    "drill": ([1.0, 0.15], [0.50, 0.50]),
+    "hiphop": ([1.0, 0.15], [0.50, 0.50]),
+    "reggaeton": ([1.0, 2.0, 0.15], [0.45, 0.30, 0.25]),
+}
+_GAP_BEATS_DEFAULT: tuple[list, list] = ([2.0, 1.0, 0.15], [0.50, 0.30, 0.20])
+
+# genre -> bass-starvation menu (bars of HP'd bass at the end of each build —
+# Noisia: no low end right before the drop makes the drop read bass-heavy)
+_STARVE_BARS: dict[str, tuple[list, list]] = {
+    "garage": ([1, 0], [0.60, 0.40]),
+    "reggaeton": ([1, 0], [0.60, 0.40]),
+    "drill": ([0, 1], [0.60, 0.40]),
+    "hiphop": ([0, 1], [0.60, 0.40]),
+}
+_STARVE_BARS_DEFAULT: tuple[list, list] = ([1, 2, 0], [0.50, 0.30, 0.20])
+
+# genre -> riser style menu ("shepard" = the octave-staggered endless-rise
+# pair, Sub Focus' 'Vapourise' move — a dnb/techno flavour first)
+_RISER_STYLE: dict[str, tuple[list, list]] = {
+    "garage": (["classic", "shepard"], [0.70, 0.30]),
+    "reggaeton": (["classic", "shepard"], [0.70, 0.30]),
+    "drill": (["classic"], None),
+    "hiphop": (["classic"], None),
+}
+_RISER_STYLE_DEFAULT: tuple[list, list] = (["classic", "shepard"], [0.55, 0.45])
+
+# genre -> phrase-boundary ear-candy vocabulary (render/fx.candy_blip kinds
+# plus the placement kinds "kick_fill" and "drum_stop" handled in render.py).
+# All breath-level. hiphop's single gesture is the scratch (its own field) —
+# Premier: one DJ element per record, so no rolling candy cadence there.
+_CANDY_MENU: dict[str, tuple] = {
+    "techhouse": ("sweep_up", "sweep_down", "hat_lift"),
+    "dnb": ("mini_downlifter", "siren_blip", "rev_swell_delay"),
+    "garage": ("kick_fill", "rev_cymbal", "siren_blip"),
+    "drill": ("rev_swell_riff", "sig_chirp"),
+    "hiphop": (),
+    "reggaeton": ("drum_stop", "siren_blip"),
+}
+_CANDY_EVERY: dict[str, tuple[list, list | None]] = {
+    "techhouse": ([8, 4, 0], [0.5, 0.3, 0.2]),
+    "dnb": ([8, 4, 0], [0.5, 0.3, 0.2]),
+    "garage": ([8, 4, 0], [0.4, 0.4, 0.2]),
+    "drill": ([8, 0], [0.6, 0.4]),
+    "hiphop": ([0], None),
+    "reggaeton": ([8, 4], [0.5, 0.5]),
+}
+
+# genre -> reverse-riff swell into drops 2+ (the drill/dnb/garage move: the
+# transition is made of the track's own melodic material)
+_SWELL: dict[str, tuple[list, list | None]] = {
+    "drill": (["reverb", None], [0.60, 0.40]),
+    "dnb": (["delay", "reverb", None], [0.40, 0.30, 0.30]),
+    "garage": (["delay", None], [0.50, 0.50]),
+}
+
+# genre -> breakdown-entry bomb (dnb/techhouse/drill lean in; others rare)
+_BOMB: dict[str, tuple[list, list]] = {
+    "dnb": ([True, False], [0.5, 0.5]),
+    "techhouse": ([True, False], [0.5, 0.5]),
+    "drill": ([True, False], [0.5, 0.5]),
+}
+_BOMB_DEFAULT: tuple[list, list] = ([False, True], [0.75, 0.25])
 
 # genre -> noise-riser sweep band: dark low-mid swells for drill/hiphop,
 # wide fast sweeps for dnb, classic white for the four-to-floor styles
@@ -387,6 +478,32 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
         # varied intro colour: dark tease .. wide open (>=15k skips the filter)
         intro_lpf=_pick(seed, "intro_lpf", [2500.0, 1500.0, 4000.0, 18000.0],
                         [0.35, 0.25, 0.25, 0.15]),
+        gap_beats=_pick(seed, "gap_beats", *_GAP_BEATS.get(g, _GAP_BEATS_DEFAULT)),
+        gap_carry=_pick(seed, "gap_carry", [None, "texture"], [0.70, 0.30]),
+        bass_starve_bars=_pick(seed, "bass_starve_bars",
+                               *_STARVE_BARS.get(g, _STARVE_BARS_DEFAULT)),
+        riser_restraint=_pick(seed, "riser_restraint", [True, False],
+                              [0.70, 0.30]),
+        riser_style=_pick(seed, "riser_style",
+                          *_RISER_STYLE.get(g, _RISER_STYLE_DEFAULT)),
+        earcandy_every=_pick(seed, "earcandy_every",
+                             *_CANDY_EVERY.get(g, ([0], None))),
+        earcandy_menu=_CANDY_MENU.get(g, ()),
+        swell_kind=_pick(seed, "swell_kind", *_SWELL.get(g, ([None], None))),
+        scratch_on=_pick(seed, "scratch_on",
+                         *(([True, False], [0.5, 0.5]) if g == "hiphop"
+                           else ([False], None))),
+        drop_open=_pick(seed, "drop_open",
+                        *((["no_pads", None], [0.5, 0.5]) if g == "garage"
+                          else ([None], None))),
+        bomb_on=_pick(seed, "bomb_on", *_BOMB.get(g, _BOMB_DEFAULT)),
+        rumble_on=_pick(seed, "rumble_on",
+                        *(([True, False], [0.6, 0.4]) if g == "techhouse"
+                          else ([False], None))),
+        odd_loop_on=_pick(seed, "odd_loop_on",
+                          *(([False, True], [0.65, 0.35]) if g == "techhouse"
+                            else ([False, True], [0.70, 0.30]) if g == "garage"
+                            else ([False], None))),
     )
 
 

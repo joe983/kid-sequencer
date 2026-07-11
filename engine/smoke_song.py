@@ -52,14 +52,38 @@ def main() -> None:
           f"bias={st.structure.drop_bias} intro={st.structure.intro_character} "
           f"esc={st.structure.escalation} pad={st.pad_role} "
           f"bass={st.bass_patch}/{st.bass_feel} tex={st.texture} prog_pick={st.prog_pick}")
+    p = st.fx_palette
+    print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
+          f"starve={p.bass_starve_bars} "
+          f"riser={p.riser_kind}/{p.riser_style}"
+          f"{'/restraint' if p.riser_restraint else ''} "
+          f"candy={p.earcandy_every or 0} swell={p.swell_kind} "
+          f"bomb={p.bomb_on} scratch={p.scratch_on} open={p.drop_open} "
+          f"rumble={p.rumble_on} odd={p.odd_loop_on} fill={p.fill_shape}")
     print(f"layers: {sorted(layers)} | kicks={len(kick_onsets)}")
 
     # the intro rides a wetter riff send — "distant" open that dries up at the
     # build. Cold-open shapes start on a DROP: no wet span (drops stay dry).
     intro_end = int(plan[0].bars * riff.bar_beats * (60.0 / riff.tempo) * SR) \
         if plan[0].name == "intro" else 0
+    # per-section spans for the pads/fx send rides (wet breaks, drier drops);
+    # the final build bar is split out as "build_tail" so the wet bloom peaks
+    # right before the drop snaps dry
+    bar_sec = riff.bar_beats * (60.0 / riff.tempo)
+    spans: list[tuple[str, int, int]] = []
+    bar = 0
+    for s in plan:
+        a, e = int(bar * bar_sec * SR), int((bar + s.bars) * bar_sec * SR)
+        if s.name.startswith("build") and s.bars >= 2:
+            tail = e - int(bar_sec * SR)
+            spans.append((s.name, a, tail))
+            spans.append(("build_tail", tail, e))
+        else:
+            spans.append((s.name, a, e))
+        bar += s.bars
     res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
-                 tempo=riff.tempo, riff_wet_spans=[(0, intro_end)])
+                 tempo=riff.tempo, riff_wet_spans=[(0, intro_end)],
+                 section_spans=spans)
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

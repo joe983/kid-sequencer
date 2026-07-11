@@ -1,5 +1,71 @@
 # Where we are / next session
 
+## NEW — Rounds 10–13: PRO POLISH epic (2026-07-11, NOT deployed)
+Owner: tracks need the professional finish of top-tier DnB/techno records —
+more (tasteful, modern) swooshes/rises/sirens/SFX, richer layering, better
+mix/master. Method: 119 adversarially-verified techniques from NAMED master
+producers/engineers (Noisia, Sub Focus, Rødhåd, Tom Hades, KiNK, MJ Cole,
+Todd Edwards, Wookie, 808Melo, M1OnTheBeat, Ghosty, Premier, Young Guru,
+MixedByAli, Tainy, Ovy on the Drums, Pretolesi, Stuart Hawkes, Beau Thomas,
+Bob Katz…) — every finding source-fetched and quote-checked. Full research +
+design doc: `~/.claude/plans/having-listened-to-the-witty-ritchie.md`.
+
+- **R10 transition core**: REAL pre-drop gap (gap_beats 2.0/1.0/0.15 per
+  press, 1.1 s clamp; gap_carry can keep the texture running); into-boundary
+  FX now END AT GAP START (never chopped); Noisia bass starvation (HP180 on
+  the build's last 1-2 bars); KSHMR riser restraint (one prominent riser —
+  later drops half/reverse-only/none); fx.shepard_riser (octave-staggered
+  endless rise); FX layer finally WET (_SEND_DB fx -16); fill shapes 3
+  (2-bar subdivision-doubling roll) + 4 (rug-pull stop at beat 3).
+- **R11 ear candy**: _candy_slots scheduler — breath-level events (Tumay:
+  -18..-30 dBFS, the written law of the layer) every 4-8 bars inside drops,
+  hook-protected (never drop 1's first 8 bars). fx.bomb (break-entry sub
+  impact → new mono fx_sub layer), dub_siren, scratch (ONE per track,
+  hiphop), reverse_swell (from the track's OWN riff audio — 808Melo),
+  candy_blip kinds incl. the recurring sig_chirp. Genre placements: garage
+  drop_open (pads out 2 bars) + kick_fill; reggaeton drum_stop (riff keeps
+  singing; muted kicks leave the pump list); drill/dnb/garage riff-swells.
+- **R12 beds/width**: fx.rumble_bed + 'rumble' layer (-31 LUFS, mono,
+  pump 1.25 — Hades' sidechained kick-tail return), drum 'room' bus
+  (Noisia overheads: HP250→dist→wet room→LP6k under the kit; drill/hiphop
+  OFF), dnb+reggaeton texture menus (wash), hiphop crackle EDGE-TO-EDGE
+  (Premier), per-section reverb-send rides (master(section_spans=…): +4 dB
+  breaks/build_tail, -2 dB drops), _haas_sides width on pads/texture (mono
+  sum unchanged BY CONSTRUCTION — answers the "melodic pipeline is mono"
+  flag), KiNK 3-beat odd loop, garage sine-sub bass double (never raw).
+- **R13 mix/master**: multiband bass duck (only <170 Hz ducks fully —
+  Pretolesi), low-mono fold 120→250 Hz, drum-bus clipper (Sub Focus),
+  Hawkes master EQ (30 Hz HP, dnb 65 Hz shelf, TWO cascaded top shelves),
+  6-9 kHz dynamic guard band pre-clip (Beau Thomas), +0.5 dB drop push
+  (DJ Swivel), PLR floor alarm (Katz) guarded on pre-limiter PLR.
+- **Null A/B: flags-off byte-identical to R9** (verified cross-process,
+  same assets, per layer). Flags-ON cross-process deterministic (3 genres).
+  NB: tinysoundfont is NOT bit-deterministic WITHIN one process (~1e-5
+  drift, like the Surge unison caveat) — determinism tests must be
+  cross-process; prod renders one song per process, so the same-(riff,
+  variation)-same-track guarantee is unaffected.
+- **Tuning levers**: gap/starve/riser/candy/swell/bomb menus + tables in
+  style.py (_GAP_BEATS/_STARVE_BARS/_RISER_STYLE/_CANDY_MENU/_CANDY_EVERY/
+  _SWELL/_BOMB); breath levels in fx.CANDY_LEVELS + generator peak_db;
+  master: _ROOM_GAIN_DB, _DRUM_CLIP_K, _HAAS_SIDE_DB, _SEND_RIDE_DB,
+  _DROP_PUSH_DB, _PLR_FLOOR, guard band params in _dynamic_guard.
+- **Research VALIDATED (do not churn)**: tiered pump depths ≈ Reznikov;
+  return ducking = Sub Focus; NY comp + HP120 = Ali/Guru; riser+sweep
+  already simultaneous; reverse-crash already end-aligned; garage swing
+  already Roger-Linn-correct; lead stacks ≥8 dB = Alchemist "felt not
+  heard"; skeleton/dembow untouchable = Tainy; pattern-derived kick onsets
+  BEAT a synthetic pulse (swing-aware, no pumping in kickless breaks).
+- **Deliberately NOT applied**: Todd Edwards vocal chops (samples/license),
+  convolution reverb (no IRs), kit re-layering (app-pack parity), Colton's
+  limiter recipe (JUCE make-up-gain trap), 2nd serial master GR stage,
+  garage bass-solo drops that mute the riff. Deferred R15 candidates:
+  per-voice pad lanes (Playford), shared character bus (Dense & Pika),
+  one-LFO-many-destinations (Sub Focus), Just Blaze lead-keyed pad duck.
+- Showcase battery coverage verified: across the standing 24 combos the new
+  vocabulary all fires (gap≥1 beat ×21, starve ×18, shepard ×7, swell ×7,
+  bomb ×8, scratch ×1, drop_open ×3, rumble ×4, odd_loop ×3, candy ×14).
+  smoke_song now prints the fx palette line per render (ears ↔ decisions).
+
 ## NEW — Round 9: percussive de-reciped + battery re-cut (2026-07-10, NOT deployed)
 Owner: fixed per-category recipes would converge. Audit: minor never was one
 (it's the kid's key); percussive had two — fixed drone voice + static pedal.
