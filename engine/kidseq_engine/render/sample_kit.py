@@ -58,6 +58,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "kick":  [("dnb/kick.wav", 1.0), ("dnb/kick.1.wav", 0.5)],
         "snare": [("dnb/snare.wav", 1.0)],
         "hatC":  [("dnb/hatC.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
     # drill: Jay Cactus Greeze (Big Kick / Psycho 808 / Brickz / Ruckus rim) +
     # TrapLordz hat — the exact app kit.
@@ -85,6 +86,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "shaker":  [("reggaeton/shaker.wav", 1.0)],
         "cowbell": [("reggaeton/cowbell.wav", 1.0)],
         "rim":     [("perc/woodblock.wav", 1.0)],  # seasoning-variant voice
+        "hatC":    [("garage/hatC.wav", 0.9)],     # seasoning-variant voice (909)
     },
     # garage: Candy kick/snare/rim + TR-909 hats. Key was "funk" pre-2026-07-10.
     "garage": {
