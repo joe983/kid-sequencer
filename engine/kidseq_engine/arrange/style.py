@@ -96,6 +96,13 @@ class FxPalette:
     riser_restraint: bool = True   # only drop 1 gets the full prominent riser;
     #                                later drops get half/reverse-only/none
     riser_style: str = "classic"   # "classic" | "shepard" (first riser only)
+    # R11 ear candy + genre FX vocabularies (all breath-level — Tumay):
+    earcandy_every: int = 0        # 0 = off; 4|8 = phrase-boundary event cadence
+    earcandy_menu: tuple = ()      # the genre's event kinds (fixed per genre)
+    swell_kind: str | None = None  # "reverb"|"delay" reverse-riff swell, drops 2+
+    scratch_on: bool = False       # hiphop: ONE turntable gesture per track
+    drop_open: str | None = None   # garage: "no_pads" 2-bar drop opening
+    bomb_on: bool = False          # breakdown-entry sub impact (fx_sub layer)
 
 
 @dataclass(frozen=True)
@@ -393,6 +400,43 @@ _RISER_STYLE: dict[str, tuple[list, list]] = {
 }
 _RISER_STYLE_DEFAULT: tuple[list, list] = (["classic", "shepard"], [0.55, 0.45])
 
+# genre -> phrase-boundary ear-candy vocabulary (render/fx.candy_blip kinds
+# plus the placement kinds "kick_fill" and "drum_stop" handled in render.py).
+# All breath-level. hiphop's single gesture is the scratch (its own field) —
+# Premier: one DJ element per record, so no rolling candy cadence there.
+_CANDY_MENU: dict[str, tuple] = {
+    "techhouse": ("sweep_up", "sweep_down", "hat_lift"),
+    "dnb": ("mini_downlifter", "siren_blip", "rev_swell_delay"),
+    "garage": ("kick_fill", "rev_cymbal", "siren_blip"),
+    "drill": ("rev_swell_riff", "sig_chirp"),
+    "hiphop": (),
+    "reggaeton": ("drum_stop", "siren_blip"),
+}
+_CANDY_EVERY: dict[str, tuple[list, list | None]] = {
+    "techhouse": ([8, 4, 0], [0.5, 0.3, 0.2]),
+    "dnb": ([8, 4, 0], [0.5, 0.3, 0.2]),
+    "garage": ([8, 4, 0], [0.4, 0.4, 0.2]),
+    "drill": ([8, 0], [0.6, 0.4]),
+    "hiphop": ([0], None),
+    "reggaeton": ([8, 4], [0.5, 0.5]),
+}
+
+# genre -> reverse-riff swell into drops 2+ (the drill/dnb/garage move: the
+# transition is made of the track's own melodic material)
+_SWELL: dict[str, tuple[list, list | None]] = {
+    "drill": (["reverb", None], [0.60, 0.40]),
+    "dnb": (["delay", "reverb", None], [0.40, 0.30, 0.30]),
+    "garage": (["delay", None], [0.50, 0.50]),
+}
+
+# genre -> breakdown-entry bomb (dnb/techhouse/drill lean in; others rare)
+_BOMB: dict[str, tuple[list, list]] = {
+    "dnb": ([True, False], [0.5, 0.5]),
+    "techhouse": ([True, False], [0.5, 0.5]),
+    "drill": ([True, False], [0.5, 0.5]),
+}
+_BOMB_DEFAULT: tuple[list, list] = ([False, True], [0.75, 0.25])
+
 # genre -> noise-riser sweep band: dark low-mid swells for drill/hiphop,
 # wide fast sweeps for dnb, classic white for the four-to-floor styles
 _RISER_BAND: dict[str, tuple[float, float]] = {
@@ -439,6 +483,17 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
                               [0.70, 0.30]),
         riser_style=_pick(seed, "riser_style",
                           *_RISER_STYLE.get(g, _RISER_STYLE_DEFAULT)),
+        earcandy_every=_pick(seed, "earcandy_every",
+                             *_CANDY_EVERY.get(g, ([0], None))),
+        earcandy_menu=_CANDY_MENU.get(g, ()),
+        swell_kind=_pick(seed, "swell_kind", *_SWELL.get(g, ([None], None))),
+        scratch_on=_pick(seed, "scratch_on",
+                         *(([True, False], [0.5, 0.5]) if g == "hiphop"
+                           else ([False], None))),
+        drop_open=_pick(seed, "drop_open",
+                        *((["no_pads", None], [0.5, 0.5]) if g == "garage"
+                          else ([None], None))),
+        bomb_on=_pick(seed, "bomb_on", *_BOMB.get(g, _BOMB_DEFAULT)),
     )
 
 

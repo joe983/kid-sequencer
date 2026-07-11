@@ -35,7 +35,8 @@ _PLAN = [
     Section("drop2", 2, "verbatim", "full", bass=True, pads=True),
     Section("outro", 1, "sparse", "lite", bass=False, pads=True),
 ]
-_OFF = FxFlags(fx=False, fills=False, automation=False, gap=False, throw=False)
+_OFF = FxFlags(fx=False, fills=False, automation=False, gap=False, throw=False,
+               earcandy=False)
 
 
 def _riff() -> Riff:
@@ -219,6 +220,81 @@ def test_fx_layer_present_with_flags_on():
     layers, _, _, _ = build_song(r, SR, plan=_PLAN, flags=FxFlags())
     assert "fx" in layers
     assert float(np.max(np.abs(layers["fx"]))) > 0.05
+
+
+def test_r11_event_generators_levels_determinism():
+    """R11 ear-candy + event FX: level pins (the breath-level law), shapes,
+    determinism, and the silent-input guard on reverse_swell."""
+    bm = fx.bomb(SR, seed=3)
+    assert bm.shape[1] == 2 and bm.shape[0] <= int(6.0 * SR)
+    assert abs(_peak_db(bm) - (-10.0)) < 1.0
+    assert np.array_equal(bm, fx.bomb(SR, seed=3))
+    assert float(np.max(np.abs(bm[-4:]))) < 0.02      # faded end
+
+    ds = fx.dub_siren(4.0, SR, seed=5, bar_s=2.0)
+    assert ds.shape == (4 * SR, 2)
+    assert np.array_equal(ds, fx.dub_siren(4.0, SR, seed=5, bar_s=2.0))
+    assert _peak_db(ds) < -22.0                        # breath level
+
+    sc = fx.scratch(SR, seed=9)
+    assert sc.shape == (int(0.6 * SR), 2)
+    assert abs(_peak_db(sc) - (-18.0)) < 1.0
+    assert np.array_equal(sc, fx.scratch(SR, seed=9))
+
+    base = fx.crash(SR, seed=2)[: SR]                  # any non-silent slice
+    for mode in ("reverb", "delay"):
+        sw = fx.reverse_swell(base, SR, mode)
+        assert sw.shape[1] == 2 and sw.shape[0] > base.shape[0]
+        assert abs(_peak_db(sw) - (-18.0)) < 1.0
+        assert np.array_equal(sw, fx.reverse_swell(base, SR, mode))
+        assert float(np.max(np.abs(sw[-4:]))) < 0.02   # clean into the entry
+    silent = np.zeros((SR, 2), dtype=np.float32)
+    assert fx.reverse_swell(silent, SR).size == 0      # silent-input guard
+
+    for kind, want in fx.CANDY_LEVELS.items():
+        a = fx.candy_blip(kind, 2.0, SR, seed=4)
+        b = fx.candy_blip(kind, 2.0, SR, seed=4)
+        assert a.shape[1] == 2 and np.array_equal(a, b), kind
+        assert _peak_db(a) <= want + 1.5, (kind, _peak_db(a))
+
+
+def test_candy_slots_hook_protection_and_spacing():
+    from kidseq_engine.arrange import Section
+    from kidseq_engine.arrange.render import _candy_slots
+
+    bar_n = SR * 2  # 1 bar at 120 bpm
+    bounds = [
+        (Section("intro", 4, "sparse", "lite", False, False), 0, 4 * bar_n),
+        (Section("drop", 16, "verbatim", "full", True, True), 4 * bar_n, 20 * bar_n),
+        (Section("break", 4, "sparse_low", None, False, True), 20 * bar_n, 24 * bar_n),
+        (Section("drop2", 16, "verbatim", "full", True, True), 24 * bar_n, 40 * bar_n),
+    ]
+    slots = _candy_slots(bounds, 4, 2.0, SR)
+    assert slots == _candy_slots(bounds, 4, 2.0, SR)   # pure/deterministic
+    assert _candy_slots(bounds, 0, 2.0, SR) == []      # off = no events
+    d1 = [b for pos, name, b in slots if name == "drop"]
+    d2 = [b for pos, name, b in slots if name == "drop2"]
+    assert all(b >= 8 for b in d1), d1                 # drop 1 hook protected
+    assert d1 == [8, 12] and d2 == [4, 8, 12]
+    for pos, name, b in slots:                         # >=1 bar from boundaries
+        sec_a = 4 * bar_n if name == "drop" else 24 * bar_n
+        sec_e = sec_a + 16 * bar_n
+        assert sec_a + bar_n <= pos <= sec_e - 2 * bar_n, (name, b)
+
+
+def test_kick_onsets_never_point_at_silent_drums():
+    """The pump must never duck the mix against silence — the drum_stop event
+    removes its muted span's onsets, and the gap never zeroes an onset (drops
+    start AT the drop sample). Invariant-checked across variations."""
+    r = _riff()
+    for v in (0, 3, 11):
+        layers, onsets, _, _ = build_song(r, SR, plan=_PLAN, flags=FxFlags(),
+                                          variation=v)
+        drums = layers.get("drums")
+        assert drums is not None
+        for o in onsets:
+            seg = drums[o:o + int(0.02 * SR)]
+            assert float(np.max(np.abs(seg))) > 1e-5, (v, o)
 
 
 if __name__ == "__main__":

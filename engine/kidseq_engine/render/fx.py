@@ -221,6 +221,208 @@ def downlifter(dur_s: float = 2.0, sr: int = SR, peak_db: float = -16.0) -> np.n
 
 
 # ---------------------------------------------------------------------------
+# Ear candy & event FX (R11). LEVEL DOCTRINE (Alex Tumay, RBMA: background
+# SFX sit at the level of a breath — felt, not heard): everything in this
+# section peaks at -18 dBFS or below, most at -24..-30. The bomb (-10) is the
+# one exception — it is a boundary event, not candy, and routes via the
+# dedicated "fx_sub" layer. Nothing here may ever read alarm-like at level —
+# this is a kids' product.
+# ---------------------------------------------------------------------------
+
+
+def bomb(sr: int = SR, seed: int = 0, peak_db: float = -10.0) -> np.ndarray:
+    """Breakdown-entry impact ('The Bomb', Attack masterclass, kid-adapted):
+    a deep pitch-dropping boom whose band-limited reverb bloom marks energy
+    LEAVING — placed at the START of breaks, the counterpart of the drop
+    impact. Dry sub decay ~1.2 s + wet tail, total <= 6 s."""
+    from pedalboard import HighpassFilter, LowpassFilter, Pedalboard, Reverb
+    from scipy.signal import butter, sosfilt
+
+    n_dry = int(1.2 * sr)
+    t = np.arange(n_dry) / sr
+    f = 50.0 * (30.0 / 50.0) ** np.minimum(t / 0.4, 1.0)
+    boom = np.tanh(1.4 * np.sin(np.cumsum(2 * np.pi * f / sr))) * np.exp(-t / 0.45)
+    rng = np.random.default_rng(seed)
+    thump_n = int(0.06 * sr)
+    sos = butter(2, 500.0, btype="low", fs=sr, output="sos")
+    boom[:thump_n] += sosfilt(sos, rng.standard_normal(thump_n)) * \
+        np.exp(-np.arange(thump_n) / (0.02 * sr)) * 0.4
+    dry = np.stack([boom, boom], axis=1).astype(np.float32)
+
+    total = int(5.5 * sr)
+    padded = np.concatenate([dry, np.zeros((total - n_dry, 2), dtype=np.float32)])
+    board = Pedalboard([   # band-limited wet bloom: no mud, no fizz (Attack)
+        HighpassFilter(cutoff_frequency_hz=400.0),
+        Reverb(room_size=0.9, damping=0.4, wet_level=1.0, dry_level=0.0, width=1.0),
+        LowpassFilter(cutoff_frequency_hz=8000.0),
+    ])
+    wet = np.asarray(board(padded, sr), dtype=np.float64)[:total]
+    x = _peak_scale(padded.astype(np.float64), 0.0) + _peak_scale(wet, -7.0)
+    x = _peak_scale(x, peak_db).astype(np.float64)
+    fade = max(2, int(0.050 * sr))
+    x[-fade:] *= _cos_edge(fade, up=False)[:, None]
+    return x.astype(np.float32)
+
+
+def dub_siren(dur_s: float, sr: int = SR, seed: int = 0, bar_s: float = 2.0,
+              peak_db: float = -24.0) -> np.ndarray:
+    """Tasteful dub siren (Attack masterclass): a soft tanh-shaped tone with a
+    saw-down pitch LFO synced to one bar, playing a seeded on/off phrase, into
+    a dotted filtered-feedback delay. Breath-level by construction — a
+    background flavour event for garage / dnb / reggaeton, never a lead."""
+    from pedalboard import Delay, LowpassFilter, Pedalboard
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    t = np.arange(n) / sr
+    lfo = 1.0 - (t % bar_s) / bar_s                    # saw-down, 1/1 bar
+    freq = (480.0 + 380.0 * lfo)
+
+    # seeded phrase: half-bar cells, ~55% sounding, varied length + register
+    cell_len = bar_s / 2.0
+    gate = np.zeros(n)
+    pitch_mult = np.ones(n)
+    n_cells = int(np.ceil(dur_s / cell_len))
+    for i in range(n_cells):
+        s0 = int(i * cell_len * sr)
+        if s0 >= n:
+            break
+        on = rng.random() < 0.55
+        length = (0.3 + 0.5 * rng.random()) * cell_len
+        mult = float(rng.choice([0.75, 1.0, 1.0, 1.33]))
+        if on:
+            e0 = min(n, s0 + int(length * sr))
+            gate[s0:e0] = 1.0
+            pitch_mult[s0:e0] = mult
+    # 5 ms smoothed gate edges (no clicks)
+    win_n = max(3, int(0.005 * sr) | 1)
+    win = np.hanning(win_n)
+    gate = np.convolve(gate, win / win.sum(), mode="same")
+
+    tone = np.tanh(2.5 * np.sin(np.cumsum(2 * np.pi * freq * pitch_mult / sr)))
+    mono = (tone * gate).astype(np.float32)
+    board = Pedalboard([
+        Delay(delay_seconds=max(0.05, 0.1875 * bar_s), feedback=0.45, mix=0.5),
+        LowpassFilter(cutoff_frequency_hz=3500.0),
+    ])
+    x = np.asarray(board(np.stack([mono, mono], axis=1), sr), dtype=np.float64)[:n]
+    x = _peak_scale(x, peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
+def scratch(sr: int = SR, seed: int = 0, peak_db: float = -18.0) -> np.ndarray:
+    """~0.6 s turntable gesture (DJ Premier's one-DJ-element rule): three
+    alternating pitch strokes of tone + bandpassed noise — a vinyl hand
+    stroke entering the hook, not an alarm. One per track, hiphop only."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    dur = 0.6
+    n = int(dur * sr)
+    t = np.arange(n) / sr
+    strokes = 3
+    edges = np.linspace(0, n, strokes + 1).astype(int)
+    freq = np.zeros(n)
+    for i in range(strokes):
+        f_a = 300.0 + 500.0 * rng.random()
+        f_b = 900.0 + 900.0 * rng.random()
+        if i % 2:
+            f_a, f_b = f_b, f_a
+        freq[edges[i]:edges[i + 1]] = np.linspace(f_a, f_b, edges[i + 1] - edges[i])
+    tone = np.sin(np.cumsum(2 * np.pi * freq / sr))
+    sos = butter(2, [500.0, 4000.0], btype="band", fs=sr, output="sos")
+    noise = sosfilt(sos, rng.standard_normal(n)) * 0.6
+    amp = 0.6 + 0.4 * np.abs(np.sin(np.pi * strokes * t / dur))  # stroke pulses
+    mono = (tone * 0.7 + noise) * amp
+    x = np.stack([mono, mono], axis=1)
+    return _edge_fades(_peak_scale(x, peak_db).astype(np.float64), sr,
+                       fade_s=0.008).astype(np.float32)
+
+
+def reverse_swell(base: np.ndarray, sr: int = SR, mode: str = "reverb",
+                  delay_s: float = 0.125, peak_db: float = -18.0) -> np.ndarray:
+    """Reverse swell built from the track's OWN material (808Melo / DJ Swivel
+    / MJ Cole): reverse the source, print the effect, reverse the print — the
+    effect tail swells INTO the entry, made of the riff itself rather than a
+    stock sweep. mode 'reverb' = crescendo hall; 'delay' = Attack's reverse
+    1/16 delay. Returns empty when the source slice is silent."""
+    from pedalboard import Delay, HighpassFilter, Pedalboard, Reverb
+
+    if base.shape[0] < int(0.1 * sr) or float(np.max(np.abs(base))) < 1e-4:
+        return np.zeros((0, 2), dtype=np.float32)
+    rev = np.ascontiguousarray(np.flip(base, axis=0), dtype=np.float32)
+    if mode == "delay":
+        board = Pedalboard([
+            Delay(delay_seconds=max(0.03, delay_s), feedback=0.48, mix=0.62),
+            HighpassFilter(cutoff_frequency_hz=250.0),
+        ])
+        tail_s = 1.0
+    else:
+        board = Pedalboard([
+            HighpassFilter(cutoff_frequency_hz=250.0),
+            Reverb(room_size=0.85, damping=0.4, wet_level=1.0, dry_level=0.0,
+                   width=1.0),
+        ])
+        tail_s = 1.5
+    padded = np.concatenate([rev, np.zeros((int(tail_s * sr), 2), dtype=np.float32)])
+    wet = np.asarray(board(padded, sr), dtype=np.float64)
+    x = np.ascontiguousarray(np.flip(wet, axis=0))
+    nn = x.shape[0]
+    x *= ((np.arange(nn) / nn) ** 1.5)[:, None]        # swell shape
+    fade = max(2, int(0.010 * sr))
+    x[-fade:] *= _cos_edge(fade, up=False)[:, None]    # clean into the entry
+    return _peak_scale(x, peak_db)
+
+
+#: candy kinds -> design peak dBFS (the breath-level law, pinned by tests)
+CANDY_LEVELS = {"sweep_up": -26.0, "sweep_down": -26.0, "hat_lift": -26.0,
+                "mini_downlifter": -24.0, "rev_cymbal": -20.0,
+                "siren_blip": -24.0, "sig_chirp": -24.0}
+
+
+def candy_blip(kind: str, bar_s: float, sr: int = SR, seed: int = 0) -> np.ndarray:
+    """Phrase-boundary ear-candy one-shots (Camo & Krooked: something small
+    happening every 4-8 bars). All breath-level (CANDY_LEVELS); each kind is
+    seeded so a given track's candy is deterministic."""
+    rng = np.random.default_rng(seed)
+    peak = CANDY_LEVELS[kind]
+    if kind in ("sweep_up", "sweep_down"):
+        dur = bar_s
+        n = int(dur * sr)
+        f0, f1 = (400.0, 6000.0) if kind == "sweep_up" else (6000.0, 400.0)
+        env = np.sin(np.pi * np.arange(n) / n)          # triangle-ish swell
+        ch = [_swept_noise(dur, sr, rng, f0, f1) * env for _ in range(2)]
+        x = _peak_scale(np.stack(ch, axis=1), peak)
+        return _edge_fades(x.astype(np.float64), sr, 0.01).astype(np.float32)
+    if kind == "hat_lift":
+        from scipy.signal import butter, sosfilt
+        dur = bar_s / 2.0
+        n = int(dur * sr)
+        sos = butter(2, [6000.0, 11000.0], btype="band", fs=sr, output="sos")
+        env = (np.arange(n) / n) ** 1.5
+        ch = [sosfilt(sos, rng.standard_normal(n)) * env for _ in range(2)]
+        x = _peak_scale(np.stack(ch, axis=1), peak)
+        return _edge_fades(x.astype(np.float64), sr, 0.008).astype(np.float32)
+    if kind == "mini_downlifter":
+        return downlifter(min(1.5, bar_s), sr, peak_db=peak)
+    if kind == "rev_cymbal":
+        return reverse_crash(crash(sr, seed), sr, peak_db=peak)
+    if kind == "siren_blip":
+        return dub_siren(2.0 * bar_s, sr, seed, bar_s, peak_db=peak)
+    if kind == "sig_chirp":
+        # the 808Melo signature: a tiny recurring chirp, SAME every occurrence
+        dur = 0.18
+        n = int(dur * sr)
+        t = np.arange(n) / sr
+        f_a = 700.0 + 500.0 * rng.random()
+        f = f_a * (2.2 ** (t / dur))
+        mono = np.sin(np.cumsum(2 * np.pi * f / sr)) * np.sin(np.pi * t / dur)
+        x = _peak_scale(np.stack([mono, mono], axis=1), peak)
+        return _edge_fades(x.astype(np.float64), sr, 0.005).astype(np.float32)
+    raise ValueError(f"unknown candy kind: {kind}")
+
+
+# ---------------------------------------------------------------------------
 # Texture beds — subliminal genre-flavour layers (builds+drops only; the mix
 # calibrates the "texture" layer to -30 LUFS so these sit UNDER everything)
 # ---------------------------------------------------------------------------

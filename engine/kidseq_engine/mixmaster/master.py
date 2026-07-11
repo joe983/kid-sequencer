@@ -79,7 +79,8 @@ GENRE_PRESETS: dict[str, GenrePreset] = {
 # Layers ducked by the sidechain pump (drums are the trigger, never ducked),
 # with per-layer depth multipliers: pads/texture pump hardest (the EDM wash),
 # the riff only breathes (it must stay legible — it IS the song).
-_PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5, "fx": 1.0}
+_PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5,
+              "fx": 1.0, "fx_sub": 1.0}
 _PUMPED_LAYERS = tuple(_PUMP_MULT)
 _PUMP_DEPTH_CAP = 0.65
 
@@ -89,7 +90,7 @@ _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
                "texture": -30.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
-_MONO_LOCK = ("bass",)
+_MONO_LOCK = ("bass", "fx_sub")
 
 # ---------------------------------------------------------------------------
 # Shared space (one wet-only reverb return replaces every insert reverb) and
@@ -199,6 +200,9 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
             HighpassFilter(cutoff_frequency_hz=400.0),
             Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0),
         ])
+    if name == "fx_sub":
+        # the Bomb's path: sub weight is the whole point — rumble guard only
+        return Pedalboard([HighpassFilter(cutoff_frequency_hz=28.0)])
     if name == "fx":
         return Pedalboard([HighpassFilter(cutoff_frequency_hz=150.0)])
     return Pedalboard([Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0)])
@@ -519,7 +523,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
             proc = proc + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
-        if name != "fx":  # FX generators are peak-specified by design — no calibration
+        if not name.startswith("fx"):  # FX layers are peak-specified by design — no calibration
             proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
