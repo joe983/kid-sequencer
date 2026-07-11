@@ -58,8 +58,24 @@ def main() -> None:
     # build. Cold-open shapes start on a DROP: no wet span (drops stay dry).
     intro_end = int(plan[0].bars * riff.bar_beats * (60.0 / riff.tempo) * SR) \
         if plan[0].name == "intro" else 0
+    # per-section spans for the pads/fx send rides (wet breaks, drier drops);
+    # the final build bar is split out as "build_tail" so the wet bloom peaks
+    # right before the drop snaps dry
+    bar_sec = riff.bar_beats * (60.0 / riff.tempo)
+    spans: list[tuple[str, int, int]] = []
+    bar = 0
+    for s in plan:
+        a, e = int(bar * bar_sec * SR), int((bar + s.bars) * bar_sec * SR)
+        if s.name.startswith("build") and s.bars >= 2:
+            tail = e - int(bar_sec * SR)
+            spans.append((s.name, a, tail))
+            spans.append(("build_tail", tail, e))
+        else:
+            spans.append((s.name, a, e))
+        bar += s.bars
     res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
-                 tempo=riff.tempo, riff_wet_spans=[(0, intro_end)])
+                 tempo=riff.tempo, riff_wet_spans=[(0, intro_end)],
+                 section_spans=spans)
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

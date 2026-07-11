@@ -103,6 +103,9 @@ class FxPalette:
     scratch_on: bool = False       # hiphop: ONE turntable gesture per track
     drop_open: str | None = None   # garage: "no_pads" 2-bar drop opening
     bomb_on: bool = False          # breakdown-entry sub impact (fx_sub layer)
+    # R12 beds (FxFlags.beds): the fullness layers under the kit
+    rumble_on: bool = False        # techno rumble bed under drop kicks (Hades)
+    odd_loop_on: bool = False      # 3-beat perc cell against the 4/4 (KiNK)
 
 
 @dataclass(frozen=True)
@@ -267,7 +270,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     "dnb": _menu(pad_role=["supersaw", "strings_pad", "choir", "glass"],
                  pad_rhythm=[0, 1],
                  bass_patch=["bass", "bass_acid"], bass_feel=[0, 1, 2, 3],
-                 drum_variant=[0, 1, 2],
+                 drum_variant=[0, 1, 2, 3], texture=["wash", None],
                  riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
     # with octave pops; FM knock as the alt colour.
@@ -296,7 +299,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                        pad_rhythm=[0, 1],
                        bass_patch=["bass_pluck", "bass_round", "bass"],
                        bass_feel=[0, 1, 2],
-                       drum_variant=[0, 1, 2, 3],
+                       drum_variant=[0, 1, 2, 3, 4], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
@@ -494,6 +497,13 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
                         *((["no_pads", None], [0.5, 0.5]) if g == "garage"
                           else ([None], None))),
         bomb_on=_pick(seed, "bomb_on", *_BOMB.get(g, _BOMB_DEFAULT)),
+        rumble_on=_pick(seed, "rumble_on",
+                        *(([True, False], [0.6, 0.4]) if g == "techhouse"
+                          else ([False], None))),
+        odd_loop_on=_pick(seed, "odd_loop_on",
+                          *(([False, True], [0.65, 0.35]) if g == "techhouse"
+                            else ([False, True], [0.70, 0.30]) if g == "garage"
+                            else ([False], None))),
     )
 
 

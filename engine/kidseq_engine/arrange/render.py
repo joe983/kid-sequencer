@@ -63,11 +63,12 @@ class FxFlags:
     gap: bool = True          # the pre-drop silence gap
     throw: bool | None = None # riff delay-echo into breaks
     earcandy: bool = True     # phrase-boundary events inside drops (R11)
+    beds: bool = True         # rumble bed + odd perc loop in drops (R12)
 
     @property
     def any_on(self) -> bool:
         return (self.fx or self.fills or self.automation or self.gap
-                or self.earcandy or self.throw is not False)
+                or self.earcandy or self.beds or self.throw is not False)
 
 
 def _lite_pattern(pattern: dict) -> dict:
@@ -141,15 +142,54 @@ def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
     return out if out is not None else np.zeros((0, 2), dtype=np.float32)
 
 
+def _sine_sub(notes, tempo: float, span_beats: float, sr: int) -> np.ndarray:
+    """A plain sine layer following the bass notes — the Architechs rule:
+    garage bass is never one raw patch. The static deep layer under the
+    plucky mid (Todd Edwards' Juno square-sub instinct, sine-simplified)."""
+    spb = seconds_per_beat(tempo)
+    n = int(span_beats * spb * sr) + int(0.1 * sr)
+    out = np.zeros(n, dtype=np.float64)
+    for nt in notes:
+        f = 440.0 * 2.0 ** ((nt.pitch - 69) / 12.0)
+        s0 = int(nt.start_beats * spb * sr)
+        e0 = min(n, s0 + max(4, int(nt.dur_beats * spb * sr)))
+        if s0 < 0 or s0 >= e0:
+            continue
+        t = np.arange(e0 - s0) / sr
+        seg = np.sin(2 * np.pi * f * t)
+        atk = min(len(seg), max(2, int(0.008 * sr)))
+        seg[:atk] *= np.linspace(0.0, 1.0, atk)
+        rel = min(len(seg), max(2, int(0.030 * sr)))
+        seg[-rel:] *= np.linspace(1.0, 0.0, rel)
+        out[s0:e0] += seg
+    return np.stack([out, out], axis=1).astype(np.float32)
+
+
 def _render_bass(notes, tempo: float, span_beats: float, sr: int,
-                 bass_patch: str = "bass") -> np.ndarray:
+                 bass_patch: str = "bass",
+                 sub_double_db: float | None = None) -> np.ndarray:
     """Render the bass LAYER with the style's genre patch (Surge). Falls back
     to the grid-voice chain (SF2 Lately Bass / numpy synth) without Surge —
-    the kid's own 'bass' grid instrument is untouched by this."""
+    the kid's own 'bass' grid instrument is untouched by this.
+    `sub_double_db` layers a sine sub under the patch at that level relative
+    to the patch's peak (garage: never raw bass)."""
     if vst_render.SURGE_VST3.exists() and bass_patch in vst_render.PATCHES:
-        return as_stereo(vst_render.render_patch(notes, tempo, bass_patch, 1,
-                                                 span_beats, sr))
-    return riff_audio(notes, tempo, "bass", 1, span_beats, sr)
+        sig = as_stereo(vst_render.render_patch(notes, tempo, bass_patch, 1,
+                                                span_beats, sr))
+    else:
+        sig = riff_audio(notes, tempo, "bass", 1, span_beats, sr)
+    if sub_double_db is not None and sig.size:
+        sub = _sine_sub(notes, tempo, span_beats, sr)
+        peak_sig = float(np.max(np.abs(sig)))
+        peak_sub = float(np.max(np.abs(sub)))
+        if peak_sig > 1e-9 and peak_sub > 1e-9:
+            sub = sub * np.float32(peak_sig * 10.0 ** (sub_double_db / 20.0)
+                                   / peak_sub)
+            out = sig.copy()
+            m = min(out.shape[0], sub.shape[0])
+            out[:m] += sub[:m]
+            return out
+    return sig
 
 
 def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
@@ -310,7 +350,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     n = int((total_bars * bar_s + 1.0) * sr)
     layers = {name: np.zeros((n, 2), dtype=np.float32)
               for name in ("riff", "drums", "bass", "pads", "texture", "fx",
-                           "fx_sub")}
+                           "fx_sub", "rumble")}
     kick_onsets: list[int] = []
 
     from ..render.drums import pattern_for
@@ -413,7 +453,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         if sec.bass:
             feel = bass_feel_for(riff.drum_style, style.bass_feel)
             notes = bass_notes(riff, prog, sec.bars, feel=feel)
-            sig = _render_bass(notes, riff.tempo, span_beats, sr, style.bass_patch)
+            # garage bass is never raw (Architechs): plucky/FM patches get a
+            # sine sub layered -12 dB underneath
+            sub_db = -12.0 if (riff.drum_style == "garage"
+                               and style.bass_patch in ("bass_pluck", "bass_fm")) \
+                else None
+            sig = _render_bass(notes, riff.tempo, span_beats, sr,
+                               style.bass_patch, sub_double_db=sub_db)
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:
@@ -437,8 +483,14 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     # edge — intro/outro included — as the sound-development bed). The -30
     # LUFS layer calibration keeps it subliminal. --------------------------
     if style.texture:
-        tex_names = ("build", "drop", "intro", "outro") if percussive \
-            else ("build", "drop")
+        if percussive:
+            tex_names = ("build", "drop", "intro", "outro")
+        elif riff.drum_style == "hiphop" and style.texture == "crackle":
+            # Premier: 'hip-hop is grimy and dirty, so keep it dirty' — the
+            # crackle bed runs edge to edge, drops included
+            tex_names = ("build", "drop", "intro", "outro", "break")
+        else:
+            tex_names = ("build", "drop")
         for s, a, e in bounds:
             if s.name.startswith(tex_names):
                 sig = _render_texture(style.texture, (e - a) / sr, sr, seed, riff)
@@ -674,6 +726,22 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                 chirp_seed if kind == "sig_chirp"
                                 else seed + 900 + b)
             _add_at(layers["fx"], sig, pos)
+
+    # ---- beds (R12): the fullness layers under the drop kit -----------------
+    if flags.beds and (pal.rumble_on or pal.odd_loop_on) and pattern:
+        from ..render.drums import render_odd_cell
+        for k, (idx, sec, a, e) in enumerate(drops):
+            dur = (e - a) / sr
+            if pal.rumble_on:
+                ons = kick_onsets_from_pattern(pattern, riff.tempo, sec.bars,
+                                               sr, style=riff.drum_style)
+                sig = fx.rumble_bed(dur, sr, seed + 600,
+                                    [o / sr for o in ons], decay_s=1.5 * spb)
+                _add_at(layers["rumble"], sig, a)
+            if pal.odd_loop_on:
+                cell = render_odd_cell(riff.drum_style, riff.tempo, dur, sr)
+                # ~-20 dB under the kit: an added quiet lane, never a feature
+                _add_at(layers["drums"], as_stereo(cell) * np.float32(0.35), a)
 
     if flags.gap:
         exempt = (pal.gap_carry,) if pal.gap_carry else ()

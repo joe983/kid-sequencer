@@ -24,6 +24,7 @@ import numpy as np
 import pyloudnorm as pyln
 from pedalboard import (
     Compressor,
+    Distortion,
     Gain,
     HighpassFilter,
     HighShelfFilter,
@@ -80,17 +81,27 @@ GENRE_PRESETS: dict[str, GenrePreset] = {
 # with per-layer depth multipliers: pads/texture pump hardest (the EDM wash),
 # the riff only breathes (it must stay legible — it IS the song).
 _PUMP_MULT = {"bass": 1.0, "pads": 1.15, "texture": 1.15, "riff": 0.5,
-              "fx": 1.0, "fx_sub": 1.0}
+              "fx": 1.0, "fx_sub": 1.0, "rumble": 1.25}
 _PUMPED_LAYERS = tuple(_PUMP_MULT)
 _PUMP_DEPTH_CAP = 0.65
 
 # Post-board layer LUFS targets (active regions only) — the calibrated mix
-# balance genre gains offset from.
+# balance genre gains offset from. rumble pumps hardest AND sits deepest —
+# it ducks out of the dry kick's way like Hades' sidechained return.
 _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
-               "texture": -30.0}
+               "texture": -30.0, "rumble": -31.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
-_MONO_LOCK = ("bass", "fx_sub")
+_MONO_LOCK = ("bass", "fx_sub", "rumble")
+
+# Haas-on-sides width (Camo & Krooked): a delayed mono copy added as pure
+# Side on the WIDTH layers only — mono sum bit-unchanged by construction,
+# drums/bass/riff core stays untouched. Per-genre side level (dB): drill/
+# hiphop stay narrower (width belongs to ear-candy layers only — MixedByAli).
+_HAAS_LAYERS = ("pads", "texture")
+_HAAS_SIDE_DB = {"drill": -18.0, "hiphop": -18.0, "reggaeton": -15.0}
+_HAAS_DEFAULT_DB = -14.0
+_HAAS_DELAY_MS = 12.0
 
 # ---------------------------------------------------------------------------
 # Shared space (one wet-only reverb return replaces every insert reverb) and
@@ -110,6 +121,12 @@ _PREDELAY_S = 0.020
 _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
                "reggaeton": -8.0, "dnb": -10.0}
 
+# parallel distorted 'room' bus under the kit (Noisia's overhead-mics trick:
+# programmed drums read as a kit in a space). drill/hiphop stay OFF — their
+# 'drums just need to knock' (Metro Boomin's engineer).
+_ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
+                 "reggaeton": -18.0}
+
 
 def _reverb_return_board(genre: str | None) -> Pedalboard:
     room = _ROOM_SIZE.get(genre or "", 0.40)
@@ -118,6 +135,38 @@ def _reverb_return_board(genre: str | None) -> Pedalboard:
         LowpassFilter(cutoff_frequency_hz=7500.0),
         Reverb(room_size=room, damping=0.55, wet_level=1.0, dry_level=0.0, width=1.0),
     ])
+
+
+def _room_bus_board() -> Pedalboard:
+    """Noisia's distorted 'overheads': HP keeps kick sub off the drive (punch
+    stays dry), heavy distortion + a SHORT wet-only room + LP against fizz —
+    summed quietly under the kit for shared-space glue. Smear is the point:
+    this bus is deliberately NOT impulse-aligned (unlike the NY crush)."""
+    return Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=250.0),
+        Distortion(drive_db=12.0),
+        Reverb(room_size=0.25, damping=0.6, wet_level=1.0, dry_level=0.0,
+               width=0.6),
+        LowpassFilter(cutoff_frequency_hz=6000.0),
+    ])
+
+
+def _haas_sides(x: np.ndarray, sr: int, delay_ms: float = 12.0,
+                side_db: float = -14.0) -> np.ndarray:
+    """Haas width on the SIDES only: a delayed mono copy added antisymmetric
+    (+L/-R). (L+s)+(R-s) == L+R — the mono fold is unchanged by construction,
+    so this cannot break mono compatibility; it only adds side energy."""
+    d = int(delay_ms / 1000.0 * sr)
+    if d <= 0 or x.shape[0] <= d:
+        return x
+    mono = x.mean(axis=1)
+    side = np.zeros_like(mono)
+    side[d:] = mono[:-d]
+    side *= np.float32(10.0 ** (side_db / 20.0))
+    out = x.copy()
+    out[:, 0] += side
+    out[:, 1] -= side
+    return out
 
 
 def _ny_crush_board() -> Pedalboard:
@@ -203,6 +252,11 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
     if name == "fx_sub":
         # the Bomb's path: sub weight is the whole point — rumble guard only
         return Pedalboard([HighpassFilter(cutoff_frequency_hz=28.0)])
+    if name == "rumble":
+        # the techno rumble bed: strictly low-band (the drums keep the slot
+        # boost; this is the space BETWEEN the kicks)
+        return Pedalboard([HighpassFilter(cutoff_frequency_hz=30.0),
+                           LowpassFilter(cutoff_frequency_hz=110.0)])
     if name == "fx":
         return Pedalboard([HighpassFilter(cutoff_frequency_hz=150.0)])
     return Pedalboard([Compressor(threshold_db=-18.0, ratio=2.0, attack_ms=10.0, release_ms=150.0)])
@@ -479,10 +533,40 @@ def _process(audio: np.ndarray, board: Pedalboard, sr: int) -> np.ndarray:
     return np.asarray(out, dtype=np.float32)
 
 
+# per-section reverb-send rides for pads/fx (Rødhåd's wet-fader move / Eric J
+# Dubowsky's return automation): wet blooms in breaks and the final build bar,
+# snaps drier inside drops for clarity. Keys are section-name prefixes.
+_SEND_RIDE_DB = {"break": 4.0, "build_tail": 4.0, "drop": -2.0}
+
+
+def _ride_curve(n: int, sr: int, base_db: float,
+                section_spans: list[tuple[str, int, int]]) -> np.ndarray:
+    """Per-sample send gain from a base level + per-section deltas, smoothed
+    with a 50 ms window so rides never click."""
+    curve = np.full(n, 10.0 ** (base_db / 20.0), dtype=np.float64)
+    for name, s0, s1 in section_spans:
+        delta = None
+        for k, v in _SEND_RIDE_DB.items():
+            if name.startswith(k):
+                delta = v
+                break
+        if delta is None:
+            continue
+        s0c, s1c = max(0, s0), min(n, s1)
+        if s1c > s0c:
+            curve[s0c:s1c] = 10.0 ** ((base_db + delta) / 20.0)
+    ramp = max(2, int(0.050 * sr))
+    win = np.ones(ramp) / ramp
+    padded = np.concatenate([np.full(ramp, curve[0]), curve,
+                             np.full(ramp, curve[-1])])
+    return np.convolve(padded, win, mode="same")[ramp:-ramp].astype(np.float32)
+
+
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            kick_onsets: list[int], lufs_target: float | None = None,
            tempo: float = 120.0,
-           riff_wet_spans: list[tuple[int, int]] | None = None) -> MasterResult:
+           riff_wet_spans: list[tuple[int, int]] | None = None,
+           section_spans: list[tuple[str, int, int]] | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -492,6 +576,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     riff_wet_spans: (start, end) sample ranges where the riff's reverb send is
             raised to _RIFF_WET_DB (the arranger passes the intro — a "distant"
             open that dries up when the band arrives).
+    section_spans: (section_name, start, end) sample ranges; when given, the
+            pads/fx reverb sends ride per section (_SEND_RIDE_DB — wet breaks,
+            drier drops). None = static sends (fixtures/tests unchanged).
     """
     if "riff" not in layers or layers["riff"].size == 0:
         raise ValueError("master() needs a non-empty 'riff' layer")
@@ -518,11 +605,23 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         else:
             proc = proc[:n]
         if name == "drums":
+            dry = proc
             # parallel NY crush under the dry kit (density without killing punch)
-            crushed = _process(proc, _ny_crush_board(), sr)[:n]
+            crushed = _process(dry, _ny_crush_board(), sr)[:n]
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
-            proc = proc + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
+            proc = dry + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
+            # parallel distorted 'room' (Noisia's overheads) — fed from the
+            # DRY kit so the crush and the room stay independent colours
+            room_db = _ROOM_GAIN_DB.get(genre or "")
+            if room_db is not None:
+                room = _process(dry, _room_bus_board(), sr)[:n]
+                if room.shape[0] < n:
+                    room = np.pad(room, ((0, n - room.shape[0]), (0, 0)))
+                proc = proc + room * (10.0 ** (room_db / 20.0))
+        if name in _HAAS_LAYERS:
+            proc = _haas_sides(proc, sr, _HAAS_DELAY_MS,
+                               _HAAS_SIDE_DB.get(genre or "", _HAAS_DEFAULT_DB))
         if not name.startswith("fx"):  # FX layers are peak-specified by design — no calibration
             proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
@@ -535,6 +634,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                 curve = np.full(n, 10.0 ** (send_db / 20.0), dtype=np.float32)
                 for s0, s1 in riff_wet_spans:
                     curve[max(0, s0):max(0, s1)] = 10.0 ** (_RIFF_WET_DB / 20.0)
+                send_acc += proc * curve[:, None]
+            elif name in ("pads", "fx") and section_spans:
+                curve = _ride_curve(n, sr, send_db, section_spans)
                 send_acc += proc * curve[:, None]
             else:
                 send_acc += proc * (10.0 ** (send_db / 20.0))

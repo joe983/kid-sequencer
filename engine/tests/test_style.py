@@ -156,6 +156,21 @@ def test_fx_palette_r11_menu_coverage():
             assert kind in CANDY_LEVELS or kind in placement_kinds, (g, kind)
 
 
+def test_fx_palette_r12_menu_coverage():
+    """R12 beds: rumble is techhouse-only, odd loop techhouse/garage; dnb and
+    reggaeton finally have a texture menu."""
+    per_genre = {g: [choose_style(_riff(drum_style=g), v).fx_palette
+                     for v in range(200)]
+                 for g in DRUM_PATTERNS}
+    assert {p.rumble_on for p in per_genre["techhouse"]} == {True, False}
+    assert {p.rumble_on for p in per_genre["dnb"]} == {False}
+    assert {p.odd_loop_on for p in per_genre["techhouse"]} == {True, False}
+    assert {p.odd_loop_on for p in per_genre["garage"]} == {True, False}
+    assert {p.odd_loop_on for p in per_genre["drill"]} == {False}
+    assert set(_GENRE_MENU["dnb"]["texture"]) == {"wash", None}
+    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", None}
+
+
 def test_arrange_style_is_frozen_and_hashable():
     s = choose_style(_riff(), 0)
     assert isinstance(s, ArrangeStyle)

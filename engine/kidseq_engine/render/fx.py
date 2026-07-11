@@ -435,6 +435,37 @@ def _edge_fades(x: np.ndarray, sr: int, fade_s: float = 0.05) -> np.ndarray:
     return x
 
 
+def rumble_bed(dur_s: float, sr: int = SR, seed: int = 0,
+               onsets_s: list[float] | tuple = (), decay_s: float = 0.5,
+               peak_db: float = -14.0) -> np.ndarray:
+    """The techno RUMBLE (Tom Hades): the kick's saturated sub tail as a
+    continuous low bed filling the space between kicks — THE peak-time
+    fullness layer. Synthesized: one pitch-dropping tanh'd sub pulse per kick
+    onset, tails overlapping (decay ~1.5x the kick period), + a faint noise
+    floor, everything lowpassed at 110 Hz. The mix calibrates the 'rumble'
+    layer to -31 LUFS, mono-locks it, and pumps it hardest — so it ducks
+    under the dry kick exactly like Hades' sidechained return channel."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    mono = np.zeros(n, dtype=np.float64)
+    pn = max(4, int(decay_s * 2.5 * sr))
+    t = np.arange(pn) / sr
+    f = 55.0 * (38.0 / 55.0) ** np.minimum(t / max(0.05, decay_s * 0.8), 1.0)
+    pulse = np.tanh(1.8 * np.sin(np.cumsum(2 * np.pi * f / sr))) \
+        * np.exp(-t / max(0.05, decay_s))
+    for o in onsets_s:
+        s0 = int(o * sr)
+        if 0 <= s0 < n:
+            e0 = min(n, s0 + pn)
+            mono[s0:e0] += pulse[: e0 - s0]
+    sos = butter(2, 110.0, btype="low", fs=sr, output="sos")
+    mono = sosfilt(sos, mono) + sosfilt(sos, rng.standard_normal(n)) * 0.05
+    x = _peak_scale(np.stack([mono, mono], axis=1), peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
 def vinyl_crackle(dur_s: float, sr: int = SR, seed: int = 0,
                   peak_db: float = -24.0, ticks_per_s: float = 8.0) -> np.ndarray:
     """Dusty record bed: sparse bandpassed ticks + a soft hiss floor.

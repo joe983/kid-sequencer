@@ -159,6 +159,50 @@ def test_mono_input_stays_mono():
         assert _corr(res.audio[:, 0], res.audio[:, 1]) > 0.90, (g, _corr(res.audio[:, 0], res.audio[:, 1]))
 
 
+def test_haas_sides_mono_sum_unchanged():
+    """The width move must be free: (L+s)+(R-s) == L+R, so the mono fold of a
+    Haas-widened layer is (near-)identical to the input's."""
+    from kidseq_engine.mixmaster.master import _haas_sides
+
+    rng = np.random.default_rng(42)
+    x = np.stack([rng.standard_normal(SR), rng.standard_normal(SR)],
+                 axis=1).astype(np.float32)
+    y = _haas_sides(x, SR, 12.0, -14.0)
+    assert not np.allclose(y, x)                       # it DID add width
+    assert np.allclose(y.sum(axis=1), x.sum(axis=1), atol=1e-5)  # mono null
+
+
+def test_room_bus_is_wet_only():
+    """The drum room bus (Noisia overheads) must carry no dry signal — the
+    dry kit comes from the main path; the room is pure parallel colour."""
+    from kidseq_engine.mixmaster.master import _process, _room_bus_board
+
+    n = SR
+    x = np.zeros((n, 2), dtype=np.float32)
+    imp = SR // 4
+    x[imp] = 0.9
+    y = _process(x, _room_bus_board(), SR)
+    peak = float(np.max(np.abs(y)))
+    assert peak > 1e-5, "room bus produced silence"
+    assert float(np.max(np.abs(y[imp]))) < 0.10 * peak, "room bus leaks dry"
+
+
+def test_ride_curve_bounded_and_smooth():
+    """Send rides: values stay within [base-2, base+4] dB and the curve never
+    jumps (50 ms smoothing)."""
+    from kidseq_engine.mixmaster.master import _ride_curve
+
+    n = 4 * SR
+    spans = [("intro", 0, SR), ("drop", SR, 2 * SR),
+             ("build_tail", 2 * SR, 3 * SR), ("break", 3 * SR, n)]
+    c = _ride_curve(n, SR, -9.0, spans)
+    assert c.shape == (n,)
+    assert np.array_equal(c, _ride_curve(n, SR, -9.0, spans))   # deterministic
+    lo, hi = 10.0 ** (-11.2 / 20.0), 10.0 ** (-4.8 / 20.0)
+    assert lo <= float(c.min()) and float(c.max()) <= hi, (c.min(), c.max())
+    assert float(np.max(np.abs(np.diff(c)))) < 0.001            # no jumps
+
+
 def test_ny_crush_is_impulse_aligned():
     """The parallel drum bus must not smear timing: crushed path peaks within
     1 ms of the dry impulse (else parallel summing combs the transient)."""

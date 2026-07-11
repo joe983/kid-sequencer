@@ -36,7 +36,7 @@ _PLAN = [
     Section("outro", 1, "sparse", "lite", bass=False, pads=True),
 ]
 _OFF = FxFlags(fx=False, fills=False, automation=False, gap=False, throw=False,
-               earcandy=False)
+               earcandy=False, beds=False)
 
 
 def _riff() -> Riff:
@@ -256,6 +256,30 @@ def test_r11_event_generators_levels_determinism():
         b = fx.candy_blip(kind, 2.0, SR, seed=4)
         assert a.shape[1] == 2 and np.array_equal(a, b), kind
         assert _peak_db(a) <= want + 1.5, (kind, _peak_db(a))
+
+
+def test_r12_beds_generators():
+    """rumble_bed: determinism, level pin, strictly low-band; odd cell:
+    determinism, length, quiet."""
+    ons = [i * 0.5 for i in range(8)]
+    rb = fx.rumble_bed(4.0, SR, seed=6, onsets_s=ons, decay_s=0.75)
+    assert rb.shape == (4 * SR, 2)
+    assert np.array_equal(rb, fx.rumble_bed(4.0, SR, seed=6, onsets_s=ons,
+                                            decay_s=0.75))
+    assert abs(_peak_db(rb) - (-14.0)) < 1.5
+    # low-band character: energy above 300 Hz is far below the sub band
+    m = rb.mean(axis=1).astype(np.float64)
+    mag = np.abs(np.fft.rfft(m * np.hanning(len(m)))) ** 2
+    fr = np.fft.rfftfreq(len(m), 1.0 / SR)
+    lo = 10.0 * np.log10(mag[(fr >= 30) & (fr < 110)].mean() + 1e-20)
+    hi = 10.0 * np.log10(mag[(fr >= 300) & (fr < 4000)].mean() + 1e-20)
+    assert lo - hi > 20.0, (lo, hi)
+
+    from kidseq_engine.render.drums import render_odd_cell
+    c1 = render_odd_cell("techhouse", 120.0, 6.0, SR)
+    c2 = render_odd_cell("techhouse", 120.0, 6.0, SR)
+    assert np.array_equal(c1, c2) and c1.shape[0] == 6 * SR
+    assert 0.0 < float(np.max(np.abs(c1))) < 0.5   # a quiet lane, not a kit
 
 
 def test_candy_slots_hook_protection_and_spacing():
