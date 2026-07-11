@@ -532,6 +532,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                         dur = riser_bars * bar_s
                         if pal.riser_style == "shepard" and mode == "full":
                             sig = fx.shepard_riser(dur, sr, seed + idx,
+                                                   peak_db=pal.riser_db,
                                                    f0=pal.riser_f0,
                                                    f1=pal.riser_f1)
                         else:
@@ -539,7 +540,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                         + (0.2 if later else 0.0))
                             sig = fx.riser(dur, sr, seed + idx,
                                            gate_hz=4.0 / spb, gate_depth=depth,
-                                           f0=pal.riser_f0, f1=pal.riser_f1)
+                                           peak_db=pal.riser_db,
+                                           f0=pal.riser_f0, f1=pal.riser_f1,
+                                           color=pal.riser_color)
                     if mode == "half":
                         sig = sig * np.float32(10.0 ** (-6.0 / 20.0))
                     _add_at(layers["fx"], sig * fx_g, a - gap_n - sig.shape[0])
@@ -564,7 +567,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     _add_at(layers["fx"], sw * fx_g, (a - gap_n) - sw.shape[0])
             nxt = bounds[idx + 1] if idx + 1 < len(bounds) else None
             if pal.downlifter_on and nxt and nxt[0].name.startswith("break"):
-                _add_at(layers["fx"], fx.downlifter(2 * bar_s, sr), nxt[1])
+                _add_at(layers["fx"], fx.downlifter(2 * bar_s, sr, seed + 500 + idx),
+                        nxt[1])
         if pal.scratch_on and len(drops) >= 2:
             # Premier's rule: ONE turntable gesture per record — entering the
             # second drop (the hook return), never repeated

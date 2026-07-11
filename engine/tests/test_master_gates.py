@@ -171,6 +171,32 @@ def test_plr_floor_holds():
         assert plr >= floor - 0.3, (g, plr, floor)
 
 
+def test_bass_band_sat_sub_clean_mids_thickened():
+    """R15 bass saturation (Noisia): the sub band passes essentially clean,
+    the mids gain harmonics; level change stays small (tone, not gain);
+    unknown genre (wet 0) is bit-identical."""
+    from scipy.signal import butter, sosfilt
+
+    from kidseq_engine.mixmaster.master import _bass_band_sat
+
+    n = 4 * SR
+    t = np.arange(n) / SR
+    mono = (0.5 * np.sin(2 * np.pi * 55.0 * t)
+            + 0.25 * np.sin(2 * np.pi * 220.0 * t)).astype(np.float32)
+    x = np.stack([mono, mono], axis=1)
+    assert np.array_equal(_bass_band_sat(x, SR, None), x)       # wet 0 = null
+    y = _bass_band_sat(x, SR, "dnb")
+    assert not np.array_equal(y, x)
+    sos = butter(4, 100.0, btype="low", fs=SR, output="sos")
+    low_in = sosfilt(sos, x, axis=0)
+    low_out = sosfilt(sos, y, axis=0)
+    # sub band essentially unchanged (tiny crossover leakage tolerated)
+    assert float(np.max(np.abs(low_out - low_in))) < 0.05
+    # overall level moves < 1 dB (RMS-matched drive)
+    rms = lambda a: float(np.sqrt(np.mean(a ** 2)))  # noqa: E731
+    assert abs(20.0 * np.log10(rms(y) / rms(x))) < 1.0
+
+
 def test_dynamic_guard_cuts_pokes_not_programme():
     """The 6-9 kHz guard band: a transient poking far above the band average
     gets cut (<= 2.5 dB); content without pokes passes (near-)unchanged."""

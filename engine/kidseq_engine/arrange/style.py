@@ -96,6 +96,9 @@ class FxPalette:
     riser_restraint: bool = True   # only drop 1 gets the full prominent riser;
     #                                later drops get half/reverse-only/none
     riser_style: str = "classic"   # "classic" | "shepard" (first riser only)
+    # R15 riser feel (owner: samey, too prominent):
+    riser_db: float = -12.0        # riser peak dBFS — varied per press
+    riser_color: str = "smooth"    # noise character (fx._RISER_COLORS)
     # R11 ear candy + genre FX vocabularies (all breath-level — Tumay):
     earcandy_every: int = 0        # 0 = off; 4|8 = phrase-boundary event cadence
     earcandy_menu: tuple = ()      # the genre's event kinds (fixed per genre)
@@ -269,7 +272,8 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     # the reese IS dnb bass — feels vary; acid as the neuro-ish alt
     "dnb": _menu(pad_role=["supersaw", "strings_pad", "choir", "glass"],
                  pad_rhythm=[0, 1],
-                 bass_patch=["bass", "bass_acid"], bass_feel=[0, 1, 2, 3],
+                 bass_patch=["bass_reese", "bass", "bass_acid"],
+                 bass_feel=[0, 1, 2, 3],
                  drum_variant=[0, 1, 2, 3], texture=["wash", None],
                  riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
@@ -373,15 +377,17 @@ _FILL_MENU: dict[str, list[int]] = {
 }
 
 # genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
-# slow tempos never read as broken). The pros cut a real breath — 2 beats in
-# the Attack "Good Life" analysis; 0.15 is the legacy micro-gap. Drill/hiphop
-# stay subtler (their drops are less EDM-shaped).
+# slow tempos never read as broken). The pros cut a real breath — but NOT on
+# every song (owner R15: overused gaps read obvious/ineffective). The big
+# 2-beat cut is now the exception; hiphop NEVER gets more than the legacy
+# micro-breath; drill leans micro. A big gap also excludes bass starvation
+# (see _choose_fx_palette) — stacking both was too much.
 _GAP_BEATS: dict[str, tuple[list, list]] = {
-    "drill": ([1.0, 0.15], [0.50, 0.50]),
-    "hiphop": ([1.0, 0.15], [0.50, 0.50]),
-    "reggaeton": ([1.0, 2.0, 0.15], [0.45, 0.30, 0.25]),
+    "drill": ([0.15, 1.0], [0.65, 0.35]),
+    "hiphop": ([0.15], None),
+    "reggaeton": ([1.0, 0.15, 2.0], [0.45, 0.30, 0.25]),
 }
-_GAP_BEATS_DEFAULT: tuple[list, list] = ([2.0, 1.0, 0.15], [0.50, 0.30, 0.20])
+_GAP_BEATS_DEFAULT: tuple[list, list] = ([1.0, 0.15, 2.0], [0.40, 0.35, 0.25])
 
 # genre -> bass-starvation menu (bars of HP'd bass at the end of each build —
 # Noisia: no low end right before the drop makes the drop read bass-heavy)
@@ -393,8 +399,8 @@ _STARVE_BARS: dict[str, tuple[list, list]] = {
 }
 _STARVE_BARS_DEFAULT: tuple[list, list] = ([1, 2, 0], [0.50, 0.30, 0.20])
 
-# genre -> riser style menu ("shepard" = the octave-staggered endless-rise
-# pair, Sub Focus' 'Vapourise' move — a dnb/techno flavour first)
+# genre -> riser style menu ("shepard" = the cyclic endless-rise layers,
+# Sub Focus' 'Vapourise' move — a dnb/techno flavour first)
 _RISER_STYLE: dict[str, tuple[list, list]] = {
     "garage": (["classic", "shepard"], [0.70, 0.30]),
     "reggaeton": (["classic", "shepard"], [0.70, 0.30]),
@@ -403,13 +409,30 @@ _RISER_STYLE: dict[str, tuple[list, list]] = {
 }
 _RISER_STYLE_DEFAULT: tuple[list, list] = (["classic", "shepard"], [0.55, 0.45])
 
+# riser LEVEL menu (dBFS peak) — pros keep risers well under the mix (owner
+# R15: -12 read too prominent everywhere). Varied per press so even two
+# riser-led takes don't sit identically.
+_RISER_DB_MENU: tuple[list, list] = ([-17.0, -14.0, -20.0], [0.50, 0.30, 0.20])
+
+# riser COLOUR menu (fx._RISER_COLORS): smooth / textured / airy — one
+# white-noise recipe for every riser is what read samey. drill/hiphop lean
+# textured (dark organic sweeps fit their palettes).
+_RISER_COLOR: dict[str, tuple[list, list]] = {
+    "drill": (["textured", "smooth"], [0.60, 0.40]),
+    "hiphop": (["textured", "smooth"], [0.60, 0.40]),
+}
+_RISER_COLOR_DEFAULT: tuple[list, list] = (["smooth", "textured", "airy"],
+                                           [0.40, 0.35, 0.25])
+
 # genre -> phrase-boundary ear-candy vocabulary (render/fx.candy_blip kinds
 # plus the placement kinds "kick_fill" and "drum_stop" handled in render.py).
 # All breath-level. hiphop's single gesture is the scratch (its own field) —
 # Premier: one DJ element per record, so no rolling candy cadence there.
 _CANDY_MENU: dict[str, tuple] = {
     "techhouse": ("sweep_up", "sweep_down", "hat_lift"),
-    "dnb": ("mini_downlifter", "siren_blip", "rev_swell_delay"),
+    # R15: mini_downlifter out of dnb — the falling tone read cheap in the
+    # dnb take; its candy is now swells/sirens/textured falls only
+    "dnb": ("rev_swell_delay", "siren_blip", "sweep_down"),
     "garage": ("kick_fill", "rev_cymbal", "siren_blip"),
     "drill": ("rev_swell_riff", "sig_chirp"),
     "hiphop": (),
@@ -463,10 +486,19 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
     f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
     rf0, rf1 = _RISER_BAND.get(g, (300.0, 8000.0))
     kind_menu = _RISER_KIND.get(g, (["noise"], None))
+    # gap + starvation interplay (owner R15: stacking both was too much) —
+    # a big 2-beat cut never also starves the bass; a 1-beat cut caps it at 1
+    gap_beats = _pick(seed, "gap_beats", *_GAP_BEATS.get(g, _GAP_BEATS_DEFAULT))
+    starve = _pick(seed, "bass_starve_bars",
+                   *_STARVE_BARS.get(g, _STARVE_BARS_DEFAULT))
+    if gap_beats >= 2.0:
+        starve = 0
+    elif gap_beats >= 1.0:
+        starve = min(starve, 1)
     return FxPalette(
         riser_on=_pick(seed, "riser_on", *riser_menu),
         riser_kind=_pick(seed, "riser_kind", *kind_menu),
-        riser_bars=_pick(seed, "riser_bars", [8, 4], [0.65, 0.35]),
+        riser_bars=_pick(seed, "riser_bars", [8, 4, 2], [0.50, 0.35, 0.15]),
         riser_f0=rf0, riser_f1=rf1,
         gate_depth=_pick(seed, "gate_depth", [0.5, 0.7], [0.6, 0.4]),
         impact_f0=f0, impact_f1=f1, impact_db=db,
@@ -478,14 +510,16 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
         # varied intro colour: dark tease .. wide open (>=15k skips the filter)
         intro_lpf=_pick(seed, "intro_lpf", [2500.0, 1500.0, 4000.0, 18000.0],
                         [0.35, 0.25, 0.25, 0.15]),
-        gap_beats=_pick(seed, "gap_beats", *_GAP_BEATS.get(g, _GAP_BEATS_DEFAULT)),
+        gap_beats=gap_beats,
         gap_carry=_pick(seed, "gap_carry", [None, "texture"], [0.70, 0.30]),
-        bass_starve_bars=_pick(seed, "bass_starve_bars",
-                               *_STARVE_BARS.get(g, _STARVE_BARS_DEFAULT)),
+        bass_starve_bars=starve,
         riser_restraint=_pick(seed, "riser_restraint", [True, False],
                               [0.70, 0.30]),
         riser_style=_pick(seed, "riser_style",
                           *_RISER_STYLE.get(g, _RISER_STYLE_DEFAULT)),
+        riser_db=_pick(seed, "riser_db", *_RISER_DB_MENU),
+        riser_color=_pick(seed, "riser_color",
+                          *_RISER_COLOR.get(g, _RISER_COLOR_DEFAULT)),
         earcandy_every=_pick(seed, "earcandy_every",
                              *_CANDY_EVERY.get(g, ([0], None))),
         earcandy_menu=_CANDY_MENU.get(g, ()),

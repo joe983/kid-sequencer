@@ -129,6 +129,39 @@ def test_fx_palette_r10_menu_coverage():
     assert {p.gap_beats for p in d} == {1.0, 0.15}
 
 
+def test_fx_palette_r15_riser_and_gap_discipline():
+    """R15 (owner ear feedback): riser level/colour vary per press; hiphop
+    NEVER gets more than the micro-gap; the big gap never stacks on bass
+    starvation; dnb leads with the proper reese."""
+    per_genre = {g: [choose_style(_riff(drum_style=g), v).fx_palette
+                     for v in range(300)]
+                 for g in DRUM_PATTERNS}
+    th = per_genre["techhouse"]
+    assert {p.riser_db for p in th} == {-17.0, -14.0, -20.0}
+    assert {p.riser_color for p in th} == {"smooth", "textured", "airy"}
+    assert {p.riser_bars for p in th} == {8, 4, 2}
+    assert {p.riser_color for p in per_genre["drill"]} == {"textured", "smooth"}
+    # hiphop: the micro-breath only — never a real gap (owner: never needs it)
+    assert {p.gap_beats for p in per_genre["hiphop"]} == {0.15}
+    # gap/starve exclusion: a 2-beat cut never also starves; 1-beat caps at 1
+    for g, pals in per_genre.items():
+        for p in pals:
+            if p.gap_beats >= 2.0:
+                assert p.bass_starve_bars == 0, g
+            elif p.gap_beats >= 1.0:
+                assert p.bass_starve_bars <= 1, g
+    # the big gap is the exception now, not the norm (<= ~1/3 of takes)
+    big = sum(1 for p in th if p.gap_beats >= 2.0)
+    assert big / len(th) < 0.35
+    # dnb bass menu leads with the reese
+    dnb_bass = {choose_style(_riff(drum_style="dnb"), v).bass_patch
+                for v in range(200)}
+    assert dnb_bass == {"bass_reese", "bass", "bass_acid"}
+    # mini_downlifter is out of dnb's candy vocabulary (read cheap)
+    for p in per_genre["dnb"]:
+        assert "mini_downlifter" not in p.earcandy_menu
+
+
 def test_fx_palette_r11_menu_coverage():
     """R11 ear-candy/vocabulary fields: coverage + genre gating (scratch is
     hiphop-only, drop_open garage-only, hiphop runs no candy cadence)."""

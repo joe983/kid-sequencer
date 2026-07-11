@@ -85,6 +85,36 @@ PATCHES: dict[str, dict] = {
         "a_amp_eg_release": ("raw", _env(0.12)),
         "character": "Warm",
     },
+    # PROPER DnB reese (R15 — owner: the old 2-voice "bass" read cheap in the
+    # dnb take): a wide 4-voice detuned saw stack over a clean sine sub, with
+    # a SLOW filter envelope so every held note visibly moves (the beating +
+    # motion is what makes a reese professional), chorus width on the mids.
+    # The mix stage keeps the sub band clean and saturates only the mids
+    # (Noisia doctrine — see master._bass_band_sat).
+    "bass_reese": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "4 voices",
+        "a_osc_1_unison_detune": ("raw", 0.52),
+        "a_osc_2_mute": False,
+        "a_osc_2_type": "Sine",
+        "a_osc_2_retrigger": True,
+        "a_osc_2_octave": -1.0,
+        "a_osc_2_volume": -4.0,
+        "a_filter_1_type": "LP Vintage Ladder",
+        "a_filter_1_cutoff": 480.0,
+        "a_filter_1_resonance": 24.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.38),
+        "a_filter_eg_attack": ("raw", _env(0.05)),
+        "a_filter_eg_decay": ("raw", _env(0.9)),   # the slow open-close ride
+        "a_filter_eg_sustain": 40.0,
+        "a_filter_eg_release": ("raw", _env(0.2)),
+        "a_amp_eg_attack": ("raw", _env(0.006)),
+        "a_amp_eg_sustain": 100.0,
+        "a_amp_eg_release": ("raw", _env(0.15)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Warm",
+    },
     # supersaw pad — for the arrangement stage's pads layer (not a grid voice)
     "pad": {
         "a_osc_1_type": "Classic",

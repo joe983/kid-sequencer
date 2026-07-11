@@ -55,8 +55,8 @@ def main() -> None:
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
           f"starve={p.bass_starve_bars} "
-          f"riser={p.riser_kind}/{p.riser_style}"
-          f"{'/restraint' if p.riser_restraint else ''} "
+          f"riser={p.riser_kind}/{p.riser_style}/{p.riser_color}"
+          f"@{p.riser_db:g}dB{'/restraint' if p.riser_restraint else ''} "
           f"candy={p.earcandy_every or 0} swell={p.swell_kind} "
           f"bomb={p.bomb_on} scratch={p.scratch_on} open={p.drop_open} "
           f"rumble={p.rumble_on} odd={p.odd_loop_on} fill={p.fill_shape}")

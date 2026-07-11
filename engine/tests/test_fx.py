@@ -64,8 +64,11 @@ def test_generators_shapes_levels_determinism():
     assert abs(_peak_db(cr) - (-14.0)) < 0.8
     rc = fx.reverse_crash(cr, SR)
     assert abs(_peak_db(rc) - (-16.0)) < 0.8
-    dl = fx.downlifter(2.0, SR)
-    assert abs(_peak_db(dl) - (-16.0)) < 0.8
+    # downlifter (R15 textured rework): noise-led composite, quieter, seeded
+    dl = fx.downlifter(2.0, SR, seed=5)
+    assert abs(_peak_db(dl) - (-18.0)) < 0.8
+    assert np.array_equal(dl, fx.downlifter(2.0, SR, seed=5))
+    assert not np.array_equal(dl, fx.downlifter(2.0, SR, seed=6))
     # riser ends silent (the drop must start clean)
     assert float(np.max(np.abs(r1[-8:]))) < 1e-3
     # parameterised impact: defaults unchanged; genre-tuned booms hold level
@@ -89,6 +92,18 @@ def test_generators_shapes_levels_determinism():
     assert abs(_peak_db(sh) - (-12.0)) < 1.5
     assert float(np.max(np.abs(sh[-8:]))) < 1e-3
     assert not np.array_equal(sh, fx.riser(2.0, SR, seed=7))
+    # the cycle must be AUDIBLE early: the first half already carries energy
+    # (the old crossfade version was near-silent-then-swell like the classic)
+    first_half_db = 20.0 * np.log10(float(np.max(np.abs(sh[: SR]))) + 1e-12)
+    assert first_half_db > -30.0
+    # riser colours (R15): each colour differs, all hold the level pin
+    for color in ("textured", "airy"):
+        rc2 = fx.riser(2.0, SR, seed=7, gate_hz=8.0, color=color)
+        assert rc2.shape == r1.shape and abs(_peak_db(rc2) - (-12.0)) < 1.5, color
+        assert not np.array_equal(rc2, r1), color
+    # riser level knob (R15: prominence varies per press)
+    quiet = fx.riser(2.0, SR, seed=7, gate_hz=8.0, peak_db=-17.0)
+    assert abs(_peak_db(quiet) - (-17.0)) < 1.5
 
 
 def test_texture_generators_shapes_levels_determinism():

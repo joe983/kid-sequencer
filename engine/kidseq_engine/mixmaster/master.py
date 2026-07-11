@@ -133,6 +133,33 @@ _ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
 _DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
                 "reggaeton": 1.15, "drill": 1.1, "hiphop": 1.1}
 
+# bass band-split saturation wet mix (Noisia: multiband dirt on EVERY bass,
+# sub band clean/mono; Young Guru: restraint — never everything). dnb runs
+# hottest (R15: its reese read cheap without harmonic thickness).
+_BASS_SAT_WET = {"dnb": 0.35, "techhouse": 0.25, "garage": 0.20,
+                 "reggaeton": 0.20, "drill": 0.20, "hiphop": 0.15}
+_BASS_SAT_SPLIT_HZ = 150.0
+_BASS_SAT_DRIVE = 2.5
+
+
+def _bass_band_sat(x: np.ndarray, sr: int, genre: str | None) -> np.ndarray:
+    """Split the bass at _BASS_SAT_SPLIT_HZ; the sub band passes CLEAN, the
+    band above gets tanh harmonics blended at the genre's wet mix (RMS-matched
+    so it is a tone change, not a level change). wet 0 = bit-identical."""
+    wet = _BASS_SAT_WET.get(genre or "", 0.0)
+    if wet <= 0.0 or x.size == 0:
+        return x
+    from scipy.signal import butter, sosfilt
+
+    sos = butter(4, _BASS_SAT_SPLIT_HZ, btype="low", fs=sr, output="sos")
+    low = sosfilt(sos, x, axis=0).astype(np.float32)
+    mids = x - low
+    rms = float(np.sqrt(np.mean(mids ** 2))) + 1e-12
+    driven = np.tanh(_BASS_SAT_DRIVE * mids / rms)
+    d_rms = float(np.sqrt(np.mean(driven ** 2))) + 1e-12
+    driven = (driven * (rms / d_rms)).astype(np.float32)
+    return (low + mids * (1.0 - wet) + driven * wet).astype(np.float32)
+
 # Bob Katz's over-compression alarm: PLR (true peak - integrated LUFS) floor
 # per genre. Breach = one bounded re-convergence at a lowered target.
 _PLR_FLOOR = {"default": 7.0, "dnb": 7.5, "techhouse": 7.5, "garage": 7.0,
@@ -660,6 +687,12 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
             proc = proc[:n]
+        if name == "bass":
+            # band-split saturation (Noisia: subtle multiband dirt on EVERY
+            # bass, sub band clean) — harmonics thicken the mids so the bass
+            # reads expensive on small speakers; calibration below restores
+            # the level so this is tone, not gain (R15: dnb bass read cheap)
+            proc = _bass_band_sat(proc, sr, genre)
         if name == "drums":
             # clip the kit, don't limit it (Sub Focus): gentle memoryless
             # drive shaves peaks; calibration below restores the level
