@@ -109,6 +109,42 @@ def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = Non
     return x.astype(np.float32)
 
 
+def shepard_riser(dur_s: float, sr: int = SR, seed: int = 0,
+                  peak_db: float = -12.0, f0: float = 300.0,
+                  f1: float = 8000.0) -> np.ndarray:
+    """Endless-rise illusion: two octave-staggered noise sweeps crossfaded so
+    a lower layer takes over underneath as the top layer peaks out — the
+    Shepard-tone riser (Sub Focus, 'Vapourise'). Ungated (the handover is the
+    feature); same (t/T)^2.5 crescendo and clean 10 ms end fade as riser()."""
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    t = np.arange(n) / sr
+    env = (t / dur_s) ** 2.5
+    # crossfade curves: top layer bows out over the final 40%, the octave-down
+    # layer fades in over the same span — equal-power so the rise never dips
+    xf = np.clip((t / dur_s - 0.6) / 0.4, 0.0, 1.0)
+    fade_out = np.cos(xf * np.pi / 2.0) ** 2
+    fade_in = 1.0 - fade_out
+    ch = []
+    for _ in range(2):  # independent noise per channel = real width
+        top = _swept_noise(dur_s, sr, rng, f0, f1) * fade_out
+        low = _swept_noise(dur_s, sr, rng, f0 * 0.5, f1 * 0.5) * fade_in
+        ch.append((top + low) * env)
+    x = _peak_scale(np.stack(ch, axis=1), 0.0).astype(np.float64)
+
+    # dual tonal glides an octave apart, crossfaded the same way, 8 dB under
+    # the noise (the classic riser's noise:sine ratio)
+    g1 = np.sin(np.cumsum(2 * np.pi * 220.0 * (2.0 ** (2.0 * t / dur_s)) / sr))
+    g2 = np.sin(np.cumsum(2 * np.pi * 110.0 * (2.0 ** (2.0 * t / dur_s)) / sr))
+    sine = (g1 * fade_out + g2 * fade_in) * env
+    x += _peak_scale(np.stack([sine, sine], axis=1), -8.0)
+    x = _peak_scale(x, peak_db).astype(np.float64)  # composite holds the pin
+
+    fade = max(2, int(0.010 * sr))
+    x[-fade:] *= _cos_edge(fade, up=False)[:, None]
+    return x.astype(np.float32)
+
+
 def impact(sr: int = SR, peak_db: float = -6.0, f0: float = 80.0,
            f1: float = 35.0) -> np.ndarray:
     """Drop-downbeat boom: f0→f1 Hz sine drop + 80 ms LP noise burst, tanh'd.

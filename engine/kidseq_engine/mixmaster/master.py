@@ -96,8 +96,10 @@ _MONO_LOCK = ("bass",)
 # the parallel "NY" drum compression bus.
 # ---------------------------------------------------------------------------
 
-# post-board send levels into the shared reverb (dB); everything else stays dry
-_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0}
+# post-board send levels into the shared reverb (dB); everything else stays
+# dry. fx is deliberately wet (Aisher/Attack: risers sit in a hall — a dry
+# riser reads pasted-on; tails also wash 1-2 bars across section boundaries)
+_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0, "fx": -16.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
               "garage": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)

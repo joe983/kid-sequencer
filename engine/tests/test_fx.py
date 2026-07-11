@@ -81,6 +81,13 @@ def test_generators_shapes_levels_determinism():
     assert np.array_equal(sb, fx.spinback(1.5, SR, seed=5))
     assert abs(_peak_db(sb) - (-14.0)) < 0.8
     assert float(np.max(np.abs(sb[-8:]))) < 1e-3
+    # shepard riser: level pin, determinism, differs from classic, clean end
+    sh = fx.shepard_riser(2.0, SR, seed=7)
+    assert sh.shape == (2 * SR, 2)
+    assert np.array_equal(sh, fx.shepard_riser(2.0, SR, seed=7))
+    assert abs(_peak_db(sh) - (-12.0)) < 1.5
+    assert float(np.max(np.abs(sh[-8:]))) < 1e-3
+    assert not np.array_equal(sh, fx.riser(2.0, SR, seed=7))
 
 
 def test_texture_generators_shapes_levels_determinism():
@@ -141,23 +148,70 @@ def test_drops_stay_verbatim_under_automation():
 
 
 def test_gap_silences_and_does_not_click():
+    """The gap length is a palette decision now (R10) — derive the expected
+    silence span from choose_style, and skip the palette's exempt layer."""
+    from kidseq_engine.arrange.style import choose_style
+
     r = _riff()
+    pal = choose_style(r, 0).fx_palette
     layers, _, plan, _ = build_song(r, SR, plan=_PLAN,
                                     flags=FxFlags(fx=False, fills=False, automation=False,
                                                   gap=True, throw=False))
     bar_s = 4.0 * 60.0 / r.tempo
     spb = 60.0 / r.tempo
+    gap_n = int(min(pal.gap_beats * spb, 1.1) * SR)
     bar = 0
     for sec in plan:
         a = int(bar * bar_s * SR)
         if sec.name.startswith("drop"):
-            g0 = a - int(0.6 * (spb / 4.0) * SR)
+            g0 = a - gap_n
             for name, buf in layers.items():
+                if name == pal.gap_carry:
+                    continue  # KSHMR carry layer keeps running through the gap
                 assert float(np.max(np.abs(buf[g0:a]))) < 1e-6, (sec.name, name)
                 # no click: sample-to-sample jump around the fade stays bounded
                 seg = buf[g0 - int(0.004 * SR):a + 4]
                 assert float(np.max(np.abs(np.diff(seg, axis=0)))) < 0.5, (sec.name, name)
         bar += sec.bars
+
+
+def test_gap_clamp_and_exempt_layer():
+    """Unit pins for _apply_gap: 1.1 s clamp at slow tempo, exempt layer
+    untouched, hard back in exactly at the drop sample."""
+    from kidseq_engine.arrange.render import _apply_gap, _gap_samples
+
+    spb = 60.0 / 50.0                      # tempo 50: 2 beats = 2.4 s
+    assert _gap_samples(2.0, spb, SR) == int(1.1 * SR)   # clamped
+    assert _gap_samples(0.15, 0.5, SR) == int(0.075 * SR)  # legacy micro-gap
+
+    n = 5 * SR
+    layers = {"a": np.ones((n, 2), dtype=np.float32),
+              "keep": np.ones((n, 2), dtype=np.float32)}
+    d = 4 * SR
+    _apply_gap(layers, [d], SR, spb, 2.0, exempt=("keep",))
+    gap_n = int(1.1 * SR)
+    assert float(np.max(np.abs(layers["a"][d - gap_n + 8:d]))) < 1e-6
+    assert float(np.min(layers["keep"])) == 1.0            # exempt untouched
+    assert layers["a"][d, 0] == 1.0                        # back in at the drop
+
+
+def test_fill_shapes_valid():
+    """All fill shapes are 16-step rows ending EMPTY (they butt into the gap);
+    shape 3 is 2 bars when the build allows, degrading to 1; shape 4 stops
+    dead at beat 3 (the rug-pull)."""
+    from kidseq_engine.arrange.render import _fill_bars, _fill_pattern
+
+    for style in ("techhouse", "dnb", "garage", "reggaeton", "drill", "hiphop"):
+        for shape in (0, 1, 2, 4):
+            pat = _fill_pattern(style, shape)
+            assert all(len(v) == 16 for v in pat.values()), (style, shape)
+            assert all(v[-1] == 0.0 for v in pat.values()), (style, shape)
+        bars = _fill_bars(style, 3, 2)
+        assert len(bars) == 2 and all(
+            len(v) == 16 for p in bars for v in p.values()), style
+        assert len(_fill_bars(style, 3, 1)) == 1, style    # degrades
+    p4 = _fill_pattern("dnb", 4)
+    assert p4["snare"][12:] == [0.0, 0.0, 0.0, 0.0]        # a beat of silence
 
 
 def test_fx_layer_present_with_flags_on():

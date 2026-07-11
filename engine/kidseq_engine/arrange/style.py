@@ -86,6 +86,16 @@ class FxPalette:
     fill_shape: int = 0            # index into the fill-shape menu
     throw: bool | None = None      # None = auto via fx.throw_fits
     intro_lpf: float = 2500.0      # intro riff filter (>=15k = wide open)
+    # R10 transition core — the pro pre-drop moves (Noisia / KSHMR / Attack):
+    gap_beats: float = 0.15        # pre-drop silence, in beats (clamped 1.1 s;
+    #                                0.15 = the legacy 0.6-of-a-16th breath)
+    gap_carry: str | None = None   # layer exempt from the gap (KSHMR: keep one
+    #                                element running through the silence)
+    bass_starve_bars: int = 0      # HP the bass for the build's final N bars —
+    #                                the drop's low end lands as pure contrast
+    riser_restraint: bool = True   # only drop 1 gets the full prominent riser;
+    #                                later drops get half/reverse-only/none
+    riser_style: str = "classic"   # "classic" | "shepard" (first riser only)
 
 
 @dataclass(frozen=True)
@@ -343,11 +353,45 @@ _IMPACT: dict[str, tuple[float, float, float]] = {
 }
 
 # genre -> allowed fill shapes (see arrange/render.py _fill_pattern):
-# 0 = snare roll, 1 = rim-led into snare, 2 = hat-roll landing on snare
+# 0 = snare roll, 1 = rim-led into snare, 2 = hat-roll landing on snare,
+# 3 = 2-bar subdivision-doubling roll (quarters->8ths->16ths — Adam Douglas'
+# build mechanics), 4 = rug-pull 16th roll that stops dead at beat 3.
+# Rolls are not the drill/hiphop vocabulary — they keep the rim fill.
 _FILL_MENU: dict[str, list[int]] = {
-    "techhouse": [0, 2], "garage": [0, 2], "reggaeton": [0],
-    "drill": [1], "hiphop": [1], "dnb": [0],
+    "techhouse": [0, 2, 3, 4], "garage": [0, 2, 3], "reggaeton": [0, 3],
+    "drill": [1], "hiphop": [1], "dnb": [0, 3, 4],
 }
+
+# genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
+# slow tempos never read as broken). The pros cut a real breath — 2 beats in
+# the Attack "Good Life" analysis; 0.15 is the legacy micro-gap. Drill/hiphop
+# stay subtler (their drops are less EDM-shaped).
+_GAP_BEATS: dict[str, tuple[list, list]] = {
+    "drill": ([1.0, 0.15], [0.50, 0.50]),
+    "hiphop": ([1.0, 0.15], [0.50, 0.50]),
+    "reggaeton": ([1.0, 2.0, 0.15], [0.45, 0.30, 0.25]),
+}
+_GAP_BEATS_DEFAULT: tuple[list, list] = ([2.0, 1.0, 0.15], [0.50, 0.30, 0.20])
+
+# genre -> bass-starvation menu (bars of HP'd bass at the end of each build —
+# Noisia: no low end right before the drop makes the drop read bass-heavy)
+_STARVE_BARS: dict[str, tuple[list, list]] = {
+    "garage": ([1, 0], [0.60, 0.40]),
+    "reggaeton": ([1, 0], [0.60, 0.40]),
+    "drill": ([0, 1], [0.60, 0.40]),
+    "hiphop": ([0, 1], [0.60, 0.40]),
+}
+_STARVE_BARS_DEFAULT: tuple[list, list] = ([1, 2, 0], [0.50, 0.30, 0.20])
+
+# genre -> riser style menu ("shepard" = the octave-staggered endless-rise
+# pair, Sub Focus' 'Vapourise' move — a dnb/techno flavour first)
+_RISER_STYLE: dict[str, tuple[list, list]] = {
+    "garage": (["classic", "shepard"], [0.70, 0.30]),
+    "reggaeton": (["classic", "shepard"], [0.70, 0.30]),
+    "drill": (["classic"], None),
+    "hiphop": (["classic"], None),
+}
+_RISER_STYLE_DEFAULT: tuple[list, list] = (["classic", "shepard"], [0.55, 0.45])
 
 # genre -> noise-riser sweep band: dark low-mid swells for drill/hiphop,
 # wide fast sweeps for dnb, classic white for the four-to-floor styles
@@ -387,6 +431,14 @@ def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
         # varied intro colour: dark tease .. wide open (>=15k skips the filter)
         intro_lpf=_pick(seed, "intro_lpf", [2500.0, 1500.0, 4000.0, 18000.0],
                         [0.35, 0.25, 0.25, 0.15]),
+        gap_beats=_pick(seed, "gap_beats", *_GAP_BEATS.get(g, _GAP_BEATS_DEFAULT)),
+        gap_carry=_pick(seed, "gap_carry", [None, "texture"], [0.70, 0.30]),
+        bass_starve_bars=_pick(seed, "bass_starve_bars",
+                               *_STARVE_BARS.get(g, _STARVE_BARS_DEFAULT)),
+        riser_restraint=_pick(seed, "riser_restraint", [True, False],
+                              [0.70, 0.30]),
+        riser_style=_pick(seed, "riser_style",
+                          *_RISER_STYLE.get(g, _RISER_STYLE_DEFAULT)),
     )
 
 

@@ -163,9 +163,12 @@ def _add_at(buf: np.ndarray, sig: np.ndarray, start: int) -> None:
 def _fill_pattern(style: str | None, shape: int | None = None) -> dict:
     """Build-tail fill (last bar of a build), by shape: 0 = backbeat roll
     (8ths → 16ths, ramping velocity), 1 = rim-led landing on the backbeat,
-    2 = hat-roll landing on the backbeat. The final 16th ALWAYS stays EMPTY
-    (it butts into the Gap). Techhouse's backbeat voice is the CLAP — its kit
-    has no snare (rolling a missing voice rendered silence)."""
+    2 = hat-roll landing on the backbeat, 4 = rug-pull 16th roll that stops
+    dead at beat 3 (the silence IS the tension — Adam Douglas). Shape 3 (the
+    2-bar subdivision-doubling roll) lives in _fill_bars. The final 16th
+    ALWAYS stays EMPTY (it butts into the Gap). Techhouse's backbeat voice is
+    the CLAP — its kit has no snare (rolling a missing voice rendered
+    silence)."""
     ramp8 = [0.45, 0, 0.52, 0, 0.60, 0, 0.68, 0]
     ramp16 = [0.72, 0.76, 0.81, 0.85, 0.90, 0.94, 0.98, 0.0]
     lead = "clap" if style == "techhouse" else "snare"
@@ -177,7 +180,28 @@ def _fill_pattern(style: str | None, shape: int | None = None) -> dict:
         return {"hatC": [.50, .55, .60, .65, .70, .75, .80, .85,
                          .88, .90, .92, .94, .96, .98, 1.0, 0.0],
                 lead: [0.0] * 12 + [0.85, 0.90, 0.95, 0.0]}
+    if shape == 4:
+        return {lead: [0.50, 0.55, 0.60, 0.64, 0.68, 0.72, 0.76, 0.80,
+                       0.84, 0.88, 0.92, 0.95, 0.0, 0.0, 0.0, 0.0]}
     return {lead: ramp8 + ramp16}
+
+
+def _fill_bars(style: str | None, shape: int, build_bars: int) -> list[dict]:
+    """Fill as a list of 1-bar patterns placed back-to-back ending at the
+    build end. Shape 3 = the 2-bar subdivision-doubling roll (quarters →
+    8ths in bar one, 8ths → 16ths in bar two, velocity ramping straight
+    through — Adam Douglas' build mechanics); degrades to shape 0 when the
+    build is only 1 bar."""
+    if shape == 3:
+        if build_bars >= 2:
+            lead = "clap" if style == "techhouse" else "snare"
+            bar_a = {lead: [0.45, 0, 0, 0, 0.52, 0, 0, 0,
+                            0.58, 0, 0.62, 0, 0.66, 0, 0.70, 0]}
+            bar_b = {lead: [0.72, 0, 0.75, 0, 0.78, 0, 0.81, 0,
+                            0.84, 0.86, 0.89, 0.91, 0.93, 0.95, 0.98, 0.0]}
+            return [bar_a, bar_b]
+        shape = 0
+    return [_fill_pattern(style, shape)]
 
 
 def _lpf_sweep(seg: np.ndarray, sr: int, f0: float, f1: float) -> np.ndarray:
@@ -197,17 +221,27 @@ def _lpf_sweep(seg: np.ndarray, sr: int, f0: float, f1: float) -> np.ndarray:
     return out.astype(np.float32)
 
 
-def _apply_gap(layers: dict, drop_starts: list[int], sr: int, sixteenth_s: float) -> None:
-    """THE GAP: everything cuts to silence for ~half a 16th before each drop —
-    the classic pre-drop breath. 3 ms cosine edges (no clicks), hard back in
-    exactly at the drop sample."""
+def _gap_samples(gap_beats: float, spb: float, sr: int) -> int:
+    """Pre-drop gap length in samples: the palette's beat count, clamped to
+    1.1 s so a 2-beat cut at tempo 40 doesn't read as 3 s of dead air."""
+    return int(min(gap_beats * spb, 1.1) * sr)
+
+
+def _apply_gap(layers: dict, drop_starts: list[int], sr: int, spb: float,
+               gap_beats: float, exempt: tuple = ()) -> None:
+    """THE GAP: everything cuts to silence before each drop — the pre-drop
+    breath. The pros cut a REAL one (up to 2 beats, Attack's 'Good Life'
+    analysis); the palette picks the length per press. 3 ms cosine edges (no
+    clicks), hard back in exactly at the drop sample. Layers named in
+    `exempt` keep running through the silence (KSHMR: carry one element)."""
     edge = max(2, int(0.003 * sr))
+    gap_n = _gap_samples(gap_beats, spb, sr)
     for d in drop_starts:
-        g0 = d - int(0.6 * sixteenth_s * sr)
+        g0 = d - gap_n
         if g0 <= edge:
             continue
-        for buf in layers.values():
-            if buf.shape[0] < d:
+        for name, buf in layers.items():
+            if name in exempt or buf.shape[0] < d:
                 continue
             t = np.linspace(0.0, np.pi, edge)
             buf[g0 - edge:g0] *= ((1.0 + np.cos(t)) * 0.5)[:, None]  # fade out
@@ -391,27 +425,51 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     quiet_fx_db = -5.0 if riff.drum_style in ("drill", "hiphop") else 0.0
     fx_g = 10.0 ** (quiet_fx_db / 20.0)
 
+    # INTO-the-boundary FX (riser / spinback / reverse crash) end at the GAP
+    # start, not the drop sample — a real gap chopping the crescendo peak
+    # kills both the riser and the silence. AT-boundary FX stay on the drop.
+    gap_n = _gap_samples(pal.gap_beats, spb, sr) if flags.gap else 0
+
     if flags.fx:
         for k, (idx, sec, a, e) in enumerate(drops):
             later = k >= 1  # drop2 onwards escalates
             prev = bounds[idx - 1] if idx > 0 else None
             if pal.riser_on and prev and prev[0].name.startswith("build"):
                 b_sec, b_a, b_e = prev
-                if pal.riser_kind == "spinback":
-                    # vinyl brake into the drop — short, ends AT the downbeat
-                    sig = fx.spinback(min(2.0, 2 * bar_s), sr, seed + idx)
-                else:
-                    riser_bars = min(pal.riser_bars, b_sec.bars)
-                    dur = riser_bars * bar_s
-                    depth = min(0.85, pal.gate_depth + (0.2 if later else 0.0))
-                    sig = fx.riser(dur, sr, seed + idx, gate_hz=4.0 / spb,
-                                   gate_depth=depth,
-                                   f0=pal.riser_f0, f1=pal.riser_f1)
-                _add_at(layers["fx"], sig * fx_g, a - sig.shape[0])
+                # KSHMR restraint: one prominent riser per track (the first
+                # drop); later drops get a half riser, reverse-only, or none
+                mode = "full"
+                if later and pal.riser_restraint:
+                    rng = _sub_rng(seed, f"riser_later:{idx}")
+                    mode = ("half", "reverse_only", "none")[
+                        int(rng.choice(3, p=[0.45, 0.35, 0.20]))]
+                if mode in ("full", "half"):
+                    if pal.riser_kind == "spinback":
+                        # vinyl brake into the drop — short, ends at the gap
+                        sig = fx.spinback(min(2.0, 2 * bar_s), sr, seed + idx)
+                    else:
+                        riser_bars = min(pal.riser_bars, b_sec.bars)
+                        if mode == "half":
+                            riser_bars = max(1, riser_bars // 2)
+                        dur = riser_bars * bar_s
+                        if pal.riser_style == "shepard" and mode == "full":
+                            sig = fx.shepard_riser(dur, sr, seed + idx,
+                                                   f0=pal.riser_f0,
+                                                   f1=pal.riser_f1)
+                        else:
+                            depth = min(0.85, pal.gate_depth
+                                        + (0.2 if later else 0.0))
+                            sig = fx.riser(dur, sr, seed + idx,
+                                           gate_hz=4.0 / spb, gate_depth=depth,
+                                           f0=pal.riser_f0, f1=pal.riser_f1)
+                    if mode == "half":
+                        sig = sig * np.float32(10.0 ** (-6.0 / 20.0))
+                    _add_at(layers["fx"], sig * fx_g, a - gap_n - sig.shape[0])
             cr = fx.crash(sr, seed + 100 + idx)
             _add_at(layers["fx"], cr * fx_g, a)
             if pal.reverse_crash_on:
-                _add_at(layers["fx"], fx.reverse_crash(cr, sr), a - cr.shape[0])
+                _add_at(layers["fx"], fx.reverse_crash(cr, sr),
+                        a - gap_n - cr.shape[0])
             imp = fx.impact(sr, peak_db=pal.impact_db,
                             f0=pal.impact_f0, f1=pal.impact_f1)
             _add_at(layers["fx"], imp, a)
@@ -426,11 +484,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     if flags.fills and pattern:
         from ..render import drums_audio_pattern
         for i, (b_sec, b_a, b_e) in builds.items():
-            fill_at = b_e - int(bar_s * sr)
-            sig = drums_audio_pattern(riff.drum_style,
-                                      _fill_pattern(riff.drum_style, pal.fill_shape),
-                                      riff.tempo, 1, sr)
-            _add_at(layers["drums"], sig, fill_at)
+            bars = _fill_bars(riff.drum_style, pal.fill_shape, b_sec.bars)
+            for bi, pat in enumerate(bars):
+                fill_at = b_e - int((len(bars) - bi) * bar_s * sr)
+                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1, sr)
+                _add_at(layers["drums"], sig, fill_at)
 
     if flags.automation:
         for sec, a, e in bounds:
@@ -441,6 +499,23 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             elif sec.name.startswith("build"):
                 for lname in ("riff", "pads"):
                     layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
+                # Noisia low-end starvation: HP the bass for the build's final
+                # bars so the drop's bass lands as pure contrast. 30 ms seam
+                # crossfade in; the gap + drop impact mask the exit seam.
+                if pal.bass_starve_bars:
+                    s0 = max(a, e2 - int(pal.bass_starve_bars * bar_s * sr))
+                    seg = layers["bass"][s0:e2]
+                    if seg.shape[0] > int(0.060 * sr):
+                        from pedalboard import HighpassFilter, Pedalboard
+                        board = Pedalboard(
+                            [HighpassFilter(cutoff_frequency_hz=180.0)])
+                        wet = np.asarray(board(seg.astype(np.float32), sr),
+                                         dtype=np.float32)
+                        xf = max(2, int(0.030 * sr))
+                        mix = np.ones(seg.shape[0], dtype=np.float32)
+                        mix[:xf] = np.linspace(0.0, 1.0, xf, dtype=np.float32)
+                        layers["bass"][s0:e2] = (seg * (1.0 - mix[:, None])
+                                                 + wet * mix[:, None])
             elif sec.name.startswith("break"):
                 two = min(e2, a + int(2 * bar_s * sr))
                 layers["pads"][a:two] = _lpf_sweep(layers["pads"][a:two], sr, 18000.0, 4000.0)
@@ -505,7 +580,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 _add_at(layers["fx"], pp2 * (10.0 ** (-10.0 / 20.0)), a + tap)
 
     if flags.gap:
-        _apply_gap(layers, [a for _, _, a, _ in drops], sr, spb / 4.0)
+        exempt = (pal.gap_carry,) if pal.gap_carry else ()
+        _apply_gap(layers, [a for _, _, a, _ in drops], sr, spb,
+                   pal.gap_beats, exempt)
 
     layers = {k: v for k, v in layers.items() if float(np.max(np.abs(v))) > 1e-6}
     return layers, kick_onsets, plan, prog

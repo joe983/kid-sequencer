@@ -111,6 +111,24 @@ def test_style_fields_are_decorrelated_across_nonces():
             "build_frac and prog_pick look locked together", sorted(combos))
 
 
+def test_fx_palette_r10_menu_coverage():
+    """R10 transition-core palette fields: every menu option occurs across 200
+    variations, and genre vocabularies hold (drill keeps rolls + shepard out)."""
+    r = _riff()  # techhouse
+    pals = [choose_style(r, v).fx_palette for v in range(200)]
+    assert {p.gap_beats for p in pals} == {2.0, 1.0, 0.15}
+    assert {p.gap_carry for p in pals} == {None, "texture"}
+    assert {p.bass_starve_bars for p in pals} == {0, 1, 2}
+    assert {p.riser_restraint for p in pals} == {True, False}
+    assert {p.riser_style for p in pals} == {"classic", "shepard"}
+    assert {p.fill_shape for p in pals} == {0, 2, 3, 4}
+    d = [choose_style(_riff(drum_style="drill"), v).fx_palette
+         for v in range(200)]
+    assert {p.riser_style for p in d} == {"classic"}
+    assert {p.fill_shape for p in d} == {1}
+    assert {p.gap_beats for p in d} == {1.0, 0.15}
+
+
 def test_arrange_style_is_frozen_and_hashable():
     s = choose_style(_riff(), 0)
     assert isinstance(s, ArrangeStyle)
