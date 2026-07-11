@@ -66,14 +66,28 @@ def _swept_noise(dur_s: float, sr: int, rng: np.random.Generator,
     return out
 
 
+#: riser colours (Sangiuliano: effects must be "organic, deep, textured —
+#: nothing too shiny or plastic") -> (bandpass q, tanh drive, band shift).
+#: One white-noise recipe for every riser reads samey and amateur — the
+#: colour varies the character per press.
+_RISER_COLORS = {
+    "smooth": (1.2, 0.0, 1.0),      # the original clean sweep
+    "textured": (0.8, 2.2, 0.75),   # saturated, narrower, darker — organic grit
+    "airy": (2.2, 0.0, 2.0),        # wide breathy hiss, band shifted up
+}
+
+
 def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = None,
           gate_depth: float = 0.5, peak_db: float = -12.0,
-          f0: float = 300.0, f1: float = 8000.0) -> np.ndarray:
+          f0: float = 300.0, f1: float = 8000.0,
+          color: str = "smooth") -> np.ndarray:
     """Noise sweep f0→f1 (default 300 Hz→8 kHz) with (t/T)^2.5 crescendo + a
     sine riser two octaves up underneath. Genres tune the band: dark low-mid
-    sweeps for drill/hiphop, wide fast sweeps for dnb. Optional 16th-note
-    gating over the final bar (gate_hz = 16ths per second) with 3 ms cosine
-    edges. Ends in a 10 ms fade so the drop downbeat starts clean."""
+    sweeps for drill/hiphop, wide fast sweeps for dnb; `color` varies the
+    noise character (see _RISER_COLORS). Optional 16th-note gating over the
+    final bar (gate_hz = 16ths per second) with 3 ms cosine edges. Ends in a
+    10 ms fade so the drop downbeat starts clean."""
+    q, drive, shift = _RISER_COLORS.get(color, _RISER_COLORS["smooth"])
     rng = np.random.default_rng(seed)
     n = int(dur_s * sr)
     t = np.arange(n) / sr
@@ -81,14 +95,21 @@ def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = Non
 
     ch = []
     for _ in range(2):  # independent noise per channel = real width
-        ch.append(_swept_noise(dur_s, sr, rng, f0, f1) * env)
+        sw = _swept_noise(dur_s, sr, rng, f0 * shift,
+                          min(f1 * shift, sr / 2 * 0.9), q=q)
+        if drive:
+            sw = np.tanh(drive * sw / (float(np.std(sw)) + 1e-9))
+        ch.append(sw * env)
     x = np.stack(ch, axis=1)
     x = _peak_scale(x, peak_db)
 
-    # tonal riser underneath: 220 Hz gliding up 2 octaves, centred, -20 dBFS
-    phase = np.cumsum(2 * np.pi * 220.0 * (2.0 ** (2.0 * t / dur_s)) / sr)
-    sine = np.sin(phase) * env
-    x += _peak_scale(np.stack([sine, sine], axis=1), -20.0)
+    # tonal riser underneath: 220 Hz gliding up 2 octaves, centred, 8 dB under
+    # ("airy" skips it — that colour is pure breath)
+    if color != "airy":
+        phase = np.cumsum(2 * np.pi * 220.0 * (2.0 ** (2.0 * t / dur_s)) / sr)
+        sine = np.sin(phase) * env
+        x = x + _peak_scale(np.stack([sine, sine], axis=1), peak_db - 8.0)
+        x = _peak_scale(x.astype(np.float64), peak_db)
 
     if gate_hz:
         gate_len = min(n, int(sr / gate_hz))
@@ -109,35 +130,68 @@ def riser(dur_s: float, sr: int = SR, seed: int = 0, gate_hz: float | None = Non
     return x.astype(np.float32)
 
 
+def _cyclic_band_noise(n: int, sr: int, rng: np.random.Generator,
+                       freqs: np.ndarray) -> np.ndarray:
+    """Noise through a bandpass whose centre follows an arbitrary per-sample
+    frequency trajectory (block-processed, carried state)."""
+    from scipy.signal import butter, sosfilt, sosfilt_zi
+
+    out = np.empty(n, dtype=np.float64)
+    noise = rng.standard_normal(n)
+    blk = 512
+    zi = None
+    for s in range(0, n, blk):
+        e = min(n, s + blk)
+        f = float(freqs[min(n - 1, s + blk // 2)])
+        lo, hi = f / 1.45, min(f * 1.45, sr / 2 * 0.95)
+        sos = butter(2, [lo, hi], btype="band", fs=sr, output="sos")
+        if zi is None:
+            zi = sosfilt_zi(sos) * 0.0
+        out[s:e], zi = sosfilt(sos, noise[s:e], zi=zi)
+    return out
+
+
 def shepard_riser(dur_s: float, sr: int = SR, seed: int = 0,
                   peak_db: float = -12.0, f0: float = 300.0,
                   f1: float = 8000.0) -> np.ndarray:
-    """Endless-rise illusion: two octave-staggered noise sweeps crossfaded so
-    a lower layer takes over underneath as the top layer peaks out — the
-    Shepard-tone riser (Sub Focus, 'Vapourise'). Ungated (the handover is the
-    feature); same (t/T)^2.5 crescendo and clean 10 ms end fade as riser()."""
+    """TRUE Shepard riser (Sub Focus, 'Vapourise'): three CYCLIC layers, each
+    climbing a 3-octave span and wrapping, offset a third of a cycle apart —
+    a layer's loudness is a raised-cosine window over its position (silent at
+    both extremes), so something is always mid-climb and the composite never
+    stops rising. Two full handovers over the riser's length make the effect
+    unmistakable (the old crossfade version was 60% identical to a classic
+    sweep). Tonal partials ride the same cycle so the endless PITCH climb is
+    audible, not just a noise swell."""
     rng = np.random.default_rng(seed)
     n = int(dur_s * sr)
     t = np.arange(n) / sr
-    env = (t / dur_s) ** 2.5
-    # crossfade curves: top layer bows out over the final 40%, the octave-down
-    # layer fades in over the same span — equal-power so the rise never dips
-    xf = np.clip((t / dur_s - 0.6) / 0.4, 0.0, 1.0)
-    fade_out = np.cos(xf * np.pi / 2.0) ** 2
-    fade_in = 1.0 - fade_out
-    ch = []
+    # gentler crescendo than the classic riser so the early cycling is audible
+    env = 0.25 + 0.75 * (t / dur_s) ** 1.8
+    span = 8.0                                     # 3 octaves per climb
+    f_lo = max(90.0, f0 * 0.6)
+    f_hi = min(f1, sr / 2 * 0.8)
+    f_top = min(f_lo * span, f_hi)
+    t_cyc = dur_s / 2.0                            # two full handovers
+
+    layers_pos = [((i / 3.0) + t / t_cyc) % 1.0 for i in range(3)]
+    ch: list[np.ndarray] = []
     for _ in range(2):  # independent noise per channel = real width
-        top = _swept_noise(dur_s, sr, rng, f0, f1) * fade_out
-        low = _swept_noise(dur_s, sr, rng, f0 * 0.5, f1 * 0.5) * fade_in
-        ch.append((top + low) * env)
+        acc = np.zeros(n)
+        for p in layers_pos:
+            w = np.sin(np.pi * p) ** 2              # silent at wrap points
+            freqs = f_lo * (f_top / f_lo) ** p
+            acc += _cyclic_band_noise(n, sr, rng, freqs) * w
+        ch.append(acc * env)
     x = _peak_scale(np.stack(ch, axis=1), 0.0).astype(np.float64)
 
-    # dual tonal glides an octave apart, crossfaded the same way, 8 dB under
-    # the noise (the classic riser's noise:sine ratio)
-    g1 = np.sin(np.cumsum(2 * np.pi * 220.0 * (2.0 ** (2.0 * t / dur_s)) / sr))
-    g2 = np.sin(np.cumsum(2 * np.pi * 110.0 * (2.0 ** (2.0 * t / dur_s)) / sr))
-    sine = (g1 * fade_out + g2 * fade_in) * env
-    x += _peak_scale(np.stack([sine, sine], axis=1), -8.0)
+    # tonal Shepard partials on the same cycle (this is what reads as an
+    # endless PITCH rise), 6 dB under the noise bed
+    tone = np.zeros(n)
+    for p in layers_pos:
+        w = np.sin(np.pi * p) ** 2
+        freqs = f_lo * (f_top / f_lo) ** p
+        tone += np.sin(np.cumsum(2 * np.pi * freqs / sr)) * w
+    x += _peak_scale(np.stack([tone, tone], axis=1), -6.0) * env[:, None]
     x = _peak_scale(x, peak_db).astype(np.float64)  # composite holds the pin
 
     fade = max(2, int(0.010 * sr))
@@ -211,13 +265,27 @@ def reverse_crash(base: np.ndarray, sr: int = SR, peak_db: float = -16.0) -> np.
     return _peak_scale(x, peak_db)
 
 
-def downlifter(dur_s: float = 2.0, sr: int = SR, peak_db: float = -16.0) -> np.ndarray:
-    """Falling sine 6 kHz→250 Hz with linear decay — the drop→break exhale."""
+def downlifter(dur_s: float = 2.0, sr: int = SR, seed: int = 0,
+               peak_db: float = -18.0) -> np.ndarray:
+    """The drop→break exhale: a falling band-noise sweep with a soft sine
+    underneath, gently tanh-blended. The original pure falling sine read
+    shiny/plastic (owner + Sangiuliano: effects must be organic and textured,
+    never laser-like) — the noise now carries the gesture and the tone only
+    supports it. 2 dB quieter than before."""
+    rng = np.random.default_rng(seed)
     n = int(dur_s * sr)
     t = np.arange(n) / sr
-    f = 6000.0 * (250.0 / 6000.0) ** (t / dur_s)
-    mono = np.sin(np.cumsum(2 * np.pi * f / sr)) * (1.0 - t / dur_s)
-    return _peak_scale(np.stack([mono, mono], axis=1), peak_db)
+    fall = (1.0 - t / dur_s) ** 1.2
+    ch = []
+    for _ in range(2):  # independent noise per channel = real width
+        ch.append(_swept_noise(dur_s, sr, rng, 5000.0, 300.0, q=1.0) * fall)
+    x = np.stack(ch, axis=1)
+    f = 4500.0 * (280.0 / 4500.0) ** (t / dur_s)
+    sine = np.sin(np.cumsum(2 * np.pi * f / sr)) * fall
+    mono_bed = np.tanh(1.2 * sine) * 0.45
+    x = _peak_scale(x, 0.0).astype(np.float64)
+    x += np.stack([mono_bed, mono_bed], axis=1)
+    return _peak_scale(x, peak_db)
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +472,7 @@ def candy_blip(kind: str, bar_s: float, sr: int = SR, seed: int = 0) -> np.ndarr
         x = _peak_scale(np.stack(ch, axis=1), peak)
         return _edge_fades(x.astype(np.float64), sr, 0.008).astype(np.float32)
     if kind == "mini_downlifter":
-        return downlifter(min(1.5, bar_s), sr, peak_db=peak)
+        return downlifter(min(1.5, bar_s), sr, seed, peak_db=peak)
     if kind == "rev_cymbal":
         return reverse_crash(crash(sr, seed), sr, peak_db=peak)
     if kind == "siren_blip":

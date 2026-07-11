@@ -1,5 +1,33 @@
 # Where we are / next session
 
+## NEW — Round 15: owner ear-feedback on the R10-14 battery (2026-07-11, NOT deployed)
+Owner listened to the showcase: risers samey / too prominent / not pro, no
+audible shepard, gaps overused (hiphop never needs one; one take stacked a
+big gap on starvation), dnb bass reads cheap, dnb swooshes amateur. Fixes:
+- **Riser level**: new `riser_db` palette field (-17 signature / -14 / -20)
+  replaces the fixed -12 — risers now sit UNDER the mix and vary per press.
+- **Riser colour**: `riser_color` smooth/textured/airy (fx._RISER_COLORS —
+  q, tanh drive, band shift). Sangiuliano: organic/textured, never shiny.
+  drill/hiphop lean textured. riser_bars menu widened [8,4,2].
+- **TRUE cyclic shepard** rebuild: 3 layers climbing a 3-octave span and
+  wrapping (raised-cosine loudness over position, silent at wrap), two full
+  handovers per riser, tonal partials riding the cycle — the old crossfade
+  version was 60% identical to a classic sweep, which is why it was never
+  heard. Pinned: first half must already carry energy.
+- **Gap discipline**: hiphop menu = [0.15] only (micro-breath); drill leans
+  micro [0.65/0.35]; default demotes the 2-beat cut to 25% (was 50%).
+  EXCLUSION: gap>=2 beats forces starve=0; gap>=1 caps starve at 1 —
+  the too-much take was exactly that stack.
+- **DnB bass**: new Surge patch `bass_reese` (4-voice 0.52-detune saw over
+  clean sine sub, SLOW filter env ride, chorus) leads the dnb menu; plus
+  mix-stage `_bass_band_sat` on every genre's bass (Noisia: sub band clean,
+  mids tanh-thickened, RMS-matched — _BASS_SAT_WET, dnb hottest 0.35).
+- **Downlifter rework**: noise-led composite (falling band-noise + soft tanh
+  sine bed) at -18, seeded — the pure falling sine read plastic. Removed
+  mini_downlifter from dnb candy (menu now rev_swell_delay/siren/sweep_down).
+Tuning levers: _RISER_DB_MENU/_RISER_COLOR/_GAP_BEATS/_BASS_SAT_WET/
+_BASS_SAT_DRIVE, fx._RISER_COLORS table, bass_reese patch params.
+
 ## NEW — Rounds 10–13: PRO POLISH epic (2026-07-11, NOT deployed)
 Owner: tracks need the professional finish of top-tier DnB/techno records —
 more (tasteful, modern) swooshes/rises/sirens/SFX, richer layering, better
