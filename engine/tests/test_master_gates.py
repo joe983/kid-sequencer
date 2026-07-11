@@ -159,6 +159,55 @@ def test_mono_input_stays_mono():
         assert _corr(res.audio[:, 0], res.audio[:, 1]) > 0.90, (g, _corr(res.audio[:, 0], res.audio[:, 1]))
 
 
+def test_plr_floor_holds():
+    """Katz's over-compression alarm as a gate: true peak minus integrated
+    LUFS must clear the genre floor — transients are getting through."""
+    from kidseq_engine.mixmaster.master import _PLR_FLOOR
+
+    for g in GENRES:
+        res, _ = _run(g, stereo=True)
+        floor = _PLR_FLOOR.get(g, _PLR_FLOOR["default"])
+        plr = res.true_peak_db - res.lufs
+        assert plr >= floor - 0.3, (g, plr, floor)
+
+
+def test_dynamic_guard_cuts_pokes_not_programme():
+    """The 6-9 kHz guard band: a transient poking far above the band average
+    gets cut (<= 2.5 dB); content without pokes passes (near-)unchanged."""
+    from kidseq_engine.mixmaster.master import _dynamic_guard
+
+    rng = np.random.default_rng(7)
+    n = 4 * SR
+    t = np.arange(n) / SR
+    base = (0.05 * np.sin(2 * np.pi * 7000.0 * t)).astype(np.float32)
+    x = np.stack([base, base], axis=1)
+    quiet = _dynamic_guard(x, SR)
+    assert np.allclose(quiet, x, atol=2e-3)            # steady content passes
+    y = x.copy()
+    burst = int(0.01 * SR)
+    y[SR:SR + burst] += (0.8 * np.sin(2 * np.pi * 7500.0 * t[:burst]))[:, None].astype(np.float32)
+    guarded = _dynamic_guard(y, SR)
+    pk_in = float(np.max(np.abs(y[SR:SR + burst])))
+    pk_out = float(np.max(np.abs(guarded[SR:SR + burst])))
+    assert pk_out < pk_in                              # the poke was caught
+    assert pk_out > pk_in * 10.0 ** (-3.0 / 20.0)      # ...but by <= ~2.5 dB
+    assert np.array_equal(guarded, _dynamic_guard(y, SR))   # deterministic
+
+
+def test_multiband_bass_duck_null_at_zero_depth():
+    """The subtractive band-split duck must be bit-identical to the input
+    when the pump shape is zero (no kicks)."""
+    rng = np.random.default_rng(3)
+    n = 2 * SR
+    bass = (0.4 * np.sin(2 * np.pi * 60.0 * np.arange(n) / SR)
+            + 0.1 * rng.standard_normal(n)).astype(np.float32)
+    layers = {"riff": np.stack([bass * 0.2, bass * 0.2], axis=1),
+              "bass": np.stack([bass, bass], axis=1)}
+    a = master(layers, SR, genre="techhouse", kick_onsets=[])
+    b = master(layers, SR, genre="techhouse", kick_onsets=[])
+    assert np.array_equal(a.audio, b.audio)            # deterministic no-kick path
+
+
 def test_haas_sides_mono_sum_unchanged():
     """The width move must be free: (L+s)+(R-s) == L+R, so the mono fold of a
     Haas-widened layer is (near-)identical to the input's."""

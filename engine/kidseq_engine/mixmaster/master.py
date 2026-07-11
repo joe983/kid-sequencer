@@ -127,6 +127,21 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 _ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
                  "reggaeton": -18.0}
 
+# drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
+# peaks without transient-dulling pump). Memoryless tanh(k*x)/tanh(k); the
+# layer LUFS calibration restores level, so only crest/harmonics change.
+_DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
+                "reggaeton": 1.15, "drill": 1.1, "hiphop": 1.1}
+
+# Bob Katz's over-compression alarm: PLR (true peak - integrated LUFS) floor
+# per genre. Breach = one bounded re-convergence at a lowered target.
+_PLR_FLOOR = {"default": 7.0, "dnb": 7.5, "techhouse": 7.5, "garage": 7.0,
+              "reggaeton": 7.0, "drill": 8.0, "hiphop": 8.0}
+
+# +0.5 dB whole-mix push inside drops (DJ Swivel, 'Closer') — pre-soft-clip,
+# 30 ms ramps, exactly half a decibel; the short-term LUFS guard backstops it.
+_DROP_PUSH_DB = 0.5
+
 
 def _reverb_return_board(genre: str | None) -> Pedalboard:
     room = _ROOM_SIZE.get(genre or "", 0.40)
@@ -353,15 +368,54 @@ def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
 def _master_eq(genre: str | None) -> Pedalboard:
     """Master tone shape, applied BEFORE every nonlinearity (HP first so
     subsonics don't eat clipper/limiter headroom). The 3.2 kHz dip is the
-    kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud."""
-    low_hz, low_db, low_q = (60.0, 1.5, 0.8) if genre in ("drill", "hiphop") else (100.0, 1.2, 0.71)
+    kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud.
+    Hawkes moves (R13): 30 Hz HP makes the low end punch harder, not thinner
+    (drill/hiphop keep 24 for 808 tails); DnB weight lives ~60 Hz; the top
+    lift is TWO small cascaded shelves, never one big boost."""
+    if genre in ("drill", "hiphop"):
+        hp_hz, low = 24.0, (60.0, 1.5, 0.8)
+    elif genre == "dnb":
+        hp_hz, low = 30.0, (65.0, 1.5, 0.8)
+    else:
+        hp_hz, low = 30.0, (100.0, 1.2, 0.71)
     return Pedalboard([
-        HighpassFilter(cutoff_frequency_hz=24.0),
-        LowShelfFilter(cutoff_frequency_hz=low_hz, gain_db=low_db, q=low_q),
+        HighpassFilter(cutoff_frequency_hz=hp_hz),
+        LowShelfFilter(cutoff_frequency_hz=low[0], gain_db=low[1], q=low[2]),
         PeakFilter(cutoff_frequency_hz=280.0, gain_db=-1.5, q=1.1),
         PeakFilter(cutoff_frequency_hz=3200.0, gain_db=-1.0, q=1.4),
-        HighShelfFilter(cutoff_frequency_hz=11000.0, gain_db=1.5, q=0.71),
+        HighShelfFilter(cutoff_frequency_hz=9500.0, gain_db=1.0, q=0.71),
+        HighShelfFilter(cutoff_frequency_hz=13500.0, gain_db=0.8, q=0.71),
     ])
+
+
+def _dynamic_guard(x: np.ndarray, sr: int, lo: float = 6000.0,
+                   hi: float = 9000.0, max_cut_db: float = 2.5) -> np.ndarray:
+    """Beau Thomas' movable dynamics band: catch harsh snare/hat transients
+    in the 6-9 kHz zone BEFORE the nonlinearities exaggerate them. Downward
+    only, max 2.5 dB, threshold auto-set ~6 dB above the band's programme
+    average; subtractive application so quiet content passes bit-identical.
+    Vectorized (the _brickwall idiom): max-filter hold + Hann smooth."""
+    from scipy.ndimage import maximum_filter1d
+    from scipy.signal import butter, fftconvolve, sosfilt
+
+    sos = butter(4, [lo, hi], btype="band", fs=sr, output="sos")
+    band = sosfilt(sos, x, axis=0).astype(np.float32)
+    lvl = np.abs(band).max(axis=1).astype(np.float64)
+    win = np.hanning(max(3, int(0.005 * sr)))
+    lvl = fftconvolve(lvl, win / win.sum(), mode="same")
+    active = lvl[lvl > 1e-5]
+    if active.size == 0:
+        return x
+    thresh = float(active.mean()) * 2.0
+    over = np.maximum(lvl / max(thresh, 1e-12), 1.0)
+    cut_db = np.minimum(20.0 * np.log10(over), max_cut_db)
+    if float(cut_db.max()) <= 1e-6:
+        return x
+    rel = max(2, int(0.080 * sr))
+    cut_db = maximum_filter1d(cut_db, size=rel)
+    cut_db = fftconvolve(cut_db, win / win.sum(), mode="same")
+    gain = (10.0 ** (-cut_db / 20.0)).astype(np.float32)
+    return (x - band * (1.0 - gain[:, None])).astype(np.float32)
 
 
 def _windowed_lufs_calibrate(stereo: np.ndarray, sr: int, ref_lufs: float = -16.0) -> np.ndarray:
@@ -555,11 +609,13 @@ def _ride_curve(n: int, sr: int, base_db: float,
         s0c, s1c = max(0, s0), min(n, s1)
         if s1c > s0c:
             curve[s0c:s1c] = 10.0 ** ((base_db + delta) / 20.0)
+    from scipy.signal import fftconvolve
+
     ramp = max(2, int(0.050 * sr))
     win = np.ones(ramp) / ramp
     padded = np.concatenate([np.full(ramp, curve[0]), curve,
                              np.full(ramp, curve[-1])])
-    return np.convolve(padded, win, mode="same")[ramp:-ramp].astype(np.float32)
+    return fftconvolve(padded, win, mode="same")[ramp:-ramp].astype(np.float32)
 
 
 def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
@@ -605,6 +661,10 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         else:
             proc = proc[:n]
         if name == "drums":
+            # clip the kit, don't limit it (Sub Focus): gentle memoryless
+            # drive shaves peaks; calibration below restores the level
+            k = _DRUM_CLIP_K.get(genre or "", 1.15)
+            proc = (np.tanh(k * proc) / np.tanh(k)).astype(np.float32)
             dry = proc
             # parallel NY crush under the dry kit (density without killing punch)
             crushed = _process(dry, _ny_crush_board(), sr)[:n]
@@ -643,7 +703,18 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
 
         if name in _PUMPED_LAYERS:
             depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
-            proc = proc * (1.0 - depth * shape)[:, None]
+            if name == "bass":
+                # multiband duck (Pretolesi: 'fix the bass, not the kick') —
+                # only the band clashing with the kick ducks fully; the
+                # bass's harmonics keep sustaining at 0.35x depth.
+                # Subtractive split: bit-identical null when shape == 0.
+                from scipy.signal import butter, sosfilt
+                sos = butter(4, 170.0, btype="low", fs=sr, output="sos")
+                low = sosfilt(sos, proc, axis=0).astype(np.float32)
+                duck = (depth * shape).astype(np.float32)[:, None]
+                proc = proc - low * duck - (proc - low) * (0.35 * duck)
+            else:
+                proc = proc * (1.0 - depth * shape)[:, None]
         gain = 10.0 ** (preset.layer_gain_db.get(name, 0.0) / 20.0)
         bus += proc * gain
 
@@ -664,8 +735,10 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = bus - bus.mean(axis=0, keepdims=True).astype(np.float32)
     bus = _process(bus, _master_eq(genre), sr)
 
-    # 2) keep the sub mono (phasey lows fold to centre); highs stay wide
-    stereo = collapse_lows_to_mono(bus, sr, 120.0)
+    # 2) keep the lows mono (phasey lows fold to centre); highs stay wide.
+    #    250 Hz per Pretolesi/Reznikov width discipline (was 120): the
+    #    100-300 Hz zone stops clouding the kick, width lives above.
+    stereo = collapse_lows_to_mono(bus, sr, 250.0)
 
     # 3) level staging by LOUDNESS, not peaks — glue then behaves consistently
     stereo = _windowed_lufs_calibrate(stereo, sr, -16.0)
@@ -674,9 +747,30 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                                   release_ms=glue_release)])
     stereo = _process(stereo, glue, sr)
 
+    # 3b) dynamic guard band (Beau Thomas): tame harsh snare/hat pokes in
+    #     6-9 kHz BEFORE the nonlinearities exaggerate them
+    stereo = _dynamic_guard(stereo, sr)
+
+    # 3c) +0.5 dB whole-mix push inside drops (DJ Swivel), 30 ms ramps —
+    #     drops read bigger without re-balancing; the -8 LUFS short-term
+    #     guard below backstops the trade
+    if section_spans:
+        from scipy.signal import fftconvolve
+        g = np.ones(stereo.shape[0], dtype=np.float64)
+        for sname, s0, s1 in section_spans:
+            if sname.startswith("drop"):
+                g[max(0, s0):min(stereo.shape[0], s1)] = \
+                    10.0 ** (_DROP_PUSH_DB / 20.0)
+        ramp = max(2, int(0.030 * sr))
+        win = np.ones(ramp) / ramp
+        padded = np.concatenate([np.full(ramp, g[0]), g, np.full(ramp, g[-1])])
+        g = fftconvolve(padded, win, mode="same")[ramp:-ramp]
+        stereo = (stereo * g[:, None].astype(np.float32)).astype(np.float32)
+
     # 4) density: full-band soft clip, then drive INTO the oversampled limiter
     #    until integrated loudness converges on target
     stereo = _soft_clip(stereo, genre) * (10.0 ** (-0.5 / 20.0))
+    pre_limit = stereo  # the clean input every re-convergence starts from
     stereo = _limit_to_lufs(stereo, sr, target, ceiling_db=-1.2)
 
     # 5) true-peak check (limiter ran at 4x, so this should already hold)
@@ -692,7 +786,24 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         stereo = _limit_to_lufs(stereo, sr, target - (worst + 8.0), ceiling_db=-1.2)
         tp = _true_peak_db(stereo, sr)
 
+    # 7) PLR floor (Bob Katz's over-compression alarm): if true peak minus
+    #    integrated loudness falls under the genre floor, the LIMITER is
+    #    eating transients — one bounded re-convergence at a lowered target.
+    #    Guarded on the pre-limiter PLR: content that is intrinsically dense
+    #    (its own crest already under the floor) cannot be "fixed" by backing
+    #    off, so it is left at target (test fixtures, steady tones).
     final_lufs = _integrated_lufs(stereo, sr)
+    plr_floor = _PLR_FLOOR.get(genre or "", _PLR_FLOOR["default"])
+    if np.isfinite(final_lufs) and (tp - final_lufs) < plr_floor - 0.05:
+        pre_lufs = _integrated_lufs(pre_limit, sr)
+        pre_plr = _true_peak_db(pre_limit, sr) - pre_lufs
+        if np.isfinite(pre_lufs) and pre_plr >= plr_floor:
+            stereo = _limit_to_lufs(pre_limit, sr,
+                                    target - (plr_floor - (tp - final_lufs)),
+                                    ceiling_db=-1.2)
+            tp = _true_peak_db(stereo, sr)
+            final_lufs = _integrated_lufs(stereo, sr)
+
     stereo = np.clip(stereo, -1.0, 1.0)
 
     return MasterResult(audio=stereo, sr=sr, lufs=final_lufs, true_peak_db=tp,
