@@ -1,0 +1,26 @@
+{
+  "riff": {
+    "notes": [
+      { "row": 7, "start": 0,  "len": 1 },
+      { "row": 5, "start": 1,  "len": 1 },
+      { "row": 3, "start": 2,  "len": 1 },
+      { "row": 2, "start": 3,  "len": 1 },
+      { "row": 7, "start": 4,  "len": 1 },
+      { "row": 5, "start": 5,  "len": 1 },
+      { "row": 3, "start": 6,  "len": 1 },
+      { "row": 1, "start": 7,  "len": 1 },
+      { "row": 7, "start": 8,  "len": 1 },
+      { "row": 4, "start": 9,  "len": 1 },
+      { "row": 2, "start": 10, "len": 1 },
+      { "row": 0, "start": 11, "len": 1 },
+      { "row": 2, "start": 12, "len": 1 },
+      { "row": 3, "start": 13, "len": 1 },
+      { "row": 5, "start": 14, "len": 1 },
+      { "row": 7, "start": 15, "len": 1 }
+    ]
+  },
+  "key": "Am",
+  "tempo": 128,
+  "instrument": "strings",
+  "drumStyle": "dnb"
+}

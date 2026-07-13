@@ -204,6 +204,41 @@ def test_fx_palette_r12_menu_coverage():
     assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", None}
 
 
+def test_percussive_photek_variants_r16():
+    """R16: percussive takes split between drone-bed and PAD-FREE (Photek);
+    the industrial 'metal' texture is reachable; percussive takes lean off
+    risers harder (owner: swooshes everywhere reads 90s-rave amateur)."""
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((Path(__file__).parents[1] / "examples" /
+                          "cluster_riff.json").read_text(encoding="utf-8"))
+    r = parse_sequence(payload)
+    styles = [choose_style(r, v) for v in range(200)]
+    assert all(s.production_mode == "percussive" for s in styles)
+    assert {s.percussive_pads for s in styles} == {"drone", "none"}
+    assert "metal" in {s.texture for s in styles}
+    on = sum(1 for s in styles if s.fx_palette.riser_on)
+    assert 0.30 < on / len(styles) < 0.70          # percussive: 50/50 riser
+    # melodic tracks: risers now off on a real share of takes (~30%)
+    mel = [choose_style(_riff(), v).fx_palette for v in range(300)]
+    off = sum(1 for p in mel if not p.riser_on)
+    assert 0.18 < off / len(mel) < 0.45
+    # the new battery riffs all parse and land their designed mode
+    for name, want in (("b_cluster", "percussive"), ("c_cluster", "percussive"),
+                       ("d_cluster", "percussive"), ("b_major", "melodic"),
+                       ("c_major", "melodic"), ("d_major", "melodic"),
+                       ("b_minor", "melodic"), ("c_minor", "melodic"),
+                       ("d_minor", "melodic")):
+        p = json.loads((Path(__file__).parents[1] / "examples" /
+                        f"{name}.json").read_text(encoding="utf-8"))
+        rr = parse_sequence(p)
+        modes = {choose_style(rr, v).production_mode for v in range(1, 30)}
+        assert modes == {want}, (name, modes)
+
+
 def test_arrange_style_is_frozen_and_hashable():
     s = choose_style(_riff(), 0)
     assert isinstance(s, ArrangeStyle)

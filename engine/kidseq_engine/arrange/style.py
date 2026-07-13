@@ -130,6 +130,7 @@ class ArrangeStyle:
     riff_ornament_b: str           # secondary kind — alternates with primary
     lead_stack: int                # index into the genre's LEAD_STACKS recipes
     fx_palette: FxPalette
+    percussive_pads: str = "drone"  # "drone" | "none" — pad-free Photek takes
 
 
 # pad role -> (renderer, patch-or-preset name). The menu validity test walks
@@ -477,12 +478,20 @@ _RISER_KIND: dict[str, tuple[list, list]] = {
 }
 
 
-def _choose_fx_palette(seed: int, genre: str | None) -> FxPalette:
+def _choose_fx_palette(seed: int, genre: str | None,
+                       percussive: bool = False) -> FxPalette:
     """Seeded dressing choices within the genre's taste. Boom-bap doesn't ride
-    white-noise risers — hiphop defaults them OFF (reverse crash still swells)."""
+    white-noise risers — hiphop defaults them OFF (reverse crash still swells).
+    R16 (owner: swooshes everywhere reads 90s-rave amateur): a real share of
+    takes now run NO riser at all — the reverse crash and fills carry those
+    transitions; percussive/industrial takes lean riser-off harder."""
     g = genre or ""
-    riser_menu = ([False, True], [0.70, 0.30]) if g == "hiphop" else \
-        ([True, False], [0.85, 0.15])
+    if g == "hiphop":
+        riser_menu = ([False, True], [0.70, 0.30])
+    elif percussive:
+        riser_menu = ([True, False], [0.50, 0.50])
+    else:
+        riser_menu = ([True, False], [0.70, 0.30])
     f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
     rf0, rf1 = _RISER_BAND.get(g, (300.0, 8000.0))
     kind_menu = _RISER_KIND.get(g, (["noise"], None))
@@ -563,10 +572,11 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     else:
         mode = "melodic"
     # percussive tracks always run an atmosphere bed (sound-development
-    # driven) — the genre's own textures plus drone/wash so no genre is
-    # locked to a single bed
+    # driven) — the genre's own textures plus drone/wash/metal so no genre
+    # is locked to a single bed ("metal" = the industrial plate, R16)
     texture_menu = menu["texture"] if mode == "melodic" else \
-        list(dict.fromkeys([t for t in menu["texture"] if t] + ["drone", "wash"]))
+        list(dict.fromkeys([t for t in menu["texture"] if t]
+                           + ["drone", "wash", "metal"]))
     # percussive drone ROLE varies too (owner: fixed recipes make every
     # percussive track converge) — dark is the anchor, colours per genre
     pad_menu = menu["pad_role"] if mode == "melodic" else \
@@ -585,6 +595,10 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
         texture=_pick(seed, "texture", texture_menu),
         percussive_pedal=_pick(seed, "percussive_pedal", [0, 1], [0.6, 0.4]),
+        # the TRUE Photek treatment (owner R16): some percussive takes carry
+        # NO pads/drones at all — just hits, bass pedal and the texture bed
+        percussive_pads=_pick(seed, "percussive_pads", ["drone", "none"],
+                              [0.55, 0.45]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
@@ -595,5 +609,6 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         lead_stack=_pick(seed, "lead_stack",
                          list(range(len(LEAD_STACKS.get(riff.drum_style or "",
                                                         [[]]))))),
-        fx_palette=_choose_fx_palette(seed, riff.drum_style),
+        fx_palette=_choose_fx_palette(seed, riff.drum_style,
+                                      percussive=(mode == "percussive")),
     )

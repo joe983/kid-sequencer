@@ -1,0 +1,24 @@
+{
+  "riff": {
+    "notes": [
+      { "row": 7, "start": 0,  "len": 1 },
+      { "row": 6, "start": 0,  "len": 1 },
+      { "row": 7, "start": 4,  "len": 1 },
+      { "row": 6, "start": 4,  "len": 1 },
+      { "row": 5, "start": 6,  "len": 1 },
+      { "row": 4, "start": 6,  "len": 1 },
+      { "row": 7, "start": 8,  "len": 1 },
+      { "row": 6, "start": 8,  "len": 1 },
+      { "row": 3, "start": 10, "len": 1 },
+      { "row": 2, "start": 10, "len": 1 },
+      { "row": 7, "start": 12, "len": 1 },
+      { "row": 6, "start": 12, "len": 1 },
+      { "row": 6, "start": 14, "len": 1 },
+      { "row": 5, "start": 14, "len": 1 }
+    ]
+  },
+  "key": "C",
+  "tempo": 150,
+  "instrument": "synth",
+  "drumStyle": "dnb"
+}

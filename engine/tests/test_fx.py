@@ -111,6 +111,7 @@ def test_texture_generators_shapes_levels_determinism():
         (fx.vinyl_crackle, {"seed": 5}, -24.0),
         (fx.noise_wash, {"seed": 5}, -26.0),
         (fx.dark_drone, {"seed": 5, "root_hz": 65.41}, -26.0),
+        (fx.metal_drone, {"seed": 5, "root_hz": 65.41}, -26.0),
     ):
         a = gen(3.0, SR, **kwargs)
         b = gen(3.0, SR, **kwargs)
@@ -123,6 +124,33 @@ def test_texture_generators_shapes_levels_determinism():
     # crackle rate knob (garage runs lighter than hiphop)
     dusty = fx.vinyl_crackle(3.0, SR, seed=5, ticks_per_s=4.0)
     assert not np.array_equal(dusty, fx.vinyl_crackle(3.0, SR, seed=5))
+
+
+def test_percussive_pad_free_take_has_no_pads():
+    """R16 (Photek): a percussive take whose style picks percussive_pads ==
+    'none' renders NO pads layer at all — hits, bass pedal and texture only."""
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.arrange.style import choose_style
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((Path(__file__).parents[1] / "examples" /
+                          "cluster_riff.json").read_text(encoding="utf-8"))
+    r = parse_sequence(payload)
+    v_none = next(v for v in range(200)
+                  if choose_style(r, v).percussive_pads == "none")
+    v_drone = next(v for v in range(200)
+                   if choose_style(r, v).percussive_pads == "drone")
+    l_none, _, _, _ = build_song(r, SR, plan=_PLAN, flags=_OFF, variation=v_none)
+    l_drone, _, _, _ = build_song(r, SR, plan=_PLAN, flags=_OFF, variation=v_drone)
+    assert "pads" not in l_none
+    # the drone half needs a pad renderer — asset-free local runs render
+    # empty pads for BOTH takes (the null tests' SF2/synth fallback has no
+    # pad voice); on Modal (soundfonts present) this assert is live
+    from kidseq_engine.render.sf_render import default_soundfont
+    if default_soundfont():
+        assert "pads" in l_drone
 
 
 def test_throw_fits_heuristic():
