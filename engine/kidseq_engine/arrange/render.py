@@ -105,6 +105,11 @@ def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.nda
         semi, _ = _scale_steps(riff.key)
         root_hz = 440.0 * 2.0 ** ((36 + semi - 69) / 12.0)  # tonic around C2
         return fx.dark_drone(dur_s, sr, seed + 302, root_hz=root_hz)
+    if kind == "metal":
+        from ..sequence import _scale_steps
+        semi, _ = _scale_steps(riff.key)
+        root_hz = 440.0 * 2.0 ** ((36 + semi - 69) / 12.0)  # tonic around C2
+        return fx.metal_drone(dur_s, sr, seed + 303, root_hz=root_hz)
     return np.zeros((0, 2), dtype=np.float32)
 
 
@@ -463,7 +468,12 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:
-            if percussive:
+            if percussive and style.percussive_pads == "none":
+                # the TRUE Photek treatment (owner R16): NO pads, NO drones,
+                # no synth long notes — just the hits, the bass pedal and the
+                # texture bed carrying the dark space
+                sig = np.zeros((0, 2), dtype=np.float32)
+            elif percussive:
                 # open-fifth drone (no third — nothing for a discordant riff
                 # to clash with); role + voicing vary per press so percussive
                 # tracks don't all share one drone sound
@@ -648,11 +658,20 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 g[:ramp] = np.linspace(1.0, g[-1], ramp)
                 g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
                 layers[lname][a:e2] *= g[:, None]
-            if sec.pads and style.structure.escalation == "full":
-                rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
-                hi = [dc_replace(nt, pitch=nt.pitch + 12)
-                      for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm,
-                                          voicing=style.pad_voicing)]
+            if sec.pads and style.structure.escalation == "full" and \
+                    not (percussive and style.percussive_pads == "none"):
+                # pad-free Photek takes stay pad-free through escalation too;
+                # drone takes escalate with the DRONE an octave up (chord
+                # doubles would break the no-chord-ops percussive doctrine)
+                if percussive:
+                    hi = [dc_replace(nt, pitch=nt.pitch + 12)
+                          for nt in drone_notes(riff, sec.bars,
+                                                voicing=style.pad_rhythm)]
+                else:
+                    rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
+                    hi = [dc_replace(nt, pitch=nt.pitch + 12)
+                          for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm,
+                                              voicing=style.pad_voicing)]
                 sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr,
                                    style.pad_role)
                 _add_at(layers["pads"], sig * 0.5, a)

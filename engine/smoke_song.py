@@ -51,6 +51,7 @@ def main() -> None:
           f"frac={st.structure.build_frac:.2f} "
           f"bias={st.structure.drop_bias} intro={st.structure.intro_character} "
           f"esc={st.structure.escalation} pad={st.pad_role} "
+          f"perc_pads={st.percussive_pads} "
           f"bass={st.bass_patch}/{st.bass_feel} tex={st.texture} prog_pick={st.prog_pick}")
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "

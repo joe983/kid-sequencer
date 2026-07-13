@@ -604,6 +604,45 @@ def dark_drone(dur_s: float, sr: int = SR, seed: int = 0,
     return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
 
 
+def metal_drone(dur_s: float, sr: int = SR, seed: int = 0,
+                root_hz: float = 65.41, peak_db: float = -26.0) -> np.ndarray:
+    """Industrial metallic bed (the Photek flavour, R16): inharmonic partials
+    of the root ringing like a struck metal plate, each breathing at its own
+    slow rate, with a faint high shimmer — reads as a dark resonant SPACE,
+    not a chord, so it can sit under pad-free percussive takes without
+    implying harmony. Kid-safe: dark and low, nothing shrieking."""
+    from scipy.signal import butter, sosfilt
+
+    rng = np.random.default_rng(seed)
+    n = int(dur_s * sr)
+    t = np.arange(n) / sr
+    # inharmonic partial ratios ≈ a metal plate/bell — deliberately NOT the
+    # harmonic series (that would read as a synth pad note)
+    partials = (1.0, 1.53, 2.27, 3.19, 4.41)
+    amps = (1.0, 0.60, 0.42, 0.28, 0.18)
+    rates = rng.uniform(0.05, 0.16, len(partials))   # per-partial breathing
+    phases = rng.uniform(0.0, 2 * np.pi, len(partials))
+    left = np.zeros(n)
+    right = np.zeros(n)
+    for i, (ratio, amp) in enumerate(zip(partials, amps)):
+        breath = 0.55 + 0.45 * np.sin(2 * np.pi * rates[i] * t + phases[i])
+        tone = np.sin(2 * np.pi * root_hz * 2.0 * ratio * t) * amp * breath
+        # alternate partials lean left/right — wide metal, mono-safe core
+        if i % 2 == 0:
+            left += tone
+            right += tone * 0.72
+        else:
+            left += tone * 0.72
+            right += tone
+    sos_hi = butter(2, [800.0, 2500.0], btype="band", fs=sr, output="sos")
+    shimmer = sosfilt(sos_hi, rng.standard_normal(n)) * 0.05
+    sos_lp = butter(2, 1800.0, btype="low", fs=sr, output="sos")
+    left = sosfilt(sos_lp, left + shimmer)
+    right = sosfilt(sos_lp, right + shimmer)
+    x = _peak_scale(np.stack([left, right], axis=1), peak_db)
+    return _edge_fades(x.astype(np.float64), sr).astype(np.float32)
+
+
 def throw_fits(riff: Riff) -> bool:
     """Per-track auto-decision for the riff delay-throw into breaks: needs a
     note sounding near the bar end (something worth echoing), a tempo where

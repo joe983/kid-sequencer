@@ -1,5 +1,39 @@
 # Where we are / next session
 
+## NEW — Round 16: Photek percussive + A-D showcase batteries (2026-07-12, NOT deployed)
+Owner: (1) restructure the showcase into folders — A = the existing battery,
+B/C/D = the same 24-track grid on COMPLETELY different sequencer melodies,
+each folder as far from the others as the engine can reach; (2) swooshes are
+still not mandatory — takes without any riser must be a real outcome; (3) the
+TRUE Photek percussive treatment was never achieved: no pads/synth long notes
+at all — just hits and a dark industrial space.
+
+- **Pad-free percussive takes**: `ArrangeStyle.percussive_pads` ("drone" 55%
+  | "none" 45%). "none" renders NO pads layer in percussive mode — drums +
+  riff-as-percussion + bass pedal + texture bed carry the track.
+- **`fx.metal_drone`** — the industrial bed: inharmonic plate partials
+  (1/1.53/2.27/3.19/4.41) on the tonic, per-partial slow breathing,
+  alternate partials leaning L/R, faint shimmer, LP 1800. Joined the
+  percussive texture menu (drone/wash/metal + genre's own). -26 dBFS,
+  texture layer calibrates to -30 LUFS as ever.
+- **Riser restraint at the on/off level**: melodic default riser_on
+  0.85→0.70 (30% of takes have NO riser — reverse crash + fills carry the
+  transition); percussive takes 50/50; hiphop unchanged (mostly off).
+- **Batteries** (`infra/modal_app.py::_BATTERIES`): showcase() now renders
+  into out/showcase/<LETTER>/ — A = original riffs (base 1, step 7, standard
+  tempos), B = syncopated offbeat synth hook / falling piano lament /
+  two-row machine stabs (base 211, step 13), C = 5-note sparse
+  question-answer piano / wall-to-wall 16th strings arps / long overlapped
+  bass seconds (base 421, step 17), D = trumpet scalar climb into holds /
+  synth octave pendulum / sparse irregular piano hits (base 631, step 19).
+  Per-battery genre tempos differ too. Riff files: examples/{b,c,d}_*.json —
+  all 9 verified: clusters riff_tonality 0.000 (always percussive), the
+  rest firmly melodic. `modal run infra/modal_app.py::showcase` renders
+  B,C,D by default; `--batteries A,B,C,D` re-cuts everything.
+- Tuning levers: percussive_pads weights + riser_on menus in
+  _choose_fx_palette/choose_style; metal_drone partials/level in fx.py;
+  battery bases/steps/tempos in _BATTERIES.
+
 ## NEW — Round 15: owner ear-feedback on the R10-14 battery (2026-07-11, NOT deployed)
 Owner listened to the showcase: risers samey / too prominent / not pro, no
 audible shepard, gaps overused (hiphop never needs one; one take stacked a
