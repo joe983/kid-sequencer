@@ -251,6 +251,89 @@ def _fill_bars(style: str | None, shape: int, build_bars: int) -> list[dict]:
     return [_fill_pattern(style, shape)]
 
 
+# R18 drummer scheduler: gesture cadence per personality (bars)
+_DRUMMER_EVERY = {"busy": 4, "regular": 8, "sparse": 16}
+
+
+def _candy_bar_set(sec_bars: int, drop_index: int, every: int) -> set[int]:
+    """The phrase-boundary bars _candy_slots would use for one drop section —
+    the drummer scheduler stays out of their way. Computed from the palette
+    (NOT FxFlags) so gesture placement never depends on flag configs."""
+    if not every:
+        return set()
+    return {b for b in range(every, sec_bars, every)
+            if not (drop_index == 1 and b < 8) and b <= sec_bars - 2}
+
+
+def _drummer_gestures(seed: int, sec_name: str, sec_bars: int, drummer: str,
+                      drop_index: int, candy_bars: set[int],
+                      genre: str | None) -> dict[int, str]:
+    """bar_index -> gesture for one drop section (R18 — owner: fills/changes
+    every 2/4/8/16 bars like a real drummer, but not every tune). The gesture
+    occupies the bar LEADING INTO each phrase boundary (a drummer fills into
+    the next phrase). Hook protection mirrors _candy_slots: drop 1's first 8
+    bars stay pure. Deterministic per (seed, section, bar)."""
+    every = _DRUMMER_EVERY.get(drummer)
+    if not every:
+        return {}
+    menu = ["minifill", "overlay_swap", "hat_lift", "ghost_add", "none"]
+    w = [0.28, 0.24, 0.18, 0.15, 0.15]
+    if genre != "techhouse":   # never break the four-on-floor
+        menu = menu + ["kick_skip"]
+        w = [0.26, 0.22, 0.16, 0.12, 0.12, 0.12]
+    wa = np.asarray(w) / sum(w)
+    out: dict[int, str] = {}
+    for b in range(every, sec_bars + 1, every):
+        if drop_index == 1 and b <= 8:
+            continue
+        if b in candy_bars:
+            continue
+        gb = b - 1
+        if gb <= 0:
+            continue
+        rng = _sub_rng(seed, f"drummer:{sec_name}:{b}")
+        g = menu[int(rng.choice(len(menu), p=wa))]
+        if g != "none":
+            out[gb] = g
+    return out
+
+
+def _gesture_pattern(base: dict, gesture: str, style: str | None,
+                     swapped: dict | None,
+                     fill_shape: int) -> dict:
+    """One bar's pattern with a drummer gesture applied. All transforms stay
+    inside the genre's own vocabulary — reduced-velocity fill rows, a one-bar
+    seasoning swap, a hat lift, ghost-snare chatter, or a dropped back-half
+    kick. Pure: never mutates `base`."""
+    lead = "clap" if style == "techhouse" else "snare"
+    if gesture == "hat_lift":
+        return {k: v for k, v in base.items()
+                if k in ("kick", "snare", "clap", "sub")}
+    if gesture == "overlay_swap" and swapped is not None:
+        return swapped
+    if gesture == "ghost_add":
+        merged = dict(base)
+        row = list(merged.get(lead) or [0.0] * 16)
+        for i, v in ((6, 0.18), (9, 0.22), (14, 0.18)):
+            row[i] = max(row[i], v)
+        merged[lead] = row
+        return merged
+    if gesture == "kick_skip":
+        merged = dict(base)
+        row = list(merged.get("kick") or [0.0] * 16)
+        for i in range(8, 16):
+            row[i] = 0.0
+        merged["kick"] = row
+        return merged
+    if gesture == "minifill":
+        merged = dict(base)
+        for voice, steps in _fill_pattern(style, fill_shape).items():
+            row = list(merged.get(voice) or [0.0] * 16)
+            merged[voice] = [max(a, b * 0.65) for a, b in zip(row, steps)]
+        return merged
+    return base
+
+
 def _lpf_sweep(seg: np.ndarray, sr: int, f0: float, f1: float) -> np.ndarray:
     """LadderFilter LPF12 sweep f0→f1 (exp) across the segment, 1024-sample
     hops with carried state. f0 == f1 gives a fixed filter."""
@@ -344,9 +427,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     percussive = style.production_mode == "percussive"
     if percussive:
         # Photek move: no chord movement under a non-harmonic pattern — the
-        # bass PEDALS (static root, or a root->fifth pedal shift for motion
-        # without harmony; variation-picked), drone instead of chord pads
-        prog = ([0, 0, 0, 0], [0, 0, 4, 4])[style.percussive_pedal % 2]
+        # bass PEDALS (static root, root->fifth shift, or the alternating
+        # root/fifth walk — R23 favours the moving ones: a static low root
+        # the whole track reads as mud), drone instead of chord pads
+        prog = ([0, 0, 0, 0], [0, 0, 4, 4],
+                [0, 4, 0, 4])[style.percussive_pedal % 3]
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
     seed = fx.song_seed(riff, variation)
@@ -359,7 +444,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     kick_onsets: list[int] = []
 
     from ..render.drums import pattern_for
-    pattern = pattern_for(riff.drum_style, style.drum_variant) if riff.drum_style else None
+    pattern = pattern_for(riff.drum_style, style.drum_variant,
+                          style.drum_skeleton) if riff.drum_style else None
+    takes = style.drum_takes   # per-press sample-take swaps (R17)
 
     # ---- base section renders + boundary map -------------------------------
     bounds: list[tuple[Section, int, int]] = []   # (section, start, end) samples
@@ -427,10 +514,16 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # main voice — doubling the original riff against a developed
                 # phrase played two melodies at once (owner heard it as
                 # discordance in the garage take).
-                stk = _render_lead_stack(span_notes, riff.tempo, 1,
-                                         span_beats, sr, riff.drum_style,
-                                         style.lead_stack)
-                _add_at(layers["riff"], stk, at)
+                # R20: some takes carry NO stack — the kid's voice + rhythm
+                # section stand alone (owner: not every song needs layers)
+                if style.lead_stack is not None:
+                    from .style import lead_stack_key
+                    stk = _render_lead_stack(span_notes, riff.tempo, 1,
+                                             span_beats, sr,
+                                             lead_stack_key(riff.drum_style,
+                                                            style.house_style),
+                                             style.lead_stack)
+                    _add_at(layers["riff"], stk, at)
             else:
                 notes = riff_variant(riff.notes, sec.riff_variant)
                 if notes:
@@ -438,26 +531,71 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                      sec.bars, riff.bar_beats, sr)
                     _add_at(layers["riff"], sig, at)
 
+        gestures: dict[int, str] = {}
         if sec.drums and pattern:
+            variant_eff = style.drum_variant
             base_pat = pattern
             if percussive and sec.name.startswith("drop"):
                 # drum-led evolution: each drop rotates to a different
                 # seasoning overlay (the kit does the developing)
-                base_pat = pattern_for(riff.drum_style,
-                                       style.drum_variant + (drop_seen - 1))
+                variant_eff = style.drum_variant + (drop_seen - 1)
+                base_pat = pattern_for(riff.drum_style, variant_eff,
+                                       style.drum_skeleton)
             pat = base_pat if sec.drums == "full" else _lite_pattern(base_pat)
-            if pat:
+            if sec.drums == "full" and sec.name.startswith("drop"):
+                # R18 drummer scheduler: per-press personality drops small
+                # gestures on phrase boundaries INSIDE the drop
+                gestures = _drummer_gestures(
+                    seed, sec.name, sec.bars, style.drummer, drop_seen,
+                    _candy_bar_set(sec.bars, drop_seen, pal.earcandy_every),
+                    riff.drum_style)
+            if pat and gestures:
                 from ..render import drums_audio_pattern
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, sec.bars, sr)
+                swapped = pattern_for(riff.drum_style, variant_eff + 1,
+                                      style.drum_skeleton)
+                for b in range(sec.bars):
+                    bpat = pat
+                    if b in gestures:
+                        bpat = _gesture_pattern(pat, gestures[b],
+                                                riff.drum_style, swapped,
+                                                pal.fill_shape)
+                    b_at = at + int(b * bar_s * sr)
+                    sig = drums_audio_pattern(riff.drum_style, bpat,
+                                              riff.tempo, 1, sr, takes=takes)
+                    _add_at(layers["drums"], sig, b_at)
+                    # pump triggers from the bar's ACTUAL kicks (kick_skip
+                    # bars must not duck the mix against silence)
+                    kick_onsets += [b_at + o for o in
+                                    kick_onsets_from_pattern(
+                                        bpat, riff.tempo, 1, sr,
+                                        style=riff.drum_style)]
+            elif pat:
+                from ..render import drums_audio_pattern
+                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo,
+                                          sec.bars, sr, takes=takes)
                 _add_at(layers["drums"], sig, at)
-            if sec.drums == "full":
-                kick_onsets += [at + o for o in
-                                kick_onsets_from_pattern(pattern, riff.tempo, sec.bars, sr,
-                                                          style=riff.drum_style)]
+                if sec.drums == "full":
+                    kick_onsets += [at + o for o in
+                                    kick_onsets_from_pattern(pattern, riff.tempo, sec.bars, sr,
+                                                              style=riff.drum_style)]
 
         if sec.bass:
             feel = bass_feel_for(riff.drum_style, style.bass_feel)
-            notes = bass_notes(riff, prog, sec.bars, feel=feel)
+            notes = bass_notes(riff, prog, sec.bars, feel=feel,
+                               gate=style.bass_gate)
+            # R18: the bass answers the drummer's fill bars — the bar's final
+            # note pops an octave (small, feel-aware; drums and bass move
+            # together the way a live rhythm section does)
+            for gb, g in sorted(gestures.items()):
+                if g != "minifill":
+                    continue
+                lo, hi = gb * riff.bar_beats, (gb + 1) * riff.bar_beats
+                idx = [i for i, nt in enumerate(notes)
+                       if lo <= nt.start_beats < hi]
+                if idx:
+                    i = idx[-1]
+                    notes[i] = dc_replace(notes[i],
+                                          pitch=min(127, notes[i].pitch + 12))
             # garage bass is never raw (Architechs): plucky/FM patches get a
             # sine sub layered -12 dB underneath
             sub_db = -12.0 if (riff.drum_style == "garage"
@@ -480,6 +618,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 notes = drone_notes(riff, sec.bars, voicing=style.pad_rhythm)
                 sig = _render_pads(notes, riff.tempo, span_beats, sr,
                                    style.pad_role)
+            elif not style.pads_on:
+                # R20 sparse take: no pads/long sounds — riff + bass + drums
+                # (+ texture, guaranteed by choose_style when the stack is
+                # also out) carry the whole arrangement
+                sig = np.zeros((0, 2), dtype=np.float32)
             else:
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
@@ -604,11 +747,32 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
 
     if flags.fills and pattern:
         from ..render import drums_audio_pattern
+        from ..render.sample_kit import render_fill_sample
+        # R17: a per-press take may swap the synthesized fill for one of the
+        # owner's REAL breakbeat fills (dnb). The fill takes over — a real
+        # drummer stops the groove to play it — so the kit is cut for the
+        # fill's musical span; render_fill_sample returns None (→ legacy
+        # synth fill) without assets or past the stretch guard.
+        sampled = (render_fill_sample(riff.drum_style, pal.fill_take,
+                                      riff.tempo, sr)
+                   if pal.fill_take else None)
         for i, (b_sec, b_a, b_e) in builds.items():
+            if sampled is not None:
+                sig, beats = sampled
+                f0 = max(b_a, b_e - int(beats * spb * sr))
+                edge = max(2, int(0.003 * sr))
+                if f0 > edge:
+                    fade = ((1.0 + np.cos(np.linspace(0.0, np.pi, edge)))
+                            * 0.5)[:, None]
+                    layers["drums"][f0 - edge:f0] *= fade
+                layers["drums"][f0:b_e] = 0.0
+                _add_at(layers["drums"], sig, f0)
+                continue
             bars = _fill_bars(riff.drum_style, pal.fill_shape, b_sec.bars)
             for bi, pat in enumerate(bars):
                 fill_at = b_e - int((len(bars) - bi) * bar_s * sr)
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1, sr)
+                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                                          sr, takes=takes)
                 _add_at(layers["drums"], sig, fill_at)
 
     if flags.automation:
@@ -659,7 +823,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
                 layers[lname][a:e2] *= g[:, None]
             if sec.pads and style.structure.escalation == "full" and \
-                    not (percussive and style.percussive_pads == "none"):
+                    not (percussive and style.percussive_pads == "none") and \
+                    (percussive or style.pads_on):
                 # pad-free Photek takes stay pad-free through escalation too;
                 # drone takes escalate with the DRONE an octave up (chord
                 # doubles would break the no-chord-ops percussive doctrine)
@@ -734,7 +899,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if kind == "kick_fill":
                 # UKG vocabulary: a 2-beat kick pickup INTO the phrase boundary
                 pat = {"kick": [0.0] * 8 + [0.55, 0, 0.65, 0, 0.75, 0, 0.85, 0]}
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1, sr)
+                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                                          sr, takes=takes)
                 _add_at(layers["drums"], sig * 0.8, pos - int(bar_s * sr))
                 continue
             if kind in ("rev_swell_riff", "rev_swell_delay"):

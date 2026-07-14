@@ -308,6 +308,118 @@ PATCHES: dict[str, dict] = {
         "a_amp_eg_release": ("raw", _env(0.08)),
         "character": "Warm",
     },
+    # R19 (owner: "never a real short sound like a pizzicato … like in some
+    # funk tunes"): TRUE pizzicato-style bass — zero sustain, the filter
+    # snaps shut in 60 ms, gone in a quarter second. The woody funk thump.
+    "bass_pizz": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 420.0,
+        "a_filter_1_resonance": 14.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.55),
+        "a_filter_eg_attack": ("raw", _env(0.003)),
+        "a_filter_eg_decay": ("raw", _env(0.06)),
+        "a_filter_eg_sustain": 0.0,
+        "a_filter_eg_release": ("raw", _env(0.04)),
+        "a_amp_eg_attack": ("raw", _env(0.003)),
+        "a_amp_eg_decay": ("raw", _env(0.12)),
+        "a_amp_eg_sustain": 0.0,
+        "a_amp_eg_release": ("raw", _env(0.05)),
+        "character": "Warm",
+    },
+    # R19 funk finger-bass: short punchy envelope with a little squelch —
+    # more body than the pizz, still percussive (syncopated 16th lines)
+    "bass_funk": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 650.0,
+        "a_filter_1_resonance": 26.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.60),
+        "a_filter_eg_attack": ("raw", _env(0.003)),
+        "a_filter_eg_decay": ("raw", _env(0.15)),
+        "a_filter_eg_sustain": 5.0,
+        "a_filter_eg_release": ("raw", _env(0.06)),
+        "a_amp_eg_attack": ("raw", _env(0.003)),
+        "a_amp_eg_decay": ("raw", _env(0.25)),
+        "a_amp_eg_sustain": 15.0,
+        "a_amp_eg_release": ("raw", _env(0.06)),
+        "character": "Warm",
+    },
+    # R19 clean rolling dnb sub (owner: "stuck on reese every time") — the
+    # authentic non-reese dnb colour: pure sine weight + a quiet saw edge for
+    # definition, short release so rolling 8ths articulate
+    "bass_sub_roll": {
+        "a_osc_1_type": "Sine",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_2_mute": False,
+        "a_osc_2_type": "Classic",
+        "a_osc_2_retrigger": True,
+        "a_osc_2_volume": -14.0,
+        "a_filter_1_type": "LP Vintage Ladder",
+        "a_filter_1_cutoff": 320.0,
+        "a_filter_1_resonance": 8.0,
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.5)),
+        "a_amp_eg_sustain": 85.0,
+        "a_amp_eg_release": ("raw", _env(0.08)),
+        "character": "Warm",
+    },
+    # R21 big-room supersaw chords (Avicii/Guetta/SHM): huge detune, wide-open
+    # filter, chords that fill the frame — sidechain pump does the movement
+    "supersaw_chord": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "7 voices",
+        "a_osc_1_unison_detune": ("raw", 0.35),
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 4500.0,
+        "a_filter_1_resonance": 8.0,
+        "a_amp_eg_attack": ("raw", _env(0.02)),
+        "a_amp_eg_sustain": 100.0,
+        "a_amp_eg_release": ("raw", _env(0.3)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Bright",
+    },
+    # R21 Berlin dub-techno chord stab: dark filtered minor stab that decays
+    # into space — Basic Channel vocabulary, not rave
+    "dub_chord": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "3 voices",
+        "a_osc_1_unison_detune": ("raw", 0.15),
+        "a_filter_1_type": "LP 12 dB",
+        "a_filter_1_cutoff": 900.0,
+        "a_filter_1_resonance": 20.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.25),
+        "a_filter_eg_attack": ("raw", _env(0.004)),
+        "a_filter_eg_decay": ("raw", _env(0.5)),
+        "a_filter_eg_sustain": 0.0,
+        "a_filter_eg_release": ("raw", _env(0.5)),
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.8)),
+        "a_amp_eg_sustain": 0.0,
+        "a_amp_eg_release": ("raw", _env(0.6)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Warm",
+    },
+    # R21 Detroit string machine: ensemble-chorused saw strings, stabbed or
+    # held — the Rhythim Is Rhythim colour
+    "string_machine": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "5 voices",
+        "a_osc_1_unison_detune": ("raw", 0.20),
+        "a_filter_1_type": "LP 12 dB",
+        "a_filter_1_cutoff": 3200.0,
+        "a_filter_1_resonance": 6.0,
+        "a_amp_eg_attack": ("raw", _env(0.15)),
+        "a_amp_eg_sustain": 100.0,
+        "a_amp_eg_release": ("raw", _env(0.8)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Neutral",
+    },
     # dark sustained pad (drill) — closed-down LP12, slow bloom, warm
     "pad_dark": {
         "a_osc_1_type": "Classic",

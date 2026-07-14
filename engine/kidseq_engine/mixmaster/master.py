@@ -94,6 +94,11 @@ _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass", "fx_sub", "rumble")
 
+# R23 (owner: percussive mixes muddy/murky): percussive takes run their
+# sustained beds a touch deeper — the drones/textures/rumble stack low-mid
+# energy edge-to-edge there, so the calibration targets drop 2 dB.
+_PERC_LUFS_DROP = {"texture": 2.0, "pads": 2.0, "rumble": 2.0}
+
 # Haas-on-sides width (Camo & Krooked): a delayed mono copy added as pure
 # Side on the WIDTH layers only — mono sum bit-unchanged by construction,
 # drums/bass/riff core stays untouched. Per-genre side level (dB): drill/
@@ -111,10 +116,14 @@ _HAAS_DELAY_MS = 12.0
 # post-board send levels into the shared reverb (dB); everything else stays
 # dry. fx is deliberately wet (Aisher/Attack: risers sit in a hall — a dry
 # riser reads pasted-on; tails also wash 1-2 bars across section boundaries)
-_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0, "fx": -16.0}
+# drums -22 -> -20 (R17): the SHARED return does more of the drum-space work
+# as the boxy parallel room bus does less — owner: drums sat in a different
+# space from the melody ("boxey").
+_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -20.0, "fx": -16.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
+# garage/reggaeton 0.50 -> 0.44 (R17): the big room read as midrange box
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
-              "garage": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
+              "garage": 0.44, "reggaeton": 0.44}   # never exceed 0.55 (metallic)
 _PREDELAY_S = 0.020
 
 # parallel drum crush, summed under the dry kit (dB by genre)
@@ -123,9 +132,11 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 
 # parallel distorted 'room' bus under the kit (Noisia's overhead-mics trick:
 # programmed drums read as a kit in a space). drill/hiphop stay OFF — their
-# 'drums just need to knock' (Metro Boomin's engineer).
-_ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
-                 "reggaeton": -18.0}
+# 'drums just need to knock' (Metro Boomin's engineer). R17: pulled 4 dB and
+# the board de-boxed (owner: "reverb on the drums … boxey, not in the same
+# space as the rest") — the shared return carries more of the space instead.
+_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
+                 "reggaeton": -21.0}
 
 # drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
 # peaks without transient-dulling pump). Memoryless tanh(k*x)/tanh(k); the
@@ -140,6 +151,11 @@ _BASS_SAT_WET = {"dnb": 0.35, "techhouse": 0.25, "garage": 0.20,
                  "reggaeton": 0.20, "drill": 0.20, "hiphop": 0.15}
 _BASS_SAT_SPLIT_HZ = 150.0
 _BASS_SAT_DRIVE = 2.5
+
+# R19 (owner: "bass can often sound dry, underproduced compared to rest of
+# the mix"): harmonics-only send into the shared reverb return — the band
+# above _BASS_SAT_SPLIT_HZ at this level; the sub never leaves the centre.
+_BASS_SEND_DB = -18.0
 
 
 def _bass_band_sat(x: np.ndarray, sr: int, genre: str | None) -> np.ndarray:
@@ -186,10 +202,13 @@ def _room_bus_board() -> Pedalboard:
     this bus is deliberately NOT impulse-aligned (unlike the NY crush)."""
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=250.0),
-        Distortion(drive_db=12.0),
+        # R17: drive 12 -> 6 and LP 6k -> 8k — the hard-driven, dark, tiny
+        # (0.25) room was the "boxey" tone the owner flagged; softer dirt +
+        # more air keeps the glue without the shoebox
+        Distortion(drive_db=6.0),
         Reverb(room_size=0.25, damping=0.6, wet_level=1.0, dry_level=0.0,
                width=0.6),
-        LowpassFilter(cutoff_frequency_hz=6000.0),
+        LowpassFilter(cutoff_frequency_hz=8000.0),
     ])
 
 
@@ -241,7 +260,8 @@ def _kick_slot(genre: str | None) -> float:
         return 55.0
 
 
-def _board_for(name: str, genre: str | None) -> Pedalboard:
+def _board_for(name: str, genre: str | None,
+               percussive: bool = False) -> Pedalboard:
     """Per-layer processing, EQ-slotted around the genre's kick fundamental:
     drums are boosted AT the kick slot, bass is notched exactly there (and takes
     80–120 Hz instead); the riff owns 2–4 kHz presence and pads are cut there
@@ -260,6 +280,11 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
         ]
         if genre == "dnb":
             chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-2.0, q=0.8))
+        elif genre == "drill" and percussive:
+            # R23: percussive drill low tidy — the Big Kick's sustain shelves
+            # down so the pedal + hits don't smear (melodic drill untouched —
+            # owner: it sounds great)
+            chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-1.5, q=0.8))
         return Pedalboard(chain)
     if name == "bass":
         slot = _kick_slot(genre)
@@ -392,23 +417,26 @@ def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
 # ---------------------------------------------------------------------------
 
 
-def _master_eq(genre: str | None) -> Pedalboard:
+def _master_eq(genre: str | None, percussive: bool = False) -> Pedalboard:
     """Master tone shape, applied BEFORE every nonlinearity (HP first so
     subsonics don't eat clipper/limiter headroom). The 3.2 kHz dip is the
     kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud.
     Hawkes moves (R13): 30 Hz HP makes the low end punch harder, not thinner
     (drill/hiphop keep 24 for 808 tails); DnB weight lives ~60 Hz; the top
-    lift is TWO small cascaded shelves, never one big boost."""
+    lift is TWO small cascaded shelves, never one big boost. Percussive
+    takes (R23 — owner: muddy/murky) cut the low-mid mud band deeper: their
+    beds/drones/pedal all live there."""
     if genre in ("drill", "hiphop"):
         hp_hz, low = 24.0, (60.0, 1.5, 0.8)
     elif genre == "dnb":
         hp_hz, low = 30.0, (65.0, 1.5, 0.8)
     else:
         hp_hz, low = 30.0, (100.0, 1.2, 0.71)
+    mud_db = -2.5 if percussive else -1.5
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=hp_hz),
         LowShelfFilter(cutoff_frequency_hz=low[0], gain_db=low[1], q=low[2]),
-        PeakFilter(cutoff_frequency_hz=280.0, gain_db=-1.5, q=1.1),
+        PeakFilter(cutoff_frequency_hz=280.0, gain_db=mud_db, q=1.1),
         PeakFilter(cutoff_frequency_hz=3200.0, gain_db=-1.0, q=1.4),
         HighShelfFilter(cutoff_frequency_hz=9500.0, gain_db=1.0, q=0.71),
         HighShelfFilter(cutoff_frequency_hz=13500.0, gain_db=0.8, q=0.71),
@@ -649,7 +677,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            kick_onsets: list[int], lufs_target: float | None = None,
            tempo: float = 120.0,
            riff_wet_spans: list[tuple[int, int]] | None = None,
-           section_spans: list[tuple[str, int, int]] | None = None) -> MasterResult:
+           section_spans: list[tuple[str, int, int]] | None = None,
+           pump_depth: float | None = None,
+           percussive: bool = False) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -668,6 +698,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
 
     preset = preset_for(genre)
     target = lufs_target if lufs_target is not None else preset.lufs_target
+    # R19: per-press pump override (ArrangeStyle.pump_depth via the caller) —
+    # techhouse's fixed 0.50 pump on every take was part of the "cheesy" read
+    pump_base = pump_depth if pump_depth is not None else preset.pump_depth
 
     # Coerce every layer to stereo (N, 2); mono inputs (e.g. tests) are upmixed.
     st_layers = {name: as_stereo(buf) for name, buf in layers.items() if buf.size}
@@ -682,7 +715,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = np.zeros((n, 2), dtype=np.float32)
     send_acc = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
-        proc = _process(buf, _board_for(name, genre), sr)  # (M, 2)
+        proc = _process(buf, _board_for(name, genre, percussive), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
@@ -716,7 +749,10 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             proc = _haas_sides(proc, sr, _HAAS_DELAY_MS,
                                _HAAS_SIDE_DB.get(genre or "", _HAAS_DEFAULT_DB))
         if not name.startswith("fx"):  # FX layers are peak-specified by design — no calibration
-            proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
+            lufs_t = _LAYER_LUFS.get(name, -22.0)
+            if percussive:
+                lufs_t -= _PERC_LUFS_DROP.get(name, 0.0)   # R23 anti-mud
+            proc = _calibrate_layer(proc, sr, lufs_t)
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
 
@@ -733,9 +769,19 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                 send_acc += proc * curve[:, None]
             else:
                 send_acc += proc * (10.0 ** (send_db / 20.0))
+        elif name == "bass":
+            # R19 (owner: bass reads dry/underproduced vs the rest): the
+            # bass's HARMONICS visit the shared room like every other layer;
+            # the sub band stays bone dry and mono (Noisia doctrine — same
+            # split as _bass_band_sat).
+            from scipy.signal import butter, sosfilt
+            sos = butter(4, _BASS_SAT_SPLIT_HZ, btype="low", fs=sr,
+                         output="sos")
+            low = sosfilt(sos, proc, axis=0).astype(np.float32)
+            send_acc += (proc - low) * (10.0 ** (_BASS_SEND_DB / 20.0))
 
         if name in _PUMPED_LAYERS:
-            depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
+            depth = min(_PUMP_DEPTH_CAP, pump_base * _PUMP_MULT[name])
             if name == "bass":
                 # multiband duck (Pretolesi: 'fix the bass, not the kick') —
                 # only the band clashing with the kick ducks fully; the
@@ -759,14 +805,14 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         ret = _process(sent, _reverb_return_board(genre), sr)[:n]
         if ret.shape[0] < n:
             ret = np.pad(ret, ((0, n - ret.shape[0]), (0, 0)))
-        ret = ret * (1.0 - 0.8 * preset.pump_depth * shape)[:, None]
+        ret = ret * (1.0 - 0.8 * pump_base * shape)[:, None]
         bus += ret
 
     # --- master-bus endgame -------------------------------------------------
     # 1) DC removal, then tone (EQ precedes every nonlinearity: HP first so
     #    subsonics don't eat clip headroom)
     bus = bus - bus.mean(axis=0, keepdims=True).astype(np.float32)
-    bus = _process(bus, _master_eq(genre), sr)
+    bus = _process(bus, _master_eq(genre, percussive), sr)
 
     # 2) keep the lows mono (phasey lows fold to centre); highs stay wide.
     #    250 Hz per Pretolesi/Reznikov width discipline (was 120): the

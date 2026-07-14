@@ -53,6 +53,12 @@ def main() -> None:
           f"esc={st.structure.escalation} pad={st.pad_role} "
           f"perc_pads={st.percussive_pads} "
           f"bass={st.bass_patch}/{st.bass_feel} tex={st.texture} prog_pick={st.prog_pick}")
+    print(f"drums: skeleton={st.drum_skeleton} variant={st.drum_variant} "
+          f"drummer={st.drummer} snare_take={st.snare_take} "
+          f"hat_take={st.hat_take} fill_take={st.fx_palette.fill_take} "
+          f"bass_gate={st.bass_gate:g} pump={st.pump_depth} "
+          f"lead_stack={st.lead_stack} pads_on={st.pads_on} "
+          f"house={st.house_style}")
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
           f"starve={p.bass_starve_bars} "
@@ -84,7 +90,8 @@ def main() -> None:
         bar += s.bars
     res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
                  tempo=riff.tempo, riff_wet_spans=[(0, intro_end)],
-                 section_spans=spans)
+                 section_spans=spans, pump_depth=st.pump_depth,
+                 percussive=(st.production_mode == "percussive"))
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

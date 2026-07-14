@@ -220,6 +220,27 @@ def test_dynamic_guard_cuts_pokes_not_programme():
     assert np.array_equal(guarded, _dynamic_guard(y, SR))   # deterministic
 
 
+def test_percussive_master_flag_defaults_off_and_tightens_lows():
+    # R23: percussive=False is the exact legacy path (default); with the flag
+    # on, the low-mid mud cut deepens and the sustained beds calibrate 2 dB
+    # deeper — output must differ, and ONLY when the flag flips.
+    from kidseq_engine.mixmaster.master import _PERC_LUFS_DROP
+
+    assert _PERC_LUFS_DROP == {"texture": 2.0, "pads": 2.0, "rumble": 2.0}
+    layers = _synth_layers("drill", stereo=True)
+    kicks = kick_onsets_from_pattern(DRUM_PATTERNS["drill"], _TEMPO,
+                                     int(_SECONDS / (4 * seconds_per_beat(_TEMPO))),
+                                     SR, style="drill")
+    a = master(dict(layers), SR, genre="drill", kick_onsets=list(kicks))
+    b = master(dict(layers), SR, genre="drill", kick_onsets=list(kicks),
+               percussive=False)
+    assert np.array_equal(a.audio, b.audio)      # default == explicit off
+    c = master(dict(layers), SR, genre="drill", kick_onsets=list(kicks),
+               percussive=True)
+    assert a.audio.shape == c.audio.shape
+    assert not np.array_equal(a.audio, c.audio)  # the flag actually bites
+
+
 def test_multiband_bass_duck_null_at_zero_depth():
     """The subtractive band-split duck must be bit-identical to the input
     when the pump shape is zero (no kicks)."""

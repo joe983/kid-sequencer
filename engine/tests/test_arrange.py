@@ -17,6 +17,11 @@ from kidseq_engine.arrange import (  # noqa: E402
     plan_song,
     riff_variant,
 )
+from kidseq_engine.arrange.render import (  # noqa: E402
+    _candy_bar_set,
+    _drummer_gestures,
+    _gesture_pattern,
+)
 from kidseq_engine.sequence import (  # noqa: E402
     _C4_MIDI,
     Note,
@@ -37,6 +42,65 @@ def _riff(key="C", tempo=120.0, drum_style="techhouse") -> Riff:
         Note(pitch=tonic + steps[1], start_beats=3.5, dur_beats=0.5),
     ]
     return Riff(notes=notes, tempo=tempo, key=key, instrument="piano", drum_style=drum_style)
+
+
+def test_drummer_scheduler_is_deterministic_and_disciplined():
+    # R18: gesture maps are pure functions of (seed, section, bars, drummer,
+    # drop index, candy bars, genre); static = no gestures; drop 1's first 8
+    # bars stay pure (the hook); candy bars are never double-booked; the
+    # four-on-floor never loses a kick.
+    from kidseq_engine.render.drums import DRUM_PATTERNS
+
+    candy = _candy_bar_set(16, 2, 4)
+    assert candy == {4, 8, 12}          # boundary bars, hook-safe, end-safe
+    assert _candy_bar_set(16, 1, 4) == {8, 12}   # drop 1 protects bars < 8
+    assert _candy_bar_set(16, 1, 0) == set()     # candy off
+
+    for drummer in ("static", "sparse", "regular", "busy"):
+        a = _drummer_gestures(1234, "drop", 16, drummer, 2, candy, "dnb")
+        b = _drummer_gestures(1234, "drop", 16, drummer, 2, candy, "dnb")
+        assert a == b                    # deterministic
+        if drummer == "static":
+            assert a == {}
+        for gb in a:
+            assert 0 < gb < 16
+            assert (gb + 1) not in candy  # gestures dodge the candy slots
+    # hook protection: no gesture bar inside drop 1's first 8 bars
+    busy1 = _drummer_gestures(99, "drop", 16, "busy", 1, set(), "dnb")
+    assert all(gb >= 8 for gb in busy1), busy1
+    # techhouse never draws kick_skip (the four-on-floor is the genre)
+    for s in range(200):
+        g = _drummer_gestures(s, "drop", 32, "busy", 2, set(), "techhouse")
+        assert "kick_skip" not in g.values(), (s, g)
+
+    # gesture patterns: pure (base unmutated), 16-step rows, genre vocabulary
+    base = DRUM_PATTERNS["dnb"]
+    snapshot = {k: list(v) for k, v in base.items()}
+    for gesture in ("minifill", "overlay_swap", "hat_lift", "ghost_add",
+                    "kick_skip"):
+        out = _gesture_pattern(base, gesture, "dnb",
+                               {"kick": base["kick"], "hatC": [0.2] * 16}, 0)
+        assert all(len(v) == 16 for v in out.values()), gesture
+        assert {k: list(v) for k, v in base.items()} == snapshot, gesture
+    assert "hatC" not in _gesture_pattern(base, "hat_lift", "dnb", None, 0)
+    ks = _gesture_pattern(base, "kick_skip", "dnb", None, 0)
+    assert all(v == 0.0 for v in ks["kick"][8:])
+    assert ks["kick"][0] == base["kick"][0]
+
+
+def test_bass_gate_shortens_durations_only():
+    # R19 articulation lever: pitches/starts/velocities untouched, durations
+    # scaled with a 0.12-beat floor; gate 1.0 = bit-identical legacy
+    riff = _riff()
+    prog = choose_progression(riff)
+    base = bass_notes(riff, prog, 4)
+    assert bass_notes(riff, prog, 4, gate=1.0) == base
+    short = bass_notes(riff, prog, 4, gate=0.35)
+    assert len(short) == len(base)
+    for a, b in zip(base, short):
+        assert (a.pitch, a.start_beats, a.velocity) == \
+               (b.pitch, b.start_beats, b.velocity)
+        assert abs(b.dur_beats - max(0.12, a.dur_beats * 0.35)) < 1e-9
 
 
 def test_every_bank_progression_is_diatonic_in_every_key():

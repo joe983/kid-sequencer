@@ -81,6 +81,140 @@ def test_every_genre_has_a_menu_and_options_are_renderable():
                 assert gain_db <= -8.0, (genre, voice, gain_db)
 
 
+def test_r19_bass_menus_weights_and_levers():
+    # explicit weight lists must match their menus; feel indices must exist;
+    # gate/pump levers pick from their menus and default sanely.
+    from kidseq_engine.arrange import _BASS_FEELS
+    from kidseq_engine.arrange.style import (_BASS_FEEL_W, _BASS_GATE,
+                                             _BASS_PATCH_W, _PUMP_MENU)
+
+    for genre, w in _BASS_PATCH_W.items():
+        assert len(w) == len(_GENRE_MENU[genre]["bass_patch"]), genre
+        assert abs(sum(w) - 1.0) < 1e-6, genre
+    for genre, w in _BASS_FEEL_W.items():
+        assert len(w) == len(_GENRE_MENU[genre]["bass_feel"]), genre
+    for genre in DRUM_PATTERNS:
+        feels = _BASS_FEELS.get(genre, [])
+        for i in _GENRE_MENU[genre]["bass_feel"]:
+            assert i < len(feels), (genre, i, len(feels))
+    # owner asks encoded: reese no longer ~50% of dnb; drill untouched
+    dnb = _GENRE_MENU["dnb"]["bass_patch"]
+    assert _BASS_PATCH_W["dnb"][dnb.index("bass_reese")] <= 0.35
+    assert "bass_pizz" in dnb and "bass_sub_roll" in dnb
+    assert _GENRE_MENU["drill"]["bass_patch"] == ["bass_sub808", "bass_round"]
+    assert _BASS_GATE["drill"] == ([1.0], None)
+    # gate + pump land across variations (techhouse has both menus)
+    r = _riff()
+    styles = [choose_style(r, v) for v in range(200)]
+    assert {s.bass_gate for s in styles} == {1.0, 0.6, 0.35}
+    assert {s.pump_depth for s in styles} == {None, 0.35, 0.22}
+    dnb_styles = [choose_style(_riff("C", 174, "dnb", "piano"), v)
+                  for v in range(300)]
+    assert {s.bass_patch for s in dnb_styles} == set(dnb)
+    reese = sum(1 for s in dnb_styles if s.bass_patch == "bass_reese")
+    assert reese / len(dnb_styles) < 0.5   # "stuck on reese" is gone
+    assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
+
+
+def test_r23_percussive_mud_discipline():
+    # R23: one sustained dark bed at a time (drone pads exclude drone/metal
+    # textures), the moving pedals lead, and all three pedal shapes occur.
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((Path(__file__).parents[1] / "examples" /
+                          "cluster_riff.json").read_text(encoding="utf-8"))
+    r = parse_sequence(payload)
+    styles = [choose_style(r, v) for v in range(300)]
+    assert all(s.production_mode == "percussive" for s in styles)
+    for s in styles:
+        if s.percussive_pads == "drone":
+            assert s.texture not in ("drone", "metal"), s.texture
+    # metal stays reachable on the pad-free takes (the R16 signature)
+    assert any(s.texture == "metal" and s.percussive_pads == "none"
+               for s in styles)
+    assert {s.percussive_pedal for s in styles} == {0, 1, 2}
+    moving = sum(1 for s in styles if s.percussive_pedal in (1, 2))
+    assert moving / len(styles) > 0.55   # the static root is the minority
+
+
+def test_r22_reggaeton_polish():
+    # R22: reggaeton has a tuned impact (no longer the generic default), the
+    # conga rim overlay is reachable, and the dembow snare stays untouchable
+    # across every skeleton and seasoning variant (Tainy rule).
+    from kidseq_engine.arrange.style import _IMPACT
+    from kidseq_engine.render.drums import (DRUM_SKELETONS, DRUM_VARIANTS,
+                                            pattern_for)
+
+    assert "reggaeton" in _IMPACT
+    assert len(DRUM_VARIANTS["reggaeton"]) == 5
+    assert max(_GENRE_MENU["reggaeton"]["drum_variant"]) == \
+        len(DRUM_VARIANTS["reggaeton"])
+    base_snare = pattern_for("reggaeton", 0)["snare"]
+    for sk in range(len(DRUM_SKELETONS["reggaeton"]) + 1):
+        for dv in range(len(DRUM_VARIANTS["reggaeton"]) + 1):
+            assert pattern_for("reggaeton", dv, sk)["snare"] == base_snare
+
+
+def test_r21_house_substyles():
+    # R21: techhouse splits into classic/bigroom/minimal/detroit; every
+    # sub-style's pads/stacks/rhythms are renderable; the rave flavours are
+    # demoted in classic; other genres never carry a house_style.
+    from kidseq_engine.arrange import _PAD_RHYTHMS
+    from kidseq_engine.arrange.style import (_HOUSE_MENU, _HOUSE_PAD_MENU,
+                                             _HOUSE_PUMP, _HOUSE_RHYTHM,
+                                             _HOUSE_RUMBLE, _STACK_W,
+                                             LEAD_STACKS, LEAD_VOICES,
+                                             lead_stack_key)
+
+    for house in _HOUSE_MENU[0]:
+        for role in _HOUSE_PAD_MENU[house]:
+            assert role in PAD_ROLES, (house, role)
+        for i in _HOUSE_RHYTHM[house][0]:
+            assert i < len(_PAD_RHYTHMS["techhouse"]), (house, i)
+        assert house in _HOUSE_PUMP and house in _HOUSE_RUMBLE
+        skey = lead_stack_key("techhouse", house)
+        for stack in LEAD_STACKS[skey]:
+            for voice, semi, gain_db in stack:
+                assert voice in LEAD_VOICES, (house, voice)
+                assert semi in (-12, 0, 12) and gain_db <= -8.0, (house, voice)
+    assert lead_stack_key("techhouse", "classic") == "techhouse"
+    assert lead_stack_key("dnb", None) == "dnb"
+    assert len(_STACK_W["techhouse"]) == len(LEAD_STACKS["techhouse"])
+    # classic demotion: rave_stab/acid recipes carry the LOW weights
+    voices0 = [s[0][0] for s in LEAD_STACKS["techhouse"]]
+    for i, v in enumerate(voices0):
+        if v in ("rave_stab", "acid"):
+            assert _STACK_W["techhouse"][i] <= 0.15, (v, i)
+
+    styles = [choose_style(_riff(), v) for v in range(300)]
+    assert {s.house_style for s in styles} == set(_HOUSE_MENU[0])
+    for g in DRUM_PATTERNS:
+        if g == "techhouse":
+            continue
+        assert choose_style(_riff(drum_style=g), 7).house_style is None, g
+    # per-sub-style routing holds: bigroom never draws a classic-only role
+    for s in styles:
+        if s.production_mode == "melodic" and s.house_style:
+            assert s.pad_role in _HOUSE_PAD_MENU[s.house_style], s.house_style
+
+
+def test_r20_sparse_instrumentation_guarded():
+    # lead_stack None and pads_on False both occur; the hollow-mid combo
+    # (no stack + no pads + no texture) never survives choose_style.
+    for genre in DRUM_PATTERNS:
+        styles = [choose_style(_riff(drum_style=genre), v) for v in range(300)]
+        assert any(s.lead_stack is None for s in styles), genre
+        assert any(s.lead_stack is not None for s in styles), genre
+        assert any(not s.pads_on for s in styles), genre
+        for s in styles:
+            if s.production_mode == "melodic":
+                assert s.lead_stack is not None or s.pads_on \
+                    or s.texture is not None, (genre, s)
+
+
 def test_style_fields_are_decorrelated_across_nonces():
     """Marginals: every menu option must actually occur across nonces (once a
     menu has >1 option), and no field may be a pure function of another field's
@@ -92,14 +226,21 @@ def test_style_fields_are_decorrelated_across_nonces():
         return [getattr(s, field) for s in styles]
 
     menu = _GENRE_MENU["techhouse"]
+    from kidseq_engine.arrange.style import _HOUSE_PAD_MENU, _HOUSE_RHYTHM
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
                   "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
                   "riff_ornament"):
         seen = set(picks(field))
         want = set(menu[field])
+        if field == "pad_role":   # R21: sub-styles widen the role pool
+            want = {r for m in _HOUSE_PAD_MENU.values() for r in m}
+        if field == "pad_rhythm":
+            want = {i for m, _ in _HOUSE_RHYTHM.values() for i in m}
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
-    assert set(picks("lead_stack")) == set(range(len(LEAD_STACKS["techhouse"])))
+    # R20: None (no stack) joined the menu
+    assert set(picks("lead_stack")) == \
+        set(range(len(LEAD_STACKS["techhouse"]))) | {None}
 
     # structure: build_frac must not determine prog_pick (or vice versa) once
     # both have >1 option. Guarded so it activates as menus widen.
@@ -153,10 +294,12 @@ def test_fx_palette_r15_riser_and_gap_discipline():
     # the big gap is the exception now, not the norm (<= ~1/3 of takes)
     big = sum(1 for p in th if p.gap_beats >= 2.0)
     assert big / len(th) < 0.35
-    # dnb bass menu leads with the reese
+    # dnb bass menu leads with the reese (R19 widened it — owner: "stuck on
+    # reese every time"; the full menu/weight contract lives in the R19 test)
     dnb_bass = {choose_style(_riff(drum_style="dnb"), v).bass_patch
                 for v in range(200)}
-    assert dnb_bass == {"bass_reese", "bass", "bass_acid"}
+    assert dnb_bass == {"bass_reese", "bass_sub_roll", "bass", "bass_pizz",
+                        "bass_acid"}
     # mini_downlifter is out of dnb's candy vocabulary (read cheap)
     for p in per_genre["dnb"]:
         assert "mini_downlifter" not in p.earcandy_menu
@@ -199,9 +342,12 @@ def test_fx_palette_r12_menu_coverage():
     assert {p.rumble_on for p in per_genre["dnb"]} == {False}
     assert {p.odd_loop_on for p in per_genre["techhouse"]} == {True, False}
     assert {p.odd_loop_on for p in per_genre["garage"]} == {True, False}
+    # R22: reggaeton joined the odd-loop club (shaker undercurrent)
+    assert {p.odd_loop_on for p in per_genre["reggaeton"]} == {True, False}
     assert {p.odd_loop_on for p in per_genre["drill"]} == {False}
     assert set(_GENRE_MENU["dnb"]["texture"]) == {"wash", None}
-    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", None}
+    # R22: reggaeton gained the warm-tape crackle bed
+    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", "crackle", None}
 
 
 def test_percussive_photek_variants_r16():

@@ -133,6 +133,55 @@ _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
 # skeleton; hats are the seasoning). Variant 0 = the base pattern untouched;
 # style.drum_variant picks. pattern_for() merges.
 _SEASONING_VOICES = {"hatC", "hatO", "rim", "shaker", "cowbell"}
+_SKELETON_VOICES = {"kick", "snare", "clap", "sub"}
+
+# Base-beat SKELETON variants (R17 — owner: "the drum beat is exactly the same
+# in every song"). Each entry replaces only kick/snare/clap/sub rows; hats stay
+# on the base + seasoning system. Skeleton 0 = the genre's DRUM_PATTERNS entry
+# untouched (legacy). These are HAND-WRITTEN from real genre vocabulary and
+# curated — never generated. The old "skeleton untouchable" rule is now
+# "skeleton ∈ this curated menu" (test_sample_kit pins it).
+DRUM_SKELETONS: dict[str, list[dict[str, list[float]]]] = {
+    "dnb": [
+        # shuffled two-step: the second kick answers on the 'and' of 2 —
+        # the snare backbeat holds, ghosts push into it
+        {"kick":  [1,0,0,0, 0,0,0,.85, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,.20, 1,0,0,.22, 0,.20,0,0, 1,0,.19,0]},
+        # roller: soft mid-bar kicks + busier ghost-snare chatter (the
+        # bustling two-step that carries liquid rollers)
+        {"kick":  [1,0,0,0, 0,0,.65,0, 0,0,1,0, 0,.60,0,0],
+         "snare": [0,0,0,.18, 1,0,.20,0, 0,.24,0,.18, 1,0,0,.22]},
+        # half-feel: ONE snare on beat 3 — the deep half-time switch
+        # (Calibre/dBridge move); kick pickup into the next bar
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, .80,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,.20, 0,0,.22,0]},
+    ],
+    "drill": [
+        # kick-pattern shuffles ARE drill's vocabulary; the beat-3 snare is
+        # the fixed anchor. Displaced pickup cluster:
+        {"kick":  [1,0,0,.55, 0,0,0,0, 0,.90,0,0, .85,0,0,0]},
+        # sparser menace — one mid-bar answer only
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, .90,0,.60,0]},
+    ],
+    "garage": [
+        # 2-step kick displacement: the second kick lands later, third answers
+        {"kick":  [1,0,0,0, 0,0,0,.90, 0,0,.85,0, 0,0,.60,0]},
+    ],
+    "hiphop": [
+        # boom-bap push: kick doubles on the 'and' of 2 (backbeat untouched)
+        {"kick":  [1,0,0,0, 0,0,0,.80, 0,0,1,0, 0,0,0,0]},
+    ],
+    "reggaeton": [
+        # dembow snare untouchable (Tainy); the kick drops beat 2's landing
+        # for a pickup INTO it — motion without breaking the four-pulse
+        {"kick":  [1,0,0,.50, 1,0,0,0, 1,0,0,0, 1,0,0,.45]},
+    ],
+    "techhouse": [
+        # kick stays four-on-floor (the genre); ghost clap answers on the
+        # last 16th of the bar
+        {"clap":  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,.45]},
+    ],
+}
 
 DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
     "techhouse": [
@@ -187,6 +236,9 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         # ghost closed hats between the shaker (a second top layer)
         {"hatC": [.14, 0, .10, 0, .14, 0, .10, 0,
                   .14, 0, .10, 0, .14, 0, .12, 0]},
+        # R22 conga-style rim tumbao — the live-percussion conversation
+        # (owner: reggaeton read more amateur than the rest)
+        {"rim": [0, 0, .28, 0, 0, .25, 0, .28, 0, 0, .28, 0, .25, 0, .28, 0]},
     ],
 }
 
@@ -215,19 +267,27 @@ def render_odd_cell(style: str | None, tempo: float, dur_s: float,
     return buf
 
 
-def pattern_for(style: str | None, variant: int = 0) -> dict | None:
-    """The genre's DRUM_PATTERNS entry with a seasoning overlay merged in.
-    Variant 0 (or an unknown style) = the base pattern object untouched."""
+def pattern_for(style: str | None, variant: int = 0,
+                skeleton: int = 0) -> dict | None:
+    """The genre's DRUM_PATTERNS entry with a base-beat SKELETON variant and a
+    seasoning overlay merged in. (variant 0, skeleton 0) on an unknown style =
+    the base pattern object untouched (identity — tests rely on it)."""
     base = DRUM_PATTERNS.get(style or "")
-    if base is None or variant <= 0:
+    if base is None or (variant <= 0 and skeleton <= 0):
         return base
-    variants = DRUM_VARIANTS.get(style or "")
-    if not variants:
-        return base
-    overlay = variants[(variant - 1) % len(variants)]
-    assert set(overlay) <= _SEASONING_VOICES, (style, sorted(overlay))
     merged = dict(base)
-    merged.update(overlay)
+    if skeleton > 0:
+        skels = DRUM_SKELETONS.get(style or "")
+        if skels:
+            skel = skels[(skeleton - 1) % len(skels)]
+            assert set(skel) <= _SKELETON_VOICES, (style, sorted(skel))
+            merged.update(skel)
+    if variant > 0:
+        variants = DRUM_VARIANTS.get(style or "")
+        if variants:
+            overlay = variants[(variant - 1) % len(variants)]
+            assert set(overlay) <= _SEASONING_VOICES, (style, sorted(overlay))
+            merged.update(overlay)
     return merged
 
 

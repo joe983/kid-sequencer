@@ -59,11 +59,15 @@ def drums_audio(style: str, tempo: float, bars: int, sr: int = SR) -> np.ndarray
 
 
 def drums_audio_pattern(style: str, pattern: dict, tempo: float, bars: int,
-                        sr: int = SR) -> np.ndarray:
+                        sr: int = SR,
+                        takes: dict[str, int] | None = None) -> np.ndarray:
     """drums_audio with an explicit (possibly subset) pattern — the arranger's
-    lite/full section renders. Same renderer priority as drums_audio."""
+    lite/full section renders. Same renderer priority as drums_audio. `takes`
+    swaps sample-kit voices to their KIT_ALTS alternates (sample path only —
+    the soundfont/synth fallbacks have one voice each)."""
     if sample_kit.kit_available(style):
-        out = sample_kit.render_drums_samples(style, tempo, bars, sr, pattern=pattern)
+        out = sample_kit.render_drums_samples(style, tempo, bars, sr,
+                                              pattern=pattern, takes=takes)
     elif default_soundfont():
         out = render_drums_sf(pattern, tempo, bars, sr, style=style)
     else:
