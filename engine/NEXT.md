@@ -1,5 +1,43 @@
 # Where we are / next session
 
+## NEW — Rounds 24–28: battery-two ear feedback ("nearly there for launch") (2026-07-14, NOT deployed)
+Owner on the R17–R23 battery: drill + reggaeton nailed bar minor fx tweaks;
+standouts B/garage_minor, B/drill_major_a, B/hiphop_percussive,
+B/reggaeton_major_a+b, C/hiphop_major_b. Remaining: techhouse mixes boomy;
+dnb half-tempo skeleton wrong song-level; hiphop shouldn't build/drop;
+PERCUSSIVE STILL MUDDY (all genres — "the main thing that lets the engine
+down"); drum variety ≥ every 16 bars; swooshes never up-down repeatedly.
+Owner Q&A on the sparse concept: drums SKELETAL + SPACIOUS (kid's note =
+loudest event); low end = kick+sub-accents OR short stabs (never
+sustained); note treatment ALTERNATES per track (dry+echo-tail vs washed);
+references = early Photek/Source Direct + Burial + Rhythm & Sound.
+
+- **R24 percussive/sparse rework**: `PERC_SKELETAL` stripped patterns
+  REPLACE the full groove in percussive mode (2-3/genre, drops rotate
+  variants; dnb+techhouse kits gained a woodblock rim). `perc_bass_notes`:
+  "stabs" (0.3-beat subs on the skeletal kick) | "accents" (no bassline,
+  one phrase-end 0.75-beat accent) — sustained pedal GONE; pump follows the
+  skeletal kick. `perc_note_style`: "dry_echo" = new `riff_echo` layer
+  (wet-only delay ghost, HP300, −27 LUFS, un-pumped) | "washed" =
+  whole-track riff wet span. `_PERC_TEXTURE` reference flavours
+  (dnb/drill=metal-led, garage/hiphop=crackle-led, techhouse/reggaeton=
+  drone-led). percussive_pads 60/40 pad-FREE. Mix: riff +1 dB, drums −1 dB
+  in percussive (`_PERC_LUFS_DROP`).
+- **R25 techhouse punch**: kit sub lane 1.0→0.55; techhouse drums board
+  90 Hz low-shelf −1.5 (transient carries, boom doesn't).
+- **R26**: dnb half-feel OUT of the song-level menu (`DNB_HALF_SKELETON`);
+  `half_switch` (35% melodic dnb) opens drop 2 on it then snaps back.
+  "static" drummer REMOVED everywhere — sparse(16) is the floor; dnb leans
+  busy/regular [0.40/0.40/0.20].
+- **R27 hiphop flat arc**: riser menu ([False],None), no build LPF climb,
+  `_IMPACT` −12, reverse-crash 0.40, escalation off at render.
+- **R28 swoosh discipline**: sweep candy never consecutive + ≤2/track
+  (remaps to non-sweeps); downlifter 0.8→0.5, 0.35 on riser-led takes.
+- Tuning levers: `PERC_SKELETAL` rows; perc_low/note_style weights;
+  `_PERC_TEXTURE`; riff_echo delay/feedback + `_LAYER_LUFS["riff_echo"]`;
+  techhouse sub-lane gain + shelf; `half_switch` weight; `_DRUMMER_MENU`;
+  hiphop `_IMPACT`/crash menu; sweep cap + downlifter menus.
+
 ## NEW — Rounds 17–23: owner ear-feedback epic on the A–D batteries (2026-07-14, NOT deployed)
 Owner listened to the 96-track A–D grid. Garage + hiphop good (menus left
 alone), drill great except muddy percussive mixes, and: DnB stuck on reese +
