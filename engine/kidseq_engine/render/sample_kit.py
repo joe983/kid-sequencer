@@ -99,6 +99,43 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
     },
 }
 
+# ALTERNATE voice takes (R17 — owner: "I fed you a variety of drum hits and
+# fills … you aren't using them"). genre -> voice -> list of alternate layer
+# lists; take 0 = the KITS default above, take N = KIT_ALTS[g][v][N-1]. Files
+# come from engine_extras.pack (owner's own library, engine-only — the app's
+# drums.pack is untouched), unpacked by scripts/fetch_extras.py. A missing
+# file silently falls back to the default take (determinism holds per-press
+# because prod always has the volume populated).
+KIT_ALTS: dict[str, dict[str, list[list[tuple[str, float]]]]] = {
+    "dnb": {
+        "snare": [
+            [("dnb/snare_alt1.wav", 1.0)],   # DC_Kit14 Snr2 — tighter crack
+            [("dnb/snare_alt2.wav", 1.0)],   # DC_Kit01 Snr3 — short punchy
+            [("dnb/snare_alt3.wav", 1.0)],   # DC_Kit01 Snr4 — ringier
+            [("dnb/snare_alt4.wav", 1.0)],   # DC_Kit02 Snr — big roomy
+        ],
+        "hatC": [
+            [("dnb/hat_alt1.wav", 1.0)],     # DC_Kit14 Hat2
+        ],
+    },
+}
+
+# Sampled FILL one-shots (whole breakbeat fills from the owner's library):
+# genre -> list of (relpath, native_bpm, musical_beats). Placed so the fill
+# ENDS at the build end, playback-rate-stretched native_bpm -> song tempo.
+KIT_FILLS: dict[str, list[tuple[str, float, float]]] = {
+    "dnb": [
+        ("dnb/fill1.wav", 175.0, 1.5),   # DC_Kit01
+        ("dnb/fill2.wav", 175.0, 2.0),   # DC_Kit03
+        ("dnb/fill3.wav", 170.0, 1.5),   # DC_Kit05
+        ("dnb/fill4.wav", 170.0, 1.5),   # DC_Kit14
+    ],
+}
+
+# a sampled fill is only playback-rate-stretched; past ~15% the pitch shift
+# reads wrong, so the renderer falls back to the synthesized fill
+_FILL_MAX_STRETCH = 0.15
+
 # Per-voice mix balance (each one-shot is peak-normalised first, so this is a clean
 # relative balance the user can tune by ear).
 _GAIN = {"kick": 1.0, "sub": 0.95, "snare": 0.78, "clap": 0.72, "hatC": 0.45,
@@ -156,6 +193,52 @@ def _load(rel: str) -> np.ndarray:
     return _cache[rel]
 
 
+def _voice_layers(style: str, name: str, takes: dict[str, int] | None
+                  ) -> list[tuple[str, float]]:
+    """The layer list for a voice honouring the per-press take pick: take 0
+    (or a take whose file is missing) = the KITS default."""
+    default = KITS[style][name]
+    t = int((takes or {}).get(name, 0))
+    if t <= 0:
+        return default
+    alts = KIT_ALTS.get(style, {}).get(name)
+    if not alts:
+        return default
+    alt = alts[(t - 1) % len(alts)]
+    if all((DRUM_DIR / rel).exists() for rel, _ in alt):
+        return alt
+    return default
+
+
+def fill_take_count(style: str | None) -> int:
+    """How many sampled fills the genre has ON DISK (0 without assets)."""
+    fills = KIT_FILLS.get(style or "", [])
+    return sum(1 for rel, _, _ in fills if (DRUM_DIR / rel).exists())
+
+
+def render_fill_sample(style: str | None, take: int, tempo: float,
+                       sr: int = SR) -> tuple[np.ndarray, float] | None:
+    """One sampled breakbeat fill, playback-rate-stretched to the song tempo.
+    Returns (stereo buffer, musical_beats at song tempo) or None when the take
+    is unavailable / the stretch would exceed _FILL_MAX_STRETCH."""
+    fills = KIT_FILLS.get(style or "")
+    if not fills or take <= 0:
+        return None
+    rel, bpm, beats = fills[(take - 1) % len(fills)]
+    if not (DRUM_DIR / rel).exists():
+        return None
+    rate = tempo / bpm   # >1 = song faster than the sample -> play faster
+    if abs(rate - 1.0) > _FILL_MAX_STRETCH:
+        return None
+    one = _load(rel)
+    n_out = max(4, int(round(one.size / rate)))
+    idx = np.linspace(0.0, one.size - 1.0, n_out)
+    stretched = np.interp(idx, np.arange(one.size), one).astype(np.float32)
+    sig = pan_stereo(stretched * np.float32(_GAIN.get("snare", 0.78) * 1.15),
+                     0.0)
+    return sig, beats
+
+
 def _voice_buffer(name: str, layers: list[tuple[str, float]]) -> np.ndarray:
     """Sum a voice's layers into one one-shot, then apply its mix gain."""
     mix: np.ndarray | None = None
@@ -173,11 +256,13 @@ def _voice_buffer(name: str, layers: list[tuple[str, float]]) -> np.ndarray:
 
 
 def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
-                         pattern: dict | None = None) -> np.ndarray:
+                         pattern: dict | None = None,
+                         takes: dict[str, int] | None = None) -> np.ndarray:
     """Render `bars` of the named genre's drums from real CC0 one-shots (mono).
 
     `pattern` overrides the style's DRUM_PATTERNS entry (the arranger passes
-    voice subsets for lite sections); the kit lookup stays by style."""
+    voice subsets for lite sections); the kit lookup stays by style. `takes`
+    swaps voices to KIT_ALTS alternates (per-press variety, R17)."""
     from .drums import DRUM_PATTERNS  # local import avoids a cycle
 
     pat = pattern if pattern is not None else DRUM_PATTERNS.get(style)
@@ -189,7 +274,8 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
     step_s = spb / 4.0  # 16 steps/bar
     buf = np.zeros((bars * bar_samples + sr, 2), dtype=np.float32)
     # pan each mono one-shot to stereo once, up front (not per hit)
-    voices = {name: pan_stereo(_voice_buffer(name, kit[name]), _PAN.get(name, 0.0))
+    voices = {name: pan_stereo(_voice_buffer(name, _voice_layers(style, name, takes)),
+                               _PAN.get(name, 0.0))
               for name in pat if name in kit}
     from .drums import swung_step_offset  # shared groove clock (pump uses it too)
 

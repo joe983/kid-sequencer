@@ -99,6 +99,9 @@ class FxPalette:
     # R15 riser feel (owner: samey, too prominent):
     riser_db: float = -12.0        # riser peak dBFS — varied per press
     riser_color: str = "smooth"    # noise character (fx._RISER_COLORS)
+    # R17: sampled breakbeat fill take (0 = synthesized _fill_pattern; dnb
+    # only for now — sample_kit.KIT_FILLS)
+    fill_take: int = 0
     # R11 ear candy + genre FX vocabularies (all breath-level — Tumay):
     earcandy_every: int = 0        # 0 = off; 4|8 = phrase-boundary event cadence
     earcandy_menu: tuple = ()      # the genre's event kinds (fixed per genre)
@@ -131,6 +134,21 @@ class ArrangeStyle:
     lead_stack: int                # index into the genre's LEAD_STACKS recipes
     fx_palette: FxPalette
     percussive_pads: str = "drone"  # "drone" | "none" — pad-free Photek takes
+    # R17 drum variety (owner: "the drum beat is exactly the same in every
+    # song"): base-beat skeleton variant + per-press sample-take swaps
+    drum_skeleton: int = 0         # index into drums.DRUM_SKELETONS (0 = legacy)
+    snare_take: int = 0            # index into sample_kit.KIT_ALTS snares
+    hat_take: int = 0              # index into sample_kit.KIT_ALTS hats
+
+    @property
+    def drum_takes(self) -> dict[str, int] | None:
+        """Voice->alt-take dict for drums_audio_pattern (None = all default)."""
+        t = {}
+        if self.snare_take:
+            t["snare"] = self.snare_take
+        if self.hat_take:
+            t["hatC"] = self.hat_take
+        return t or None
 
 
 # pad role -> (renderer, patch-or-preset name). The menu validity test walks
@@ -377,6 +395,32 @@ _FILL_MENU: dict[str, list[int]] = {
     "drill": [1], "hiphop": [1], "dnb": [0, 3, 4],
 }
 
+# R17 — base-beat SKELETON variant menus (drums.DRUM_SKELETONS; 0 = legacy).
+# dnb spreads widest (owner: its beat was identical every song); the genres
+# the owner called good stay legacy-heavy.
+_SKELETON_MENU: dict[str, tuple[list, list | None]] = {
+    "dnb": ([0, 1, 2, 3], [0.30, 0.25, 0.25, 0.20]),
+    "drill": ([0, 1, 2], [0.60, 0.25, 0.15]),
+    "garage": ([0, 1], [0.70, 0.30]),
+    "hiphop": ([0, 1], [0.70, 0.30]),
+    "reggaeton": ([0, 1], [0.75, 0.25]),
+    "techhouse": ([0, 1], [0.75, 0.25]),
+}
+
+# R17 — per-press sample-take swaps (sample_kit.KIT_ALTS; 0 = the pack
+# default). Only dnb has alternates so far (the owner's own library).
+_SNARE_TAKES: dict[str, tuple[list, list | None]] = {
+    "dnb": ([0, 1, 2, 3, 4], [0.32, 0.17, 0.17, 0.17, 0.17]),
+}
+_HAT_TAKES: dict[str, tuple[list, list | None]] = {
+    "dnb": ([0, 1], [0.65, 0.35]),
+}
+
+# R17 — sampled breakbeat fill takes (sample_kit.KIT_FILLS; 0 = synthesized).
+_FILL_TAKES: dict[str, tuple[list, list | None]] = {
+    "dnb": ([0, 1, 2, 3, 4], [0.30, 0.175, 0.175, 0.175, 0.175]),
+}
+
 # genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
 # slow tempos never read as broken). The pros cut a real breath — but NOT on
 # every song (owner R15: overused gaps read obvious/ineffective). The big
@@ -514,6 +558,7 @@ def _choose_fx_palette(seed: int, genre: str | None,
         downlifter_on=_pick(seed, "downlifter_on", [True, False], [0.8, 0.2]),
         reverse_crash_on=_pick(seed, "reverse_crash_on", [True, False], [0.8, 0.2]),
         fill_shape=_pick(seed, "fill_shape", _FILL_MENU.get(g, [0])),
+        fill_take=_pick(seed, "fill_take", *_FILL_TAKES.get(g, ([0], None))),
         # None = auto (fx.throw_fits decides); False = suppressed this take
         throw=_pick(seed, "throw", [None, False], [0.75, 0.25]),
         # varied intro colour: dark tease .. wide open (>=15k skips the filter)
@@ -600,6 +645,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         percussive_pads=_pick(seed, "percussive_pads", ["drone", "none"],
                               [0.55, 0.45]),
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
+        drum_skeleton=_pick(seed, "drum_skeleton",
+                            *_SKELETON_MENU.get(riff.drum_style or "",
+                                                ([0], None))),
+        snare_take=_pick(seed, "snare_take",
+                         *_SNARE_TAKES.get(riff.drum_style or "", ([0], None))),
+        hat_take=_pick(seed, "hat_take",
+                       *_HAT_TAKES.get(riff.drum_style or "", ([0], None))),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],

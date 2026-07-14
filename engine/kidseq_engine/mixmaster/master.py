@@ -111,10 +111,14 @@ _HAAS_DELAY_MS = 12.0
 # post-board send levels into the shared reverb (dB); everything else stays
 # dry. fx is deliberately wet (Aisher/Attack: risers sit in a hall — a dry
 # riser reads pasted-on; tails also wash 1-2 bars across section boundaries)
-_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -22.0, "fx": -16.0}
+# drums -22 -> -20 (R17): the SHARED return does more of the drum-space work
+# as the boxy parallel room bus does less — owner: drums sat in a different
+# space from the melody ("boxey").
+_SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -20.0, "fx": -16.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
+# garage/reggaeton 0.50 -> 0.44 (R17): the big room read as midrange box
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
-              "garage": 0.50, "reggaeton": 0.50}   # never exceed 0.55 (metallic)
+              "garage": 0.44, "reggaeton": 0.44}   # never exceed 0.55 (metallic)
 _PREDELAY_S = 0.020
 
 # parallel drum crush, summed under the dry kit (dB by genre)
@@ -123,9 +127,11 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 
 # parallel distorted 'room' bus under the kit (Noisia's overhead-mics trick:
 # programmed drums read as a kit in a space). drill/hiphop stay OFF — their
-# 'drums just need to knock' (Metro Boomin's engineer).
-_ROOM_GAIN_DB = {"dnb": -16.0, "techhouse": -16.0, "garage": -18.0,
-                 "reggaeton": -18.0}
+# 'drums just need to knock' (Metro Boomin's engineer). R17: pulled 4 dB and
+# the board de-boxed (owner: "reverb on the drums … boxey, not in the same
+# space as the rest") — the shared return carries more of the space instead.
+_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
+                 "reggaeton": -21.0}
 
 # drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
 # peaks without transient-dulling pump). Memoryless tanh(k*x)/tanh(k); the
@@ -186,10 +192,13 @@ def _room_bus_board() -> Pedalboard:
     this bus is deliberately NOT impulse-aligned (unlike the NY crush)."""
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=250.0),
-        Distortion(drive_db=12.0),
+        # R17: drive 12 -> 6 and LP 6k -> 8k — the hard-driven, dark, tiny
+        # (0.25) room was the "boxey" tone the owner flagged; softer dirt +
+        # more air keeps the glue without the shoebox
+        Distortion(drive_db=6.0),
         Reverb(room_size=0.25, damping=0.6, wet_level=1.0, dry_level=0.0,
                width=0.6),
-        LowpassFilter(cutoff_frequency_hz=6000.0),
+        LowpassFilter(cutoff_frequency_hz=8000.0),
     ])
 
 
