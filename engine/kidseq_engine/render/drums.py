@@ -236,6 +236,9 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         # ghost closed hats between the shaker (a second top layer)
         {"hatC": [.14, 0, .10, 0, .14, 0, .10, 0,
                   .14, 0, .10, 0, .14, 0, .12, 0]},
+        # R22 conga-style rim tumbao — the live-percussion conversation
+        # (owner: reggaeton read more amateur than the rest)
+        {"rim": [0, 0, .28, 0, 0, .25, 0, .28, 0, 0, .28, 0, .25, 0, .28, 0]},
     ],
 }
 

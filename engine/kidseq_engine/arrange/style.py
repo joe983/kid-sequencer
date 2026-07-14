@@ -370,7 +370,8 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                        bass_patch=["bass_pluck", "bass_pizz", "bass_round",
                                    "bass"],
                        bass_feel=[0, 1, 2, 3],
-                       drum_variant=[0, 1, 2, 3, 4], texture=["wash", None],
+                       drum_variant=[0, 1, 2, 3, 4, 5],
+                       texture=["wash", "crackle", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
@@ -531,11 +532,14 @@ def choose_structure(variation: int = 0) -> StructureStyle:
 
 # genre -> impact boom (f0, f1, level dB). drill/hiphop dive deeper (they
 # already run quiet_fx_db -5); garage keeps it light; dnb slightly higher f0.
+# reggaeton tuned in R22 (owner: it read more amateur than the rest — it was
+# the only genre still on the generic default).
 _IMPACT: dict[str, tuple[float, float, float]] = {
     "drill": (60.0, 28.0, -6.0),
     "hiphop": (60.0, 28.0, -6.0),
     "dnb": (70.0, 35.0, -6.0),
     "garage": (80.0, 35.0, -9.0),
+    "reggaeton": (70.0, 32.0, -7.0),
 }
 
 # genre -> allowed fill shapes (see arrange/render.py _fill_pattern):
@@ -762,6 +766,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
         odd_loop_on=_pick(seed, "odd_loop_on",
                           *(([False, True], [0.65, 0.35]) if g == "techhouse"
                             else ([False, True], [0.70, 0.30]) if g == "garage"
+                            # R22: the shaker odd-cell gives reggaeton drops
+                            # a live-percussion undercurrent
+                            else ([False, True], [0.60, 0.40]) if g == "reggaeton"
                             else ([False], None))),
     )
 

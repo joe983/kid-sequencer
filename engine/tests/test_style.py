@@ -116,6 +116,24 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r22_reggaeton_polish():
+    # R22: reggaeton has a tuned impact (no longer the generic default), the
+    # conga rim overlay is reachable, and the dembow snare stays untouchable
+    # across every skeleton and seasoning variant (Tainy rule).
+    from kidseq_engine.arrange.style import _IMPACT
+    from kidseq_engine.render.drums import (DRUM_SKELETONS, DRUM_VARIANTS,
+                                            pattern_for)
+
+    assert "reggaeton" in _IMPACT
+    assert len(DRUM_VARIANTS["reggaeton"]) == 5
+    assert max(_GENRE_MENU["reggaeton"]["drum_variant"]) == \
+        len(DRUM_VARIANTS["reggaeton"])
+    base_snare = pattern_for("reggaeton", 0)["snare"]
+    for sk in range(len(DRUM_SKELETONS["reggaeton"]) + 1):
+        for dv in range(len(DRUM_VARIANTS["reggaeton"]) + 1):
+            assert pattern_for("reggaeton", dv, sk)["snare"] == base_snare
+
+
 def test_r21_house_substyles():
     # R21: techhouse splits into classic/bigroom/minimal/detroit; every
     # sub-style's pads/stacks/rhythms are renderable; the rave flavours are
@@ -300,9 +318,12 @@ def test_fx_palette_r12_menu_coverage():
     assert {p.rumble_on for p in per_genre["dnb"]} == {False}
     assert {p.odd_loop_on for p in per_genre["techhouse"]} == {True, False}
     assert {p.odd_loop_on for p in per_genre["garage"]} == {True, False}
+    # R22: reggaeton joined the odd-loop club (shaker undercurrent)
+    assert {p.odd_loop_on for p in per_genre["reggaeton"]} == {True, False}
     assert {p.odd_loop_on for p in per_genre["drill"]} == {False}
     assert set(_GENRE_MENU["dnb"]["texture"]) == {"wash", None}
-    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", None}
+    # R22: reggaeton gained the warm-tape crackle bed
+    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", "crackle", None}
 
 
 def test_percussive_photek_variants_r16():
