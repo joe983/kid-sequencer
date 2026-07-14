@@ -141,6 +141,10 @@ class ArrangeStyle:
     hat_take: int = 0              # index into sample_kit.KIT_ALTS hats
     # R18: in-drop gesture cadence ("static" = never — today's behaviour)
     drummer: str = "static"        # "static" | "sparse" | "regular" | "busy"
+    # R19: staccato articulation lever (multiplies bass-note durations) +
+    # per-press sidechain pump depth (None = the genre preset)
+    bass_gate: float = 1.0
+    pump_depth: float | None = None
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -285,47 +289,92 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
     # Bass: plucky rolling line first, reese as the darker alt.
     "techhouse": _menu(pad_role=["pluck", "supersaw", "newage", "glass"],
                        pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass", "bass_acid"],
-                       bass_feel=[0, 1, 2],
+                       bass_patch=["bass_pluck", "bass_funk", "bass",
+                                   "bass_acid", "bass_pizz"],
+                       bass_feel=[0, 1, 2, 3, 4],
                        drum_variant=[0, 1, 2, 3], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # dnb: supersaw wash (its pad identity) + cinematic strings/choir/glass;
-    # the reese IS dnb bass — feels vary; acid as the neuro-ish alt
+    # reese leads but no longer dominates (R19 — owner: "stuck on reese every
+    # time"): rolling clean sub + stab/pizz colours join the menu
     "dnb": _menu(pad_role=["supersaw", "strings_pad", "choir", "glass"],
                  pad_rhythm=[0, 1],
-                 bass_patch=["bass_reese", "bass", "bass_acid"],
-                 bass_feel=[0, 1, 2, 3],
+                 bass_patch=["bass_reese", "bass_sub_roll", "bass",
+                             "bass_pizz", "bass_acid"],
+                 bass_feel=[0, 1, 2, 3, 4, 5],
                  drum_variant=[0, 1, 2, 3], texture=["wash", None],
                  riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
     # with octave pops; FM knock as the alt colour.
     "garage": _menu(pad_role=["organ", "pluck", "clav", "brass_stab"],
                     pad_rhythm=[0, 1],
-                    bass_patch=["bass_pluck", "bass_fm", "bass"],
-                    bass_feel=[0, 1, 2],
+                    bass_patch=["bass_pluck", "bass_fm", "bass_funk", "bass"],
+                    bass_feel=[0, 1, 2, 3],
                     drum_variant=[0, 1, 2, 3], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # drill: dark closed-down sustain; cinematic strings + dark choir
     # (UK drill's string/choir-loop DNA). 808 sub + round alt. Breaks stay low.
+    # (Owner: drill sounds great — menus deliberately untouched in R19.)
     "drill": _menu(pad_role=["dark", "strings_pad", "choir"], pad_rhythm=[0, 1],
                    bass_patch=["bass_sub808", "bass_round"], bass_feel=[0, 1],
                    drum_variant=[0, 1, 2], texture=["drone", None],
                    riff_break_variant=["sparse_low", "call_response"]),
     # hiphop: e-piano comping (boom-bap keys); warm pad / FM tines / clav.
-    # 808 / round sub / FM knock / reese bass colours.
+    # 808 / round sub / FM knock / funk-pluck bass colours.
     "hiphop": _menu(pad_role=["epiano", "warm", "fmep", "clav"], pad_rhythm=[0, 1],
-                    bass_patch=["bass_sub808", "bass_round", "bass_fm", "bass"],
-                    bass_feel=[0, 1],
+                    bass_patch=["bass_sub808", "bass_round", "bass_funk",
+                                "bass_fm", "bass"],
+                    bass_feel=[0, 1, 2],
                     drum_variant=[0, 1, 2, 3], texture=["crackle", None],
                     riff_break_variant=["sparse_low", "call_response"]),
     # reggaeton: pizzicato dembow-accent plucks; nylon guitar (the reggaeton
-    # sound) / warm / strings alts. Tresillo bass with an octave answer.
+    # sound) / warm / strings alts. Tresillo bass with an octave answer;
+    # short plucked colours lead (R19 — the real-world dembow bass is short).
     "reggaeton": _menu(pad_role=["pizz", "nylon", "warm", "strings_pad"],
                        pad_rhythm=[0, 1],
-                       bass_patch=["bass_pluck", "bass_round", "bass"],
-                       bass_feel=[0, 1, 2],
+                       bass_patch=["bass_pluck", "bass_pizz", "bass_round",
+                                   "bass"],
+                       bass_feel=[0, 1, 2, 3],
                        drum_variant=[0, 1, 2, 3, 4], texture=["wash", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
+}
+
+# R19 explicit bass weights (owner: reese ~50% read as "every time"; bass
+# variety per genre). None = the signature-first default. Lengths must match
+# the menus above.
+_BASS_PATCH_W: dict[str, list[float]] = {
+    "techhouse": [0.35, 0.20, 0.15, 0.15, 0.15],
+    "dnb": [0.35, 0.25, 0.15, 0.15, 0.10],
+    "garage": [0.45, 0.20, 0.20, 0.15],
+    "hiphop": [0.45, 0.20, 0.15, 0.10, 0.10],
+    "reggaeton": [0.40, 0.25, 0.20, 0.15],
+}
+_BASS_FEEL_W: dict[str, list[float]] = {
+    # offbeat total ~0.45 (owner: "doesn't always need the offbeat pump")
+    "techhouse": [0.30, 0.20, 0.15, 0.20, 0.15],
+    # the whole-bar reese drone (index 2) deweighted hard
+    "dnb": [0.25, 0.20, 0.10, 0.15, 0.20, 0.10],
+    "garage": [0.30, 0.30, 0.25, 0.15],
+    "hiphop": [0.45, 0.35, 0.20],
+    "reggaeton": [0.25, 0.35, 0.20, 0.20],
+}
+
+# R19 staccato articulation lever: multiplies every bass-note duration.
+# drill/hiphop keep their 808 tails (that IS the genre); everyone else gets a
+# real chance of a short-gated bassline.
+_BASS_GATE: dict[str, tuple[list, list | None]] = {
+    "techhouse": ([1.0, 0.6, 0.35], [0.50, 0.30, 0.20]),
+    "dnb": ([1.0, 0.6, 0.35], [0.60, 0.25, 0.15]),
+    "garage": ([1.0, 0.6], [0.70, 0.30]),
+    "hiphop": ([1.0, 0.6], [0.80, 0.20]),
+    "reggaeton": ([1.0, 0.6, 0.35], [0.50, 0.30, 0.20]),
+    "drill": ([1.0], None),
+}
+
+# R19 per-press sidechain pump depth (None = the genre preset). Techhouse
+# only: pump_depth 0.50 on every take was part of the "cheesy" read.
+_PUMP_MENU: dict[str, tuple[list, list | None]] = {
+    "techhouse": ([None, 0.35, 0.22], [0.50, 0.30, 0.20]),
 }
 
 
@@ -651,8 +700,10 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         # clamped there) — best colour favoured, all candidates cover the riff
         prog_pick=_pick(seed, "progression", [0, 1, 2, 3],
                         [0.40, 0.30, 0.20, 0.10]),
-        bass_patch=_pick(seed, "bass_patch", menu["bass_patch"]),
-        bass_feel=_pick(seed, "bass_feel", menu["bass_feel"]),
+        bass_patch=_pick(seed, "bass_patch", menu["bass_patch"],
+                         _BASS_PATCH_W.get(riff.drum_style or "")),
+        bass_feel=_pick(seed, "bass_feel", menu["bass_feel"],
+                        _BASS_FEEL_W.get(riff.drum_style or "")),
         pad_role=_pick(seed, "pad_role", pad_menu),
         pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
@@ -673,6 +724,11 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         drummer=_pick(seed, "drummer",
                       *_DRUMMER_MENU.get(riff.drum_style or "",
                                          (["static"], None))),
+        bass_gate=_pick(seed, "bass_gate",
+                        *_BASS_GATE.get(riff.drum_style or "", ([1.0], None))),
+        pump_depth=_pick(seed, "pump_depth",
+                         *_PUMP_MENU.get(riff.drum_style or "",
+                                         ([None], None))),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],

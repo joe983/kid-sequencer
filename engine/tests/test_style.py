@@ -81,6 +81,41 @@ def test_every_genre_has_a_menu_and_options_are_renderable():
                 assert gain_db <= -8.0, (genre, voice, gain_db)
 
 
+def test_r19_bass_menus_weights_and_levers():
+    # explicit weight lists must match their menus; feel indices must exist;
+    # gate/pump levers pick from their menus and default sanely.
+    from kidseq_engine.arrange import _BASS_FEELS
+    from kidseq_engine.arrange.style import (_BASS_FEEL_W, _BASS_GATE,
+                                             _BASS_PATCH_W, _PUMP_MENU)
+
+    for genre, w in _BASS_PATCH_W.items():
+        assert len(w) == len(_GENRE_MENU[genre]["bass_patch"]), genre
+        assert abs(sum(w) - 1.0) < 1e-6, genre
+    for genre, w in _BASS_FEEL_W.items():
+        assert len(w) == len(_GENRE_MENU[genre]["bass_feel"]), genre
+    for genre in DRUM_PATTERNS:
+        feels = _BASS_FEELS.get(genre, [])
+        for i in _GENRE_MENU[genre]["bass_feel"]:
+            assert i < len(feels), (genre, i, len(feels))
+    # owner asks encoded: reese no longer ~50% of dnb; drill untouched
+    dnb = _GENRE_MENU["dnb"]["bass_patch"]
+    assert _BASS_PATCH_W["dnb"][dnb.index("bass_reese")] <= 0.35
+    assert "bass_pizz" in dnb and "bass_sub_roll" in dnb
+    assert _GENRE_MENU["drill"]["bass_patch"] == ["bass_sub808", "bass_round"]
+    assert _BASS_GATE["drill"] == ([1.0], None)
+    # gate + pump land across variations (techhouse has both menus)
+    r = _riff()
+    styles = [choose_style(r, v) for v in range(200)]
+    assert {s.bass_gate for s in styles} == {1.0, 0.6, 0.35}
+    assert {s.pump_depth for s in styles} == {None, 0.35, 0.22}
+    dnb_styles = [choose_style(_riff("C", 174, "dnb", "piano"), v)
+                  for v in range(300)]
+    assert {s.bass_patch for s in dnb_styles} == set(dnb)
+    reese = sum(1 for s in dnb_styles if s.bass_patch == "bass_reese")
+    assert reese / len(dnb_styles) < 0.5   # "stuck on reese" is gone
+    assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
+
+
 def test_style_fields_are_decorrelated_across_nonces():
     """Marginals: every menu option must actually occur across nonces (once a
     menu has >1 option), and no field may be a pure function of another field's
@@ -153,10 +188,12 @@ def test_fx_palette_r15_riser_and_gap_discipline():
     # the big gap is the exception now, not the norm (<= ~1/3 of takes)
     big = sum(1 for p in th if p.gap_beats >= 2.0)
     assert big / len(th) < 0.35
-    # dnb bass menu leads with the reese
+    # dnb bass menu leads with the reese (R19 widened it — owner: "stuck on
+    # reese every time"; the full menu/weight contract lives in the R19 test)
     dnb_bass = {choose_style(_riff(drum_style="dnb"), v).bass_patch
                 for v in range(200)}
-    assert dnb_bass == {"bass_reese", "bass", "bass_acid"}
+    assert dnb_bass == {"bass_reese", "bass_sub_roll", "bass", "bass_pizz",
+                        "bass_acid"}
     # mini_downlifter is out of dnb's candy vocabulary (read cheap)
     for p in per_genre["dnb"]:
         assert "mini_downlifter" not in p.earcandy_menu

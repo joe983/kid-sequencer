@@ -571,6 +571,12 @@ _FEEL_LONG_SUB = [(0.0, 3.0, 106), (3.0, 1.0, 98)]
 
 # Per-genre bass FEELS: list of variants, each a list of (start, dur, vel)
 # root hits within one bar. Variant 0 = the genre's current signature.
+# R19 shared short-note feels (owner: "all the bass sounds tend to be
+# sustained for a long time … never a short sound like in some funk tunes")
+_FEEL_FUNK_SYNC = [(0.0, 0.22, 106), (0.75, 0.18, 92), (1.25, 0.18, 98),
+                   (1.75, 0.22, 94), (2.5, 0.22, 104), (3.25, 0.18, 96),
+                   (3.75, 0.18, 92)]
+
 _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
     "techhouse": [
         _FEEL_OFFBEAT,
@@ -580,6 +586,11 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         # offbeats answering an octave up (4th tuple slot = octave shift)
         [(0.5, 0.45, 104, 0), (1.5, 0.45, 100, 12),
          (2.5, 0.45, 104, 0), (3.5, 0.45, 100, 12)],
+        # R19 ON-beat pumping quarters (owner: "doesn't always need the
+        # offbeat pumping bass")
+        [(0.0, 0.7, 106), (1.0, 0.7, 100), (2.0, 0.7, 104), (3.0, 0.7, 100)],
+        # R19 funk 16th syncopation (short plucked line)
+        _FEEL_FUNK_SYNC,
     ],
     "garage": [
         _FEEL_OFFBEAT,
@@ -588,6 +599,8 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         # 2-step with octave pops on the skips
         [(0.0, 0.9, 106, 0), (1.75, 0.45, 98, 12),
          (2.5, 0.9, 104, 0), (3.5, 0.45, 98, 12)],
+        # R19 funk 16th syncopation
+        _FEEL_FUNK_SYNC,
     ],
     "reggaeton": [
         _FEEL_OFFBEAT,
@@ -595,6 +608,9 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         [(0.0, 1.4, 106), (1.5, 1.4, 100), (3.0, 0.9, 98)],
         # tresillo with the last push answered an octave up
         [(0.0, 1.4, 106, 0), (1.5, 1.4, 100, 0), (3.0, 0.9, 98, 12)],
+        # R19 staccato tresillo — short plucked dembow (the real-world
+        # reggaeton bass is short far more often than sustained)
+        [(0.0, 0.35, 106), (1.5, 0.35, 100), (3.0, 0.3, 98)],
     ],
     "dnb": [
         _FEEL_DNB_TWOSTEP,
@@ -604,6 +620,11 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         [(0.0, 3.9, 104)],
         # two-step with the answer an octave up
         [(0.0, 1.5, 106, 0), (2.5, 1.0, 100, 12)],
+        # R19 rolling-sub 8ths (the classic non-reese dnb engine room)
+        [(0.0, 0.4, 106), (0.5, 0.35, 94), (1.0, 0.4, 100), (1.5, 0.35, 94),
+         (2.0, 0.4, 104), (2.5, 0.35, 94), (3.0, 0.4, 100), (3.5, 0.35, 94)],
+        # R19 stab bass — short hits answering the two-step
+        [(0.0, 0.3, 108), (2.5, 0.3, 102), (3.5, 0.2, 94)],
     ],
     "drill": [
         _FEEL_LONG_SUB,
@@ -614,6 +635,8 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         _FEEL_LONG_SUB,
         # kick-locked boom-bap roots
         [(0.0, 2.4, 106), (2.5, 1.4, 100)],
+        # R19 short funk-leaning roots (boom-bap upright feel)
+        [(0.0, 0.6, 106), (1.75, 0.3, 94), (2.5, 0.6, 102), (3.75, 0.25, 92)],
     ],
 }
 
@@ -634,13 +657,16 @@ def bass_feel_for(genre: str | None, variant: int = 0) -> list[tuple[float, floa
 
 
 def bass_notes(riff: Riff, prog: list[int], bars: int,
-               feel: list[tuple] | None = None) -> list[Note]:
+               feel: list[tuple] | None = None,
+               gate: float = 1.0) -> list[Note]:
     """Chord roots around C2–B2 in a genre feel — `feel` is a list of
     (start_beat, dur, vel[, octave_shift]) hits per bar (default: the genre's
     legacy bucket). The optional 4th element lifts a hit an octave (C3–B3 —
     the classic octave-pop bassline move); the pitch CLASS is always the chord
     root (the root-pc test relies on it). Pitches are absolute (no -24 shift
-    downstream — these are not grid notes)."""
+    downstream — these are not grid notes). `gate` (R19) multiplies every
+    duration — the staccato articulation lever (1.0 = legacy, floor 0.12
+    beats so a hit never vanishes)."""
     feel = feel if feel is not None else _default_feel(riff.drum_style)
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
@@ -651,6 +677,8 @@ def bass_notes(riff: Riff, prog: list[int], bars: int,
         for hit in feel:
             start, dur, vel = hit[0], hit[1], hit[2]
             shift = hit[3] if len(hit) > 3 else 0
+            if gate != 1.0:
+                dur = max(0.12, dur * gate)
             out.append(Note(pitch=pitch + shift, velocity=vel,
                             start_beats=bar0 + start, dur_beats=dur))
     return out

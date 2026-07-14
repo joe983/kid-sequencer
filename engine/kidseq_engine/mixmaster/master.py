@@ -147,6 +147,11 @@ _BASS_SAT_WET = {"dnb": 0.35, "techhouse": 0.25, "garage": 0.20,
 _BASS_SAT_SPLIT_HZ = 150.0
 _BASS_SAT_DRIVE = 2.5
 
+# R19 (owner: "bass can often sound dry, underproduced compared to rest of
+# the mix"): harmonics-only send into the shared reverb return — the band
+# above _BASS_SAT_SPLIT_HZ at this level; the sub never leaves the centre.
+_BASS_SEND_DB = -18.0
+
 
 def _bass_band_sat(x: np.ndarray, sr: int, genre: str | None) -> np.ndarray:
     """Split the bass at _BASS_SAT_SPLIT_HZ; the sub band passes CLEAN, the
@@ -658,7 +663,8 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            kick_onsets: list[int], lufs_target: float | None = None,
            tempo: float = 120.0,
            riff_wet_spans: list[tuple[int, int]] | None = None,
-           section_spans: list[tuple[str, int, int]] | None = None) -> MasterResult:
+           section_spans: list[tuple[str, int, int]] | None = None,
+           pump_depth: float | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -677,6 +683,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
 
     preset = preset_for(genre)
     target = lufs_target if lufs_target is not None else preset.lufs_target
+    # R19: per-press pump override (ArrangeStyle.pump_depth via the caller) —
+    # techhouse's fixed 0.50 pump on every take was part of the "cheesy" read
+    pump_base = pump_depth if pump_depth is not None else preset.pump_depth
 
     # Coerce every layer to stereo (N, 2); mono inputs (e.g. tests) are upmixed.
     st_layers = {name: as_stereo(buf) for name, buf in layers.items() if buf.size}
@@ -742,9 +751,19 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
                 send_acc += proc * curve[:, None]
             else:
                 send_acc += proc * (10.0 ** (send_db / 20.0))
+        elif name == "bass":
+            # R19 (owner: bass reads dry/underproduced vs the rest): the
+            # bass's HARMONICS visit the shared room like every other layer;
+            # the sub band stays bone dry and mono (Noisia doctrine — same
+            # split as _bass_band_sat).
+            from scipy.signal import butter, sosfilt
+            sos = butter(4, _BASS_SAT_SPLIT_HZ, btype="low", fs=sr,
+                         output="sos")
+            low = sosfilt(sos, proc, axis=0).astype(np.float32)
+            send_acc += (proc - low) * (10.0 ** (_BASS_SEND_DB / 20.0))
 
         if name in _PUMPED_LAYERS:
-            depth = min(_PUMP_DEPTH_CAP, preset.pump_depth * _PUMP_MULT[name])
+            depth = min(_PUMP_DEPTH_CAP, pump_base * _PUMP_MULT[name])
             if name == "bass":
                 # multiband duck (Pretolesi: 'fix the bass, not the kick') —
                 # only the band clashing with the kick ducks fully; the
@@ -768,7 +787,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         ret = _process(sent, _reverb_return_board(genre), sr)[:n]
         if ret.shape[0] < n:
             ret = np.pad(ret, ((0, n - ret.shape[0]), (0, 0)))
-        ret = ret * (1.0 - 0.8 * preset.pump_depth * shape)[:, None]
+        ret = ret * (1.0 - 0.8 * pump_base * shape)[:, None]
         bus += ret
 
     # --- master-bus endgame -------------------------------------------------

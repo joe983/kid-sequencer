@@ -573,7 +573,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
 
         if sec.bass:
             feel = bass_feel_for(riff.drum_style, style.bass_feel)
-            notes = bass_notes(riff, prog, sec.bars, feel=feel)
+            notes = bass_notes(riff, prog, sec.bars, feel=feel,
+                               gate=style.bass_gate)
             # R18: the bass answers the drummer's fill bars — the bar's final
             # note pops an octave (small, feel-aware; drums and bass move
             # together the way a live rhythm section does)

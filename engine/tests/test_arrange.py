@@ -88,6 +88,21 @@ def test_drummer_scheduler_is_deterministic_and_disciplined():
     assert ks["kick"][0] == base["kick"][0]
 
 
+def test_bass_gate_shortens_durations_only():
+    # R19 articulation lever: pitches/starts/velocities untouched, durations
+    # scaled with a 0.12-beat floor; gate 1.0 = bit-identical legacy
+    riff = _riff()
+    prog = choose_progression(riff)
+    base = bass_notes(riff, prog, 4)
+    assert bass_notes(riff, prog, 4, gate=1.0) == base
+    short = bass_notes(riff, prog, 4, gate=0.35)
+    assert len(short) == len(base)
+    for a, b in zip(base, short):
+        assert (a.pitch, a.start_beats, a.velocity) == \
+               (b.pitch, b.start_beats, b.velocity)
+        assert abs(b.dur_beats - max(0.12, a.dur_beats * 0.35)) < 1e-9
+
+
 def test_every_bank_progression_is_diatonic_in_every_key():
     for key in _KEYS:
         _, steps = _scale_steps(key)
