@@ -116,6 +116,20 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r20_sparse_instrumentation_guarded():
+    # lead_stack None and pads_on False both occur; the hollow-mid combo
+    # (no stack + no pads + no texture) never survives choose_style.
+    for genre in DRUM_PATTERNS:
+        styles = [choose_style(_riff(drum_style=genre), v) for v in range(300)]
+        assert any(s.lead_stack is None for s in styles), genre
+        assert any(s.lead_stack is not None for s in styles), genre
+        assert any(not s.pads_on for s in styles), genre
+        for s in styles:
+            if s.production_mode == "melodic":
+                assert s.lead_stack is not None or s.pads_on \
+                    or s.texture is not None, (genre, s)
+
+
 def test_style_fields_are_decorrelated_across_nonces():
     """Marginals: every menu option must actually occur across nonces (once a
     menu has >1 option), and no field may be a pure function of another field's
@@ -134,7 +148,9 @@ def test_style_fields_are_decorrelated_across_nonces():
         want = set(menu[field])
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
-    assert set(picks("lead_stack")) == set(range(len(LEAD_STACKS["techhouse"])))
+    # R20: None (no stack) joined the menu
+    assert set(picks("lead_stack")) == \
+        set(range(len(LEAD_STACKS["techhouse"]))) | {None}
 
     # structure: build_frac must not determine prog_pick (or vice versa) once
     # both have >1 option. Guarded so it activates as menus widen.

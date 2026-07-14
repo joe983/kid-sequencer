@@ -131,7 +131,7 @@ class ArrangeStyle:
     riff_break_variant: str        # riff transform used in breaks
     riff_ornament: str             # primary vary_end bar kind (vary_bar)
     riff_ornament_b: str           # secondary kind — alternates with primary
-    lead_stack: int                # index into the genre's LEAD_STACKS recipes
+    lead_stack: int | None         # LEAD_STACKS recipe index; None = no stack
     fx_palette: FxPalette
     percussive_pads: str = "drone"  # "drone" | "none" — pad-free Photek takes
     # R17 drum variety (owner: "the drum beat is exactly the same in every
@@ -145,6 +145,9 @@ class ArrangeStyle:
     # per-press sidechain pump depth (None = the genre preset)
     bass_gate: float = 1.0
     pump_depth: float | None = None
+    # R20: pads render switch for melodic takes (percussive has its own
+    # percussive_pads); guarded so lead+pads never BOTH drop without texture
+    pads_on: bool = True
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -376,6 +379,18 @@ _BASS_GATE: dict[str, tuple[list, list | None]] = {
 _PUMP_MENU: dict[str, tuple[list, list | None]] = {
     "techhouse": ([None, 0.35, 0.22], [0.50, 0.30, 0.20]),
 }
+
+# R20 sparse instrumentation (owner: "don't have to use all types of
+# instruments in every song — some tracks don't need pads/organs/string long
+# sounds"): probability the lead stack sits out, and the pads on/off menu.
+# choose_style guards the combination: a take never drops BOTH unless a
+# texture bed carries the mid.
+_LEAD_NONE_W: dict[str, float] = {"drill": 0.30, "hiphop": 0.30}
+_LEAD_NONE_DEFAULT = 0.25
+_PADS_ON: dict[str, tuple[list, list | None]] = {
+    "drill": ([True, False], [0.70, 0.30]),
+}
+_PADS_ON_DEFAULT: tuple[list, list | None] = ([True, False], [0.80, 0.20])
 
 
 def _menu_for(genre: str | None) -> dict[str, list]:
@@ -693,6 +708,20 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     # percussive track converge) — dark is the anchor, colours per genre
     pad_menu = menu["pad_role"] if mode == "melodic" else \
         _DRONE_ROLES.get(riff.drum_style or "", ["dark", "glass"])
+    # R20 sparse draws (hoisted so the guard below can correct the combo):
+    texture = _pick(seed, "texture", texture_menu)
+    n_stacks = len(LEAD_STACKS.get(riff.drum_style or "", [[]]))
+    none_w = _LEAD_NONE_W.get(riff.drum_style or "", _LEAD_NONE_DEFAULT)
+    lead_stack = _pick(seed, "lead_stack",
+                       list(range(n_stacks)) + [None],
+                       [(1.0 - none_w) / n_stacks] * n_stacks + [none_w])
+    pads_on = _pick(seed, "pads_on",
+                    *_PADS_ON.get(riff.drum_style or "", _PADS_ON_DEFAULT))
+    # the mid must not go hollow: a take never drops BOTH the lead stack and
+    # the pads unless a texture bed is carrying (percussive mode always has
+    # texture, so this only ever bites melodic takes)
+    if lead_stack is None and not pads_on and texture is None:
+        pads_on = True
     return ArrangeStyle(
         production_mode=mode,
         structure=choose_structure(variation),
@@ -707,7 +736,7 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         pad_role=_pick(seed, "pad_role", pad_menu),
         pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
-        texture=_pick(seed, "texture", texture_menu),
+        texture=texture,
         percussive_pedal=_pick(seed, "percussive_pedal", [0, 1], [0.6, 0.4]),
         # the TRUE Photek treatment (owner R16): some percussive takes carry
         # NO pads/drones at all — just hits, bass pedal and the texture bed
@@ -735,9 +764,8 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                                      [0.25, 0.20, 0.20, 0.15, 0.10, 0.10])),
         riff_ornament_b=_pick(seed, "riff_ornament_b",
                               [k for k in menu["riff_ornament"] if k != _orn]),
-        lead_stack=_pick(seed, "lead_stack",
-                         list(range(len(LEAD_STACKS.get(riff.drum_style or "",
-                                                        [[]]))))),
+        lead_stack=lead_stack,
+        pads_on=pads_on,
         fx_palette=_choose_fx_palette(seed, riff.drum_style,
                                       percussive=(mode == "percussive")),
     )

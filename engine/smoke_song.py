@@ -56,7 +56,8 @@ def main() -> None:
     print(f"drums: skeleton={st.drum_skeleton} variant={st.drum_variant} "
           f"drummer={st.drummer} snare_take={st.snare_take} "
           f"hat_take={st.hat_take} fill_take={st.fx_palette.fill_take} "
-          f"bass_gate={st.bass_gate:g} pump={st.pump_depth}")
+          f"bass_gate={st.bass_gate:g} pump={st.pump_depth} "
+          f"lead_stack={st.lead_stack} pads_on={st.pads_on}")
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
           f"starve={p.bass_starve_bars} "

@@ -512,10 +512,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # main voice — doubling the original riff against a developed
                 # phrase played two melodies at once (owner heard it as
                 # discordance in the garage take).
-                stk = _render_lead_stack(span_notes, riff.tempo, 1,
-                                         span_beats, sr, riff.drum_style,
-                                         style.lead_stack)
-                _add_at(layers["riff"], stk, at)
+                # R20: some takes carry NO stack — the kid's voice + rhythm
+                # section stand alone (owner: not every song needs layers)
+                if style.lead_stack is not None:
+                    stk = _render_lead_stack(span_notes, riff.tempo, 1,
+                                             span_beats, sr, riff.drum_style,
+                                             style.lead_stack)
+                    _add_at(layers["riff"], stk, at)
             else:
                 notes = riff_variant(riff.notes, sec.riff_variant)
                 if notes:
@@ -610,6 +613,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 notes = drone_notes(riff, sec.bars, voicing=style.pad_rhythm)
                 sig = _render_pads(notes, riff.tempo, span_beats, sr,
                                    style.pad_role)
+            elif not style.pads_on:
+                # R20 sparse take: no pads/long sounds — riff + bass + drums
+                # (+ texture, guaranteed by choose_style when the stack is
+                # also out) carry the whole arrangement
+                sig = np.zeros((0, 2), dtype=np.float32)
             else:
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
@@ -810,7 +818,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 g[-ramp:] = np.linspace(g[-1], 1.0, ramp)
                 layers[lname][a:e2] *= g[:, None]
             if sec.pads and style.structure.escalation == "full" and \
-                    not (percussive and style.percussive_pads == "none"):
+                    not (percussive and style.percussive_pads == "none") and \
+                    (percussive or style.pads_on):
                 # pad-free Photek takes stay pad-free through escalation too;
                 # drone takes escalate with the DRONE an octave up (chord
                 # doubles would break the no-chord-ops percussive doctrine)
