@@ -684,6 +684,33 @@ def bass_notes(riff: Riff, prog: list[int], bars: int,
     return out
 
 
+def perc_bass_notes(riff: Riff, pedal_prog: list[int], bars: int, mode: str,
+                    kick_steps: list[int] | None = None) -> list[Note]:
+    """R24 percussive low end (owner: NEVER a sustained pedal — "a mix of
+    kick-carries-it-with-sub-accents and short rhythmic sub stabs").
+
+    mode "stabs": short gated sub notes locked to the skeletal kick
+    positions (dur 0.3 beats). mode "accents": NO bassline — one short sub
+    note lands as an accent at the end of every 4-bar phrase. Pitch classes
+    follow the pedal degrees (root / root->fifth walk); everything stays in
+    C2..B2, nothing rings."""
+    semi, steps = _scale_steps(riff.key)
+    out: list[Note] = []
+    for b in range(bars):
+        root_pc = (semi + steps[_chord_for_bar(b, pedal_prog)]) % 12
+        pitch = _fold(36 + root_pc, 36, 47)  # C2..B2
+        bar0 = b * 4.0
+        if mode == "accents":
+            if b % 4 == 3:   # the phrase-end accent, off the downbeat
+                out.append(Note(pitch=pitch, velocity=106,
+                                start_beats=bar0 + 2.5, dur_beats=0.75))
+            continue
+        for step in (kick_steps or [0]):
+            out.append(Note(pitch=pitch, velocity=104,
+                            start_beats=bar0 + step / 4.0, dur_beats=0.3))
+    return out
+
+
 # Per-genre pad RHYTHMS: list of variants, each a list of (start_beat, dur)
 # chord onsets within one bar. Variant 0 = the genre's signature comping;
 # style.pad_rhythm picks. Sustained genres keep the whole-bar wash.

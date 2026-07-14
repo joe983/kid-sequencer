@@ -50,6 +50,8 @@ def test_every_genre_kit_covers_its_pattern_voices():
     from kidseq_engine.render.drums import (DRUM_SKELETONS, DRUM_VARIANTS,
                                             pattern_for)
 
+    from kidseq_engine.render.drums import PERC_SKELETAL
+
     for style, pat in DRUM_PATTERNS.items():
         kit = sample_kit.KITS.get(style)
         assert kit is not None, f"no sample kit defined for genre {style!r}"
@@ -60,6 +62,10 @@ def test_every_genre_kit_covers_its_pattern_voices():
                 p = pattern_for(style, variant, skel)
                 missing = [v for v in p if v not in kit]
                 assert not missing, (style, variant, skel, missing)
+        # R24 skeletal percussive patterns hit real voices too
+        for i, sk in enumerate(PERC_SKELETAL.get(style, [])):
+            missing = [v for v in sk if v not in kit]
+            assert not missing, (style, f"skeletal:{i}", missing)
 
 
 def test_drum_variants_never_touch_the_genre_skeleton():

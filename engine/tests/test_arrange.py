@@ -88,6 +88,44 @@ def test_drummer_scheduler_is_deterministic_and_disciplined():
     assert ks["kick"][0] == base["kick"][0]
 
 
+def test_r24_perc_bass_never_sustains():
+    # R24 (owner): percussive low end is short stabs or one phrase-end
+    # accent — a sustained note must be impossible from this helper.
+    from kidseq_engine.arrange import perc_bass_notes
+
+    riff = _riff()
+    pedal = [0, 4, 0, 4]
+    stabs = perc_bass_notes(riff, pedal, 8, "stabs", [0, 6, 10])
+    assert len(stabs) == 8 * 3
+    assert all(nt.dur_beats <= 0.3 for nt in stabs)
+    assert all(36 <= nt.pitch <= 47 for nt in stabs)
+    accents = perc_bass_notes(riff, pedal, 8, "accents", [0, 6, 10])
+    assert len(accents) == 2                      # bars 3 and 7 only
+    assert all(nt.dur_beats <= 0.75 for nt in accents)
+    assert perc_bass_notes(riff, pedal, 8, "stabs", [0, 6, 10]) == stabs
+
+
+def test_r24_skeletal_patterns_are_spacious():
+    # skeletal = real gaps: every skeletal pattern fires FEWER total hits
+    # than the genre's full pattern, rows are 16 steps, kick lane present.
+    from kidseq_engine.render.drums import (DRUM_PATTERNS, PERC_SKELETAL,
+                                            perc_pattern_for)
+
+    def hits(p):
+        return sum(1 for row in p.values() for v in row if v > 0)
+
+    for style, skels in PERC_SKELETAL.items():
+        full = hits(DRUM_PATTERNS[style])
+        assert skels, style
+        for i, skel in enumerate(skels):
+            assert all(len(v) == 16 for v in skel.values()), (style, i)
+            assert "kick" in skel, (style, i)
+            assert hits(skel) < full, (style, i, hits(skel), full)
+        # rotation cycles the variants deterministically
+        assert perc_pattern_for(style, 0) is skels[0]
+        assert perc_pattern_for(style, len(skels)) is skels[0]
+
+
 def test_bass_gate_shortens_durations_only():
     # R19 articulation lever: pitches/starts/velocities untouched, durations
     # scaled with a 0.12-beat floor; gate 1.0 = bit-identical legacy

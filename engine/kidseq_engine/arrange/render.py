@@ -21,8 +21,8 @@ from ..audio import SR, as_stereo, seconds_per_beat
 from ..sequence import Riff
 from . import (Section, bass_feel_for, bass_notes, choose_progression,
                chord_pcs_for_bar, develop_phrase, drone_notes, pad_notes,
-               pad_rhythm_for, plan_song, resolve_clashes, riff_variant,
-               soften_clashes)
+               pad_rhythm_for, perc_bass_notes, plan_song, resolve_clashes,
+               riff_variant, soften_clashes)
 from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, _sub_rng, choose_style
 
 # phrase-treatment draw weights: statements anchor (~1/3), the rest develop
@@ -440,13 +440,20 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     n = int((total_bars * bar_s + 1.0) * sr)
     layers = {name: np.zeros((n, 2), dtype=np.float32)
               for name in ("riff", "drums", "bass", "pads", "texture", "fx",
-                           "fx_sub", "rumble")}
+                           "fx_sub", "rumble", "riff_echo")}
     kick_onsets: list[int] = []
 
-    from ..render.drums import pattern_for
+    from ..render.drums import pattern_for, perc_pattern_for
     pattern = pattern_for(riff.drum_style, style.drum_variant,
                           style.drum_skeleton) if riff.drum_style else None
     takes = style.drum_takes   # per-press sample-take swaps (R17)
+    # R24 skeletal doctrine: percussive takes play the SPARSE patterns, and
+    # the low end never sustains — sub stabs lock to the skeletal kick
+    perc_kick_steps: list[int] = []
+    if percussive and riff.drum_style:
+        skel = perc_pattern_for(riff.drum_style, style.drum_variant) or {}
+        perc_kick_steps = [i for i, v in enumerate(skel.get("kick", []))
+                           if v > 0]
 
     # ---- base section renders + boundary map -------------------------------
     bounds: list[tuple[Section, int, int]] = []   # (section, start, end) samples
@@ -534,13 +541,15 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         gestures: dict[int, str] = {}
         if sec.drums and pattern:
             variant_eff = style.drum_variant
-            base_pat = pattern
-            if percussive and sec.name.startswith("drop"):
-                # drum-led evolution: each drop rotates to a different
-                # seasoning overlay (the kit does the developing)
-                variant_eff = style.drum_variant + (drop_seen - 1)
-                base_pat = pattern_for(riff.drum_style, variant_eff,
-                                       style.drum_skeleton)
+            if percussive:
+                # R24: skeletal + spacious — the stripped patterns replace
+                # the full genre groove; each drop rotates to a different
+                # skeletal variant (the kit itself is the journey)
+                rot = (drop_seen - 1) if sec.name.startswith("drop") else 0
+                variant_eff = style.drum_variant + rot
+                base_pat = perc_pattern_for(riff.drum_style, variant_eff)
+            else:
+                base_pat = pattern
             pat = base_pat if sec.drums == "full" else _lite_pattern(base_pat)
             if sec.drums == "full" and sec.name.startswith("drop"):
                 # R18 drummer scheduler: per-press personality drops small
@@ -549,13 +558,30 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     seed, sec.name, sec.bars, style.drummer, drop_seen,
                     _candy_bar_set(sec.bars, drop_seen, pal.earcandy_every),
                     riff.drum_style)
-            if pat and gestures:
+            # R26 dnb switch-up (owner: the half-feel "would work for some
+            # sections but not the whole song"): the SECOND drop opens on
+            # the half-feel skeleton for its first phrases, then snaps back
+            half_bars: set[int] = set()
+            if (style.half_switch and not percussive and sec.drums == "full"
+                    and sec.name.startswith("drop") and drop_seen == 2):
+                half_bars = set(range(min(8, max(4, sec.bars // 2))))
+                gestures = {b: g for b, g in gestures.items()
+                            if b not in half_bars}
+            if pat and (gestures or half_bars):
                 from ..render import drums_audio_pattern
-                swapped = pattern_for(riff.drum_style, variant_eff + 1,
-                                      style.drum_skeleton)
+                swapped = (perc_pattern_for(riff.drum_style, variant_eff + 1)
+                           if percussive else
+                           pattern_for(riff.drum_style, variant_eff + 1,
+                                       style.drum_skeleton))
+                from ..render.drums import DNB_HALF_SKELETON
+                half_pat = pattern_for(riff.drum_style, variant_eff,
+                                       DNB_HALF_SKELETON) \
+                    if half_bars else None
                 for b in range(sec.bars):
                     bpat = pat
-                    if b in gestures:
+                    if b in half_bars and half_pat:
+                        bpat = half_pat
+                    elif b in gestures:
                         bpat = _gesture_pattern(pat, gestures[b],
                                                 riff.drum_style, swapped,
                                                 pal.fill_shape)
@@ -575,14 +601,23 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                           sec.bars, sr, takes=takes)
                 _add_at(layers["drums"], sig, at)
                 if sec.drums == "full":
+                    # base_pat, not `pattern`: percussive sections play the
+                    # skeletal kick — the pump must follow what actually hits
                     kick_onsets += [at + o for o in
-                                    kick_onsets_from_pattern(pattern, riff.tempo, sec.bars, sr,
+                                    kick_onsets_from_pattern(base_pat, riff.tempo, sec.bars, sr,
                                                               style=riff.drum_style)]
 
         if sec.bass:
-            feel = bass_feel_for(riff.drum_style, style.bass_feel)
-            notes = bass_notes(riff, prog, sec.bars, feel=feel,
-                               gate=style.bass_gate)
+            if percussive:
+                # R24 (owner: percussive low end NEVER sustains): short sub
+                # stabs locked to the skeletal kick, or no bassline at all
+                # bar one phrase-end accent — the kick owns the lows
+                notes = perc_bass_notes(riff, prog, sec.bars, style.perc_low,
+                                        perc_kick_steps)
+            else:
+                feel = bass_feel_for(riff.drum_style, style.bass_feel)
+                notes = bass_notes(riff, prog, sec.bars, feel=feel,
+                                   gate=style.bass_gate)
             # R18: the bass answers the drummer's fill bars — the bar's final
             # note pops an octave (small, feel-aware; drums and bass move
             # together the way a live rhythm section does)
@@ -631,6 +666,22 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             _add_at(layers["pads"], sig, at)
 
         bar += sec.bars
+
+    # ---- R24 "dry + up front, echo tail" note treatment: a wet-only delay
+    # ghost of the kid's note echoes off into the space after each hit
+    # (Photek/Burial vocabulary). The "washed" alternative lives at the mix
+    # stage (whole-track riff_wet_spans). Own layer -> own LUFS target, and
+    # it deliberately does NOT pump — the tails breathe through the gaps.
+    if percussive and style.perc_note_style == "dry_echo":
+        from pedalboard import Delay, HighpassFilter, Pedalboard
+        board = Pedalboard([
+            Delay(delay_seconds=min(0.75 * spb, 0.9), feedback=0.5, mix=1.0),
+            HighpassFilter(cutoff_frequency_hz=300.0),
+        ])
+        wet = np.asarray(board(layers["riff"].astype(np.float32), sr),
+                         dtype=np.float32)
+        m = min(n, wet.shape[0])
+        layers["riff_echo"][:m] = wet[:m]
 
     # ---- genre texture bed (builds+drops; percussive mode runs it edge to
     # edge — intro/outro included — as the sound-development bed). The -30
@@ -782,8 +833,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 layers["riff"][a:e2] = _lpf_sweep(layers["riff"][a:e2], sr,
                                                   pal.intro_lpf, pal.intro_lpf)
             elif sec.name.startswith("build"):
-                for lname in ("riff", "pads"):
-                    layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
+                # R27: hiphop keeps a flat arc — no EDM filter climb; the
+                # beat just plays (builds still starve bass + fill lightly)
+                if riff.drum_style != "hiphop":
+                    for lname in ("riff", "pads"):
+                        layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
                 # Noisia low-end starvation: HP the bass for the build's final
                 # bars so the drop's bass lands as pure contrast. 30 ms seam
                 # crossfade in; the gap + drop impact mask the exit seam.
@@ -810,8 +864,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
 
     # drop2+ escalation: hotter kit/pads + pad octave-double (pads are not the
     # riff). Mode from the style: "full" = both, "gain_only" = no octave
-    # double, "off" = later drops stay level with the first.
-    if style.structure.escalation != "off":
+    # double, "off" = later drops stay level with the first. R27: hiphop
+    # never escalates — the head-nod stays level front to back.
+    if style.structure.escalation != "off" and riff.drum_style != "hiphop":
         for k, (idx, sec, a, e) in enumerate(drops):
             if k == 0:
                 continue
@@ -879,9 +934,23 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     if flags.earcandy and pal.earcandy_every and pal.earcandy_menu:
         from ..render import drums_audio_pattern
         chirp_seed = seed + 777   # 808Melo signature: the SAME chirp each time
+        # R28 (owner: "never have the swoosh going up and down over and
+        # over"): sweep-family candy never fires twice in a row and is
+        # capped at 2 per track — repeats remap to the menu's non-sweeps.
+        _SWEEP_KINDS = {"sweep_up", "sweep_down"}
+        sweeps_used = 0
+        prev_sweep = False
         for pos, sname, b in _candy_slots(bounds, pal.earcandy_every, bar_s, sr):
             rng = _sub_rng(seed, f"candy:{sname}:{b}")
             kind = pal.earcandy_menu[int(rng.choice(len(pal.earcandy_menu)))]
+            if kind in _SWEEP_KINDS and (prev_sweep or sweeps_used >= 2):
+                alts = [k for k in pal.earcandy_menu if k not in _SWEEP_KINDS]
+                if not alts:
+                    prev_sweep = False
+                    continue
+                kind = alts[b % len(alts)]
+            prev_sweep = kind in _SWEEP_KINDS
+            sweeps_used += 1 if prev_sweep else 0
             if kind == "drum_stop":
                 # Tainy: a 1-2 beat drum+bass stop 'so it doesn't get boring';
                 # the riff keeps singing. Muted kicks leave the pump list too
