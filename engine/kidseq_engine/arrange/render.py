@@ -558,15 +558,30 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     seed, sec.name, sec.bars, style.drummer, drop_seen,
                     _candy_bar_set(sec.bars, drop_seen, pal.earcandy_every),
                     riff.drum_style)
-            if pat and gestures:
+            # R26 dnb switch-up (owner: the half-feel "would work for some
+            # sections but not the whole song"): the SECOND drop opens on
+            # the half-feel skeleton for its first phrases, then snaps back
+            half_bars: set[int] = set()
+            if (style.half_switch and not percussive and sec.drums == "full"
+                    and sec.name.startswith("drop") and drop_seen == 2):
+                half_bars = set(range(min(8, max(4, sec.bars // 2))))
+                gestures = {b: g for b, g in gestures.items()
+                            if b not in half_bars}
+            if pat and (gestures or half_bars):
                 from ..render import drums_audio_pattern
                 swapped = (perc_pattern_for(riff.drum_style, variant_eff + 1)
                            if percussive else
                            pattern_for(riff.drum_style, variant_eff + 1,
                                        style.drum_skeleton))
+                from ..render.drums import DNB_HALF_SKELETON
+                half_pat = pattern_for(riff.drum_style, variant_eff,
+                                       DNB_HALF_SKELETON) \
+                    if half_bars else None
                 for b in range(sec.bars):
                     bpat = pat
-                    if b in gestures:
+                    if b in half_bars and half_pat:
+                        bpat = half_pat
+                    elif b in gestures:
                         bpat = _gesture_pattern(pat, gestures[b],
                                                 riff.drum_style, swapped,
                                                 pal.fill_shape)
@@ -818,8 +833,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 layers["riff"][a:e2] = _lpf_sweep(layers["riff"][a:e2], sr,
                                                   pal.intro_lpf, pal.intro_lpf)
             elif sec.name.startswith("build"):
-                for lname in ("riff", "pads"):
-                    layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
+                # R27: hiphop keeps a flat arc — no EDM filter climb; the
+                # beat just plays (builds still starve bass + fill lightly)
+                if riff.drum_style != "hiphop":
+                    for lname in ("riff", "pads"):
+                        layers[lname][a:e2] = _lpf_sweep(layers[lname][a:e2], sr, 900.0, 18000.0)
                 # Noisia low-end starvation: HP the bass for the build's final
                 # bars so the drop's bass lands as pure contrast. 30 ms seam
                 # crossfade in; the gap + drop impact mask the exit seam.
@@ -846,8 +864,9 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
 
     # drop2+ escalation: hotter kit/pads + pad octave-double (pads are not the
     # riff). Mode from the style: "full" = both, "gain_only" = no octave
-    # double, "off" = later drops stay level with the first.
-    if style.structure.escalation != "off":
+    # double, "off" = later drops stay level with the first. R27: hiphop
+    # never escalates — the head-nod stays level front to back.
+    if style.structure.escalation != "off" and riff.drum_style != "hiphop":
         for k, (idx, sec, a, e) in enumerate(drops):
             if k == 0:
                 continue
@@ -915,9 +934,23 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     if flags.earcandy and pal.earcandy_every and pal.earcandy_menu:
         from ..render import drums_audio_pattern
         chirp_seed = seed + 777   # 808Melo signature: the SAME chirp each time
+        # R28 (owner: "never have the swoosh going up and down over and
+        # over"): sweep-family candy never fires twice in a row and is
+        # capped at 2 per track — repeats remap to the menu's non-sweeps.
+        _SWEEP_KINDS = {"sweep_up", "sweep_down"}
+        sweeps_used = 0
+        prev_sweep = False
         for pos, sname, b in _candy_slots(bounds, pal.earcandy_every, bar_s, sr):
             rng = _sub_rng(seed, f"candy:{sname}:{b}")
             kind = pal.earcandy_menu[int(rng.choice(len(pal.earcandy_menu)))]
+            if kind in _SWEEP_KINDS and (prev_sweep or sweeps_used >= 2):
+                alts = [k for k in pal.earcandy_menu if k not in _SWEEP_KINDS]
+                if not alts:
+                    prev_sweep = False
+                    continue
+                kind = alts[b % len(alts)]
+            prev_sweep = kind in _SWEEP_KINDS
+            sweeps_used += 1 if prev_sweep else 0
             if kind == "drum_stop":
                 # Tainy: a 1-2 beat drum+bass stop 'so it doesn't get boring';
                 # the riff keeps singing. Muted kicks leave the pump list too

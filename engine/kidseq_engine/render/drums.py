@@ -327,6 +327,11 @@ def render_odd_cell(style: str | None, tempo: float, dur_s: float,
     return buf
 
 
+# pattern_for skeleton index of the dnb half-feel (DRUM_SKELETONS["dnb"][2]).
+# R26: out of the song-level menu; used only as the second-drop switch-up.
+DNB_HALF_SKELETON = 3
+
+
 def pattern_for(style: str | None, variant: int = 0,
                 skeleton: int = 0) -> dict | None:
     """The genre's DRUM_PATTERNS entry with a base-beat SKELETON variant and a

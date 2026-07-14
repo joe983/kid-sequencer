@@ -45,7 +45,10 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
     # clap/hats are the app's real TR-909.
     "techhouse": {
         "kick": [("bounce/kick.wav", 1.0)],
-        "sub":  [("bounce/sub.wav", 1.0)],
+        # sub lane 1.0 -> 0.55 (R25 — owner: "big boom kick and bass takes
+        # up all the space, kick must be punchier"): the sub is weight under
+        # the transient, not a second kick
+        "sub":  [("bounce/sub.wav", 0.55)],
         "clap": [("techhouse/clap.wav", 1.0)],
         "hatC": [("techhouse/hatC.wav", 1.0)],
         "hatO": [("techhouse/hatO.wav", 1.0)],

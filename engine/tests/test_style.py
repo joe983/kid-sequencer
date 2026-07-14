@@ -116,6 +116,42 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r26_r27_r28_ear_feedback_round_two():
+    # R26: the dnb half-feel is OUT of the song-level skeleton menu and
+    # lives on as the second-drop switch-up (melodic dnb only); no drummer
+    # menu offers "static" (variety at least every 16 bars). R27: hiphop
+    # NEVER rides a riser and its impact is soft. R28: the downlifter is
+    # rarer on riser-led takes.
+    from kidseq_engine.arrange.style import (_DRUMMER_MENU, _IMPACT,
+                                             _SKELETON_MENU)
+    from kidseq_engine.render.drums import DNB_HALF_SKELETON
+
+    assert DNB_HALF_SKELETON not in _SKELETON_MENU["dnb"][0]
+    for genre, (menu, _) in _DRUMMER_MENU.items():
+        assert "static" not in menu, genre
+        assert "sparse" in menu or "regular" in menu or "busy" in menu, genre
+
+    dnb = [choose_style(_riff(drum_style="dnb"), v) for v in range(200)]
+    mel = [s for s in dnb if s.production_mode == "melodic"]
+    assert {s.half_switch for s in mel} == {True, False}
+    for g in DRUM_PATTERNS:
+        if g == "dnb":
+            continue
+        assert not any(choose_style(_riff(drum_style=g), v).half_switch
+                       for v in range(50)), g
+
+    hh = [choose_style(_riff(drum_style="hiphop"), v).fx_palette
+          for v in range(200)]
+    assert {p.riser_on for p in hh} == {False}
+    assert _IMPACT["hiphop"][2] <= -12.0
+
+    th = [choose_style(_riff(), v).fx_palette for v in range(400)]
+    dl_with_riser = [p.downlifter_on for p in th if p.riser_on]
+    dl_without = [p.downlifter_on for p in th if not p.riser_on]
+    assert sum(dl_with_riser) / len(dl_with_riser) < \
+        sum(dl_without) / len(dl_without)
+
+
 def test_r24_percussive_doctrine():
     # R24: both low-end modes and both note treatments occur across takes;
     # pad-free leads (60/40); percussive textures follow the genre's

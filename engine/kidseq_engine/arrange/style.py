@@ -155,6 +155,9 @@ class ArrangeStyle:
     # never sustained; the note treatment alternates per track)
     perc_low: str = "stabs"          # "stabs" | "accents"
     perc_note_style: str = "dry_echo"  # "dry_echo" | "washed"
+    # R26: melodic dnb only — the second drop opens on the half-feel
+    # skeleton for its first phrases, then snaps back (the switch-up)
+    half_switch: bool = False
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -558,7 +561,7 @@ def choose_structure(variation: int = 0) -> StructureStyle:
 # the only genre still on the generic default).
 _IMPACT: dict[str, tuple[float, float, float]] = {
     "drill": (60.0, 28.0, -6.0),
-    "hiphop": (60.0, 28.0, -6.0),
+    "hiphop": (60.0, 28.0, -12.0),   # R27: boom-bap drops arrive, not explode
     "dnb": (70.0, 35.0, -6.0),
     "garage": (80.0, 35.0, -9.0),
     "reggaeton": (70.0, 32.0, -7.0),
@@ -578,7 +581,10 @@ _FILL_MENU: dict[str, list[int]] = {
 # dnb spreads widest (owner: its beat was identical every song); the genres
 # the owner called good stay legacy-heavy.
 _SKELETON_MENU: dict[str, tuple[list, list | None]] = {
-    "dnb": ([0, 1, 2, 3], [0.30, 0.25, 0.25, 0.20]),
+    # dnb skeleton 3 (half-feel) is OUT of the song-level menu (owner R26:
+    # "would work for some sections but not the whole song") — it lives on
+    # as the half_switch section switch-up instead
+    "dnb": ([0, 1, 2], [0.40, 0.30, 0.30]),
     "drill": ([0, 1, 2], [0.60, 0.25, 0.15]),
     "garage": ([0, 1], [0.70, 0.30]),
     "hiphop": ([0, 1], [0.70, 0.30]),
@@ -600,20 +606,18 @@ _FILL_TAKES: dict[str, tuple[list, list | None]] = {
     "dnb": ([0, 1, 2, 3, 4], [0.30, 0.175, 0.175, 0.175, 0.175]),
 }
 
-# R18 — per-press DRUMMER personality (owner: "changes every 2/4/8/16 bars,
-# like drum fills of a normal drummer … not every tune needs variety every 4
-# bars"). Sets the in-drop gesture cadence (render._drummer_gestures):
-# busy = every 4 bars, regular = 8, sparse = 16, static = never (today's
-# behaviour). Head-nod genres lean static — their loop IS the genre.
+# R18/R26 — per-press DRUMMER personality (owner R26: "still need drum beat
+# variety AT LEAST every 16 bars"). Sets the in-drop gesture cadence
+# (render._drummer_gestures): busy = every 4 bars, regular = 8, sparse = 16.
+# "static" is GONE from every menu — sparse (16) is the floor now; dnb
+# leans busiest (its beats read most repetitive).
 _DRUMMER_MENU: dict[str, tuple[list, list | None]] = {
-    "dnb": (["regular", "busy", "sparse", "static"], [0.35, 0.25, 0.25, 0.15]),
-    "techhouse": (["regular", "sparse", "busy", "static"],
-                  [0.35, 0.30, 0.20, 0.15]),
-    "garage": (["regular", "busy", "sparse", "static"],
-               [0.35, 0.25, 0.25, 0.15]),
-    "drill": (["static", "sparse", "regular"], [0.45, 0.35, 0.20]),
-    "hiphop": (["static", "sparse", "regular"], [0.45, 0.35, 0.20]),
-    "reggaeton": (["sparse", "regular", "static"], [0.40, 0.35, 0.25]),
+    "dnb": (["busy", "regular", "sparse"], [0.40, 0.40, 0.20]),
+    "techhouse": (["regular", "sparse", "busy"], [0.45, 0.30, 0.25]),
+    "garage": (["regular", "busy", "sparse"], [0.40, 0.35, 0.25]),
+    "drill": (["sparse", "regular"], [0.60, 0.40]),
+    "hiphop": (["sparse", "regular"], [0.60, 0.40]),
+    "reggaeton": (["sparse", "regular"], [0.55, 0.45]),
 }
 
 # genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
@@ -727,7 +731,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
     transitions; percussive/industrial takes lean riser-off harder."""
     g = genre or ""
     if g == "hiphop":
-        riser_menu = ([False, True], [0.70, 0.30])
+        # R27 (owner: "hip hop doesn't EVER need such a big build and drop —
+        # that's not the style at all"): risers never fire
+        riser_menu = ([False], None)
     elif percussive:
         riser_menu = ([True, False], [0.50, 0.50])
     else:
@@ -744,15 +750,24 @@ def _choose_fx_palette(seed: int, genre: str | None,
         starve = 0
     elif gap_beats >= 1.0:
         starve = min(starve, 1)
+    riser_on = _pick(seed, "riser_on", *riser_menu)
+    # R28 swoosh discipline (owner: "never have the swoosh going up and down
+    # over and over"): the downlifter is rarer overall, and rarer still on
+    # takes whose drops already ride a riser — up-then-down-then-up is the
+    # exact shape that read as crap.
+    dl_menu = ([True, False], [0.35, 0.65]) if riser_on \
+        else ([True, False], [0.50, 0.50])
+    crash_menu = ([True, False], [0.40, 0.60]) if g == "hiphop" \
+        else ([True, False], [0.8, 0.2])
     return FxPalette(
-        riser_on=_pick(seed, "riser_on", *riser_menu),
+        riser_on=riser_on,
         riser_kind=_pick(seed, "riser_kind", *kind_menu),
         riser_bars=_pick(seed, "riser_bars", [8, 4, 2], [0.50, 0.35, 0.15]),
         riser_f0=rf0, riser_f1=rf1,
         gate_depth=_pick(seed, "gate_depth", [0.5, 0.7], [0.6, 0.4]),
         impact_f0=f0, impact_f1=f1, impact_db=db,
-        downlifter_on=_pick(seed, "downlifter_on", [True, False], [0.8, 0.2]),
-        reverse_crash_on=_pick(seed, "reverse_crash_on", [True, False], [0.8, 0.2]),
+        downlifter_on=_pick(seed, "downlifter_on", *dl_menu),
+        reverse_crash_on=_pick(seed, "reverse_crash_on", *crash_menu),
         fill_shape=_pick(seed, "fill_shape", _FILL_MENU.get(g, [0])),
         fill_take=_pick(seed, "fill_take", *_FILL_TAKES.get(g, ([0], None))),
         # None = auto (fx.throw_fits decides); False = suppressed this take
@@ -908,6 +923,10 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         perc_low=_pick(seed, "perc_low", ["stabs", "accents"], [0.55, 0.45]),
         perc_note_style=_pick(seed, "perc_note_style",
                               ["dry_echo", "washed"], [0.55, 0.45]),
+        half_switch=_pick(seed, "half_switch",
+                          *(([False, True], [0.65, 0.35])
+                            if riff.drum_style == "dnb" and mode == "melodic"
+                            else ([False], None))),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],

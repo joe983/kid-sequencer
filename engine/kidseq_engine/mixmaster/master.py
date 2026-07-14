@@ -282,6 +282,11 @@ def _board_for(name: str, genre: str | None,
         ]
         if genre == "dnb":
             chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-2.0, q=0.8))
+        elif genre == "techhouse":
+            # R25 (owner: boomy kick eats the mix, must be punchier): shelve
+            # the low sustain down so the slot-boosted transient carries the
+            # weight — punch is the first 20 ms, boom is everything after
+            chain.insert(2, LowShelfFilter(cutoff_frequency_hz=90.0, gain_db=-1.5, q=0.8))
         elif genre == "drill" and percussive:
             # R23: percussive drill low tidy — the Big Kick's sustain shelves
             # down so the pedal + hits don't smear (melodic drill untouched —
