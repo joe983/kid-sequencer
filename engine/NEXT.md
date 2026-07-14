@@ -1,5 +1,69 @@
 # Where we are / next session
 
+## NEW — Rounds 17–23: owner ear-feedback epic on the A–D batteries (2026-07-14, NOT deployed)
+Owner listened to the 96-track A–D grid. Garage + hiphop good (menus left
+alone), drill great except muddy percussive mixes, and: DnB stuck on reese +
+identical beat every song + unused library fills + boxey drum reverb; bass
+everywhere too sustained/synthesised/dry/similar; variety only at
+breakdowns; techhouse cheesy-90s (wants Avicii/Guetta/SHM × Berlin minimal ×
+Detroit); reggaeton amateur; not every song needs pads/long sounds.
+
+- **R17 drums+space**: `DRUM_SKELETONS` — hand-curated base-beat variants
+  per genre (dnb ×3: shuffled two-step/roller/half-feel; drill ×2; others
+  ×1; skeleton 0 = legacy; `pattern_for(style, variant, skeleton)`
+  composes). The old "skeleton untouchable" rule is now "skeleton ∈ curated
+  menu" (test_sample_kit pins it; reggaeton dembow snare still untouchable
+  across ALL combos — R22 test). **engine_extras.pack** (committed,
+  `tools/install_engine_extras.py` → `scripts/fetch_extras.py` in
+  populate_assets): the owner's 4 alt dnb snares + alt hat + 4 REAL
+  breakbeat fills. `sample_kit.KIT_ALTS/KIT_FILLS` + per-press
+  `snare_take`/`hat_take`/`fill_take`; sampled fills REPLACE the synth fill
+  at build tails (kit cut for the fill span; >15% tempo stretch falls back).
+  De-box: `_ROOM_GAIN_DB` −4 dB, room bus drive 12→6 dB + LP 6k→8k,
+  `_ROOM_SIZE` garage/reggaeton .50→.44, drums shared-return send −22→−20.
+- **R18 drummer**: `ArrangeStyle.drummer` static/sparse/regular/busy
+  (= never/16/8/4-bar gesture cadence; drill/hiphop lean static). In-drop
+  gestures on the bar INTO each phrase boundary: minifill / one-bar
+  seasoning swap / hat lift / ghost adds / kick_skip (never techhouse).
+  Hook + candy-slot discipline; gesture sections render drums PER BAR with
+  per-bar kick onsets (kick_skip never ducks against silence); bass answers
+  minifill bars with an octave pop.
+- **R19 bass**: patches `bass_pizz` (true zero-sustain pluck), `bass_funk`,
+  `bass_sub_roll` (clean non-reese dnb). `bass_gate` [1.0/0.6/0.35]
+  duration lever (drill/hiphop keep tails). New short feels (funk 16th
+  sync, on-beat quarters, rolling-sub 8ths, stab bass, staccato tresillo).
+  Explicit weights: dnb reese 0.35, reese-drone feel 0.10; techhouse
+  offbeat ~0.45 total. Mix: harmonics-only bass send into the shared reverb
+  (`_BASS_SEND_DB` −18, split 150 Hz, sub dry+mono). `master(pump_depth=)`
+  per-press override (techhouse [preset/.35/.22]).
+- **R20 sparse**: `lead_stack` None (~25–30%), `pads_on` 80/20 (drill
+  70/30); guard: never both out unless texture carries.
+- **R21 techhouse**: `house_style` classic .25 / bigroom .30 / minimal .25
+  / detroit .20. New patches `supersaw_chord`/`dub_chord`/`string_machine`
+  + `pad_piano` (real Salamander). Per-sub-style pad menus, pad rhythm
+  (bigroom whole-bar holds = _PAD_RHYTHMS index 2), LEAD_STACKS banks
+  (`techhouse:bigroom|minimal|detroit` via `lead_stack_key`), pump feel,
+  rumble weighting, minimal lead-None 45%. Classic demoted rave_stab/acid
+  to 0.15 each (`_STACK_W`).
+- **R22 reggaeton**: `_IMPACT` entry (70/32/−7), crackle texture, conga rim
+  tumbao overlay (variant 5), odd_loop shaker cell 40%.
+- **R23 percussive mud**: drone pads exclude drone/metal textures (one dark
+  bed at a time; metal stays the pad-free signature); `percussive_pedal`
+  [0,1,2] with moving shapes leading (new alternating root/fifth walk);
+  `master(percussive=)` — beds −2 dB (`_PERC_LUFS_DROP`), 280 Hz mud cut
+  −1.5→−2.5, drill drums 85 Hz shelf −1.5 (percussive only; flag off =
+  bit-identical legacy path).
+- smoke_song decision log now prints all of it: `drums: skeleton= variant=
+  drummer= snare_take= hat_take= fill_take= bass_gate= pump= lead_stack=
+  pads_on= house=`.
+- Tuning levers: `_SKELETON_MENU`/`_SNARE_TAKES`/`_FILL_TAKES` weights;
+  `_DRUMMER_MENU` + gesture menu weights in `_drummer_gestures`;
+  `_BASS_PATCH_W`/`_BASS_FEEL_W`/`_BASS_GATE`/`_PUMP_MENU`/`_BASS_SEND_DB`;
+  `_LEAD_NONE_W`/`_PADS_ON`; `_HOUSE_*` menus + `_STACK_W`; room-bus
+  constants; `_PERC_LUFS_DROP` + pedal weights. New samples: edit
+  `tools/install_engine_extras.py` → re-run → commit the pack → re-run
+  `modal run infra/modal_app.py::populate_assets`.
+
 ## NEW — Round 16: Photek percussive + A-D showcase batteries (2026-07-12, NOT deployed)
 Owner: (1) restructure the showcase into folders — A = the existing battery,
 B/C/D = the same 24-track grid on COMPLETELY different sequencer melodies,
