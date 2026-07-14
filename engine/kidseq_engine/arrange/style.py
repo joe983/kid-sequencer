@@ -818,6 +818,15 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                  else _PUMP_MENU.get(riff.drum_style or "", ([None], None)))
     # R20 sparse draws (hoisted so the guard below can correct the combo):
     texture = _pick(seed, "texture", texture_menu)
+    # R23 low-bed cap (owner: percussive mixes muddy/murky): a fifth-drone
+    # pad take never ALSO runs a drone-family texture — one sustained dark
+    # bed at a time; the metal/drone textures stay the pad-free takes'
+    # signature. Deterministic correction, same pattern as the R20 guard.
+    perc_pads = _pick(seed, "percussive_pads", ["drone", "none"],
+                      [0.55, 0.45])
+    if mode == "percussive" and perc_pads == "drone" \
+            and texture in ("drone", "metal"):
+        texture = "wash"
     skey = lead_stack_key(riff.drum_style, house)
     stacks = LEAD_STACKS.get(skey, [[]])
     n_stacks = len(stacks)
@@ -849,11 +858,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         pad_rhythm=_pick(seed, "pad_rhythm", *rhythm_menu),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
         texture=texture,
-        percussive_pedal=_pick(seed, "percussive_pedal", [0, 1], [0.6, 0.4]),
+        # R23: the moving pedals lead (a static low root all track = mud);
+        # 2 = the alternating root/fifth walk
+        percussive_pedal=_pick(seed, "percussive_pedal", [0, 1, 2],
+                               [0.30, 0.40, 0.30]),
         # the TRUE Photek treatment (owner R16): some percussive takes carry
         # NO pads/drones at all — just hits, bass pedal and the texture bed
-        percussive_pads=_pick(seed, "percussive_pads", ["drone", "none"],
-                              [0.55, 0.45]),
+        percussive_pads=perc_pads,
         drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
         drum_skeleton=_pick(seed, "drum_skeleton",
                             *_SKELETON_MENU.get(riff.drum_style or "",

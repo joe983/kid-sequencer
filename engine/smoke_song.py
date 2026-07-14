@@ -90,7 +90,8 @@ def main() -> None:
         bar += s.bars
     res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
                  tempo=riff.tempo, riff_wet_spans=[(0, intro_end)],
-                 section_spans=spans, pump_depth=st.pump_depth)
+                 section_spans=spans, pump_depth=st.pump_depth,
+                 percussive=(st.production_mode == "percussive"))
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

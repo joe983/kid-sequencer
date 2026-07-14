@@ -427,9 +427,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     percussive = style.production_mode == "percussive"
     if percussive:
         # Photek move: no chord movement under a non-harmonic pattern — the
-        # bass PEDALS (static root, or a root->fifth pedal shift for motion
-        # without harmony; variation-picked), drone instead of chord pads
-        prog = ([0, 0, 0, 0], [0, 0, 4, 4])[style.percussive_pedal % 2]
+        # bass PEDALS (static root, root->fifth shift, or the alternating
+        # root/fifth walk — R23 favours the moving ones: a static low root
+        # the whole track reads as mud), drone instead of chord pads
+        prog = ([0, 0, 0, 0], [0, 0, 4, 4],
+                [0, 4, 0, 4])[style.percussive_pedal % 3]
     spb = seconds_per_beat(riff.tempo)
     bar_s = riff.bar_beats * spb
     seed = fx.song_seed(riff, variation)

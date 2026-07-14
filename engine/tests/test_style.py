@@ -116,6 +116,30 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r23_percussive_mud_discipline():
+    # R23: one sustained dark bed at a time (drone pads exclude drone/metal
+    # textures), the moving pedals lead, and all three pedal shapes occur.
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((Path(__file__).parents[1] / "examples" /
+                          "cluster_riff.json").read_text(encoding="utf-8"))
+    r = parse_sequence(payload)
+    styles = [choose_style(r, v) for v in range(300)]
+    assert all(s.production_mode == "percussive" for s in styles)
+    for s in styles:
+        if s.percussive_pads == "drone":
+            assert s.texture not in ("drone", "metal"), s.texture
+    # metal stays reachable on the pad-free takes (the R16 signature)
+    assert any(s.texture == "metal" and s.percussive_pads == "none"
+               for s in styles)
+    assert {s.percussive_pedal for s in styles} == {0, 1, 2}
+    moving = sum(1 for s in styles if s.percussive_pedal in (1, 2))
+    assert moving / len(styles) > 0.55   # the static root is the minority
+
+
 def test_r22_reggaeton_polish():
     # R22: reggaeton has a tuned impact (no longer the generic default), the
     # conga rim overlay is reachable, and the dembow snare stays untouchable

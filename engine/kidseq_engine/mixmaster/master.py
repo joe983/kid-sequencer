@@ -94,6 +94,11 @@ _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass", "fx_sub", "rumble")
 
+# R23 (owner: percussive mixes muddy/murky): percussive takes run their
+# sustained beds a touch deeper — the drones/textures/rumble stack low-mid
+# energy edge-to-edge there, so the calibration targets drop 2 dB.
+_PERC_LUFS_DROP = {"texture": 2.0, "pads": 2.0, "rumble": 2.0}
+
 # Haas-on-sides width (Camo & Krooked): a delayed mono copy added as pure
 # Side on the WIDTH layers only — mono sum bit-unchanged by construction,
 # drums/bass/riff core stays untouched. Per-genre side level (dB): drill/
@@ -255,7 +260,8 @@ def _kick_slot(genre: str | None) -> float:
         return 55.0
 
 
-def _board_for(name: str, genre: str | None) -> Pedalboard:
+def _board_for(name: str, genre: str | None,
+               percussive: bool = False) -> Pedalboard:
     """Per-layer processing, EQ-slotted around the genre's kick fundamental:
     drums are boosted AT the kick slot, bass is notched exactly there (and takes
     80–120 Hz instead); the riff owns 2–4 kHz presence and pads are cut there
@@ -274,6 +280,11 @@ def _board_for(name: str, genre: str | None) -> Pedalboard:
         ]
         if genre == "dnb":
             chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-2.0, q=0.8))
+        elif genre == "drill" and percussive:
+            # R23: percussive drill low tidy — the Big Kick's sustain shelves
+            # down so the pedal + hits don't smear (melodic drill untouched —
+            # owner: it sounds great)
+            chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-1.5, q=0.8))
         return Pedalboard(chain)
     if name == "bass":
         slot = _kick_slot(genre)
@@ -406,23 +417,26 @@ def pump_envelope(n_samples: int, sr: int, onsets: list[int], depth: float,
 # ---------------------------------------------------------------------------
 
 
-def _master_eq(genre: str | None) -> Pedalboard:
+def _master_eq(genre: str | None, percussive: bool = False) -> Pedalboard:
     """Master tone shape, applied BEFORE every nonlinearity (HP first so
     subsonics don't eat clipper/limiter headroom). The 3.2 kHz dip is the
     kid-specific anti-fatigue move; 280 Hz clears stacked low-mid mud.
     Hawkes moves (R13): 30 Hz HP makes the low end punch harder, not thinner
     (drill/hiphop keep 24 for 808 tails); DnB weight lives ~60 Hz; the top
-    lift is TWO small cascaded shelves, never one big boost."""
+    lift is TWO small cascaded shelves, never one big boost. Percussive
+    takes (R23 — owner: muddy/murky) cut the low-mid mud band deeper: their
+    beds/drones/pedal all live there."""
     if genre in ("drill", "hiphop"):
         hp_hz, low = 24.0, (60.0, 1.5, 0.8)
     elif genre == "dnb":
         hp_hz, low = 30.0, (65.0, 1.5, 0.8)
     else:
         hp_hz, low = 30.0, (100.0, 1.2, 0.71)
+    mud_db = -2.5 if percussive else -1.5
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=hp_hz),
         LowShelfFilter(cutoff_frequency_hz=low[0], gain_db=low[1], q=low[2]),
-        PeakFilter(cutoff_frequency_hz=280.0, gain_db=-1.5, q=1.1),
+        PeakFilter(cutoff_frequency_hz=280.0, gain_db=mud_db, q=1.1),
         PeakFilter(cutoff_frequency_hz=3200.0, gain_db=-1.0, q=1.4),
         HighShelfFilter(cutoff_frequency_hz=9500.0, gain_db=1.0, q=0.71),
         HighShelfFilter(cutoff_frequency_hz=13500.0, gain_db=0.8, q=0.71),
@@ -664,7 +678,8 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            tempo: float = 120.0,
            riff_wet_spans: list[tuple[int, int]] | None = None,
            section_spans: list[tuple[str, int, int]] | None = None,
-           pump_depth: float | None = None) -> MasterResult:
+           pump_depth: float | None = None,
+           percussive: bool = False) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -700,7 +715,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = np.zeros((n, 2), dtype=np.float32)
     send_acc = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
-        proc = _process(buf, _board_for(name, genre), sr)  # (M, 2)
+        proc = _process(buf, _board_for(name, genre, percussive), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
@@ -734,7 +749,10 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             proc = _haas_sides(proc, sr, _HAAS_DELAY_MS,
                                _HAAS_SIDE_DB.get(genre or "", _HAAS_DEFAULT_DB))
         if not name.startswith("fx"):  # FX layers are peak-specified by design — no calibration
-            proc = _calibrate_layer(proc, sr, _LAYER_LUFS.get(name, -22.0))
+            lufs_t = _LAYER_LUFS.get(name, -22.0)
+            if percussive:
+                lufs_t -= _PERC_LUFS_DROP.get(name, 0.0)   # R23 anti-mud
+            proc = _calibrate_layer(proc, sr, lufs_t)
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
 
@@ -794,7 +812,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     # 1) DC removal, then tone (EQ precedes every nonlinearity: HP first so
     #    subsonics don't eat clip headroom)
     bus = bus - bus.mean(axis=0, keepdims=True).astype(np.float32)
-    bus = _process(bus, _master_eq(genre), sr)
+    bus = _process(bus, _master_eq(genre, percussive), sr)
 
     # 2) keep the lows mono (phasey lows fold to centre); highs stay wide.
     #    250 Hz per Pretolesi/Reznikov width discipline (was 120): the
