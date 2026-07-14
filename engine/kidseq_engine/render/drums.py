@@ -243,6 +243,66 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
 }
 
 
+# R24 SKELETAL percussive patterns (owner: "skeletal + spacious — stripped
+# percussion with real gaps; the kid's note is the loudest event"). These
+# replace the FULL genre groove in percussive/sparse mode. Hand-written, 2-3
+# variants per genre; drops rotate variants (the kit is the journey). The
+# gaps are the point — resist filling them.
+PERC_SKELETAL: dict[str, list[dict[str, list[float]]]] = {
+    "dnb": [   # Photek: surgical, dry, all air
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.9,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,.25,0]},
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,.22],
+         "rim":   [0,0,0,0, 0,0,.25,0, 0,0,0,0, .28,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,.7,0, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0]},
+    ],
+    "drill": [
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, .85,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,.8,0, 0,0,0,0, 0,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+         "rim":   [0,0,0,0, 0,0,0,0, 0,0,0,.3, 0,0,0,0]},
+    ],
+    "garage": [   # Burial: 2-step ghosts, off-grid feel, no hats
+        {"kick":  [1,0,0,0, 0,0,0,.6, 0,0,0,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, .8,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.7,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,.25, 0,0,0,0],
+         "rim":   [0,0,0,0, 0,0,0,0, 0,.22,0,0, 0,0,.25,0]},
+    ],
+    "hiphop": [
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.9,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,0,.7, 0,0,0,0, 0,0,0,0],
+         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,.2,0]},
+    ],
+    "techhouse": [   # Rhythm & Sound: the 4/4 pulse breathing in space
+        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "rim":   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,.25,0]},
+        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "shaker": [0,0,.2,0, 0,0,0,0, 0,0,.2,0, 0,0,0,0]},
+    ],
+    "reggaeton": [
+        {"kick":  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+         "snare": [0,0,0,.7, 0,0,.6,0, 0,0,0,0, 0,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
+         "rim":   [0,0,0,.3, 0,0,.28,0, 0,0,0,.3, 0,0,.28,0]},
+    ],
+}
+
+
+def perc_pattern_for(style: str | None, variant: int = 0) -> dict | None:
+    """The genre's SKELETAL percussive pattern (R24). Variants rotate per
+    drop — the kit itself develops. Falls back to the full pattern for an
+    unknown style (never silent)."""
+    skels = PERC_SKELETAL.get(style or "")
+    if not skels:
+        return DRUM_PATTERNS.get(style or "")
+    return skels[variant % len(skels)]
+
+
 def render_odd_cell(style: str | None, tempo: float, dur_s: float,
                     sr: int = SR, voice: str = "shaker",
                     cell_beats: float = 3.0) -> np.ndarray:

@@ -151,6 +151,10 @@ class ArrangeStyle:
     # R21: techhouse sub-style ("classic"|"bigroom"|"minimal"|"detroit");
     # None for every other genre
     house_style: str | None = None
+    # R24 percussive/sparse doctrine (owner: skeletal + spacious; low end
+    # never sustained; the note treatment alternates per track)
+    perc_low: str = "stabs"          # "stabs" | "accents"
+    perc_note_style: str = "dry_echo"  # "dry_echo" | "washed"
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -485,6 +489,24 @@ def _menu_for(genre: str | None) -> dict[str, list]:
     return _GENRE_MENU.get(genre or "", _GENRE_MENU["techhouse"])
 
 
+# R24 percussive texture REFERENCE flavours (owner picked all three):
+# Photek/Source Direct = dnb+drill (metal, surgical), Burial = garage+hiphop
+# (crackle, ghostly), Rhythm & Sound = techhouse+reggaeton (dub drone
+# breath). Metal stays reachable everywhere (tests + the pad-free takes'
+# signature) but weighted by reference.
+_PERC_TEXTURE: dict[str, tuple[list, list]] = {
+    "dnb": (["metal", "drone", "wash"], [0.40, 0.35, 0.25]),
+    "drill": (["metal", "drone", "wash"], [0.40, 0.35, 0.25]),
+    "garage": (["crackle", "wash", "drone", "metal"],
+               [0.35, 0.30, 0.25, 0.10]),
+    "hiphop": (["crackle", "wash", "drone", "metal"],
+               [0.35, 0.30, 0.25, 0.10]),
+    "techhouse": (["drone", "wash", "crackle", "metal"],
+                  [0.40, 0.30, 0.20, 0.10]),
+    "reggaeton": (["drone", "wash", "crackle", "metal"],
+                  [0.40, 0.30, 0.20, 0.10]),
+}
+
 # percussive-mode drone roles per genre (no chord-implying comping sounds)
 _DRONE_ROLES: dict[str, list[str]] = {
     "drill": ["dark", "choir"],
@@ -795,11 +817,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     else:
         mode = "melodic"
     # percussive tracks always run an atmosphere bed (sound-development
-    # driven) — the genre's own textures plus drone/wash/metal so no genre
-    # is locked to a single bed ("metal" = the industrial plate, R16)
-    texture_menu = menu["texture"] if mode == "melodic" else \
-        list(dict.fromkeys([t for t in menu["texture"] if t]
-                           + ["drone", "wash", "metal"]))
+    # driven). R24: the bed follows the genre's REFERENCE flavour (Photek /
+    # Burial / Rhythm & Sound) instead of a flat pool.
+    if mode == "melodic":
+        texture_menu, texture_w = menu["texture"], None
+    else:
+        texture_menu, texture_w = _PERC_TEXTURE.get(
+            riff.drum_style or "", (["drone", "wash", "metal"], None))
     # R21: techhouse splits into sub-styles — the pick reroutes pads, lead
     # stacks, pad rhythm, pump and rumble below
     house = _pick(seed, "house_style", *_HOUSE_MENU) \
@@ -817,13 +841,14 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     pump_menu = (_HOUSE_PUMP[house] if house
                  else _PUMP_MENU.get(riff.drum_style or "", ([None], None)))
     # R20 sparse draws (hoisted so the guard below can correct the combo):
-    texture = _pick(seed, "texture", texture_menu)
+    texture = _pick(seed, "texture", texture_menu, texture_w)
     # R23 low-bed cap (owner: percussive mixes muddy/murky): a fifth-drone
     # pad take never ALSO runs a drone-family texture — one sustained dark
     # bed at a time; the metal/drone textures stay the pad-free takes'
     # signature. Deterministic correction, same pattern as the R20 guard.
-    perc_pads = _pick(seed, "percussive_pads", ["drone", "none"],
-                      [0.55, 0.45])
+    # R24: pad-free is now the percussive DEFAULT (skeletal doctrine).
+    perc_pads = _pick(seed, "percussive_pads", ["none", "drone"],
+                      [0.60, 0.40])
     if mode == "percussive" and perc_pads == "drone" \
             and texture in ("drone", "metal"):
         texture = "wash"
@@ -880,6 +905,9 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                         *_BASS_GATE.get(riff.drum_style or "", ([1.0], None))),
         pump_depth=_pick(seed, "pump_depth", *pump_menu),
         house_style=house,
+        perc_low=_pick(seed, "perc_low", ["stabs", "accents"], [0.55, 0.45]),
+        perc_note_style=_pick(seed, "perc_note_style",
+                              ["dry_echo", "washed"], [0.55, 0.45]),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],

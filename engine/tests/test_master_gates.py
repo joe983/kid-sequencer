@@ -226,7 +226,8 @@ def test_percussive_master_flag_defaults_off_and_tightens_lows():
     # deeper — output must differ, and ONLY when the flag flips.
     from kidseq_engine.mixmaster.master import _PERC_LUFS_DROP
 
-    assert _PERC_LUFS_DROP == {"texture": 2.0, "pads": 2.0, "rumble": 2.0}
+    assert _PERC_LUFS_DROP == {"texture": 2.0, "pads": 2.0, "rumble": 2.0,
+                               "drums": 1.0, "riff": -1.0}
     layers = _synth_layers("drill", stereo=True)
     kicks = kick_onsets_from_pattern(DRUM_PATTERNS["drill"], _TEMPO,
                                      int(_SECONDS / (4 * seconds_per_beat(_TEMPO))),

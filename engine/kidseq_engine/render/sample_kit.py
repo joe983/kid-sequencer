@@ -51,6 +51,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "hatO": [("techhouse/hatO.wav", 1.0)],
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
         "cowbell": [("perc/cowbell.wav", 1.0)],  # seasoning-variant voice
+        "rim":   [("perc/woodblock.wav", 1.0)],  # R24 skeletal voice
     },
     # dnb: the app's kit — layered soft kick (VEH1 004 + 005 at 0.5, the pack's
     # relative gains), DC_Kit14 snare + 75ms-trimmed hat (trim baked at unpack).
@@ -59,6 +60,7 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "snare": [("dnb/snare.wav", 1.0)],
         "hatC":  [("dnb/hatC.wav", 1.0)],
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
+        "rim":   [("perc/woodblock.wav", 1.0)],  # R24 skeletal voice
     },
     # drill: Jay Cactus Greeze (Big Kick / Psycho 808 / Brickz / Ruckus rim) +
     # TrapLordz hat — the exact app kit.

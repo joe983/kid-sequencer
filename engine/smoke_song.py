@@ -58,7 +58,8 @@ def main() -> None:
           f"hat_take={st.hat_take} fill_take={st.fx_palette.fill_take} "
           f"bass_gate={st.bass_gate:g} pump={st.pump_depth} "
           f"lead_stack={st.lead_stack} pads_on={st.pads_on} "
-          f"house={st.house_style}")
+          f"house={st.house_style} perc_low={st.perc_low} "
+          f"note_style={st.perc_note_style}")
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "
           f"starve={p.bass_starve_bars} "
@@ -71,8 +72,12 @@ def main() -> None:
 
     # the intro rides a wetter riff send — "distant" open that dries up at the
     # build. Cold-open shapes start on a DROP: no wet span (drops stay dry).
+    # R24 "washed" percussive takes bathe the note the WHOLE track (Rhythm &
+    # Sound treatment); "dry_echo" takes get the delay-ghost layer instead.
     intro_end = int(plan[0].bars * riff.bar_beats * (60.0 / riff.tempo) * SR) \
         if plan[0].name == "intro" else 0
+    if st.production_mode == "percussive" and st.perc_note_style == "washed":
+        intro_end = 1 << 62   # whole track
     # per-section spans for the pads/fx send rides (wet breaks, drier drops);
     # the final build bar is split out as "build_tail" so the wet bloom peaks
     # right before the drop snaps dry

@@ -116,6 +116,32 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r24_percussive_doctrine():
+    # R24: both low-end modes and both note treatments occur across takes;
+    # pad-free leads (60/40); percussive textures follow the genre's
+    # reference flavour menus.
+    import json
+    from pathlib import Path
+
+    from kidseq_engine.arrange.style import _PERC_TEXTURE
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((Path(__file__).parents[1] / "examples" /
+                          "cluster_riff.json").read_text(encoding="utf-8"))
+    for genre, (tex_menu, _) in _PERC_TEXTURE.items():
+        payload["drumStyle"] = genre
+        r = parse_sequence(payload)
+        styles = [choose_style(r, v) for v in range(200)]
+        assert {s.perc_low for s in styles} == {"stabs", "accents"}, genre
+        assert {s.perc_note_style for s in styles} == \
+            {"dry_echo", "washed"}, genre
+        for s in styles:
+            assert s.texture in tex_menu, (genre, s.texture)
+        none_share = sum(1 for s in styles
+                         if s.percussive_pads == "none") / len(styles)
+        assert none_share > 0.5, (genre, none_share)   # pad-free leads
+
+
 def test_r23_percussive_mud_discipline():
     # R23: one sustained dark bed at a time (drone pads exclude drone/metal
     # textures), the moving pedals lead, and all three pedal shapes occur.

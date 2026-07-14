@@ -88,16 +88,18 @@ _PUMP_DEPTH_CAP = 0.65
 # Post-board layer LUFS targets (active regions only) — the calibrated mix
 # balance genre gains offset from. rumble pumps hardest AND sits deepest —
 # it ducks out of the dry kick's way like Hades' sidechained return.
+# riff_echo (R24) = the percussive note's ghost delay tail, well under.
 _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
-               "texture": -30.0, "rumble": -31.0}
+               "texture": -30.0, "rumble": -31.0, "riff_echo": -27.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass", "fx_sub", "rumble")
 
-# R23 (owner: percussive mixes muddy/murky): percussive takes run their
-# sustained beds a touch deeper — the drones/textures/rumble stack low-mid
-# energy edge-to-edge there, so the calibration targets drop 2 dB.
-_PERC_LUFS_DROP = {"texture": 2.0, "pads": 2.0, "rumble": 2.0}
+# R23/R24 (owner: percussive mixes muddy/murky; "the kid's note is the
+# loudest event"): percussive takes run their sustained beds deeper, the
+# drums step back a touch and the RIFF steps forward (negative = boost).
+_PERC_LUFS_DROP = {"texture": 2.0, "pads": 2.0, "rumble": 2.0,
+                   "drums": 1.0, "riff": -1.0}
 
 # Haas-on-sides width (Camo & Krooked): a delayed mono copy added as pure
 # Side on the WIDTH layers only — mono sum bit-unchanged by construction,
