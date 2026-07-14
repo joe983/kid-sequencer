@@ -139,6 +139,8 @@ class ArrangeStyle:
     drum_skeleton: int = 0         # index into drums.DRUM_SKELETONS (0 = legacy)
     snare_take: int = 0            # index into sample_kit.KIT_ALTS snares
     hat_take: int = 0              # index into sample_kit.KIT_ALTS hats
+    # R18: in-drop gesture cadence ("static" = never — today's behaviour)
+    drummer: str = "static"        # "static" | "sparse" | "regular" | "busy"
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -421,6 +423,22 @@ _FILL_TAKES: dict[str, tuple[list, list | None]] = {
     "dnb": ([0, 1, 2, 3, 4], [0.30, 0.175, 0.175, 0.175, 0.175]),
 }
 
+# R18 — per-press DRUMMER personality (owner: "changes every 2/4/8/16 bars,
+# like drum fills of a normal drummer … not every tune needs variety every 4
+# bars"). Sets the in-drop gesture cadence (render._drummer_gestures):
+# busy = every 4 bars, regular = 8, sparse = 16, static = never (today's
+# behaviour). Head-nod genres lean static — their loop IS the genre.
+_DRUMMER_MENU: dict[str, tuple[list, list | None]] = {
+    "dnb": (["regular", "busy", "sparse", "static"], [0.35, 0.25, 0.25, 0.15]),
+    "techhouse": (["regular", "sparse", "busy", "static"],
+                  [0.35, 0.30, 0.20, 0.15]),
+    "garage": (["regular", "busy", "sparse", "static"],
+               [0.35, 0.25, 0.25, 0.15]),
+    "drill": (["static", "sparse", "regular"], [0.45, 0.35, 0.20]),
+    "hiphop": (["static", "sparse", "regular"], [0.45, 0.35, 0.20]),
+    "reggaeton": (["sparse", "regular", "static"], [0.40, 0.35, 0.25]),
+}
+
 # genre -> pre-drop gap length menu, in BEATS (clamped to 1.1 s at render so
 # slow tempos never read as broken). The pros cut a real breath — but NOT on
 # every song (owner R15: overused gaps read obvious/ineffective). The big
@@ -652,6 +670,9 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                          *_SNARE_TAKES.get(riff.drum_style or "", ([0], None))),
         hat_take=_pick(seed, "hat_take",
                        *_HAT_TAKES.get(riff.drum_style or "", ([0], None))),
+        drummer=_pick(seed, "drummer",
+                      *_DRUMMER_MENU.get(riff.drum_style or "",
+                                         (["static"], None))),
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],
