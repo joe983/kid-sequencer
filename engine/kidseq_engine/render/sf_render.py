@@ -44,6 +44,7 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     # PAD_ROLES — Surge handles the synth-family roles)
     "pad_organ": (GENERALUSER_SF, 0, 17),   # GM Percussive Organ — garage skank
     "pad_epiano": (GENERALUSER_SF, 0, 4),   # GM Electric Piano 1 — hiphop keys
+    "pad_piano": (SALAMANDER_SF, 0, 0),     # real grand — big-room piano stabs (R21)
     "pad_pizz": (GENERALUSER_SF, 0, 45),    # GM Pizzicato Strings — reggaeton pluck
     "pad_warm": (GENERALUSER_SF, 0, 89),    # GM Pad 2 (warm) — soft alternate
     "pad_strings": (GENERALUSER_SF, 0, 49), # GM String Ensemble 2 — cinematic alt
@@ -90,6 +91,7 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
         from .drums import DRUM_PATTERNS  # noqa: F401  (avoid unused import lints elsewhere)
         gm = {"piano": 0, "trumpet": 56, "synth": 81, "bass": 38, "strings": 48,
               "bells": 9, "pads": 50, "pad_organ": 17, "pad_epiano": 4,
+              "pad_piano": 0,
               "pad_pizz": 45, "pad_warm": 89, "pad_strings": 49, "pad_newage": 88,
               "pad_celesta": 8, "pad_musicbox": 10, "pad_vibes": 11,
               "pad_marimba": 12, "pad_tubular": 14, "pad_fmep": 5,

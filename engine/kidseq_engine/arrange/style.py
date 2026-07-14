@@ -148,6 +148,9 @@ class ArrangeStyle:
     # R20: pads render switch for melodic takes (percussive has its own
     # percussive_pads); guarded so lead+pads never BOTH drop without texture
     pads_on: bool = True
+    # R21: techhouse sub-style ("classic"|"bigroom"|"minimal"|"detroit");
+    # None for every other genre
+    house_style: str | None = None
 
     @property
     def drum_takes(self) -> dict[str, int] | None:
@@ -180,6 +183,11 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
     "clav": ("sf", "pad_clav"),
     "nylon": ("sf", "pad_nylon"),
     "fmep": ("sf", "pad_fmep"),
+    # R21 techhouse sub-style roles
+    "supersaw_chord": ("vst", "supersaw_chord"),   # big-room chords
+    "dub_chord": ("vst", "dub_chord"),             # Berlin dub stab
+    "string_machine": ("vst", "string_machine"),   # Detroit strings
+    "piano": ("sf", "pad_piano"),                  # real grand (Salamander)
 }
 
 #: pad triad voicings pad_notes understands
@@ -208,6 +216,11 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "rave_stab": ("vst", "stab_rave"),
     "fifths": ("sf", "lead_fifths"),
     "square": ("sf", "lead_square"),
+    # R21 techhouse sub-style voices
+    "supersaw": ("vst", "supersaw_chord"),
+    "dub": ("vst", "dub_chord"),
+    "machine_strings": ("vst", "string_machine"),
+    "piano": ("sf", "pad_piano"),
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -216,11 +229,30 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
 # holds the composite level — the lead gets RICHER, not louder. Signature
 # stack first; style.lead_stack picks per press.
 LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
+    # R21: shimmer-led classic; the rave lead / stab / acid flavours are now
+    # the occasional wink, not the default (_STACK_W demotes them — owner:
+    # "still has this cheesy 90s feel")
     "techhouse": [
-        [("unison", 0, -9.0), ("shimmer", 12, -13.0)],
         [("shimmer", 12, -9.0), ("body", -12, -14.0)],
+        [("unison", 0, -9.0), ("shimmer", 12, -13.0)],
         [("rave_stab", 0, -9.0), ("twinkle", 12, -13.0)],
         [("acid", 0, -10.0), ("shimmer", 12, -14.0)],
+    ],
+    # R21 techhouse SUB-STYLE stacks (lead_stack_key routes here)
+    "techhouse:bigroom": [
+        [("supersaw", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("piano", 0, -9.0), ("supersaw", 0, -13.0)],
+        [("supersaw", 0, -8.0)],
+    ],
+    "techhouse:minimal": [
+        [("dub", 0, -10.0)],
+        [("body", -12, -12.0)],
+        [("dub", 0, -11.0), ("shimmer", 12, -16.0)],
+    ],
+    "techhouse:detroit": [
+        [("machine_strings", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("machine_strings", 12, -10.0)],
+        [("keys", 0, -10.0), ("machine_strings", 0, -13.0)],
     ],
     "dnb": [
         [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
@@ -379,6 +411,61 @@ _BASS_GATE: dict[str, tuple[list, list | None]] = {
 _PUMP_MENU: dict[str, tuple[list, list | None]] = {
     "techhouse": ([None, 0.35, 0.22], [0.50, 0.30, 0.20]),
 }
+
+# ---------------------------------------------------------------------------
+# R21 techhouse SUB-STYLES (owner: "sounds amateur, cheesy 90s … look into
+# Avicii/Guetta/Swedish House Mafia, blend in Berlin minimal + Detroit").
+# One per-press pick; each sub-style swaps the pad menu, lead stacks, pad
+# rhythm, pump feel and rumble weighting. "classic" keeps the legacy menus
+# with the rave flavours demoted.
+# ---------------------------------------------------------------------------
+
+_HOUSE_MENU: tuple[list, list] = (["classic", "bigroom", "minimal", "detroit"],
+                                  [0.25, 0.30, 0.25, 0.20])
+_HOUSE_PAD_MENU: dict[str, list[str]] = {
+    "classic": ["pluck", "supersaw", "newage", "glass"],
+    "bigroom": ["supersaw_chord", "piano", "glass"],
+    "minimal": ["dub_chord", "dark", "glass"],
+    "detroit": ["string_machine", "warm", "epiano"],
+}
+# pad_rhythm per sub-style (index 2 = the R21 whole-bar sustain — see
+# _PAD_RHYTHMS["techhouse"]): big-room holds chords, minimal stabs offbeats
+_HOUSE_RHYTHM: dict[str, tuple[list, list | None]] = {
+    "classic": ([0, 1], None),
+    "bigroom": ([2, 1], [0.60, 0.40]),
+    "minimal": ([0], None),
+    "detroit": ([0, 1], [0.60, 0.40]),
+}
+# pump per sub-style (None = preset 0.50): bigroom pumps hard, minimal rolls
+_HOUSE_PUMP: dict[str, tuple[list, list | None]] = {
+    "classic": ([None, 0.35, 0.22], [0.50, 0.30, 0.20]),
+    "bigroom": ([None, 0.35], [0.70, 0.30]),
+    "minimal": ([0.35, 0.22, None], [0.45, 0.35, 0.20]),
+    "detroit": ([0.35, None, 0.22], [0.40, 0.40, 0.20]),
+}
+# rumble bed (Hades) per sub-style — minimal leans in, bigroom mostly not
+_HOUSE_RUMBLE: dict[str, tuple[list, list]] = {
+    "classic": ([True, False], [0.60, 0.40]),
+    "bigroom": ([False, True], [0.70, 0.30]),
+    "minimal": ([True, False], [0.75, 0.25]),
+    "detroit": ([True, False], [0.50, 0.50]),
+}
+# classic's stack weights: rave_stab/acid demoted to rare winks
+_STACK_W: dict[str, list[float]] = {
+    "techhouse": [0.40, 0.30, 0.15, 0.15],
+}
+
+
+def lead_stack_key(genre: str | None, house: str | None) -> str:
+    """LEAD_STACKS key for a render: techhouse sub-styles get their own
+    stack banks; everything else (and classic) uses the genre key."""
+    g = genre or ""
+    if g == "techhouse" and house and house != "classic":
+        key = f"techhouse:{house}"
+        if key in LEAD_STACKS:
+            return key
+    return g
+
 
 # R20 sparse instrumentation (owner: "don't have to use all types of
 # instruments in every song — some tracks don't need pads/organs/string long
@@ -605,7 +692,8 @@ _RISER_KIND: dict[str, tuple[list, list]] = {
 
 
 def _choose_fx_palette(seed: int, genre: str | None,
-                       percussive: bool = False) -> FxPalette:
+                       percussive: bool = False,
+                       house: str | None = None) -> FxPalette:
     """Seeded dressing choices within the genre's taste. Boom-bap doesn't ride
     white-noise risers — hiphop defaults them OFF (reverse crash still swells).
     R16 (owner: swooshes everywhere reads 90s-rave amateur): a real share of
@@ -668,8 +756,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
                           else ([None], None))),
         bomb_on=_pick(seed, "bomb_on", *_BOMB.get(g, _BOMB_DEFAULT)),
         rumble_on=_pick(seed, "rumble_on",
-                        *(([True, False], [0.6, 0.4]) if g == "techhouse"
-                          else ([False], None))),
+                        *(_HOUSE_RUMBLE.get(house or "classic",
+                                            ([True, False], [0.6, 0.4]))
+                          if g == "techhouse" else ([False], None))),
         odd_loop_on=_pick(seed, "odd_loop_on",
                           *(([False, True], [0.65, 0.35]) if g == "techhouse"
                             else ([False, True], [0.70, 0.30]) if g == "garage"
@@ -704,17 +793,33 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     texture_menu = menu["texture"] if mode == "melodic" else \
         list(dict.fromkeys([t for t in menu["texture"] if t]
                            + ["drone", "wash", "metal"]))
+    # R21: techhouse splits into sub-styles — the pick reroutes pads, lead
+    # stacks, pad rhythm, pump and rumble below
+    house = _pick(seed, "house_style", *_HOUSE_MENU) \
+        if riff.drum_style == "techhouse" else None
     # percussive drone ROLE varies too (owner: fixed recipes make every
     # percussive track converge) — dark is the anchor, colours per genre
-    pad_menu = menu["pad_role"] if mode == "melodic" else \
-        _DRONE_ROLES.get(riff.drum_style or "", ["dark", "glass"])
+    if mode != "melodic":
+        pad_menu = _DRONE_ROLES.get(riff.drum_style or "", ["dark", "glass"])
+    elif house:
+        pad_menu = _HOUSE_PAD_MENU[house]
+    else:
+        pad_menu = menu["pad_role"]
+    rhythm_menu = (_HOUSE_RHYTHM[house] if house
+                   else (menu["pad_rhythm"], None))
+    pump_menu = (_HOUSE_PUMP[house] if house
+                 else _PUMP_MENU.get(riff.drum_style or "", ([None], None)))
     # R20 sparse draws (hoisted so the guard below can correct the combo):
     texture = _pick(seed, "texture", texture_menu)
-    n_stacks = len(LEAD_STACKS.get(riff.drum_style or "", [[]]))
-    none_w = _LEAD_NONE_W.get(riff.drum_style or "", _LEAD_NONE_DEFAULT)
+    skey = lead_stack_key(riff.drum_style, house)
+    stacks = LEAD_STACKS.get(skey, [[]])
+    n_stacks = len(stacks)
+    none_w = 0.45 if house == "minimal" else \
+        _LEAD_NONE_W.get(riff.drum_style or "", _LEAD_NONE_DEFAULT)
+    stack_w = _STACK_W.get(skey, [1.0 / n_stacks] * n_stacks)
     lead_stack = _pick(seed, "lead_stack",
                        list(range(n_stacks)) + [None],
-                       [(1.0 - none_w) / n_stacks] * n_stacks + [none_w])
+                       [w * (1.0 - none_w) for w in stack_w] + [none_w])
     pads_on = _pick(seed, "pads_on",
                     *_PADS_ON.get(riff.drum_style or "", _PADS_ON_DEFAULT))
     # the mid must not go hollow: a take never drops BOTH the lead stack and
@@ -734,7 +839,7 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         bass_feel=_pick(seed, "bass_feel", menu["bass_feel"],
                         _BASS_FEEL_W.get(riff.drum_style or "")),
         pad_role=_pick(seed, "pad_role", pad_menu),
-        pad_rhythm=_pick(seed, "pad_rhythm", menu["pad_rhythm"]),
+        pad_rhythm=_pick(seed, "pad_rhythm", *rhythm_menu),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
         texture=texture,
         percussive_pedal=_pick(seed, "percussive_pedal", [0, 1], [0.6, 0.4]),
@@ -755,9 +860,8 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                                          (["static"], None))),
         bass_gate=_pick(seed, "bass_gate",
                         *_BASS_GATE.get(riff.drum_style or "", ([1.0], None))),
-        pump_depth=_pick(seed, "pump_depth",
-                         *_PUMP_MENU.get(riff.drum_style or "",
-                                         ([None], None))),
+        pump_depth=_pick(seed, "pump_depth", *pump_menu),
+        house_style=house,
         riff_break_variant=_pick(seed, "riff_break_variant", menu["riff_break_variant"]),
         riff_ornament=(_orn := _pick(seed, "riff_ornament",
                                      menu["riff_ornament"],
@@ -767,5 +871,6 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         lead_stack=lead_stack,
         pads_on=pads_on,
         fx_palette=_choose_fx_palette(seed, riff.drum_style,
-                                      percussive=(mode == "percussive")),
+                                      percussive=(mode == "percussive"),
+                                      house=house),
     )

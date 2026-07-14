@@ -692,9 +692,11 @@ _PAD_RHYTHMS: dict[str, list[list[tuple[float, float]]]] = {
         [(0.5, 0.4), (1.5, 0.4), (2.5, 0.4), (3.5, 0.4)],
         [(0.5, 0.4), (2.0, 0.3), (2.75, 0.4), (3.75, 0.25)],
     ],
-    "techhouse": [  # pluck stabs on the &s / 16th-push comping
+    "techhouse": [  # pluck stabs on the &s / 16th-push comping / R21
         [(1.5, 0.35), (3.5, 0.35)],
         [(0.75, 0.3), (1.5, 0.3), (2.75, 0.3), (3.5, 0.3)],
+        # R21 bigroom: whole-bar held chords — the sidechain pump moves them
+        [(0.0, 4.0)],
     ],
     "drill": [  # dark sustain / re-struck tail
         [(0.0, 4.0)],

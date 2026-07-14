@@ -116,6 +116,49 @@ def test_r19_bass_menus_weights_and_levers():
     assert _PUMP_MENU.get("dnb") is None   # pump lever is techhouse-only
 
 
+def test_r21_house_substyles():
+    # R21: techhouse splits into classic/bigroom/minimal/detroit; every
+    # sub-style's pads/stacks/rhythms are renderable; the rave flavours are
+    # demoted in classic; other genres never carry a house_style.
+    from kidseq_engine.arrange import _PAD_RHYTHMS
+    from kidseq_engine.arrange.style import (_HOUSE_MENU, _HOUSE_PAD_MENU,
+                                             _HOUSE_PUMP, _HOUSE_RHYTHM,
+                                             _HOUSE_RUMBLE, _STACK_W,
+                                             LEAD_STACKS, LEAD_VOICES,
+                                             lead_stack_key)
+
+    for house in _HOUSE_MENU[0]:
+        for role in _HOUSE_PAD_MENU[house]:
+            assert role in PAD_ROLES, (house, role)
+        for i in _HOUSE_RHYTHM[house][0]:
+            assert i < len(_PAD_RHYTHMS["techhouse"]), (house, i)
+        assert house in _HOUSE_PUMP and house in _HOUSE_RUMBLE
+        skey = lead_stack_key("techhouse", house)
+        for stack in LEAD_STACKS[skey]:
+            for voice, semi, gain_db in stack:
+                assert voice in LEAD_VOICES, (house, voice)
+                assert semi in (-12, 0, 12) and gain_db <= -8.0, (house, voice)
+    assert lead_stack_key("techhouse", "classic") == "techhouse"
+    assert lead_stack_key("dnb", None) == "dnb"
+    assert len(_STACK_W["techhouse"]) == len(LEAD_STACKS["techhouse"])
+    # classic demotion: rave_stab/acid recipes carry the LOW weights
+    voices0 = [s[0][0] for s in LEAD_STACKS["techhouse"]]
+    for i, v in enumerate(voices0):
+        if v in ("rave_stab", "acid"):
+            assert _STACK_W["techhouse"][i] <= 0.15, (v, i)
+
+    styles = [choose_style(_riff(), v) for v in range(300)]
+    assert {s.house_style for s in styles} == set(_HOUSE_MENU[0])
+    for g in DRUM_PATTERNS:
+        if g == "techhouse":
+            continue
+        assert choose_style(_riff(drum_style=g), 7).house_style is None, g
+    # per-sub-style routing holds: bigroom never draws a classic-only role
+    for s in styles:
+        if s.production_mode == "melodic" and s.house_style:
+            assert s.pad_role in _HOUSE_PAD_MENU[s.house_style], s.house_style
+
+
 def test_r20_sparse_instrumentation_guarded():
     # lead_stack None and pads_on False both occur; the hollow-mid combo
     # (no stack + no pads + no texture) never survives choose_style.
@@ -141,11 +184,16 @@ def test_style_fields_are_decorrelated_across_nonces():
         return [getattr(s, field) for s in styles]
 
     menu = _GENRE_MENU["techhouse"]
+    from kidseq_engine.arrange.style import _HOUSE_PAD_MENU, _HOUSE_RHYTHM
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
                   "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
                   "riff_ornament"):
         seen = set(picks(field))
         want = set(menu[field])
+        if field == "pad_role":   # R21: sub-styles widen the role pool
+            want = {r for m in _HOUSE_PAD_MENU.values() for r in m}
+        if field == "pad_rhythm":
+            want = {i for m, _ in _HOUSE_RHYTHM.values() for i in m}
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
     # R20: None (no stack) joined the menu

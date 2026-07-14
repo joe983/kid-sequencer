@@ -515,8 +515,11 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # R20: some takes carry NO stack — the kid's voice + rhythm
                 # section stand alone (owner: not every song needs layers)
                 if style.lead_stack is not None:
+                    from .style import lead_stack_key
                     stk = _render_lead_stack(span_notes, riff.tempo, 1,
-                                             span_beats, sr, riff.drum_style,
+                                             span_beats, sr,
+                                             lead_stack_key(riff.drum_style,
+                                                            style.house_style),
                                              style.lead_stack)
                     _add_at(layers["riff"], stk, at)
             else:
