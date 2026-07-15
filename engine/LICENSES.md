@@ -18,7 +18,7 @@ exact license **and** its AI/automated-use permission below.
 | trumpet, strings, bells (Modal/Linux build) | **VSCO 2 CE** (sgossner/VSCO-2-CE) via sfizz | **CC0 1.0** | ✅ public domain; AI/automated use OK |
 | trumpet, strings, bells (local fallback) | GeneralUser GS v1.471 | **GeneralUser GS License v2.0** | ✅ explicitly allows commercial use + use in software projects |
 | drums (electronic: kick/sub/snare/clap/hats) | **Boochi44/free-drum-samples** | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
-| drums (aux perc: cowbell/shaker/woodblock) | **VCSL** (sgossner/VCSL) | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
+| drums (aux perc: cowbell/shaker/woodblock/conga/bongo) | **VCSL** (sgossner/VCSL) | **CC0 1.0** | ✅ public domain, no restriction; AI/automated use OK |
 | drums (acoustic breakbeat kit for DnB: kick/snare/rim/hats) | **Virtuosity Drums** (sfzinstruments/virtuosity_drums) | **CC0 1.0** | ✅ public domain; AI/automated use OK |
 | drums (GM kit) | GeneralUser GS (GM kit) | GeneralUser GS License v2.0 | ✅ fallback only (used when sample kits not fetched) |
 
@@ -33,7 +33,9 @@ server) — satisfied by our downloaded copy.
   (CC0 1.0) license."* 3 flavours (hard-trap / bounce / soulful-vintage). Many one-shots
   derive from the CC0 **tidalcycles/sounds-tr808-fischer** TR-808 set (E. Loveall).
 - **VCSL** (https://github.com/sgossner/VCSL) — Versilian Studios, **CC0 1.0** public-domain
-  dedication. We take 3 aux-percussion one-shots (cowbell, large shaker, woodblock).
+  dedication. We take 5 aux-percussion one-shots (cowbell, large shaker, woodblock,
+  open conga `Conga_HitN_v2_rr1_Sum.wav`, high bongo `BongoH_Hit1_v2_rr1_Mid.wav` —
+  the last two added R31 for the techhouse producer-style latin/disco seasoning).
 - **Virtuosity Drums** (https://github.com/sfzinstruments/virtuosity_drums) — **CC0-1.0**
   (repo LICENSE, verified 2026-07-02). Real acoustic kit performed by drummer Austin McMahon,
   recorded by Versilian Studios / Karoryfer Samples (KVRDC'21). We take 6 top-velocity

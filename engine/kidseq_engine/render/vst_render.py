@@ -420,6 +420,112 @@ PATCHES: dict[str, dict] = {
         "fx_a1_fx_type": "Chorus",
         "character": "Neutral",
     },
+    # R31 Dom Dolla talkbox lead: single saw through a high-resonance bandpass
+    # with a medium filter-envelope sweep — every note "talks" a vowel-ish wah.
+    # The instrumental stand-in for his pitched/formant vocal hooks.
+    "lead_talkbox": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_filter_1_type": "BP 24 dB",
+        "a_filter_1_cutoff": 800.0,
+        "a_filter_1_resonance": 45.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.55),
+        "a_filter_eg_attack": ("raw", _env(0.01)),
+        "a_filter_eg_decay": ("raw", _env(0.25)),
+        "a_filter_eg_sustain": 35.0,
+        "a_filter_eg_release": ("raw", _env(0.15)),
+        "a_amp_eg_attack": ("raw", _env(0.005)),
+        "a_amp_eg_decay": ("raw", _env(0.4)),
+        "a_amp_eg_sustain": 55.0,
+        "a_amp_eg_release": ("raw", _env(0.12)),
+        "character": "Warm",
+    },
+    # R31 MK/Fred vocal-chop stab: detuned pair through a brighter bandpass,
+    # fast decay to silence — reads as a re-pitched SYLLABLE, not a talking
+    # lead (deliberately differentiated from lead_talkbox).
+    "stab_vocal": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "2 voices",
+        "a_osc_1_unison_detune": ("raw", 0.2),
+        "a_filter_1_type": "BP 24 dB",
+        "a_filter_1_cutoff": 1400.0,
+        "a_filter_1_resonance": 38.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.35),
+        "a_filter_eg_attack": ("raw", _env(0.004)),
+        "a_filter_eg_decay": ("raw", _env(0.14)),
+        "a_filter_eg_sustain": 0.0,
+        "a_filter_eg_release": ("raw", _env(0.1)),
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.18)),
+        "a_amp_eg_sustain": 0.0,
+        "a_amp_eg_release": ("raw", _env(0.1)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Bright",
+    },
+    # R31 Dom Dolla rubber-wobble bass: saw + sine sub with a slow-ish
+    # high-mod filter envelope — each note does the filter "wobble" that
+    # carries his bass-as-melody signature. Short release so syncopated
+    # 16ths duck cleanly around the kick.
+    "bass_wobble": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_2_mute": False,
+        "a_osc_2_type": "Sine",
+        "a_osc_2_retrigger": True,
+        "a_osc_2_octave": -1.0,
+        "a_osc_2_volume": -5.0,
+        "a_filter_1_type": "LP Vintage Ladder",
+        "a_filter_1_cutoff": 300.0,
+        "a_filter_1_resonance": 35.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.78),
+        "a_filter_eg_attack": ("raw", _env(0.004)),
+        "a_filter_eg_decay": ("raw", _env(0.3)),
+        "a_filter_eg_sustain": 12.0,
+        "a_filter_eg_release": ("raw", _env(0.08)),
+        "a_amp_eg_attack": ("raw", _env(0.004)),
+        "a_amp_eg_decay": ("raw", _env(0.5)),
+        "a_amp_eg_sustain": 45.0,
+        "a_amp_eg_release": ("raw", _env(0.08)),
+        "character": "Warm",
+    },
+    # R31 MK organ bass (Korg M1 "Organ 2" lineage): sine + quiet octave-up
+    # sine, instant attack, short release — round bouncy stabs that sit fat
+    # under piano/organ comping. (A +7-semi fifth layer would be truer to the
+    # M1 stack, but osc pitch-in-semitones isn't in the exposed param set —
+    # the octave pair reads close.)
+    "bass_organ": {
+        "a_osc_1_type": "Sine",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_2_mute": False,
+        "a_osc_2_type": "Sine",
+        "a_osc_2_retrigger": True,
+        "a_osc_2_octave": 1.0,
+        "a_osc_2_volume": -8.0,
+        "a_amp_eg_attack": ("raw", _env(0.003)),
+        "a_amp_eg_decay": ("raw", _env(0.35)),
+        "a_amp_eg_sustain": 85.0,
+        "a_amp_eg_release": ("raw", _env(0.06)),
+        "character": "Warm",
+    },
+    # R31 Purple Disco Machine Italo lead: lightly-detuned pair, open LP24,
+    # medium decay + chorus — the sparkling 4-8-note earworm voice that
+    # trades with string stabs over the octave funk bass.
+    "lead_italo": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "2 voices",
+        "a_osc_1_unison_detune": ("raw", 0.15),
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 3000.0,
+        "a_filter_1_resonance": 10.0,
+        "a_amp_eg_attack": ("raw", _env(0.005)),
+        "a_amp_eg_decay": ("raw", _env(0.35)),
+        "a_amp_eg_sustain": 60.0,
+        "a_amp_eg_release": ("raw", _env(0.18)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Bright",
+    },
     # dark sustained pad (drill) — closed-down LP12, slow bloom, warm
     "pad_dark": {
         "a_osc_1_type": "Classic",

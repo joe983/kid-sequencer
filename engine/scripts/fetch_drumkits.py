@@ -17,7 +17,7 @@ Sources (all CC0 1.0 — see ../LICENSES.md):
 
 Curates a flat layout the renderer maps directly:
   assets/drums/{hard-trap,bounce,soulful}/{kick,snare,clap,hatC,hatO,sub}.wav
-  assets/drums/perc/{cowbell,shaker,woodblock}.wav
+  assets/drums/perc/{cowbell,shaker,woodblock,conga,bongo}.wav
   assets/drums/virtuosity/{kick,kick-live,snare,rim,hatC,hatO}.wav
 """
 
@@ -56,6 +56,10 @@ VCSL_PERC = {
     "cowbell":   "Idiophones/Struck Idiophones/Cowbells/Cowbell1_Hit_v2_rr1_Mid.wav",
     "shaker":    "Idiophones/Struck Idiophones/Shaker, Large/LShaker_Hit_rr1_Mid.wav",
     "woodblock": "Idiophones/Struck Idiophones/Woodblock/wood_click2_mp.wav",
+    # R31 producer-style percussion (techhouse latin/disco seasoning): open
+    # conga + high bongo, mid-velocity takes
+    "conga":     "Membranophones/Struck Membranophones/Conga/Conga_HitN_v2_rr1_Sum.wav",
+    "bongo":     "Membranophones/Struck Membranophones/Bongos/BongoH_Hit1_v2_rr1_Mid.wav",
 }
 
 

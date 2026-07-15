@@ -121,18 +121,21 @@ def _voice(name: str, sr: int) -> np.ndarray:
     if name == "rim": return _tone(330, 0.05, sr, 60)
     if name == "cowbell": return _tone(540, 0.12, sr, 18) * 0.5 + _tone(810, 0.12, sr, 18) * 0.3
     if name == "shaker": return _hat(0.05, sr) * 0.6
+    if name == "conga": return _tone(190, 0.18, sr, 14)
+    if name == "bongo": return _tone(320, 0.12, sr, 20)
     return _hat(0.04, sr)
 
 
 # Per-voice mix gains (rough balance).
 _GAIN = {"kick": 1.0, "sub": 0.9, "snare": 0.7, "clap": 0.7, "hatC": 0.35,
-         "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3}
+         "hatO": 0.4, "rim": 0.5, "cowbell": 0.4, "shaker": 0.3,
+         "conga": 0.45, "bongo": 0.45}
 
 # Seasoning overlays: per-genre pattern VARIANTS that replace only hat / rim /
 # shaker / cowbell rows — NEVER kick/snare/clap/sub (kick+snare = the genre's
 # skeleton; hats are the seasoning). Variant 0 = the base pattern untouched;
 # style.drum_variant picks. pattern_for() merges.
-_SEASONING_VOICES = {"hatC", "hatO", "rim", "shaker", "cowbell"}
+_SEASONING_VOICES = {"hatC", "hatO", "rim", "shaker", "cowbell", "conga", "bongo"}
 _SKELETON_VOICES = {"kick", "snare", "clap", "sub"}
 
 # Base-beat SKELETON variants (R17 — owner: "the drum beat is exactly the same
@@ -191,6 +194,16 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         {"shaker": [.18] * 16},
         # the classic 909 cowbell on the offbeats
         {"cowbell": [0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0, 0, 0, .25, 0]},
+        # R31 producer-style seasoning rows (indices 4-7):
+        # conga tumbao — the carnival-house live-percussion conversation
+        {"conga": [0, 0, .30, 0, 0, .28, 0, .32, 0, 0, .30, 0, .28, 0, .32, 0]},
+        # disco percussion bed — shaker 16ths + offbeat cowbell zaps
+        {"shaker": [.20] * 16,
+         "cowbell": [0, 0, 0, 0, 0, 0, .22, 0, 0, 0, 0, 0, 0, 0, .22, 0]},
+        # foley knocks — woodblock ghosts standing in for found-sound clicks
+        {"rim": [0, 0, 0, .14, 0, 0, .12, 0, 0, .14, 0, 0, 0, 0, .12, 0]},
+        # bongo conversation — the second carnival top layer
+        {"bongo": [0, .25, 0, 0, 0, 0, .28, 0, 0, .25, 0, 0, .30, 0, 0, 0]},
     ],
     "dnb": [
         # offbeat-8th hats only (rolling top)
@@ -372,15 +385,21 @@ def pattern_for(style: str | None, variant: int = 0,
 SWING: dict[str, float] = {"garage": 0.16, "techhouse": 0.08}
 
 
-def swung_step_offset(style: str | None, step: int) -> float:
+def swung_step_offset(style: str | None, step: int,
+                      swing: float | None = None) -> float:
     """Step position in step-units with swing applied (odd 16ths delayed).
     THE shared groove clock: drum renderers AND the sidechain pump both use
-    this, so the duck always lands exactly on the (possibly swung) hit."""
-    return step + (SWING.get(style or "", 0.0) if step % 2 else 0.0)
+    this, so the duck always lands exactly on the (possibly swung) hit.
+    `swing` (R31) overrides the per-style SWING map — the producer-style
+    per-press groove; None = the map (all legacy paths byte-identical). Only
+    ODD steps move, so a genre's even-step kick/clap backbone cannot shift."""
+    s = SWING.get(style or "", 0.0) if swing is None else swing
+    return step + (s if step % 2 else 0.0)
 
 
 def render_drums(style: str, tempo: float, bars: int, sr: int = SR,
-                 pattern: dict | None = None) -> np.ndarray:
+                 pattern: dict | None = None,
+                 swing: float | None = None) -> np.ndarray:
     """Render `bars` bars of the named drum style to a mono float buffer.
 
     `pattern` overrides the style's DRUM_PATTERNS entry (arranger voice subsets)."""
@@ -400,6 +419,7 @@ def render_drums(style: str, tempo: float, bars: int, sr: int = SR,
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
+                at = int((b * 4 * spb
+                          + swung_step_offset(style, i, swing) * step_s) * sr)
                 add_at(buf, oneshot * float(vel) * g, at)
     return buf[: bars * bar_samples + int(0.4 * sr)]
