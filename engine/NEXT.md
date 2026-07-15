@@ -1,5 +1,25 @@
 # Where we are / next session
 
+## NEW — R29 + battery THREE (2026-07-14, NOT deployed)
+Owner confirmed the R26 half-feel switch-up is what they meant, lifted the
+Modal spend limit, and asked for a fresh listening set: ALL base melodies
+swapped, and each battery's percussive slot = a different NON-MUSICAL
+child-experiment pattern, from very sparse to far too busy.
+
+- **R29 routing**: `riff_tonality` returns 0.30 (percussive) for 1–2 note
+  patterns (was 1.0/melodic) — a single programmed note now gets the R24
+  sparse/atmospheric treatment. test_style's melodic fixture grew to 4
+  triad-anchored notes.
+- **Battery THREE inputs** (`examples/{a2,b2,c2,d2}_*.json`, _BATTERIES
+  bases/steps/tempos unchanged): 8 new melodies across piano/synth/trumpet/
+  strings/bells/bass + child patterns A = TWO touches, B = 4 pokes w/ a
+  finger rub, C = 18-note splatter, D = 32-note wall mash over held lows.
+  All 12 verified routing correctly; extremes smoke-rendered clean.
+- Battery cut on the R24–R29 engine, verified by content (96 files, 24
+  percussive/72 melodic, both perc_low + note_style modes live, 16 dry_echo
+  takes carry the riff_echo layer) → copied to MAIN repo
+  `engine/out/showcase/` — **this is the owner's current listening set**.
+
 ## NEW — Rounds 24–28: battery-two ear feedback ("nearly there for launch") (2026-07-14, NOT deployed)
 Owner on the R17–R23 battery: drill + reggaeton nailed bar minor fx tweaks;
 standouts B/garage_minor, B/drill_major_a, B/hiphop_percussive,
