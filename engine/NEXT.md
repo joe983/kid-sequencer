@@ -37,6 +37,15 @@ Virji was banked for the future Garage pass — 2-step belongs to that genre):
   reproducible variation numbers; resumable, skips existing files).
   Null A/B fixtures: `::baseline --tag <pre|post>` → out/baseline/<tag>/
   SHA256SUMS (other genres must stay byte-identical, cross-process).
+  ⚠️ NULL A/B CAVEAT (discovered verifying R31): some fixture renders flip
+  between TWO stable hash values across Modal runs REGARDLESS of code
+  revision (dnb/hiphop flipped; each divergent hash was reproduced exactly
+  by the other revision, and choose_style output diffed empty) — host CPU
+  variance in the synth float paths, pre-existing, NOT a regression. If a
+  hash differs, re-render BOTH revisions before concluding anything: a
+  value the other revision also produces = environmental. This also
+  refines the determinism note below: same (sequence, variation) = same
+  track holds per machine-type, not across Modal's host fleet.
 - **Repeat-press math**: P(same producer twice) = 1/6; with per-producer
   sub-draws still varying, "feels the same" ≈ 4–6% of consecutive pairs.
 - Levers: every `_PRODUCER_*` table in style.py (menus/weights/pins),

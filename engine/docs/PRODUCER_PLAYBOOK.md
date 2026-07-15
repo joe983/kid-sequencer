@@ -61,7 +61,13 @@ r19 fx/bass tests that hard-code the old menus.
 - `python -m modal run infra/modal_app.py::run_tests` — all suites green.
 - Null A/B: `::baseline --tag pre` BEFORE the change, `--tag post` after —
   every OTHER genre's SHA256 must be identical (cross-process; see the
-  NEXT.md determinism caveat).
+  NEXT.md determinism caveat). If a hash differs, DON'T panic-bisect:
+  some renders flip between two stable values across Modal hosts (CPU
+  float variance, discovered R31). Re-render both revisions (`--tag
+  post2`, and `--tag preflip` from a pre-revision worktree); a divergent
+  hash the other revision also produces is environmental, not yours.
+  The style layer can be compared exactly: diff `choose_style` output
+  across revisions for the fixtures (pure Python, runs locally).
 - `::producers --riff-file examples/<battery riff> --genre <genre> --tempo
   <genre tempo>` → `out/showcase/PRODUCERS/<genre>/` (+ a percussive-input
   run with the battery child riff). Copy to the MAIN repo checkout for the
