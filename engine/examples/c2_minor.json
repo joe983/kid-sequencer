@@ -1,0 +1,40 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 3,
+        "start": 0,
+        "len": 4
+      },
+      {
+        "row": 4,
+        "start": 4,
+        "len": 1
+      },
+      {
+        "row": 5,
+        "start": 5,
+        "len": 1
+      },
+      {
+        "row": 3,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 7,
+        "start": 8,
+        "len": 4
+      },
+      {
+        "row": 5,
+        "start": 12,
+        "len": 4
+      }
+    ]
+  },
+  "key": "Dm",
+  "tempo": 96,
+  "instrument": "strings",
+  "drumStyle": "techhouse"
+}

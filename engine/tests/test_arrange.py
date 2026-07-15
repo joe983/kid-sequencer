@@ -287,10 +287,14 @@ def test_riff_tonality_separates_melodic_from_percussive_patterns():
     assert riff_tonality(melodic) == riff_tonality(melodic)   # deterministic
     assert riff_tonality(melodic) > 0.65, riff_tonality(melodic)
     assert riff_tonality(cluster) < 0.55, riff_tonality(cluster)
-    # too-short riffs are treated as melodic, never mode-flipped
+    # R29: 1-2 note patterns take the PERCUSSIVE/sparse treatment — a small
+    # child's single note gets atmosphere, not chords forced under nothing
     short = Riff(notes=melodic.notes[:2], tempo=120, key="C",
                  instrument="piano", drum_style="techhouse")
-    assert riff_tonality(short) == 1.0
+    assert riff_tonality(short) == 0.30
+    one = Riff(notes=melodic.notes[:1], tempo=120, key="C",
+               instrument="piano", drum_style="techhouse")
+    assert riff_tonality(one) == 0.30
     # the percussive-mode drone: root + fifth ONLY (no third to clash)
     dn = drone_notes(cluster, bars=2)
     assert len(dn) == 4 and all(n.dur_beats == 4.0 for n in dn)

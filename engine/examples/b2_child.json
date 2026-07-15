@@ -1,0 +1,30 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 4,
+        "start": 0,
+        "len": 1
+      },
+      {
+        "row": 3,
+        "start": 0,
+        "len": 1
+      },
+      {
+        "row": 7,
+        "start": 7,
+        "len": 3
+      },
+      {
+        "row": 0,
+        "start": 12,
+        "len": 1
+      }
+    ]
+  },
+  "key": "C",
+  "tempo": 120,
+  "instrument": "synth",
+  "drumStyle": "techhouse"
+}

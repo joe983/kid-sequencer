@@ -375,7 +375,12 @@ def riff_tonality(riff: Riff) -> float:
     the arranger switches production mode instead of forcing chords under it."""
     notes = riff.notes
     if len(notes) < 3:
-        return 1.0  # too short to judge — treat as melodic
+        # R29 (owner): "even if the child just programs in 1 short note you
+        # can still produce a sparse interesting song where that note can
+        # clearly be heard" — 1-2 note patterns take the PERCUSSIVE/sparse
+        # treatment (skeletal drums, note-forward mix, atmosphere), not
+        # chords-and-development forced under nearly nothing.
+        return 0.30
     semi, steps = _scale_steps(riff.key)
     tonic = _C4_MIDI + semi
     weights: dict[int, float] = {}

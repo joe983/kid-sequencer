@@ -271,34 +271,38 @@ def render_showcase_item(riff_file: str, style: str, tempo: int,
 # melodies, its own variation-number base (structures never repeat across
 # batteries) and its own tempo per genre — folders A..D should sit as far
 # apart as the engine can reach. A = the original riff set.
+# Battery THREE input set (2026-07-14, owner: "swap all the base melodies …
+# for each percussive track use a different non-musical note pattern —
+# imagine a very small child experimenting; try very sparse patterns and
+# far-too-busy patterns"). The "cluster" slot now spans the child-experiment
+# spectrum: A = 2 touches (very sparse), B = 4 pokes w/ a rub, C = 18-note
+# splatter, D = 32-note wall mash over held low notes.
 _BATTERIES: dict[str, dict] = {
-    "A": {"major": "examples/sample_riff.json",
-          "minor": "examples/minor_riff.json",
-          "cluster": "examples/cluster_riff.json",
+    # A: playful bounce (piano) / falling lament (synth) / TWO TOUCHES
+    "A": {"major": "examples/a2_major.json",
+          "minor": "examples/a2_minor.json",
+          "cluster": "examples/a2_child.json",
           "base": 1, "step": 7,
           "tempos": {"techhouse": 124, "dnb": 172, "garage": 132,
                      "drill": 142, "hiphop": 92, "reggaeton": 96}},
-    # B: syncopated offbeat hook (synth) / falling lament (piano) /
-    # two-row machine stabs (synth)
-    "B": {"major": "examples/b_major.json",
-          "minor": "examples/b_minor.json",
-          "cluster": "examples/b_cluster.json",
+    # B: staccato ladder (trumpet) / call-response w/ rests (piano) / 4 POKES
+    "B": {"major": "examples/b2_major.json",
+          "minor": "examples/b2_minor.json",
+          "cluster": "examples/b2_child.json",
           "base": 211, "step": 13,
           "tempos": {"techhouse": 128, "dnb": 176, "garage": 130,
                      "drill": 140, "hiphop": 88, "reggaeton": 100}},
-    # C: 5-note sparse question/answer w/ octave leap (piano) / wall-to-wall
-    # rising 16th arps (strings) / long overlapped seconds (bass — industrial)
-    "C": {"major": "examples/c_major.json",
-          "minor": "examples/c_minor.json",
-          "cluster": "examples/c_cluster.json",
+    # C: rolling alternation (synth) / wide lament (strings) / BUSY SPLATTER
+    "C": {"major": "examples/c2_major.json",
+          "minor": "examples/c2_minor.json",
+          "cluster": "examples/c2_child.json",
           "base": 421, "step": 17,
           "tempos": {"techhouse": 120, "dnb": 168, "garage": 134,
                      "drill": 144, "hiphop": 96, "reggaeton": 92}},
-    # D: scalar climb into long holds (trumpet) / octave-pendulum leaps
-    # (synth) / sparse irregular hits + silence (piano, rhythm-forward)
-    "D": {"major": "examples/d_major.json",
-          "minor": "examples/d_minor.json",
-          "cluster": "examples/d_cluster.json",
+    # D: octave-leap question (bells) / driving low repeats (bass) / WALL MASH
+    "D": {"major": "examples/d2_major.json",
+          "minor": "examples/d2_minor.json",
+          "cluster": "examples/d2_child.json",
           "base": 631, "step": 19,
           "tempos": {"techhouse": 126, "dnb": 174, "garage": 128,
                      "drill": 138, "hiphop": 84, "reggaeton": 98}},
