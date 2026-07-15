@@ -334,7 +334,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                        bass_patch=["bass_pluck", "bass_funk", "bass",
                                    "bass_acid", "bass_pizz"],
                        bass_feel=[0, 1, 2, 3, 4],
-                       drum_variant=[0, 1, 2, 3], texture=["wash", None],
+                       drum_variant=[0, 1, 2, 3], texture=[None, "crackle"],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
     # dnb: supersaw wash (its pad identity) + cinematic strings/choir/glass;
     # reese leads but no longer dominates (R19 — owner: "stuck on reese every
@@ -344,7 +344,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                  bass_patch=["bass_reese", "bass_sub_roll", "bass",
                              "bass_pizz", "bass_acid"],
                  bass_feel=[0, 1, 2, 3, 4, 5],
-                 drum_variant=[0, 1, 2, 3], texture=["wash", None],
+                 drum_variant=[0, 1, 2, 3], texture=[None, "crackle"],
                  riff_break_variant=["sparse_low", "octave_echo"]),
     # organ skank IS UK garage; pluck/clav/brass-stab alternates. Bouncy bass
     # with octave pops; FM knock as the alt colour.
@@ -378,7 +378,7 @@ _GENRE_MENU: dict[str, dict[str, list]] = {
                                    "bass"],
                        bass_feel=[0, 1, 2, 3],
                        drum_variant=[0, 1, 2, 3, 4, 5],
-                       texture=["wash", "crackle", None],
+                       texture=["crackle", None],
                        riff_break_variant=["sparse_low", "octave_echo", "call_response"]),
 }
 
@@ -494,20 +494,18 @@ def _menu_for(genre: str | None) -> dict[str, list]:
 
 # R24 percussive texture REFERENCE flavours (owner picked all three):
 # Photek/Source Direct = dnb+drill (metal, surgical), Burial = garage+hiphop
-# (crackle, ghostly), Rhythm & Sound = techhouse+reggaeton (dub drone
-# breath). Metal stays reachable everywhere (tests + the pad-free takes'
-# signature) but weighted by reference.
+# (crackle, ghostly), Rhythm & Sound dub breath via drone. R30: "wash" is
+# BANNED — a filtered-noise bed IS a continuous swoosh, which is exactly
+# what the owner keeps flagging ("swooshes all the way through sounds
+# crap"). Tonal/textural beds only. techhouse leans crackle over drone
+# ("too dubbed out — still need to hear that it is tech house").
 _PERC_TEXTURE: dict[str, tuple[list, list]] = {
-    "dnb": (["metal", "drone", "wash"], [0.40, 0.35, 0.25]),
-    "drill": (["metal", "drone", "wash"], [0.40, 0.35, 0.25]),
-    "garage": (["crackle", "wash", "drone", "metal"],
-               [0.35, 0.30, 0.25, 0.10]),
-    "hiphop": (["crackle", "wash", "drone", "metal"],
-               [0.35, 0.30, 0.25, 0.10]),
-    "techhouse": (["drone", "wash", "crackle", "metal"],
-                  [0.40, 0.30, 0.20, 0.10]),
-    "reggaeton": (["drone", "wash", "crackle", "metal"],
-                  [0.40, 0.30, 0.20, 0.10]),
+    "dnb": (["metal", "drone", "crackle"], [0.45, 0.35, 0.20]),
+    "drill": (["metal", "drone", "crackle"], [0.45, 0.35, 0.20]),
+    "garage": (["crackle", "drone", "metal"], [0.50, 0.30, 0.20]),
+    "hiphop": (["crackle", "drone", "metal"], [0.50, 0.30, 0.20]),
+    "techhouse": (["crackle", "drone", "metal"], [0.45, 0.35, 0.20]),
+    "reggaeton": (["crackle", "drone", "metal"], [0.50, 0.30, 0.20]),
 }
 
 # percussive-mode drone roles per genre (no chord-implying comping sounds)
@@ -735,7 +733,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
         # that's not the style at all"): risers never fire
         riser_menu = ([False], None)
     elif percussive:
-        riser_menu = ([True, False], [0.50, 0.50])
+        # R30: percussive/sparse takes barely ever ride a riser — sweeps
+        # were reading as wall-to-wall swoosh on top of the beds
+        riser_menu = ([False, True], [0.75, 0.25])
     else:
         riser_menu = ([True, False], [0.70, 0.30])
     f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
@@ -866,7 +866,7 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                       [0.60, 0.40])
     if mode == "percussive" and perc_pads == "drone" \
             and texture in ("drone", "metal"):
-        texture = "wash"
+        texture = "crackle"   # R30: never "wash" — noise beds read as swoosh
     skey = lead_stack_key(riff.drum_style, house)
     stacks = LEAD_STACKS.get(skey, [[]])
     n_stacks = len(stacks)

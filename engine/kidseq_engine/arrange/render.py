@@ -674,8 +674,10 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     # it deliberately does NOT pump — the tails breathe through the gaps.
     if percussive and style.perc_note_style == "dry_echo":
         from pedalboard import Delay, HighpassFilter, Pedalboard
+        # R30 (owner: too much delay "would warp it a little too much
+        # beyond recognition"): fewer repeats — the note first, one ghost
         board = Pedalboard([
-            Delay(delay_seconds=min(0.75 * spb, 0.9), feedback=0.5, mix=1.0),
+            Delay(delay_seconds=min(0.75 * spb, 0.9), feedback=0.35, mix=1.0),
             HighpassFilter(cutoff_frequency_hz=300.0),
         ])
         wet = np.asarray(board(layers["riff"].astype(np.float32), sr),
