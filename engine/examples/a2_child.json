@@ -1,0 +1,20 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 6,
+        "start": 2,
+        "len": 1
+      },
+      {
+        "row": 1,
+        "start": 9,
+        "len": 2
+      }
+    ]
+  },
+  "key": "C",
+  "tempo": 120,
+  "instrument": "piano",
+  "drumStyle": "techhouse"
+}

@@ -20,11 +20,16 @@ from kidseq_engine.sequence import _C4_MIDI, Note, Riff, _scale_steps  # noqa: E
 
 
 def _riff(key="C", tempo=120.0, drum_style="techhouse", instrument="piano") -> Riff:
+    # 4 triad-anchored notes: firmly MELODIC under riff_tonality (R29 routes
+    # 1-2 note patterns to the percussive/sparse treatment, so the melodic
+    # fixture must be a real melody)
     semi, steps = _scale_steps(key)
     tonic = _C4_MIDI + semi
     notes = [
         Note(pitch=tonic, start_beats=0.0, dur_beats=1.0),
+        Note(pitch=tonic + steps[2], start_beats=1.0, dur_beats=1.0),
         Note(pitch=tonic + steps[4], start_beats=2.0, dur_beats=1.5),
+        Note(pitch=tonic + steps[2], start_beats=3.5, dur_beats=0.5),
     ]
     return Riff(notes=notes, tempo=tempo, key=key,
                 instrument=instrument, drum_style=drum_style)

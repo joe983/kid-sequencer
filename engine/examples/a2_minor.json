@@ -1,0 +1,40 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 7,
+        "start": 0,
+        "len": 2
+      },
+      {
+        "row": 5,
+        "start": 2,
+        "len": 2
+      },
+      {
+        "row": 3,
+        "start": 4,
+        "len": 3
+      },
+      {
+        "row": 7,
+        "start": 8,
+        "len": 2
+      },
+      {
+        "row": 5,
+        "start": 10,
+        "len": 2
+      },
+      {
+        "row": 4,
+        "start": 12,
+        "len": 3
+      }
+    ]
+  },
+  "key": "Am",
+  "tempo": 100,
+  "instrument": "synth",
+  "drumStyle": "techhouse"
+}
