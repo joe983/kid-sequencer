@@ -1,5 +1,26 @@
 # Where we are / next session
 
+## NEW — R30: percussive backbones + swoosh purge (2026-07-14, NOT deployed)
+Owner on battery three (percussive focus; "apply to all"): half-tempo dnb
+too long + wrong there; swooshes as continuous background AGAIN
+(drill/garage/reggaeton "all the way through — sounds crap"); reggaeton
+dembow missing = unrecognisable; hiphop disjointed; dnb main snares must be
+equal; techhouse percussive too dubbed out; echo risks warping the note.
+NEXT SESSION (owner): close this session out, then go GENRE BY GENRE adding
+a little more variety to each separately.
+
+- **PERC_SKELETAL principle: strip TOPS, never the backbone.** Reggaeton
+  keeps the full dembow; dnb always full-tempo two-step, snare mains EQUAL
+  at steps 4+12 (half-feel lives ONLY in the melodic ≤8-bar switch-up);
+  hiphop keeps boom-bap kick/snare; techhouse keeps 4-floor + CLAP; garage
+  mains equalised; drill untouched. R30 contract test pins all of this.
+- **"wash" texture BANNED everywhere** (melodic + percussive menus + the
+  R23 exclusion fallback → crackle): a filtered-noise bed IS a continuous
+  swoosh. Percussive riser_on 0.50 → 0.25.
+- **riff_echo subtler**: feedback 0.35, target −29 LUFS.
+- Levers: PERC_SKELETAL rows; _PERC_TEXTURE weights; percussive riser
+  menu; riff_echo feedback/LUFS.
+
 ## NEW — R29 + battery THREE (2026-07-14, NOT deployed)
 Owner confirmed the R26 half-feel switch-up is what they meant, lifted the
 Modal spend limit, and asked for a fresh listening set: ALL base melodies

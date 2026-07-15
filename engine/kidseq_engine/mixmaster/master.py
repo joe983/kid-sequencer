@@ -88,9 +88,10 @@ _PUMP_DEPTH_CAP = 0.65
 # Post-board layer LUFS targets (active regions only) — the calibrated mix
 # balance genre gains offset from. rumble pumps hardest AND sits deepest —
 # it ducks out of the dry kick's way like Hades' sidechained return.
-# riff_echo (R24) = the percussive note's ghost delay tail, well under.
+# riff_echo (R24) = the percussive note's ghost delay tail, well under
+# (R30: -27 -> -29 — the echo must never blur the note past recognition).
 _LAYER_LUFS = {"drums": -18.0, "riff": -20.0, "bass": -21.0, "pads": -26.0,
-               "texture": -30.0, "rumble": -31.0, "riff_echo": -27.0}
+               "texture": -30.0, "rumble": -31.0, "riff_echo": -29.0}
 
 # Layers locked dead-centre (mono) after their board — low-end mono-compatibility.
 _MONO_LOCK = ("bass", "fx_sub", "rumble")

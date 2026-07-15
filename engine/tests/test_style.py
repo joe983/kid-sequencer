@@ -157,6 +157,41 @@ def test_r26_r27_r28_ear_feedback_round_two():
         sum(dl_without) / len(dl_without)
 
 
+def test_r30_percussive_recognition_and_swoosh_purge():
+    # R30 (owner battery-three notes): skeletal patterns keep the genre's
+    # BACKBONE — dembow present, dnb always full-tempo with EQUAL main
+    # snares, hiphop boom-bap core, techhouse 4-floor + clap; "wash" (the
+    # continuous-swoosh noise bed) is banned from every texture menu.
+    from kidseq_engine.arrange.style import _PERC_TEXTURE
+    from kidseq_engine.render.drums import DRUM_PATTERNS as DP
+    from kidseq_engine.render.drums import DRUM_SKELETONS, PERC_SKELETAL
+
+    # dnb: every full-beat pattern (base, skeletons except the half-feel
+    # switch-up, and every percussive skeletal) keeps snare mains at 4 & 12
+    # EQUAL — and percussive dnb is never half-feel
+    full_beats = [DP["dnb"], DRUM_SKELETONS["dnb"][0], DRUM_SKELETONS["dnb"][1]]
+    full_beats += PERC_SKELETAL["dnb"]
+    for i, p in enumerate(full_beats):
+        sn = p["snare"]
+        assert sn[4] == sn[12] == 1, (i, sn)
+    # reggaeton skeletal: the dembow is unmistakable (4-pulse kick + the
+    # classic 3/6/11/14 snare)
+    for sk in PERC_SKELETAL["reggaeton"]:
+        assert sk["kick"] == DP["reggaeton"]["kick"], sk
+        assert sk["snare"] == DP["reggaeton"]["snare"], sk
+    # hiphop skeletal keeps the boom-bap backbeat
+    for sk in PERC_SKELETAL["hiphop"]:
+        assert sk["snare"][4] == sk["snare"][12] == 1, sk
+    # techhouse skeletal keeps 4-floor + clap backbeat
+    for sk in PERC_SKELETAL["techhouse"]:
+        assert sk["kick"][::4] == [1, 1, 1, 1], sk
+        assert sk["clap"][4] == sk["clap"][12] == 1, sk
+    # wash is gone from every menu, melodic and percussive
+    for genre in DRUM_PATTERNS:
+        assert "wash" not in _GENRE_MENU[genre]["texture"], genre
+        assert "wash" not in _PERC_TEXTURE[genre][0], genre
+
+
 def test_r24_percussive_doctrine():
     # R24: both low-end modes and both note treatments occur across takes;
     # pad-free leads (60/40); percussive textures follow the genre's
@@ -412,9 +447,9 @@ def test_fx_palette_r12_menu_coverage():
     # R22: reggaeton joined the odd-loop club (shaker undercurrent)
     assert {p.odd_loop_on for p in per_genre["reggaeton"]} == {True, False}
     assert {p.odd_loop_on for p in per_genre["drill"]} == {False}
-    assert set(_GENRE_MENU["dnb"]["texture"]) == {"wash", None}
-    # R22: reggaeton gained the warm-tape crackle bed
-    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"wash", "crackle", None}
+    # R30: "wash" is banned everywhere — a noise bed IS a continuous swoosh
+    assert set(_GENRE_MENU["dnb"]["texture"]) == {None, "crackle"}
+    assert set(_GENRE_MENU["reggaeton"]["texture"]) == {"crackle", None}
 
 
 def test_percussive_photek_variants_r16():
@@ -434,7 +469,7 @@ def test_percussive_photek_variants_r16():
     assert {s.percussive_pads for s in styles} == {"drone", "none"}
     assert "metal" in {s.texture for s in styles}
     on = sum(1 for s in styles if s.fx_palette.riser_on)
-    assert 0.30 < on / len(styles) < 0.70          # percussive: 50/50 riser
+    assert 0.10 < on / len(styles) < 0.40   # R30: percussive risers are rare
     # melodic tracks: risers now off on a real share of takes (~30%)
     mel = [choose_style(_riff(), v).fx_palette for v in range(300)]
     off = sum(1 for p in mel if not p.riser_on)

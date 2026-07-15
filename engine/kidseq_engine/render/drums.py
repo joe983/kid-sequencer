@@ -248,47 +248,58 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
 # replace the FULL genre groove in percussive/sparse mode. Hand-written, 2-3
 # variants per genre; drops rotate variants (the kit is the journey). The
 # gaps are the point — resist filling them.
+# R30 (owner battery-three notes): spaciousness comes from STRIPPED TOPS,
+# never a stripped backbone — every skeletal pattern keeps its genre's
+# recognisable kick+snare core intact (the dembow stays the dembow, dnb
+# stays full-tempo two-step with EQUAL main snares, hiphop stays boom-bap,
+# techhouse keeps the 4-floor + clap backbeat). Variants differ by small
+# rim/ghost conversations only; the drummer gestures add the motion.
 PERC_SKELETAL: dict[str, list[dict[str, list[float]]]] = {
-    "dnb": [   # Photek: surgical, dry, all air
-        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.9,0, 0,0,0,0],
-         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,.25,0]},
-        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0],
-         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,.22],
-         "rim":   [0,0,0,0, 0,0,.25,0, 0,0,0,0, .28,0,0,0]},
+    "dnb": [   # Photek: surgical, dry — ALWAYS full-tempo (no half-feel
+        # here; owner: it reads wrong and ran too long), mains equal
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
+         "rim":   [0,0,0,0, 0,0,.25,0, 0,.22,0,0, 0,0,0,.25]},
         {"kick":  [1,0,0,0, 0,0,.7,0, 0,0,1,0, 0,0,0,0],
-         "snare": [0,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0]},
+         "snare": [0,0,0,.2, 1,0,0,0, 0,0,0,0, 1,0,0,.22]},
     ],
-    "drill": [
+    "drill": [   # (owner liked these — snare anchored on beat 3)
         {"kick":  [1,0,0,0, 0,0,0,0, 0,0,0,0, .85,0,0,0],
          "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0]},
         {"kick":  [1,0,0,0, 0,0,.8,0, 0,0,0,0, 0,0,0,0],
          "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
          "rim":   [0,0,0,0, 0,0,0,0, 0,0,0,.3, 0,0,0,0]},
     ],
-    "garage": [   # Burial: 2-step ghosts, off-grid feel, no hats
+    "garage": [   # 2-step core intact, mains equal
         {"kick":  [1,0,0,0, 0,0,0,.6, 0,0,0,0, 0,0,0,0],
-         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, .8,0,0,0]},
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]},
         {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.7,0, 0,0,0,0],
-         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,.25, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,.25, 1,0,0,0],
          "rim":   [0,0,0,0, 0,0,0,0, 0,.22,0,0, 0,0,.25,0]},
     ],
-    "hiphop": [
-        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.9,0, 0,0,0,0],
-         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 0,0,0,0]},
-        {"kick":  [1,0,0,0, 0,0,0,.7, 0,0,0,0, 0,0,0,0],
-         "snare": [0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,.2,0]},
+    "hiphop": [   # boom-bap core intact (owner: was disjointed)
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]},
+        {"kick":  [1,0,0,0, 0,0,0,.7, 0,0,1,0, 0,0,0,0],
+         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,.2]},
     ],
-    "techhouse": [   # Rhythm & Sound: the 4/4 pulse breathing in space
+    "techhouse": [   # 4-floor + CLAP backbeat: unmistakably tech house
+        # (owner: "too dubbed out — still need to hear that it is tech house")
         {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "clap":  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]},
+        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "clap":  [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
          "rim":   [0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,.25,0]},
-        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
-         "shaker": [0,0,.2,0, 0,0,0,0, 0,0,.2,0, 0,0,0,0]},
     ],
-    "reggaeton": [
-        {"kick":  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
-         "snare": [0,0,0,.7, 0,0,.6,0, 0,0,0,0, 0,0,0,0]},
-        {"kick":  [1,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0],
-         "rim":   [0,0,0,.3, 0,0,.28,0, 0,0,0,.3, 0,0,.28,0]},
+    "reggaeton": [   # the DEMBOW stays (owner: "wasn't recognisable as the
+        # genre") — four-pulse kick + the classic dembow snare, tops gone
+        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "snare": [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,0,1,0]},
+        {"kick":  [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0],
+         "snare": [0,0,0,1, 0,0,1,0, 0,0,0,1, 0,0,1,0],
+         "rim":   [0,0,.25,0, 0,0,0,0, 0,0,.25,0, 0,0,0,0]},
     ],
 }
 
