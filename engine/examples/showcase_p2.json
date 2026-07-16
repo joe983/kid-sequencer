@@ -1,0 +1,50 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 7,
+        "start": 0,
+        "len": 2
+      },
+      {
+        "row": 0,
+        "start": 2,
+        "len": 1
+      },
+      {
+        "row": 7,
+        "start": 3,
+        "len": 1
+      },
+      {
+        "row": 0,
+        "start": 4,
+        "len": 2
+      },
+      {
+        "row": 5,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 2,
+        "start": 8,
+        "len": 4
+      },
+      {
+        "row": 5,
+        "start": 12,
+        "len": 2
+      },
+      {
+        "row": 0,
+        "start": 14,
+        "len": 2
+      }
+    ]
+  },
+  "key": "C",
+  "tempo": 122,
+  "instrument": "piano",
+  "drumStyle": "techhouse"
+}
