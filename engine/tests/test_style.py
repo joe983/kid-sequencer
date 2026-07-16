@@ -366,22 +366,25 @@ def test_style_fields_are_decorrelated_across_nonces():
                                              _PRODUCER_FEEL, _PRODUCER_MENU,
                                              _PRODUCER_PAD_MENU,
                                              _PRODUCER_RHYTHM)
+    # R31/R33: the producer styles own the techhouse pools for these fields.
+    # Restrict the unions to TECHHOUSE producers (the riff under test is
+    # techhouse) so other genres' producer rows (garage, …) don't leak in.
+    th = set(_PRODUCER_MENU["techhouse"][0])
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
                   "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
                   "riff_ornament"):
         seen = set(picks(field))
         want = set(menu[field])
-        # R31: the producer styles own the techhouse pools for these fields
         if field == "pad_role":
-            want = {r for m in _PRODUCER_PAD_MENU.values() for r in m}
+            want = {r for p, m in _PRODUCER_PAD_MENU.items() if p in th for r in m}
         if field == "pad_rhythm":
-            want = {i for m, _ in _PRODUCER_RHYTHM.values() for i in m}
+            want = {i for p, (m, _) in _PRODUCER_RHYTHM.items() if p in th for i in m}
         if field == "bass_patch":
-            want = {b for m, _ in _PRODUCER_BASS.values() for b in m}
+            want = {b for p, (m, _) in _PRODUCER_BASS.items() if p in th for b in m}
         if field == "bass_feel":
-            want = {i for m, _ in _PRODUCER_FEEL.values() for i in m}
+            want = {i for p, (m, _) in _PRODUCER_FEEL.items() if p in th for i in m}
         if field == "drum_variant":
-            want = {i for m in _PRODUCER_DRUMV.values() for i in m}
+            want = {i for p, m in _PRODUCER_DRUMV.items() if p in th for i in m}
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
     # R20: None (no stack) joined the menu; R31: producer banks are 3 stacks

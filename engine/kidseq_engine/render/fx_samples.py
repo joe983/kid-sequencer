@@ -35,11 +35,16 @@ FX_FALLBACK: dict[str, str | None] = {
     "smp_tom_zap": "sig_chirp",
     "smp_riser": "sweep_up",
     "smp_impact": "sig_chirp",
+    # R33 garage producer candy
+    "smp_horn": "sig_chirp",     # virji rave air-horn / stab
+    "smp_dub": "rev_cymbal",     # breakz dub-delay throw
+    "smp_siren": "sweep_up",     # sunny dub siren (sweep-family)
+    "smp_swell": "rev_cymbal",   # sincere string swell / dusk lift
 }
 
 # sampled sweep-family kinds — join the R28 sweep cap (never twice in a row,
 # <=2 per track) alongside the synth sweep_up/sweep_down.
-SAMPLED_SWEEP_KINDS = {"smp_slide", "smp_riser"}
+SAMPLED_SWEEP_KINDS = {"smp_slide", "smp_riser", "smp_siren"}
 
 _cache: dict[str, np.ndarray] = {}
 

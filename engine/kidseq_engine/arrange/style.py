@@ -625,6 +625,157 @@ _STACK_W: dict[str, list[float]] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# R33 GARAGE PRODUCER STYLES (owner-approved 2026-07-16). Added by DATA — no
+# schema change (the R31 machinery + config-driven gate handle any genre).
+# Signatures: engine/docs/producer_signatures_garage.md. Reference producers:
+#   virji   — Sammy Virji           (organ bassline, bouncy 2-step, diva chops)
+#   breakz  — Interplanetary Criminal(raw broken 2-step, dark sub, lo-fi)
+#   sunny   — Conducta              (sunshine skippy, springy sub, vocal confetti)
+#   niche   — Silva Bumpa           (driving swung, wobble/growl bass = the lead)
+#   sincere — MJ Cole               (smooth soulful 2-step, Rhodes/piano)
+#   dusk    — salute                (euphoric-atmospheric, rolling sub, filtered pads)
+# Ranges valid for garage: pad_rhythm 0-1, bass_feel 0-3, drum_variant 0-2,
+# fill_shape 0-2 (_FILL_MENU["garage"] has 3). Every treatment stays inside the
+# pinned 2-step backbone; swing moves odd 16ths only.
+# ---------------------------------------------------------------------------
+_PRODUCER_MENU["garage"] = (
+    ["virji", "breakz", "sunny", "niche", "sincere", "dusk"], [1, 1, 1, 1, 1, 1])
+_PRODUCER_PAD_MENU.update({
+    "virji": ["organ", "pluck"],
+    "breakz": ["dub_chord", "dark"],
+    "sunny": ["pluck", "organ", "glass"],
+    "niche": ["dark", "organ"],
+    "sincere": ["epiano", "piano"],
+    "dusk": ["string_machine", "warm", "supersaw_chord"],
+})
+_PRODUCER_RHYTHM.update({
+    "virji": ([1, 0], None),        # offbeat organ skank
+    "breakz": ([0], None),          # sparse — a lone stab
+    "sunny": ([1, 0], None),
+    "niche": ([0, 1], None),        # bass carries the harmony; pads minimal
+    "sincere": ([0, 1], None),
+    "dusk": ([1, 0], None),
+})
+_PRODUCER_BASS.update({
+    "virji": (["bass_organ", "bass_funk"], [0.70, 0.30]),      # organ bass = hook
+    "breakz": (["bass_sub_roll", "bass_reese"], [0.60, 0.40]), # dark minimal sub
+    "sunny": (["bass_pluck", "bass_round"], [0.65, 0.35]),     # springy warm
+    "niche": (["bass_wobble", "bass_reese"], [0.65, 0.35]),    # growl mid-bass lead
+    "sincere": (["bass_round", "bass"], [0.70, 0.30]),         # soft round jazzy
+    "dusk": (["bass_sub_roll", "bass_round"], [0.60, 0.40]),   # deep rolling sub
+})
+_PRODUCER_FEEL.update({
+    "virji": ([1, 2], [0.60, 0.40]),
+    "breakz": ([0], None),
+    "sunny": ([1, 2], [0.55, 0.45]),
+    "niche": ([1, 0], [0.60, 0.40]),
+    "sincere": ([0, 3], [0.60, 0.40]),
+    "dusk": ([3, 0], [0.60, 0.40]),
+})
+_PRODUCER_GATE.update({
+    "virji": ([0.6, 0.35], [0.60, 0.40]),   # bouncy short organ bass
+    "breakz": ([1.0, 0.6], [0.55, 0.45]),
+    "sunny": ([0.6, 1.0], [0.60, 0.40]),
+    "niche": ([0.6, 0.35], [0.60, 0.40]),   # tight
+    "sincere": ([1.0, 0.6], [0.65, 0.35]),  # round walking
+    "dusk": ([1.0], None),                  # rolling continuous sub
+})
+_PRODUCER_PUMP.update({
+    "virji": ([None], None),
+    "breakz": ([None], None),
+    "sunny": ([0.35, None], [0.60, 0.40]),
+    "niche": ([None, 0.35], [0.60, 0.40]),
+    "sincere": ([None], None),
+    "dusk": ([0.62, None], [0.60, 0.40]),   # pumped euphoric pads
+})
+_PRODUCER_RUMBLE.update({
+    "virji": ([False], None),
+    "breakz": ([False], None),
+    "sunny": ([False], None),
+    "niche": ([False, True], [0.70, 0.30]),  # heavy sub-bed taste
+    "sincere": ([False], None),
+    "dusk": ([False], None),
+})
+_PRODUCER_SWING.update({
+    "virji": ([0.16], None),        # heavy garage swing
+    "breakz": ([0.14], None),       # rawer, looser
+    "sunny": ([0.16], None),
+    "niche": ([0.13], None),        # driving, tighter
+    "sincere": ([0.15], None),      # understated
+    "dusk": ([0.16], None),
+})
+_PRODUCER_DRUMV.update({
+    "virji": [0, 1],
+    "breakz": [0, 2],
+    "sunny": [1, 0, 2],
+    "niche": [0, 1],
+    "sincere": [0, 1],
+    "dusk": [0, 2],
+})
+_PRODUCER_FILL.update({          # indices into _FILL_MENU["garage"] (0-2)
+    "virji": [0, 2],
+    "breakz": [0],
+    "sunny": [2, 0],
+    "niche": [0, 1],
+    "sincere": [0],
+    "dusk": [2, 0],
+})
+_PRODUCER_CANDY.update({         # smp_* kinds -> fx_samples.FX_FALLBACK
+    "virji": ("smp_horn", "smp_rev", "hat_lift"),
+    "breakz": ("smp_dub", "hat_lift"),
+    "sunny": ("smp_siren", "smp_riser", "hat_lift"),
+    "niche": ("smp_impact", "hat_lift"),
+    "sincere": ("smp_swell", "hat_lift"),
+    "dusk": ("smp_riser", "hat_lift"),
+})
+_PRODUCER_SWELL.update({         # salute's filtered reverse-reverb lift
+    "dusk": (["reverb", None], [0.60, 0.40]),
+})
+# each producer's SIGNATURE lead stack leads with its REAL repitched one-shot
+# (smp voice -> smp_render.SMP_VOICES); Surge/SF flavours stay as alternates.
+LEAD_VOICES.update({
+    "g_virji": ("smp", "g_virji"),
+    "g_breakz": ("smp", "g_breakz"),
+    "g_sunny": ("smp", "g_sunny"),
+    "g_niche": ("smp", "g_niche"),
+    "g_sincere": ("smp", "g_sincere"),
+    "g_dusk": ("smp", "g_dusk"),
+})
+LEAD_STACKS.update({
+    "garage:virji": [
+        [("g_virji", 0, -9.0), ("organ_v", 0, -14.0)],
+        [("organ_v", 0, -10.0), ("shimmer", 12, -14.0)],
+        [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
+    ],
+    "garage:breakz": [
+        [("g_breakz", 0, -10.0), ("body", -12, -14.0)],
+        [("body", 0, -10.0)],
+        [("keys", 0, -11.0), ("body", -12, -14.0)],
+    ],
+    "garage:sunny": [
+        [("g_sunny", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("vibes", 0, -10.0), ("twinkle", 12, -14.0)],
+        [("bellglass", 12, -10.0), ("keys", 0, -14.0)],
+    ],
+    "garage:niche": [
+        [("g_niche", 0, -9.0), ("body", -12, -14.0)],
+        [("body", 0, -10.0), ("rave_stab", 0, -14.0)],
+        [("dub", 0, -10.0)],
+    ],
+    "garage:sincere": [
+        [("g_sincere", 0, -9.0), ("keys", 0, -13.0)],
+        [("keys", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("piano", 0, -10.0)],
+    ],
+    "garage:dusk": [
+        [("g_dusk", 0, -9.0), ("machine_strings", 0, -14.0)],
+        [("machine_strings", 0, -10.0), ("shimmer", 12, -14.0)],
+        [("strings", 12, -11.0), ("body", -12, -14.0)],
+    ],
+})
+
+
 def lead_stack_key(genre: str | None, producer: str | None) -> str:
     """LEAD_STACKS key for a render: producer styles get their own stack
     banks (`<genre>:<key>`); everything else uses the genre key."""

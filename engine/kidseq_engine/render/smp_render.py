@@ -35,6 +35,13 @@ SMP_VOICES: dict[str, tuple[str, tuple[str, str]]] = {
     "chop_real":  ("techhouse/pianohouse/chop.wav", ("vst", "stab_vocal")),
     "chop_note":  ("techhouse/lofi/chop.wav", ("vst", "stab_vocal")),
     "rave_shot":  ("techhouse/bigroom/rave_shot.wav", ("vst", "supersaw_chord")),
+    # R33 garage producers (each producer's real vocal chop / dark stab)
+    "g_virji":    ("garage/virji/chop.wav", ("sf", "pad_organ")),
+    "g_breakz":   ("garage/breakz/chop.wav", ("vst", "stab_vocal")),
+    "g_sunny":    ("garage/sunny/chop.wav", ("vst", "stab_vocal")),
+    "g_niche":    ("garage/niche/stab.wav", ("vst", "stab_rave")),
+    "g_sincere":  ("garage/sincere/chop.wav", ("sf", "pad_epiano")),
+    "g_dusk":     ("garage/dusk/chop.wav", ("vst", "stab_vocal")),
 }
 
 _HALF_STEP_UP = 2.0 ** (0.5)    # +6 semitones
