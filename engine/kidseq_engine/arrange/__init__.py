@@ -596,6 +596,20 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         [(0.0, 0.7, 106), (1.0, 0.7, 100), (2.0, 0.7, 104), (3.0, 0.7, 100)],
         # R19 funk 16th syncopation (short plucked line)
         _FEEL_FUNK_SYNC,
+        # R31 producer feels (indices 5-8):
+        # 5 — discofunk octave-pop 8ths: every second 8th jumps the octave
+        # (the Purple Disco Machine funk motor)
+        [(0.0, 0.35, 102, 0), (0.5, 0.3, 96, 12), (1.0, 0.35, 102, 0),
+         (1.5, 0.3, 96, 12), (2.0, 0.35, 102, 0), (2.5, 0.3, 96, 12),
+         (3.0, 0.35, 102, 0), (3.5, 0.3, 96, 12)],
+        # 6 — latin tumbao locks: syncopated pushes between the four-pulse
+        [(0.0, 0.4, 104), (1.5, 0.4, 100), (2.5, 0.4, 102), (3.5, 0.35, 98)],
+        # 7 — bassled kick call-response 16ths: every hit ducks BETWEEN the
+        # 4-floor kicks (never lands on beats 0/1/2/3) — the Dom Dolla pocket
+        [(0.75, 0.2, 104), (1.25, 0.18, 96), (1.75, 0.2, 100),
+         (2.75, 0.2, 104), (3.25, 0.18, 96), (3.75, 0.2, 100)],
+        # 8 — lofi held roots: two soft cushions per bar, the pump moves them
+        [(0.0, 1.9, 102), (2.0, 1.9, 98)],
     ],
     "garage": [
         _FEEL_OFFBEAT,
@@ -724,11 +738,16 @@ _PAD_RHYTHMS: dict[str, list[list[tuple[float, float]]]] = {
         [(0.5, 0.4), (1.5, 0.4), (2.5, 0.4), (3.5, 0.4)],
         [(0.5, 0.4), (2.0, 0.3), (2.75, 0.4), (3.75, 0.25)],
     ],
-    "techhouse": [  # pluck stabs on the &s / 16th-push comping / R21
+    "techhouse": [  # pluck stabs on the &s / 16th-push comping / R21 / R31
         [(1.5, 0.35), (3.5, 0.35)],
         [(0.75, 0.3), (1.5, 0.3), (2.75, 0.3), (3.5, 0.3)],
         # R21 bigroom: whole-bar held chords — the sidechain pump moves them
         [(0.0, 4.0)],
+        # R31 discofunk 8th-note chuck: short chops every 8th (Chic motor)
+        [(0.0, 0.2), (0.5, 0.2), (1.0, 0.2), (1.5, 0.2),
+         (2.0, 0.2), (2.5, 0.2), (3.0, 0.2), (3.5, 0.2)],
+        # R31 offbeat organ skank (pianohouse/latin comping)
+        [(0.5, 0.4), (1.5, 0.4), (2.5, 0.4), (3.5, 0.4)],
     ],
     "drill": [  # dark sustain / re-struck tail
         [(0.0, 4.0)],

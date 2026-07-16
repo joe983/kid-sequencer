@@ -1,5 +1,59 @@
 # Where we are / next session
 
+## NEW — R31: producer-style axis, techhouse (2026-07-15, NOT deployed)
+The genre-by-genre variety pass begins. Answers "a second press sounds like
+the same track": a 6-value **producer style** drawn per press recolours the
+whole techhouse take. Each value is a coherent palette modeled on a modern
+chart producer (owner-approved after a web-verified research pass; Sammy
+Virji was banked for the future Garage pass — 2-step belongs to that genre):
+
+| key | reference | palette core |
+|---|---|---|
+| `bassled` | Dom Dolla | `bass_wobble` + kick call-response 16ths, `lead_talkbox` hook, sparse pluck/piano pads, dry |
+| `discofunk` | Purple Disco Machine | `bass_funk` octave-pop 8ths (feel 5), clav chuck (rhythm 3), `string_machine`/`lead_italo`, disco perc row 5 |
+| `pianohouse` | MK | `bass_organ` bounce, piano/organ skank (rhythm 4), `stab_vocal` chop lead, swing 0.13 |
+| `latin` | HUGEL | conga/bongo rows 4/7 (never bare), accordion/brass/marimba hooks, tumbao feel 6 |
+| `lofi` | Fred again.. | felt_piano (PAD_POST LPF) + pinned crackle + pinned pads, held roots feel 8, pump 0.62, reverse swell |
+| `bigroom` | Guetta | R21 bigroom assets (supersaw_chord, whole-bar pads), rolling 8ths, riser PINNED ON, roll fills, swing 0.02 |
+
+- **Mechanics**: `producer_style` (generic per-genre `_PRODUCER_MENU` — other
+  genres add entries later, no schema change) REPLACES R21 `house_style`
+  (`_HOUSE_*` tables deleted; bigroom carries the reusable assets forward).
+  Uniform 6-way draw, fresh stream name, both production modes; percussive
+  and hiphop FX disciplines still outrank producer FX menus (riser order:
+  hiphop→never, percussive→R30, then producer).
+- **New assets**: Surge `lead_talkbox`/`stab_vocal`/`bass_wobble`/
+  `bass_organ`/`lead_italo` (probed on Modal: all render, BP 24 dB valid);
+  SF `pad_accordion` (GM 21); VCSL conga+bongo → `perc/{conga,bongo}.wav`
+  (on the volume); DRUM_VARIANTS["techhouse"] rows 4–7; _BASS_FEELS 5–8;
+  _PAD_RHYTHMS 3–4; felt piano = Salamander through `PAD_POST` LPF 2.8k.
+- **Per-press swing**: `ArrangeStyle.drum_swing` threads a `swing=` override
+  through `swung_step_offset` → all three drum renderers + `drums_audio_
+  pattern` + `kick_onsets_from_pattern` (pump stays locked). Odd-16th-only,
+  so the pinned even-step kick/clap backbone can never move. None = legacy.
+- **Ear-check**: `python -m modal run infra/modal_app.py::producers`
+  (--riff-file/--genre/--tempo/--base) — scans nonces until all 6 keys hit,
+  renders → `out/showcase/PRODUCERS/<genre>/producer_<key>_v<N>.mp3` (real
+  reproducible variation numbers; resumable, skips existing files).
+  Null A/B fixtures: `::baseline --tag <pre|post>` → out/baseline/<tag>/
+  SHA256SUMS (other genres must stay byte-identical, cross-process).
+  ⚠️ NULL A/B CAVEAT (discovered verifying R31): some fixture renders flip
+  between TWO stable hash values across Modal runs REGARDLESS of code
+  revision (dnb/hiphop flipped; each divergent hash was reproduced exactly
+  by the other revision, and choose_style output diffed empty) — host CPU
+  variance in the synth float paths, pre-existing, NOT a regression. If a
+  hash differs, re-render BOTH revisions before concluding anything: a
+  value the other revision also produces = environmental. This also
+  refines the determinism note below: same (sequence, variation) = same
+  track holds per machine-type, not across Modal's host fleet.
+- **Repeat-press math**: P(same producer twice) = 1/6; with per-producer
+  sub-draws still varying, "feels the same" ≈ 4–6% of consecutive pairs.
+- Levers: every `_PRODUCER_*` table in style.py (menus/weights/pins),
+  `_PRODUCER_SWING` values, PAD_POST felt-piano (LPF Hz, vel scale),
+  producer stack banks `LEAD_STACKS["techhouse:<key>"]`, DRUM_VARIANTS rows.
+- Playbook for the other five genres: `docs/PRODUCER_PLAYBOOK.md`; producer
+  sonic signatures: `docs/producer_signatures.md`.
+
 ## NEW — R30: percussive backbones + swoosh purge (2026-07-14, NOT deployed)
 Owner on battery three (percussive focus; "apply to all"): half-tempo dnb
 too long + wrong there; swooshes as continuous background AGAIN

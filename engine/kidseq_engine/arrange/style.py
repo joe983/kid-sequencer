@@ -148,9 +148,13 @@ class ArrangeStyle:
     # R20: pads render switch for melodic takes (percussive has its own
     # percussive_pads); guarded so lead+pads never BOTH drop without texture
     pads_on: bool = True
-    # R21: techhouse sub-style ("classic"|"bigroom"|"minimal"|"detroit");
-    # None for every other genre
-    house_style: str | None = None
+    # R31: per-genre producer style (techhouse: "bassled"|"discofunk"|
+    # "latin"|"pianohouse"|"lofi"|"bigroom" — see _PRODUCER_MENU); None for
+    # genres without a producer menu. Supersedes R21's house_style.
+    producer_style: str | None = None
+    # R31: per-press hat-lane swing override (None = the drums.SWING map —
+    # every genre without a producer menu renders byte-identical)
+    drum_swing: float | None = None
     # R24 percussive/sparse doctrine (owner: skeletal + spacious; low end
     # never sustained; the note treatment alternates per track)
     perc_low: str = "stabs"          # "stabs" | "accents"
@@ -195,6 +199,9 @@ PAD_ROLES: dict[str, tuple[str, str]] = {
     "dub_chord": ("vst", "dub_chord"),             # Berlin dub stab
     "string_machine": ("vst", "string_machine"),   # Detroit strings
     "piano": ("sf", "pad_piano"),                  # real grand (Salamander)
+    # R31 producer-style roles
+    "accordion": ("sf", "pad_accordion"),          # HUGEL cumbia hooks
+    "felt_piano": ("sf", "pad_piano"),             # Fred lofi bed (PAD_POST LPF)
 }
 
 #: pad triad voicings pad_notes understands
@@ -228,6 +235,13 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "dub": ("vst", "dub_chord"),
     "machine_strings": ("vst", "string_machine"),
     "piano": ("sf", "pad_piano"),
+    # R31 producer-style voices
+    "talkbox": ("vst", "lead_talkbox"),      # Dom Dolla vowel-wah hook
+    "vocal_stab": ("vst", "stab_vocal"),     # MK/Fred chop-syllable stab
+    "italo": ("vst", "lead_italo"),          # PDM sparkling lead
+    "accordion": ("sf", "pad_accordion"),    # HUGEL cumbia riff
+    "brass": ("sf", "pad_brass"),            # HUGEL mariachi stabs
+    "organ_v": ("sf", "pad_organ"),          # MK M1-organ riff
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -245,21 +259,38 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
         [("rave_stab", 0, -9.0), ("twinkle", 12, -13.0)],
         [("acid", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
-    # R21 techhouse SUB-STYLE stacks (lead_stack_key routes here)
+    # R31 techhouse PRODUCER-STYLE stacks (lead_stack_key routes here; the
+    # plain "techhouse" bank above is the required per-genre fallback and is
+    # never drawn while a producer is set)
+    "techhouse:bassled": [
+        [("talkbox", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("talkbox", 0, -10.0)],
+        [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
+    ],
+    "techhouse:discofunk": [
+        [("italo", 0, -9.0), ("machine_strings", 0, -13.0)],
+        [("machine_strings", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("brass", 0, -10.0), ("italo", 12, -14.0)],
+    ],
+    "techhouse:latin": [
+        [("accordion", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("brass", 0, -9.0)],
+        [("marimba", 0, -10.0), ("accordion", 0, -13.0)],
+    ],
+    "techhouse:pianohouse": [
+        [("vocal_stab", 0, -9.0), ("piano", 0, -13.0)],
+        [("piano", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("organ_v", 0, -10.0), ("vocal_stab", 12, -14.0)],
+    ],
+    "techhouse:lofi": [
+        [("vocal_stab", 0, -10.0), ("keys", 0, -13.0)],
+        [("keys", 0, -9.0), ("shimmer", 12, -15.0)],
+        [("piano", 0, -10.0)],
+    ],
     "techhouse:bigroom": [
         [("supersaw", 0, -9.0), ("shimmer", 12, -14.0)],
         [("piano", 0, -9.0), ("supersaw", 0, -13.0)],
         [("supersaw", 0, -8.0)],
-    ],
-    "techhouse:minimal": [
-        [("dub", 0, -10.0)],
-        [("body", -12, -12.0)],
-        [("dub", 0, -11.0), ("shimmer", 12, -16.0)],
-    ],
-    "techhouse:detroit": [
-        [("machine_strings", 0, -9.0), ("shimmer", 12, -14.0)],
-        [("machine_strings", 12, -10.0)],
-        [("keys", 0, -10.0), ("machine_strings", 0, -13.0)],
     ],
     "dnb": [
         [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
@@ -421,55 +452,166 @@ _PUMP_MENU: dict[str, tuple[list, list | None]] = {
 }
 
 # ---------------------------------------------------------------------------
-# R21 techhouse SUB-STYLES (owner: "sounds amateur, cheesy 90s … look into
-# Avicii/Guetta/Swedish House Mafia, blend in Berlin minimal + Detroit").
-# One per-press pick; each sub-style swaps the pad menu, lead stacks, pad
-# rhythm, pump feel and rumble weighting. "classic" keeps the legacy menus
-# with the rave flavours demoted.
+# R31 PRODUCER STYLES (owner: "6 producers per genre with unique identifiable
+# popular styles … so a second press on the same sequence never uses the same
+# sound palette"). Techhouse first (supersedes the R21 house_style axis — the
+# owner called that brief's references "old artists"); other genres add their
+# own six later by extending these per-genre tables, no schema change.
+# Internal keys are descriptive; the reference producers (comments/docs only):
+#   bassled    — Dom Dolla         (rubber wobble bass IS the melody, talkbox)
+#   discofunk  — Purple Disco Machine (octave funk bass, chuck, Italo strings)
+#   latin      — HUGEL             (conga/bongo tumbao, accordion/brass hooks)
+#   pianohouse — MK                (90s piano/organ stabs, vocal-chop lead)
+#   lofi       — Fred again..      (felt piano, crackle bed, deep pump)
+#   bigroom    — David Guetta      (supersaw stabs, long builds — R21 assets)
 # ---------------------------------------------------------------------------
 
-_HOUSE_MENU: tuple[list, list] = (["classic", "bigroom", "minimal", "detroit"],
-                                  [0.25, 0.30, 0.25, 0.20])
-_HOUSE_PAD_MENU: dict[str, list[str]] = {
-    "classic": ["pluck", "supersaw", "newage", "glass"],
+_PRODUCER_MENU: dict[str, tuple[list, list]] = {
+    # balanced 6-way (NOT signature-first): every press should feel like a
+    # different producer took the session
+    "techhouse": (["bassled", "discofunk", "latin", "pianohouse", "lofi",
+                   "bigroom"], [1, 1, 1, 1, 1, 1]),
+}
+_PRODUCER_PAD_MENU: dict[str, list[str]] = {
+    "bassled": ["pluck", "piano", "dark"],
+    "discofunk": ["string_machine", "clav", "epiano"],
+    "latin": ["brass_stab", "organ", "accordion", "piano"],
+    "pianohouse": ["piano", "organ", "epiano"],
+    "lofi": ["felt_piano", "epiano", "warm"],
     "bigroom": ["supersaw_chord", "piano", "glass"],
-    "minimal": ["dub_chord", "dark", "glass"],
-    "detroit": ["string_machine", "warm", "epiano"],
 }
-# pad_rhythm per sub-style (index 2 = the R21 whole-bar sustain — see
-# _PAD_RHYTHMS["techhouse"]): big-room holds chords, minimal stabs offbeats
-_HOUSE_RHYTHM: dict[str, tuple[list, list | None]] = {
-    "classic": ([0, 1], None),
+# pad_rhythm per producer (indices into _PAD_RHYTHMS["techhouse"]: 2 = R21
+# whole-bar sustain, 3 = R31 disco 8th-chuck, 4 = R31 offbeat organ skank)
+_PRODUCER_RHYTHM: dict[str, tuple[list, list | None]] = {
+    "bassled": ([0, 1], None),
+    "discofunk": ([3, 1], [0.60, 0.40]),
+    "latin": ([4, 0], [0.60, 0.40]),
+    "pianohouse": ([4, 1], [0.60, 0.40]),
+    "lofi": ([2], None),          # held emotional chords — the pump moves them
     "bigroom": ([2, 1], [0.60, 0.40]),
-    "minimal": ([0], None),
-    "detroit": ([0, 1], [0.60, 0.40]),
 }
-# pump per sub-style (None = preset 0.50): bigroom pumps hard, minimal rolls
-_HOUSE_PUMP: dict[str, tuple[list, list | None]] = {
-    "classic": ([None, 0.35, 0.22], [0.50, 0.30, 0.20]),
-    "bigroom": ([None, 0.35], [0.70, 0.30]),
-    "minimal": ([0.35, 0.22, None], [0.45, 0.35, 0.20]),
-    "detroit": ([0.35, None, 0.22], [0.40, 0.40, 0.20]),
+# bass is the strongest producer differentiator — patch + feel + gate are all
+# producer-routed for techhouse (the _GENRE_MENU bass entries stay for
+# reference/fallback but are no longer drawn from)
+_PRODUCER_BASS: dict[str, tuple[list, list | None]] = {
+    "bassled": (["bass_wobble", "bass_funk", "bass_fm"], [0.60, 0.25, 0.15]),
+    "discofunk": (["bass_funk", "bass_pluck"], [0.65, 0.35]),
+    "latin": (["bass_pluck", "bass_round"], [0.65, 0.35]),
+    "pianohouse": (["bass_organ", "bass_round", "bass_pluck"],
+                   [0.50, 0.25, 0.25]),
+    "lofi": (["bass_round", "bass"], [0.70, 0.30]),
+    "bigroom": (["bass", "bass_pluck"], [0.70, 0.30]),
 }
-# rumble bed (Hades) per sub-style — minimal leans in, bigroom mostly not
-_HOUSE_RUMBLE: dict[str, tuple[list, list]] = {
-    "classic": ([True, False], [0.60, 0.40]),
+# feel indices into _BASS_FEELS["techhouse"] (5-8 = the R31 producer feels)
+_PRODUCER_FEEL: dict[str, tuple[list, list | None]] = {
+    "bassled": ([7, 4], [0.55, 0.45]),     # kick call-response / funk 16ths
+    "discofunk": ([5], None),              # octave-pop 8ths
+    "latin": ([6, 0], [0.60, 0.40]),       # tumbao locks / offbeat
+    "pianohouse": ([0, 4], [0.55, 0.45]),
+    "lofi": ([8, 3], [0.60, 0.40]),        # held roots / on-beat quarters
+    "bigroom": ([1], None),                # rolling 8th pairs — the engine room
+}
+_PRODUCER_GATE: dict[str, tuple[list, list | None]] = {
+    "bassled": ([0.35, 0.6], [0.60, 0.40]),
+    "discofunk": ([0.35, 0.6], [0.70, 0.30]),
+    "latin": ([0.6, 0.35], [0.60, 0.40]),
+    "pianohouse": ([0.6, 0.35], [0.60, 0.40]),
+    "lofi": ([1.0], None),                 # soft cushion, never gated
+    "bigroom": ([1.0, 0.6], [0.70, 0.30]),
+}
+# pump per producer (None = preset 0.50; 0.62 sits under master's 0.65 cap):
+# lofi/bigroom treat the pump AS the feel, discofunk stays gentle
+_PRODUCER_PUMP: dict[str, tuple[list, list | None]] = {
+    "bassled": ([None, 0.35], [0.60, 0.40]),
+    "discofunk": ([0.35, None, 0.22], [0.50, 0.30, 0.20]),
+    "latin": ([0.35, None], [0.60, 0.40]),
+    "pianohouse": ([0.35, 0.22], [0.60, 0.40]),
+    "lofi": ([0.62, None], [0.60, 0.40]),
+    "bigroom": ([None, 0.62], [0.60, 0.40]),
+}
+# rumble bed was a Berlin-techno flavour — only bassled/bigroom keep a taste
+_PRODUCER_RUMBLE: dict[str, tuple[list, list | None]] = {
+    "bassled": ([False, True], [0.60, 0.40]),
+    "discofunk": ([False], None),
+    "latin": ([False], None),
+    "pianohouse": ([False], None),
+    "lofi": ([False], None),
     "bigroom": ([False, True], [0.70, 0.30]),
-    "minimal": ([True, False], [0.75, 0.25]),
-    "detroit": ([True, False], [0.50, 0.50]),
 }
-# classic's stack weights: rave_stab/acid demoted to rare winks
+# per-press hat-lane swing (drums.swung_step_offset override; kick/clap are
+# even-step so the pinned backbone can never move): bigroom machine-straight,
+# pianohouse carries the MK shuffle
+_PRODUCER_SWING: dict[str, tuple[list, list | None]] = {
+    "bassled": ([0.06], None),
+    "discofunk": ([0.05], None),
+    "latin": ([0.10], None),
+    "pianohouse": ([0.13], None),
+    "lofi": ([0.11], None),
+    "bigroom": ([0.02], None),
+}
+# seasoning-variant menus (indices into DRUM_VARIANTS["techhouse"]; 0 = base,
+# 4 = conga tumbao, 5 = disco perc, 6 = foley knocks, 7 = bongo conversation).
+# latin never runs bare — the percussion IS its identity.
+_PRODUCER_DRUMV: dict[str, list[int]] = {
+    "bassled": [0, 1, 2],
+    "discofunk": [5, 2],
+    "latin": [4, 7, 2],
+    "pianohouse": [0, 1],
+    "lofi": [6, 0],
+    "bigroom": [0, 1],
+}
+# lead-stack sit-out weight (replaces the R21 minimal special-case): the
+# bassled hook should almost always speak
+_PRODUCER_LEAD_NONE: dict[str, float] = {"bassled": 0.15, "lofi": 0.20}
+# pads on/off per producer: bassled leaves space (his pads are rare/low);
+# lofi PINS pads on (the felt-piano chords are the emotional core)
+_PRODUCER_PADS_ON: dict[str, tuple[list, list | None]] = {
+    "bassled": ([True, False], [0.55, 0.45]),
+    "lofi": ([True], None),
+}
+# FX routing per producer (consumed by _choose_fx_palette):
+# bigroom PINS the riser on (the long filtered build IS the signature;
+# riser_restraint still tames later drops); latin/lofi lean off
+_PRODUCER_RISER_ON: dict[str, tuple[list, list | None]] = {
+    "bigroom": ([True], None),
+    "pianohouse": ([True, False], [0.60, 0.40]),
+    "latin": ([False, True], [0.60, 0.40]),
+    "lofi": ([False, True], [0.70, 0.30]),
+}
+_PRODUCER_RISER_DB: dict[str, tuple[list, list]] = {
+    "bigroom": ([-14.0, -17.0, -20.0], [0.50, 0.30, 0.20]),
+    "lofi": ([-20.0, -17.0], [0.60, 0.40]),
+}
+# fill shapes (subset of _FILL_MENU["techhouse"]): bigroom rides the
+# subdivision-doubling roll, latin's hat-roll stands in for a timbale roll
+_PRODUCER_FILL: dict[str, list[int]] = {
+    "bigroom": [3, 0],
+    "latin": [2],
+    "lofi": [0],
+}
+_PRODUCER_FILL_DEFAULT: list[int] = [0, 2, 4]
+# lofi gets the reverse-riff swell (Fred's reverse-reverb-into-downbeat move)
+_PRODUCER_SWELL: dict[str, tuple[list, list | None]] = {
+    "lofi": (["reverb", None], [0.60, 0.40]),
+}
+_PRODUCER_CANDY: dict[str, tuple] = {
+    "lofi": ("rev_swell_riff",),
+    "latin": ("hat_lift", "sweep_up"),
+    "bigroom": ("sweep_up", "hat_lift", "sweep_down"),
+}
+# stack weights for the LEGACY techhouse fallback bank only (producer banks
+# draw uniform); kept because the renderability walk requires a per-genre bank
 _STACK_W: dict[str, list[float]] = {
     "techhouse": [0.40, 0.30, 0.15, 0.15],
 }
 
 
-def lead_stack_key(genre: str | None, house: str | None) -> str:
-    """LEAD_STACKS key for a render: techhouse sub-styles get their own
-    stack banks; everything else (and classic) uses the genre key."""
+def lead_stack_key(genre: str | None, producer: str | None) -> str:
+    """LEAD_STACKS key for a render: producer styles get their own stack
+    banks (`<genre>:<key>`); everything else uses the genre key."""
     g = genre or ""
-    if g == "techhouse" and house and house != "classic":
-        key = f"techhouse:{house}"
+    if producer:
+        key = f"{g}:{producer}"
         if key in LEAD_STACKS:
             return key
     return g
@@ -721,12 +863,14 @@ _RISER_KIND: dict[str, tuple[list, list]] = {
 
 def _choose_fx_palette(seed: int, genre: str | None,
                        percussive: bool = False,
-                       house: str | None = None) -> FxPalette:
+                       producer: str | None = None) -> FxPalette:
     """Seeded dressing choices within the genre's taste. Boom-bap doesn't ride
     white-noise risers — hiphop defaults them OFF (reverse crash still swells).
     R16 (owner: swooshes everywhere reads 90s-rave amateur): a real share of
     takes now run NO riser at all — the reverse crash and fills carry those
-    transitions; percussive/industrial takes lean riser-off harder."""
+    transitions; percussive/industrial takes lean riser-off harder. R31: a
+    producer style recolours riser/fill/candy/swell/rumble — but the hiphop
+    and percussive disciplines above always win the riser decision."""
     g = genre or ""
     if g == "hiphop":
         # R27 (owner: "hip hop doesn't EVER need such a big build and drop —
@@ -736,6 +880,8 @@ def _choose_fx_palette(seed: int, genre: str | None,
         # R30: percussive/sparse takes barely ever ride a riser — sweeps
         # were reading as wall-to-wall swoosh on top of the beds
         riser_menu = ([False, True], [0.75, 0.25])
+    elif producer and producer in _PRODUCER_RISER_ON:
+        riser_menu = _PRODUCER_RISER_ON[producer]
     else:
         riser_menu = ([True, False], [0.70, 0.30])
     f0, f1, db = _IMPACT.get(g, (80.0, 35.0, -6.0))
@@ -768,7 +914,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
         impact_f0=f0, impact_f1=f1, impact_db=db,
         downlifter_on=_pick(seed, "downlifter_on", *dl_menu),
         reverse_crash_on=_pick(seed, "reverse_crash_on", *crash_menu),
-        fill_shape=_pick(seed, "fill_shape", _FILL_MENU.get(g, [0])),
+        fill_shape=_pick(seed, "fill_shape",
+                         (_PRODUCER_FILL.get(producer, _PRODUCER_FILL_DEFAULT)
+                          if producer else _FILL_MENU.get(g, [0]))),
         fill_take=_pick(seed, "fill_take", *_FILL_TAKES.get(g, ([0], None))),
         # None = auto (fx.throw_fits decides); False = suppressed this take
         throw=_pick(seed, "throw", [None, False], [0.75, 0.25]),
@@ -782,13 +930,18 @@ def _choose_fx_palette(seed: int, genre: str | None,
                               [0.70, 0.30]),
         riser_style=_pick(seed, "riser_style",
                           *_RISER_STYLE.get(g, _RISER_STYLE_DEFAULT)),
-        riser_db=_pick(seed, "riser_db", *_RISER_DB_MENU),
+        riser_db=_pick(seed, "riser_db",
+                       *((producer and _PRODUCER_RISER_DB.get(producer))
+                         or _RISER_DB_MENU)),
         riser_color=_pick(seed, "riser_color",
                           *_RISER_COLOR.get(g, _RISER_COLOR_DEFAULT)),
         earcandy_every=_pick(seed, "earcandy_every",
                              *_CANDY_EVERY.get(g, ([0], None))),
-        earcandy_menu=_CANDY_MENU.get(g, ()),
-        swell_kind=_pick(seed, "swell_kind", *_SWELL.get(g, ([None], None))),
+        earcandy_menu=(_PRODUCER_CANDY.get(producer, _CANDY_MENU.get(g, ()))
+                       if producer else _CANDY_MENU.get(g, ())),
+        swell_kind=_pick(seed, "swell_kind",
+                         *(_PRODUCER_SWELL.get(producer, ([None], None))
+                           if producer else _SWELL.get(g, ([None], None)))),
         scratch_on=_pick(seed, "scratch_on",
                          *(([True, False], [0.5, 0.5]) if g == "hiphop"
                            else ([False], None))),
@@ -797,9 +950,9 @@ def _choose_fx_palette(seed: int, genre: str | None,
                           else ([None], None))),
         bomb_on=_pick(seed, "bomb_on", *_BOMB.get(g, _BOMB_DEFAULT)),
         rumble_on=_pick(seed, "rumble_on",
-                        *(_HOUSE_RUMBLE.get(house or "classic",
-                                            ([True, False], [0.6, 0.4]))
-                          if g == "techhouse" else ([False], None))),
+                        *((producer and _PRODUCER_RUMBLE.get(producer))
+                          or (([True, False], [0.6, 0.4])
+                              if g == "techhouse" else ([False], None)))),
         odd_loop_on=_pick(seed, "odd_loop_on",
                           *(([False, True], [0.65, 0.35]) if g == "techhouse"
                             else ([False, True], [0.70, 0.30]) if g == "garage"
@@ -831,29 +984,39 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                      [0.6, 0.4])
     else:
         mode = "melodic"
+    # R31: the producer-style pick recolours the whole take — pads, lead
+    # stacks, bass, drum seasoning, swing, pump, rumble and FX routing.
+    # Drawn for any genre with a _PRODUCER_MENU entry (techhouse today), in
+    # BOTH production modes (percussive takes still get producer-coloured
+    # rumble/FX/swing; drones/skeletal doctrine stays in charge of the rest).
+    producer = (_pick(seed, "producer_style",
+                      *_PRODUCER_MENU[riff.drum_style])
+                if riff.drum_style in _PRODUCER_MENU else None)
     # percussive tracks always run an atmosphere bed (sound-development
     # driven). R24: the bed follows the genre's REFERENCE flavour (Photek /
     # Burial / Rhythm & Sound) instead of a flat pool.
     if mode == "melodic":
         texture_menu, texture_w = menu["texture"], None
+        if producer == "lofi":
+            # the ever-present vinyl bed IS the lofi fingerprint (pinned)
+            texture_menu, texture_w = ["crackle"], None
+        elif producer in ("discofunk", "bigroom"):
+            # zero lo-fi grit in the glossy palettes — crackle stays rare
+            texture_menu, texture_w = [None, "crackle"], [0.70, 0.30]
     else:
         texture_menu, texture_w = _PERC_TEXTURE.get(
             riff.drum_style or "", (["drone", "wash", "metal"], None))
-    # R21: techhouse splits into sub-styles — the pick reroutes pads, lead
-    # stacks, pad rhythm, pump and rumble below
-    house = _pick(seed, "house_style", *_HOUSE_MENU) \
-        if riff.drum_style == "techhouse" else None
     # percussive drone ROLE varies too (owner: fixed recipes make every
     # percussive track converge) — dark is the anchor, colours per genre
     if mode != "melodic":
         pad_menu = _DRONE_ROLES.get(riff.drum_style or "", ["dark", "glass"])
-    elif house:
-        pad_menu = _HOUSE_PAD_MENU[house]
+    elif producer:
+        pad_menu = _PRODUCER_PAD_MENU[producer]
     else:
         pad_menu = menu["pad_role"]
-    rhythm_menu = (_HOUSE_RHYTHM[house] if house
+    rhythm_menu = (_PRODUCER_RHYTHM[producer] if producer
                    else (menu["pad_rhythm"], None))
-    pump_menu = (_HOUSE_PUMP[house] if house
+    pump_menu = (_PRODUCER_PUMP[producer] if producer
                  else _PUMP_MENU.get(riff.drum_style or "", ([None], None)))
     # R20 sparse draws (hoisted so the guard below can correct the combo):
     texture = _pick(seed, "texture", texture_menu, texture_w)
@@ -867,17 +1030,19 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
     if mode == "percussive" and perc_pads == "drone" \
             and texture in ("drone", "metal"):
         texture = "crackle"   # R30: never "wash" — noise beds read as swoosh
-    skey = lead_stack_key(riff.drum_style, house)
+    skey = lead_stack_key(riff.drum_style, producer)
     stacks = LEAD_STACKS.get(skey, [[]])
     n_stacks = len(stacks)
-    none_w = 0.45 if house == "minimal" else \
-        _LEAD_NONE_W.get(riff.drum_style or "", _LEAD_NONE_DEFAULT)
+    none_w = (_PRODUCER_LEAD_NONE.get(producer, _LEAD_NONE_DEFAULT) if producer
+              else _LEAD_NONE_W.get(riff.drum_style or "", _LEAD_NONE_DEFAULT))
     stack_w = _STACK_W.get(skey, [1.0 / n_stacks] * n_stacks)
     lead_stack = _pick(seed, "lead_stack",
                        list(range(n_stacks)) + [None],
                        [w * (1.0 - none_w) for w in stack_w] + [none_w])
-    pads_on = _pick(seed, "pads_on",
-                    *_PADS_ON.get(riff.drum_style or "", _PADS_ON_DEFAULT))
+    pads_menu = _PADS_ON.get(riff.drum_style or "", _PADS_ON_DEFAULT)
+    if producer:
+        pads_menu = _PRODUCER_PADS_ON.get(producer, pads_menu)
+    pads_on = _pick(seed, "pads_on", *pads_menu)
     # the mid must not go hollow: a take never drops BOTH the lead stack and
     # the pads unless a texture bed is carrying (percussive mode always has
     # texture, so this only ever bites melodic takes)
@@ -890,10 +1055,16 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         # clamped there) — best colour favoured, all candidates cover the riff
         prog_pick=_pick(seed, "progression", [0, 1, 2, 3],
                         [0.40, 0.30, 0.20, 0.10]),
-        bass_patch=_pick(seed, "bass_patch", menu["bass_patch"],
-                         _BASS_PATCH_W.get(riff.drum_style or "")),
-        bass_feel=_pick(seed, "bass_feel", menu["bass_feel"],
-                        _BASS_FEEL_W.get(riff.drum_style or "")),
+        # R31: bass is the strongest producer differentiator — patch/feel are
+        # producer-routed whenever a producer style is in play
+        bass_patch=_pick(seed, "bass_patch",
+                         *(_PRODUCER_BASS[producer] if producer
+                           else (menu["bass_patch"],
+                                 _BASS_PATCH_W.get(riff.drum_style or "")))),
+        bass_feel=_pick(seed, "bass_feel",
+                        *(_PRODUCER_FEEL[producer] if producer
+                          else (menu["bass_feel"],
+                                _BASS_FEEL_W.get(riff.drum_style or "")))),
         pad_role=_pick(seed, "pad_role", pad_menu),
         pad_rhythm=_pick(seed, "pad_rhythm", *rhythm_menu),
         pad_voicing=_pick(seed, "pad_voicing", menu["pad_voicing"]),
@@ -905,7 +1076,9 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         # the TRUE Photek treatment (owner R16): some percussive takes carry
         # NO pads/drones at all — just hits, bass pedal and the texture bed
         percussive_pads=perc_pads,
-        drum_variant=_pick(seed, "drum_variant", menu["drum_variant"]),
+        drum_variant=_pick(seed, "drum_variant",
+                           (_PRODUCER_DRUMV[producer] if producer
+                            else menu["drum_variant"])),
         drum_skeleton=_pick(seed, "drum_skeleton",
                             *_SKELETON_MENU.get(riff.drum_style or "",
                                                 ([0], None))),
@@ -917,9 +1090,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                       *_DRUMMER_MENU.get(riff.drum_style or "",
                                          (["static"], None))),
         bass_gate=_pick(seed, "bass_gate",
-                        *_BASS_GATE.get(riff.drum_style or "", ([1.0], None))),
+                        *(_PRODUCER_GATE[producer] if producer
+                          else _BASS_GATE.get(riff.drum_style or "",
+                                              ([1.0], None)))),
         pump_depth=_pick(seed, "pump_depth", *pump_menu),
-        house_style=house,
+        producer_style=producer,
+        drum_swing=(_pick(seed, "drum_swing", *_PRODUCER_SWING[producer])
+                    if producer else None),
         perc_low=_pick(seed, "perc_low", ["stabs", "accents"], [0.55, 0.45]),
         perc_note_style=_pick(seed, "perc_note_style",
                               ["dry_echo", "washed"], [0.55, 0.45]),
@@ -937,5 +1114,5 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         pads_on=pads_on,
         fx_palette=_choose_fx_palette(seed, riff.drum_style,
                                       percussive=(mode == "percussive"),
-                                      house=house),
+                                      producer=producer),
     )

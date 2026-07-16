@@ -335,6 +335,96 @@ def showcase(batteries: str = "B,C,D") -> None:
         print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
+# R31 producer legend (internal key -> reference producer, for ear-check logs)
+_PRODUCER_LEGEND = {"bassled": "Dom Dolla", "discofunk": "Purple Disco Machine",
+                    "latin": "HUGEL", "pianohouse": "MK",
+                    "lofi": "Fred again..", "bigroom": "David Guetta"}
+
+
+@app.local_entrypoint()
+def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
+              tempo: int = 124, base: int = 900) -> None:
+    """R31 ear-check: one riff x every producer style of a genre ->
+    out/showcase/PRODUCERS/<genre>/producer_<key>_v<N>.mp3.
+
+    Scans variation numbers locally (choose_style is pure) until every
+    producer key has a nonce, then renders those exact (riff, variation)
+    pairs — the filenames carry REAL, reproducible variation numbers and
+    there is no forced-style hook in prod code. Mutates the payload exactly
+    like render_showcase_item (drumStyle + tempo) so the scan and the render
+    see the same seed. Skips files already present (resumable)."""
+    import json
+    import sys as _sys
+
+    _sys.path.insert(0, str(ENGINE_LOCAL))
+    from kidseq_engine.arrange.style import _PRODUCER_MENU, choose_style
+    from kidseq_engine.sequence import parse_sequence
+
+    payload = json.loads((ENGINE_LOCAL / riff_file).read_text(encoding="utf-8"))
+    genre = genre or payload.get("drumStyle") or "techhouse"
+    if genre not in _PRODUCER_MENU:
+        print(f"genre {genre!r} has no producer menu yet "
+              f"(have: {sorted(_PRODUCER_MENU)})")
+        return
+    payload["drumStyle"] = genre
+    payload["tempo"] = tempo
+    riff = parse_sequence(payload)
+    keys = list(_PRODUCER_MENU[genre][0])
+    hits: dict[str, int] = {}
+    v = base
+    while len(hits) < len(keys) and v < base + 500:
+        hits.setdefault(choose_style(riff, v).producer_style, v)
+        v += 1
+    for k in keys:
+        tag = _PRODUCER_LEGEND.get(k, k)
+        print(f"  {k:<11} ({tag}): variation {hits.get(k, 'NOT FOUND')}")
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    pending = [(k, n) for k, n in hits.items()
+               if not (dst_dir / f"producer_{k}_v{n}.mp3").exists()]
+    plan = [(riff_file, genre, tempo, n) for _, n in pending]
+    for (k, n), mp3 in zip(pending, render_showcase_item.starmap(plan)):
+        dst = dst_dir / f"producer_{k}_v{n}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
+# Null-A/B fixtures (R31): non-techhouse genres at pinned variations. Rendered
+# once per engine revision; producer-axis rounds must leave these byte-identical
+# (cross-process compare — see NEXT.md determinism caveat).
+_BASELINE_FIXTURES: list[tuple[str, str, int, int]] = [
+    ("examples/a2_major.json", "dnb", 172, 11),
+    ("examples/a2_major.json", "garage", 132, 12),
+    ("examples/a2_major.json", "reggaeton", 96, 13),
+    ("examples/a2_major.json", "hiphop", 92, 14),
+    ("examples/a2_major.json", "drill", 142, 15),
+    ("examples/a2_child.json", "dnb", 172, 16),   # percussive path
+]
+
+
+@app.local_entrypoint()
+def baseline(tag: str = "pre") -> None:
+    """Render the null-A/B fixtures -> out/baseline/<tag>/ + SHA256SUMS.
+    Skips files already present (resumable); compare tags with SHA256SUMS."""
+    import hashlib
+
+    dst_dir = ENGINE_LOCAL / "out" / "baseline" / tag
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    todo = [(riff, style, tempo, var)
+            for riff, style, tempo, var in _BASELINE_FIXTURES
+            if not (dst_dir / f"{style}_v{var}.mp3").exists()]
+    for (riff, style, tempo, var), mp3 in zip(todo, render_showcase_item.starmap(todo)):
+        dst = dst_dir / f"{style}_v{var}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+    lines = []
+    for riff, style, tempo, var in _BASELINE_FIXTURES:
+        p = dst_dir / f"{style}_v{var}.mp3"
+        lines.append(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}")
+    (dst_dir / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print("\n".join(lines))
+
+
 @app.function(image=image, volumes={ASSETS_MOUNT: volume}, timeout=3600)
 def render_song_genre(style: str, tempo: int, variation: int = 0) -> bytes:
     """Full arranged song for one genre at its representative tempo."""

@@ -58,7 +58,8 @@ def main() -> None:
           f"hat_take={st.hat_take} fill_take={st.fx_palette.fill_take} "
           f"bass_gate={st.bass_gate:g} pump={st.pump_depth} "
           f"lead_stack={st.lead_stack} pads_on={st.pads_on} "
-          f"house={st.house_style} perc_low={st.perc_low} "
+          f"producer={st.producer_style} swing={st.drum_swing} "
+          f"perc_low={st.perc_low} "
           f"note_style={st.perc_note_style}")
     p = st.fx_palette
     print(f"fx: gap={p.gap_beats:g}b carry={p.gap_carry} "

@@ -368,12 +368,14 @@ def _calibrate_layer(buf: np.ndarray, sr: int, target_lufs: float) -> np.ndarray
 
 
 def kick_onsets_from_pattern(pattern: dict[str, list[float]], tempo: float, bars: int,
-                             sr: int, style: str | None = None) -> list[int]:
+                             sr: int, style: str | None = None,
+                             swing: float | None = None) -> list[int]:
     """Sample indices of every kick hit across `bars` bars (the pump trigger).
 
     Uses the symbolic pattern (not audio detection) so the pump is musically locked.
     `style` applies the same swing as the drum renderers — the duck lands exactly
-    on the swung hit. Falls back to `sub` if a pattern has no kick.
+    on the swung hit; `swing` (R31) is the per-press override, shared with the
+    renderers so pump and hits stay locked. Falls back to `sub` if no kick.
     """
     from ..render.drums import swung_step_offset
 
@@ -386,7 +388,9 @@ def kick_onsets_from_pattern(pattern: dict[str, list[float]], tempo: float, bars
     for b in range(bars):
         for i, vel in enumerate(steps):
             if vel > 0:
-                onsets.append(int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr))
+                onsets.append(int((b * 4 * spb
+                                   + swung_step_offset(style, i, swing)
+                                   * step_s) * sr))
     return onsets
 
 

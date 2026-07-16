@@ -62,6 +62,7 @@ INSTRUMENT_SF: dict[str, tuple[Path, int, int]] = {
     "pad_brass": (GENERALUSER_SF, 0, 61),      # brass section stabs
     "pad_choir": (GENERALUSER_SF, 0, 52),      # choir aahs
     "pad_kalimba": (GENERALUSER_SF, 0, 108),
+    "pad_accordion": (GENERALUSER_SF, 0, 21),  # GM Accordion — R31 latin hooks
     "lead_square": (GENERALUSER_SF, 0, 80),    # GM square lead
     "lead_sawgm": (GENERALUSER_SF, 0, 81),     # GM saw lead
     "lead_calliope": (GENERALUSER_SF, 0, 82),
@@ -73,6 +74,7 @@ _DRUM_SF = (GENERALUSER_SF, 128, 0)
 _GM_DRUM_NOTE = {
     "kick": 36, "sub": 35, "snare": 38, "clap": 39,
     "hatC": 42, "hatO": 46, "rim": 37, "cowbell": 56, "shaker": 70,
+    "conga": 63, "bongo": 60,   # GM Open Hi Conga / Hi Bongo (R31)
 }
 
 # sr -> (Synth, {sf_path_str: sfid}) — load each soundfont once, reuse.
@@ -96,7 +98,8 @@ def resolve_instrument(instrument: str) -> tuple[Path, int, int]:
               "pad_celesta": 8, "pad_musicbox": 10, "pad_vibes": 11,
               "pad_marimba": 12, "pad_tubular": 14, "pad_fmep": 5,
               "pad_clav": 7, "pad_harp": 46, "pad_nylon": 24, "pad_brass": 61,
-              "pad_choir": 52, "pad_kalimba": 108, "lead_square": 80,
+              "pad_choir": 52, "pad_kalimba": 108, "pad_accordion": 21,
+              "lead_square": 80,
               "lead_sawgm": 81, "lead_calliope": 82, "lead_fifths": 86}
         return GENERALUSER_SF, 0, gm.get(instrument, 0)
     return path, bank, preset
@@ -183,7 +186,8 @@ def render_riff_sf(notes, tempo, instrument, bars, bar_beats=4.0, sr=SR) -> np.n
     return _render_timeline(setup, events, total_frames, sr)
 
 
-def render_drums_sf(pattern, tempo, bars, sr=SR, style: str | None = None) -> np.ndarray:
+def render_drums_sf(pattern, tempo, bars, sr=SR, style: str | None = None,
+                    swing: float | None = None) -> np.ndarray:
     """Render a drum step-pattern with the GM drum kit (channel 9)."""
     from .drums import swung_step_offset
 
@@ -202,7 +206,8 @@ def render_drums_sf(pattern, tempo, bars, sr=SR, style: str | None = None) -> np
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
+                at = int((b * 4 * spb
+                          + swung_step_offset(style, i, swing) * step_s) * sr)
                 v = max(1, min(127, int(vel * 127)))
                 events.append((at, "on", 9, key, v))
                 events.append((at + hit_dur_f, "off", 9, key, 0))

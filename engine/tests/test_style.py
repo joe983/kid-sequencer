@@ -108,11 +108,11 @@ def test_r19_bass_menus_weights_and_levers():
     assert "bass_pizz" in dnb and "bass_sub_roll" in dnb
     assert _GENRE_MENU["drill"]["bass_patch"] == ["bass_sub808", "bass_round"]
     assert _BASS_GATE["drill"] == ([1.0], None)
-    # gate + pump land across variations (techhouse has both menus)
+    # gate + pump land across variations (techhouse: producer-routed unions)
     r = _riff()
     styles = [choose_style(r, v) for v in range(200)]
     assert {s.bass_gate for s in styles} == {1.0, 0.6, 0.35}
-    assert {s.pump_depth for s in styles} == {None, 0.35, 0.22}
+    assert {s.pump_depth for s in styles} == {None, 0.35, 0.22, 0.62}
     dnb_styles = [choose_style(_riff("C", 174, "dnb", "piano"), v)
                   for v in range(300)]
     assert {s.bass_patch for s in dnb_styles} == set(dnb)
@@ -260,47 +260,81 @@ def test_r22_reggaeton_polish():
             assert pattern_for("reggaeton", dv, sk)["snare"] == base_snare
 
 
-def test_r21_house_substyles():
-    # R21: techhouse splits into classic/bigroom/minimal/detroit; every
-    # sub-style's pads/stacks/rhythms are renderable; the rave flavours are
-    # demoted in classic; other genres never carry a house_style.
-    from kidseq_engine.arrange import _PAD_RHYTHMS
-    from kidseq_engine.arrange.style import (_HOUSE_MENU, _HOUSE_PAD_MENU,
-                                             _HOUSE_PUMP, _HOUSE_RHYTHM,
-                                             _HOUSE_RUMBLE, _STACK_W,
-                                             LEAD_STACKS, LEAD_VOICES,
-                                             lead_stack_key)
+def test_r31_producer_styles():
+    # R31: the per-genre PRODUCER-STYLE axis (supersedes R21 house_style).
+    # Techhouse: 6 modern chart-producer palettes (Dom Dolla / Purple Disco
+    # Machine / HUGEL / MK / Fred again.. / Guetta). The test iterates every
+    # genre in _PRODUCER_MENU so future genre passes extend it by DATA.
+    from kidseq_engine.arrange import _BASS_FEELS, _PAD_RHYTHMS
+    from kidseq_engine.arrange.style import (_CANDY_MENU, _PRODUCER_BASS,
+                                             _PRODUCER_CANDY, _PRODUCER_DRUMV,
+                                             _PRODUCER_FEEL, _PRODUCER_FILL,
+                                             _PRODUCER_FILL_DEFAULT,
+                                             _PRODUCER_GATE, _PRODUCER_MENU,
+                                             _PRODUCER_PAD_MENU,
+                                             _PRODUCER_PUMP, _PRODUCER_RHYTHM,
+                                             _PRODUCER_RUMBLE,
+                                             _PRODUCER_SWING, LEAD_STACKS,
+                                             LEAD_VOICES, lead_stack_key)
+    from kidseq_engine.render.drums import DRUM_VARIANTS
 
-    for house in _HOUSE_MENU[0]:
-        for role in _HOUSE_PAD_MENU[house]:
-            assert role in PAD_ROLES, (house, role)
-        for i in _HOUSE_RHYTHM[house][0]:
-            assert i < len(_PAD_RHYTHMS["techhouse"]), (house, i)
-        assert house in _HOUSE_PUMP and house in _HOUSE_RUMBLE
-        skey = lead_stack_key("techhouse", house)
-        for stack in LEAD_STACKS[skey]:
-            for voice, semi, gain_db in stack:
-                assert voice in LEAD_VOICES, (house, voice)
-                assert semi in (-12, 0, 12) and gain_db <= -8.0, (house, voice)
-    assert lead_stack_key("techhouse", "classic") == "techhouse"
-    assert lead_stack_key("dnb", None) == "dnb"
-    assert len(_STACK_W["techhouse"]) == len(LEAD_STACKS["techhouse"])
-    # classic demotion: rave_stab/acid recipes carry the LOW weights
-    voices0 = [s[0][0] for s in LEAD_STACKS["techhouse"]]
-    for i, v in enumerate(voices0):
-        if v in ("rave_stab", "acid"):
-            assert _STACK_W["techhouse"][i] <= 0.15, (v, i)
-
-    styles = [choose_style(_riff(), v) for v in range(300)]
-    assert {s.house_style for s in styles} == set(_HOUSE_MENU[0])
+    for genre, (keys, weights) in _PRODUCER_MENU.items():
+        assert len(weights) == len(keys), genre
+        for p in keys:
+            # every menu entry renderable / in range
+            for role in _PRODUCER_PAD_MENU[p]:
+                assert role in PAD_ROLES, (p, role)
+            for i in _PRODUCER_RHYTHM[p][0]:
+                assert i < len(_PAD_RHYTHMS[genre]), (p, i)
+            patches, w = _PRODUCER_BASS[p]
+            assert w is None or len(w) == len(patches), p
+            for patch in patches:
+                assert patch in PATCHES, (p, patch)
+            for i in _PRODUCER_FEEL[p][0]:
+                assert i < len(_BASS_FEELS[genre]), (p, i)
+            for i in _PRODUCER_DRUMV[p]:
+                assert 0 <= i <= len(DRUM_VARIANTS[genre]), (p, i)
+            assert p in _PRODUCER_GATE and p in _PRODUCER_PUMP
+            assert p in _PRODUCER_RUMBLE and p in _PRODUCER_SWING
+            skey = lead_stack_key(genre, p)
+            assert skey == f"{genre}:{p}", (genre, p)
+            for stack in LEAD_STACKS[skey]:
+                for voice, semi, gain_db in stack:
+                    assert voice in LEAD_VOICES, (p, voice)
+                    assert semi in (-12, 0, 12) and gain_db <= -8.0, (p, voice)
+        # coverage: a balanced menu means every producer lands across nonces
+        styles = [choose_style(_riff(drum_style=genre), v) for v in range(300)]
+        assert {s.producer_style for s in styles} == set(keys), genre
+        # per-producer routing + identity pins
+        for s in styles:
+            p = s.producer_style
+            assert s.drum_swing in _PRODUCER_SWING[p][0], p
+            assert s.drum_variant in _PRODUCER_DRUMV[p], p
+            assert s.bass_patch in _PRODUCER_BASS[p][0], p
+            assert s.bass_feel in _PRODUCER_FEEL[p][0], p
+            assert s.bass_gate in _PRODUCER_GATE[p][0], p
+            assert s.pump_depth in _PRODUCER_PUMP[p][0], p
+            assert s.fx_palette.fill_shape in \
+                _PRODUCER_FILL.get(p, _PRODUCER_FILL_DEFAULT), p
+            assert s.fx_palette.earcandy_menu == \
+                _PRODUCER_CANDY.get(p, _CANDY_MENU.get(genre, ())), p
+            if p == "latin":
+                assert s.drum_variant != 0, s   # percussion IS the identity
+            if s.production_mode == "melodic":
+                assert s.pad_role in _PRODUCER_PAD_MENU[p], p
+                assert s.pad_rhythm in _PRODUCER_RHYTHM[p][0], p
+                if p == "lofi":   # the crackle bed + chords are the core
+                    assert s.texture == "crackle" and s.pads_on, s
+                if p == "bigroom":   # the long build IS the signature
+                    assert s.fx_palette.riser_on, s
+    # genres WITHOUT a producer menu carry None (and default swing) — the
+    # byte-identical guarantee for every other genre
     for g in DRUM_PATTERNS:
-        if g == "techhouse":
+        if g in _PRODUCER_MENU:
             continue
-        assert choose_style(_riff(drum_style=g), 7).house_style is None, g
-    # per-sub-style routing holds: bigroom never draws a classic-only role
-    for s in styles:
-        if s.production_mode == "melodic" and s.house_style:
-            assert s.pad_role in _HOUSE_PAD_MENU[s.house_style], s.house_style
+        s = choose_style(_riff(drum_style=g), 7)
+        assert s.producer_style is None and s.drum_swing is None, g
+    assert lead_stack_key("dnb", None) == "dnb"
 
 
 def test_r20_sparse_instrumentation_guarded():
@@ -328,21 +362,32 @@ def test_style_fields_are_decorrelated_across_nonces():
         return [getattr(s, field) for s in styles]
 
     menu = _GENRE_MENU["techhouse"]
-    from kidseq_engine.arrange.style import _HOUSE_PAD_MENU, _HOUSE_RHYTHM
+    from kidseq_engine.arrange.style import (_PRODUCER_BASS, _PRODUCER_DRUMV,
+                                             _PRODUCER_FEEL, _PRODUCER_MENU,
+                                             _PRODUCER_PAD_MENU,
+                                             _PRODUCER_RHYTHM)
     for field in ("bass_patch", "pad_role", "texture", "riff_break_variant",
                   "bass_feel", "pad_rhythm", "drum_variant", "pad_voicing",
                   "riff_ornament"):
         seen = set(picks(field))
         want = set(menu[field])
-        if field == "pad_role":   # R21: sub-styles widen the role pool
-            want = {r for m in _HOUSE_PAD_MENU.values() for r in m}
+        # R31: the producer styles own the techhouse pools for these fields
+        if field == "pad_role":
+            want = {r for m in _PRODUCER_PAD_MENU.values() for r in m}
         if field == "pad_rhythm":
-            want = {i for m, _ in _HOUSE_RHYTHM.values() for i in m}
+            want = {i for m, _ in _PRODUCER_RHYTHM.values() for i in m}
+        if field == "bass_patch":
+            want = {b for m, _ in _PRODUCER_BASS.values() for b in m}
+        if field == "bass_feel":
+            want = {i for m, _ in _PRODUCER_FEEL.values() for i in m}
+        if field == "drum_variant":
+            want = {i for m in _PRODUCER_DRUMV.values() for i in m}
         assert seen == want, (field, seen, want)
     from kidseq_engine.arrange.style import LEAD_STACKS
-    # R20: None (no stack) joined the menu
-    assert set(picks("lead_stack")) == \
-        set(range(len(LEAD_STACKS["techhouse"]))) | {None}
+    # R20: None (no stack) joined the menu; R31: producer banks are 3 stacks
+    n_max = max(len(LEAD_STACKS[f"techhouse:{p}"])
+                for p in _PRODUCER_MENU["techhouse"][0])
+    assert set(picks("lead_stack")) == set(range(n_max)) | {None}
 
     # structure: build_frac must not determine prog_pick (or vice versa) once
     # both have >1 option. Guarded so it activates as menus widen.
@@ -420,7 +465,8 @@ def test_fx_palette_r11_menu_coverage():
     assert {p.earcandy_every for p in per_genre["hiphop"]} == {0}
     assert {p.earcandy_every for p in per_genre["reggaeton"]} == {8, 4}
     assert {p.swell_kind for p in per_genre["dnb"]} == {"delay", "reverb", None}
-    assert {p.swell_kind for p in per_genre["techhouse"]} == {None}
+    # R31: the lofi producer style brought Fred's reverse-riff swell along
+    assert {p.swell_kind for p in per_genre["techhouse"]} == {None, "reverb"}
     assert {p.scratch_on for p in per_genre["hiphop"]} == {True, False}
     assert {p.scratch_on for p in per_genre["techhouse"]} == {False}
     assert {p.drop_open for p in per_genre["garage"]} == {"no_pads", None}

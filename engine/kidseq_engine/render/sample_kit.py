@@ -26,7 +26,8 @@ from ..audio import SR, add_at, normalize, pan_stereo, read_wav, seconds_per_bea
 # Constant-power stereo placement per voice: low-end / backbeat dead-centre for
 # mono-compatibility, hats & aux perc spread. (mono-below-120 fold is a backstop.)
 _PAN = {"kick": 0.0, "sub": 0.0, "snare": 0.0, "clap": 0.0,
-        "hatC": 0.25, "hatO": -0.20, "rim": -0.30, "shaker": 0.35, "cowbell": -0.15}
+        "hatC": 0.25, "hatO": -0.20, "rim": -0.30, "shaker": 0.35,
+        "cowbell": -0.15, "conga": -0.25, "bongo": 0.30}
 
 DRUM_DIR = Path(__file__).resolve().parents[2] / "assets" / "drums"
 
@@ -55,6 +56,8 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
         "cowbell": [("perc/cowbell.wav", 1.0)],  # seasoning-variant voice
         "rim":   [("perc/woodblock.wav", 1.0)],  # R24 skeletal voice
+        "conga": [("perc/conga.wav", 1.0)],     # R31 producer-seasoning voice
+        "bongo": [("perc/bongo.wav", 1.0)],     # R31 producer-seasoning voice
     },
     # dnb: the app's kit — layered soft kick (VEH1 004 + 005 at 0.5, the pack's
     # relative gains), DC_Kit14 snare + 75ms-trimmed hat (trim baked at unpack).
@@ -144,7 +147,8 @@ _FILL_MAX_STRETCH = 0.15
 # Per-voice mix balance (each one-shot is peak-normalised first, so this is a clean
 # relative balance the user can tune by ear).
 _GAIN = {"kick": 1.0, "sub": 0.95, "snare": 0.78, "clap": 0.72, "hatC": 0.45,
-         "hatO": 0.5, "rim": 0.6, "cowbell": 0.5, "shaker": 0.38}
+         "hatO": 0.5, "rim": 0.6, "cowbell": 0.5, "shaker": 0.38,
+         "conga": 0.5, "bongo": 0.5}
 
 _cache: dict[str, np.ndarray] = {}
 
@@ -262,12 +266,14 @@ def _voice_buffer(name: str, layers: list[tuple[str, float]]) -> np.ndarray:
 
 def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
                          pattern: dict | None = None,
-                         takes: dict[str, int] | None = None) -> np.ndarray:
+                         takes: dict[str, int] | None = None,
+                         swing: float | None = None) -> np.ndarray:
     """Render `bars` of the named genre's drums from real CC0 one-shots (mono).
 
     `pattern` overrides the style's DRUM_PATTERNS entry (the arranger passes
     voice subsets for lite sections); the kit lookup stays by style. `takes`
-    swaps voices to KIT_ALTS alternates (per-press variety, R17)."""
+    swaps voices to KIT_ALTS alternates (per-press variety, R17). `swing`
+    overrides the per-style SWING map (per-press producer groove, R31)."""
     from .drums import DRUM_PATTERNS  # local import avoids a cycle
 
     pat = pattern if pattern is not None else DRUM_PATTERNS.get(style)
@@ -292,6 +298,7 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
             for i, vel in enumerate(steps):
                 if vel <= 0:
                     continue
-                at = int((b * 4 * spb + swung_step_offset(style, i) * step_s) * sr)
+                at = int((b * 4 * spb
+                          + swung_step_offset(style, i, swing) * step_s) * sr)
                 add_at(buf, one * float(vel), at)
     return buf[: bars * bar_samples + int(0.4 * sr)]

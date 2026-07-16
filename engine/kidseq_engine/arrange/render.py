@@ -75,21 +75,40 @@ def _lite_pattern(pattern: dict) -> dict:
     return {k: v for k, v in pattern.items() if k in _LITE_VOICES}
 
 
+# R31 per-role pad post-processing: role -> (lowpass Hz, velocity scale).
+# felt_piano = the Salamander grand played soft through a closed-down filter —
+# the lofi producer style's bittersweet chord bed. The role itself resolves to
+# a real renderer via PAD_ROLES (the renderability walk stays honest).
+PAD_POST: dict[str, tuple[float, float]] = {"felt_piano": (2800.0, 0.75)}
+
+
 def _render_pads(notes, tempo: float, span_beats: float, sr: int,
                  pad_role: str = "supersaw") -> np.ndarray:
     """Render the pads layer with the style's genre role: Surge patches for
     synth-family roles, GM presets for keys-family (organ/e-piano/pizz).
     Cross-fallbacks keep SOME pad when a renderer is missing."""
     kind, name = PAD_ROLES.get(pad_role, ("vst", "pad"))
+    post = PAD_POST.get(pad_role)
+    if post is not None:
+        notes = [dc_replace(n, velocity=max(1, min(127, int(n.velocity * post[1]))))
+                 for n in notes]
     if kind == "vst" and vst_render.SURGE_VST3.exists():
-        return as_stereo(vst_render.render_patch(notes, tempo, name, 1, span_beats, sr))
-    if kind == "sf" and default_soundfont():
-        return as_stereo(render_riff_sf(notes, tempo, name, 1, span_beats, sr))
-    if vst_render.SURGE_VST3.exists():
-        return as_stereo(vst_render.render_patch(notes, tempo, "pad", 1, span_beats, sr))
-    if default_soundfont():
-        return as_stereo(render_riff_sf(notes, tempo, "pads", 1, span_beats, sr))
-    return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
+        sig = as_stereo(vst_render.render_patch(notes, tempo, name, 1, span_beats, sr))
+    elif kind == "sf" and default_soundfont():
+        sig = as_stereo(render_riff_sf(notes, tempo, name, 1, span_beats, sr))
+    elif vst_render.SURGE_VST3.exists():
+        sig = as_stereo(vst_render.render_patch(notes, tempo, "pad", 1, span_beats, sr))
+    elif default_soundfont():
+        sig = as_stereo(render_riff_sf(notes, tempo, "pads", 1, span_beats, sr))
+    else:
+        return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
+    if post is not None and sig.size:
+        from pedalboard import LadderFilter
+
+        filt = LadderFilter(mode=LadderFilter.Mode.LPF12,
+                            cutoff_hz=float(post[0]), resonance=0.1)
+        sig = filt.process(sig, sr).astype(np.float32)
+    return sig
 
 
 def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.ndarray:
@@ -528,7 +547,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     stk = _render_lead_stack(span_notes, riff.tempo, 1,
                                              span_beats, sr,
                                              lead_stack_key(riff.drum_style,
-                                                            style.house_style),
+                                                            style.producer_style),
                                              style.lead_stack)
                     _add_at(layers["riff"], stk, at)
             else:
@@ -587,25 +606,29 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                                 pal.fill_shape)
                     b_at = at + int(b * bar_s * sr)
                     sig = drums_audio_pattern(riff.drum_style, bpat,
-                                              riff.tempo, 1, sr, takes=takes)
+                                              riff.tempo, 1, sr, takes=takes,
+                                              swing=style.drum_swing)
                     _add_at(layers["drums"], sig, b_at)
                     # pump triggers from the bar's ACTUAL kicks (kick_skip
                     # bars must not duck the mix against silence)
                     kick_onsets += [b_at + o for o in
                                     kick_onsets_from_pattern(
                                         bpat, riff.tempo, 1, sr,
-                                        style=riff.drum_style)]
+                                        style=riff.drum_style,
+                                        swing=style.drum_swing)]
             elif pat:
                 from ..render import drums_audio_pattern
                 sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo,
-                                          sec.bars, sr, takes=takes)
+                                          sec.bars, sr, takes=takes,
+                                          swing=style.drum_swing)
                 _add_at(layers["drums"], sig, at)
                 if sec.drums == "full":
                     # base_pat, not `pattern`: percussive sections play the
                     # skeletal kick — the pump must follow what actually hits
                     kick_onsets += [at + o for o in
                                     kick_onsets_from_pattern(base_pat, riff.tempo, sec.bars, sr,
-                                                              style=riff.drum_style)]
+                                                              style=riff.drum_style,
+                                                              swing=style.drum_swing)]
 
         if sec.bass:
             if percussive:
@@ -825,7 +848,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             for bi, pat in enumerate(bars):
                 fill_at = b_e - int((len(bars) - bi) * bar_s * sr)
                 sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
-                                          sr, takes=takes)
+                                          sr, takes=takes,
+                                          swing=style.drum_swing)
                 _add_at(layers["drums"], sig, fill_at)
 
     if flags.automation:
@@ -971,7 +995,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # UKG vocabulary: a 2-beat kick pickup INTO the phrase boundary
                 pat = {"kick": [0.0] * 8 + [0.55, 0, 0.65, 0, 0.75, 0, 0.85, 0]}
                 sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
-                                          sr, takes=takes)
+                                          sr, takes=takes,
+                                          swing=style.drum_swing)
                 _add_at(layers["drums"], sig * 0.8, pos - int(bar_s * sr))
                 continue
             if kind in ("rev_swell_riff", "rev_swell_delay"):
@@ -994,7 +1019,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             dur = (e - a) / sr
             if pal.rumble_on:
                 ons = kick_onsets_from_pattern(pattern, riff.tempo, sec.bars,
-                                               sr, style=riff.drum_style)
+                                               sr, style=riff.drum_style,
+                                               swing=style.drum_swing)
                 sig = fx.rumble_bed(dur, sr, seed + 600,
                                     [o / sr for o in ons], decay_s=1.5 * spb)
                 _add_at(layers["rumble"], sig, a)
