@@ -96,13 +96,40 @@ def test_kit_key_null_contract():
     b = master({"riff": riff.copy(), "drums": drums.copy()}, SR,
                genre="techhouse", kick_onsets=list(on), kit_key=None)
     assert np.array_equal(a.audio, b.audio), "kit_key=None must equal omitting it"
+    # pianohouse carries NO R32f mix seasoning, so with no pack on disk its
+    # kit_key only affects the kick slot — which falls back to the base genre
+    # slot, making the master byte-identical to the no-kit_key path.
     from kidseq_engine.render.sample_kit import kit_available
-    if not kit_available("techhouse:bassled"):
+    if not kit_available("techhouse:pianohouse"):
         c = master({"riff": riff.copy(), "drums": drums.copy()}, SR,
                    genre="techhouse", kick_onsets=list(on),
-                   kit_key="techhouse:bassled")
+                   kit_key="techhouse:pianohouse")
         assert np.array_equal(a.audio, c.audio), \
-            "a producer key with no pack must slot around the base genre kick"
+            "an unseasoned producer key with no pack must equal the base master"
+
+
+def test_producer_mix_seasoning_null_and_deterministic():
+    # R32f: a producer kit_key seasons the mix (<=2 dB reverb/room/NY/clip); a
+    # non-producer / None kit_key seasons NOTHING (bit-identical null contract).
+    # lofi's deltas apply from the producer NAME (not assets), so this runs
+    # anywhere. Deterministic per kit_key.
+    np.random.seed(4)
+    riff = _tone(440, 1.2)
+    drums = (np.random.uniform(-1, 1, int(1.2 * SR)) * 0.3).astype(np.float32)
+    on = list(kick_onsets_from_pattern(DRUM_PATTERNS["techhouse"], 120, 1, SR))
+
+    def m(kk):
+        return master({"riff": riff.copy(), "drums": drums.copy(),
+                       "pads": (riff * 0.3).copy()}, SR, genre="techhouse",
+                      kick_onsets=list(on), kit_key=kk)
+
+    assert np.array_equal(m(None).audio, m("techhouse").audio), \
+        "a non-producer kit_key must not season the mix"
+    lofi = m("techhouse:lofi")
+    assert np.array_equal(lofi.audio, m("techhouse:lofi").audio), \
+        "seasoning must be deterministic"
+    assert not np.array_equal(m(None).audio, lofi.audio), \
+        "lofi seasoning must change the mix"
 
 
 if __name__ == "__main__":

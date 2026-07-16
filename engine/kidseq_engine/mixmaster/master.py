@@ -147,6 +147,25 @@ _ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
 _DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
                 "reggaeton": 1.15, "drill": 1.1, "hiphop": 1.1}
 
+# R32f per-producer mix SEASONING (<=2 dB) — layered on the genre lookups.
+# producer is parsed from master()'s kit_key; a None/non-producer kit_key
+# misses every table => bit-identical null contract. Identity comes from the
+# sound sources (R32b-e); this is a light colour, not the differentiator.
+_PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
+    "lofi": {"riff": 2.0, "pads": 2.0},   # Fred: washed — wetter riff + pads
+    "bassled": {"pads": -2.0},            # Dom Dolla: dry, sparse — drier pads
+}
+_PRODUCER_ROOM_SIZE: dict[str, float] = {"lofi": 0.46, "bassled": 0.36}
+_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0}   # Guetta: denser drums
+_PRODUCER_DRUM_CLIP_K: dict[str, float] = {"bigroom": 1.5, "lofi": 1.15}
+
+
+def _producer_of(kit_key: str | None) -> str | None:
+    """The producer name from a "<genre>:<producer>" kit_key, else None."""
+    if kit_key and ":" in kit_key:
+        return kit_key.split(":", 1)[1]
+    return None
+
 # bass band-split saturation wet mix (Noisia: multiband dirt on EVERY bass,
 # sub band clean/mono; Young Guru: restraint — never everything). dnb runs
 # hottest (R15: its reese read cheap without harmonic thickness).
@@ -189,8 +208,11 @@ _PLR_FLOOR = {"default": 7.0, "dnb": 7.5, "techhouse": 7.5, "garage": 7.0,
 _DROP_PUSH_DB = 0.5
 
 
-def _reverb_return_board(genre: str | None) -> Pedalboard:
-    room = _ROOM_SIZE.get(genre or "", 0.40)
+def _reverb_return_board(genre: str | None,
+                         producer: str | None = None) -> Pedalboard:
+    room = _PRODUCER_ROOM_SIZE.get(producer)
+    if room is None:
+        room = _ROOM_SIZE.get(genre or "", 0.40)
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=300.0),   # keep mud out of the tail
         LowpassFilter(cutoff_frequency_hz=7500.0),
@@ -713,6 +735,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         raise ValueError("master() needs a non-empty 'riff' layer")
 
     preset = preset_for(genre)
+    producer = _producer_of(kit_key)   # R32f per-producer mix seasoning
     target = lufs_target if lufs_target is not None else preset.lufs_target
     # R19: per-press pump override (ArrangeStyle.pump_depth via the caller) —
     # techhouse's fixed 0.50 pump on every take was part of the "cheesy" read
@@ -745,14 +768,19 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         if name == "drums":
             # clip the kit, don't limit it (Sub Focus): gentle memoryless
             # drive shaves peaks; calibration below restores the level
-            k = _DRUM_CLIP_K.get(genre or "", 1.15)
+            k = _PRODUCER_DRUM_CLIP_K.get(producer)
+            if k is None:
+                k = _DRUM_CLIP_K.get(genre or "", 1.15)
             proc = (np.tanh(k * proc) / np.tanh(k)).astype(np.float32)
             dry = proc
             # parallel NY crush under the dry kit (density without killing punch)
             crushed = _process(dry, _ny_crush_board(), sr)[:n]
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
-            proc = dry + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
+            ny_db = _PRODUCER_NY_DB.get(producer)
+            if ny_db is None:
+                ny_db = _NY_GAIN_DB.get(genre or "", -8.0)
+            proc = dry + crushed * (10.0 ** (ny_db / 20.0))
             # parallel distorted 'room' (Noisia's overheads) — fed from the
             # DRY kit so the crush and the room stay independent colours
             room_db = _ROOM_GAIN_DB.get(genre or "")
@@ -775,6 +803,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         # tap the shared-reverb send pre-pump (the return gets its own duck)
         send_db = _SEND_DB.get(name)
         if send_db is not None:
+            send_db += _PRODUCER_SEND_DELTA.get(producer, {}).get(name, 0.0)
             if name == "riff" and riff_wet_spans:
                 curve = np.full(n, 10.0 ** (send_db / 20.0), dtype=np.float32)
                 for s0, s1 in riff_wet_spans:
@@ -818,7 +847,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     if float(np.max(np.abs(send_acc))) > 1e-9:
         pre = int(_PREDELAY_S * sr)
         sent = np.pad(send_acc, ((pre, 0), (0, 0)))[:n]
-        ret = _process(sent, _reverb_return_board(genre), sr)[:n]
+        ret = _process(sent, _reverb_return_board(genre, producer), sr)[:n]
         if ret.shape[0] < n:
             ret = np.pad(ret, ((0, n - ret.shape[0]), (0, 0)))
         ret = ret * (1.0 - 0.8 * pump_base * shape)[:, None]
