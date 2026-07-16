@@ -1,85 +1,47 @@
-"""Build engine/packs/producer_techhouse.pack — the R32 PRODUCER sound sources.
+"""Build engine/packs/producer_<genre>.pack — the R32 PRODUCER sound sources.
 
-R31 gave every techhouse producer the same drum kit; the owner heard "they all
+R31 gave every producer of a genre the same drum kit; the owner heard "they all
 sound the same". This packs each producer's OWN drum voices (from the owner's
 commercial libraries, chosen by spectral triage — see producer_recipes.md) so
-the six producers are audibly distinct.
+the producers are audibly distinct.
 
 Same container as drums.pack / engine_extras.pack:
   [4-byte LE headerLen][UTF-8 JSON header][concatenated wav bytes]
 Header schema v1 has THREE sections (R32b fills "drums"; R32c/R32e add
 "melodic" smp chops and "fx" one-shots — same pack, rebuilt):
-  {"drums":   {"techhouse:<producer>": {voice: {o,n,g}}},
-   "melodic": {"techhouse:<producer>": {name:  {o,n,g,root_hz}}},
-   "fx":      {"techhouse:<producer>": {kind:  {o,n,g,peak_dbfs}}}}
+  {"drums":   {"<genre>:<producer>": {voice: {o,n,g}}},
+   "melodic": {"<genre>:<producer>": {name:  {o,n,g,root_hz}}},
+   "fx":      {"<genre>:<producer>": {kind:  {o,n,g,peak_dbfs}}}}
 
-The DRUM picks come from tools/producer_candidates.json (first entry per
-section = the locked FINAL PICK; owner swaps by reordering that file). Voices
-are conditioned exactly like install_engine_extras (peak -0.5 dBFS + 25 Hz HP
-+ optional trim) so pack gains mean the same across packs.
-scripts/fetch_producer_kits.py unpacks -> assets/drums/techhouse/<producer>/.
+Everything genre-specific (the producer list, the drum/melodic/fx voice ->
+candidate-section maps, per-voice trims, the pack filename, the candidate file)
+comes from the genre's manifest at engine/producers/<genre>.json — add a genre
+by dropping in a manifest, not by editing this tool. The picks come from the
+manifest's candidates_file (first entry per section = the locked FINAL PICK;
+owner swaps by reordering that file). Voices are conditioned exactly like
+install_engine_extras (peak -0.5 dBFS + 25 Hz HP + optional trim) so pack gains
+mean the same across packs. scripts/fetch_producer_kits.py unpacks ->
+assets/drums/<genre>/<producer>/.
 
 Run locally (needs the owner's sample library):
-    python tools/install_producer_kits.py
+    python tools/install_producer_kits.py [--genre techhouse]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import struct
+import sys
 from pathlib import Path
 
 LIB = Path(r"C:\Users\Joe_C\Documents\MyMusic\Samples")
 HERE = Path(__file__).resolve().parent
-CAND = json.loads((HERE / "producer_candidates.json").read_text(encoding="utf-8"))["candidates"]
 DST = HERE.parent / "engine" / "packs"
 
-# producer -> engine drum voice -> candidate-map section (first entry = pick).
-# Only the producer-SPECIFIC voices are packed; the rest of each kit reuses the
-# base techhouse relpaths in sample_kit.KITS (kit_available still covers them).
-DRUM_MAP: dict[str, dict[str, str]] = {
-    "bassled":   {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"},
-    "discofunk": {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO",
-                  "shaker": "shaker"},
-    "latin":     {"kick": "kick", "clap": "clap", "hatO": "hatO", "bongo": "bongo",
-                  "rim": "rim", "shaker": "shaker", "conga": "perc"},
-    "pianohouse": {"kick": "kick_909", "clap": "clap", "hatC": "hatC",
-                   "hatO": "hatO", "rim": "rim"},
-    "lofi":      {"kick": "kick", "clap": "clap", "hatC": "hatC", "shaker": "foley"},
-    "bigroom":   {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"},
-}
-
-# per-(producer, voice) trim in ms where the raw one-shot rings too long for its
-# lane (lofi's foley "shaker" is up to ~1.7 s; a 16th-note lane needs it short).
-TRIMS: dict[tuple[str, str], int] = {("lofi", "shaker"): 240}
-
-# R32c MELODIC section: producer -> smp voice name -> candidate-map section.
-# These become the "melodic" pack section (mono + root_hz), unpacked to
-# assets/melodic_oneshots/techhouse/<producer>/<name>.wav for smp_render.
-MELODIC_MAP: dict[str, dict[str, str]] = {
-    "bassled":   {"chop": "chop"},        # Dom Dolla talkbox-alien vocal chop
-    "discofunk": {"funk_stab": "funk_stab"},  # PDM funk one-shot stab
-    "latin":     {"chant": "chant"},      # HUGEL cumbia vocal chant
-    "pianohouse": {"chop": "chop"},       # MK dub vocal-sample syllable
-    "lofi":      {"chop": "chop"},        # Fred voice-note fragment
-    "bigroom":   {"rave_shot": "stab_madeon"},  # Guetta supersaw/rave stab
-}
-MELODIC_TRIM_MS = 1400   # chops repitch per note; cap the ring
-
-# R32e FX section: producer -> fx kind (smp_*) -> candidate-map section. These
-# become the "fx" pack section, unpacked to assets/fx_oneshots/techhouse/
-# <producer>/<kind>.wav and played by the candy scheduler (breath-level, at
-# phrase boundaries) via fx_samples.fx_shot. Producers with no fx candidate
-# (pianohouse — MK is restrained) use the genre's synth FX unchanged.
-FX_MAP: dict[str, dict[str, str]] = {
-    "bassled":   {"smp_slide": "fx_sweep", "smp_rev": "fx_rev"},
-    "discofunk": {"smp_tom_zap": "tom_zap"},
-    "latin":     {"smp_rev_perk": "fx_rev", "smp_crowd": "crowd", "smp_perk": "perk"},
-    "lofi":      {"smp_rev_swell": "fx_rev"},
-    "bigroom":   {"smp_riser": "riser", "smp_impact": "impact", "smp_slide": "slide"},
-}
-FX_PEAK_DBFS = -18.0     # breath-level (Tumay ear-candy law)
-FX_TRIM_MS = 1600        # candy-sized; risers/crowd are ~3 s raw
+# import the shared manifest loader (lives under engine/)
+sys.path.insert(0, str(HERE.parent / "engine"))
+from kidseq_engine.producer_manifest import load_manifest  # noqa: E402
 
 
 def _condition_fx(src: Path, trim_ms: int, peak_dbfs: float) -> bytes:
@@ -186,36 +148,39 @@ def _condition(src: Path, trim_ms: int | None = None) -> bytes:
     return buf.getvalue()
 
 
-def main() -> None:
+def main(genre: str = "techhouse") -> None:
+    man = load_manifest(genre)
+    cand = man.candidates()
+    trims = man.trims_ms
     DST.mkdir(parents=True, exist_ok=True)
     data = bytearray()
     header: dict = {"drums": {}, "melodic": {}, "fx": {}}
     n_files = 0
-    for producer, voices in DRUM_MAP.items():
-        key = f"techhouse:{producer}"
+    for producer, voices in man.drum_map.items():
+        key = f"{genre}:{producer}"
         header["drums"][key] = {}
         for voice, section in voices.items():
-            cands = CAND.get(producer, {}).get(section)
+            cands = cand.get(producer, {}).get(section)
             assert cands, f"no candidates for {producer}/{section}"
             rel = cands[0]  # locked FINAL PICK
             src = LIB / rel
             assert src.exists(), f"missing pick: {src}"
-            raw = _condition(src, TRIMS.get((producer, voice)))
+            raw = _condition(src, trims.get((producer, voice)))
             header["drums"][key][voice] = {"o": len(data), "n": len(raw), "g": 1.0}
             data.extend(raw)
             n_files += 1
             print(f"  {producer:10s} {voice:7s} <- {Path(rel).name}")
     # ---- MELODIC section (R32c): smp chops/stabs/chants + root_hz ----------
-    for producer, voices in MELODIC_MAP.items():
-        key = f"techhouse:{producer}"
+    for producer, voices in man.melodic_map.items():
+        key = f"{genre}:{producer}"
         header["melodic"][key] = {}
         for name, section in voices.items():
-            cands = CAND.get(producer, {}).get(section)
+            cands = cand.get(producer, {}).get(section)
             assert cands, f"no candidates for {producer}/{section} (melodic)"
             rel = cands[0]
             src = LIB / rel
             assert src.exists(), f"missing melodic pick: {src}"
-            raw, root = _condition_melodic(src, MELODIC_TRIM_MS)
+            raw, root = _condition_melodic(src, man.melodic_trim_ms)
             header["melodic"][key][name] = {"o": len(data), "n": len(raw),
                                             "g": 1.0, "root_hz": round(root, 2)}
             data.extend(raw)
@@ -223,23 +188,23 @@ def main() -> None:
             print(f"  [mel] {producer:10s} {name:9s} <- {Path(rel).name}  "
                   f"root={root:.1f}Hz")
     # ---- FX section (R32e): sampled candy one-shots + baked peak_dbfs -------
-    for producer, kinds in FX_MAP.items():
-        key = f"techhouse:{producer}"
+    for producer, kinds in man.fx_map.items():
+        key = f"{genre}:{producer}"
         header["fx"][key] = {}
         for kind, section in kinds.items():
-            cands = CAND.get(producer, {}).get(section)
+            cands = cand.get(producer, {}).get(section)
             assert cands, f"no candidates for {producer}/{section} (fx)"
             rel = cands[0]
             src = LIB / rel
             assert src.exists(), f"missing fx pick: {src}"
-            raw = _condition_fx(src, FX_TRIM_MS, FX_PEAK_DBFS)
+            raw = _condition_fx(src, man.fx_trim_ms, man.fx_peak_dbfs)
             header["fx"][key][kind] = {"o": len(data), "n": len(raw), "g": 1.0,
-                                       "peak_dbfs": FX_PEAK_DBFS}
+                                       "peak_dbfs": man.fx_peak_dbfs}
             data.extend(raw)
             n_files += 1
             print(f"  [fx]  {producer:10s} {kind:12s} <- {Path(rel).name}")
     head = json.dumps(header, separators=(",", ":")).encode("utf-8")
-    pack = DST / "producer_techhouse.pack"
+    pack = DST / man.pack
     with open(pack, "wb") as f:
         f.write(struct.pack("<I", len(head)))
         f.write(head)
@@ -252,4 +217,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--genre", default="techhouse",
+                    help="which genre's manifest to build (engine/producers/<genre>.json)")
+    main(ap.parse_args().genre)

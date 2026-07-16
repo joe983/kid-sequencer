@@ -80,28 +80,69 @@ R31 varied per-press *decisions* but every producer shared one drum kit, one
 Surge family and identically-synthesized FX → the owner heard "they all sound
 the same." A producer axis is not done until each producer has REAL distinct
 sound SOURCES. The R32 techhouse pass is the template (`docs/producer_recipes.md`
-+ `~/.claude/plans/ok-now-back-to-bubbly-allen.md`):
++ `~/.claude/plans/can-you-remember-i-woolly-horizon.md`).
 
-1. **Recipes + triage** — map each producer's signature to files on the owner's
-   disk. Spectral-triage the banks (decay/centroid/band-energy/tonalness) into
-   `producer_candidates.json`; **de-dup so producers sharing a bank get DISTINCT
-   files**. Audition contact sheets (`tools/audition_producer_kits.py`) → owner.
-2. **Drum kits** — `KITS["<genre>:<producer>"]` + `kit_key()`; pack the picks
-   (`tools/install_producer_kits.py` → the genre pack); thread `drum_kit`
-   through the AUDIO drum calls + `master(kit_key=)` slot (symbolic pump stays
-   on `riff.drum_style`).
+### The push button (mechanical — one file + two commands)
+
+Everything genre-specific lives in ONE manifest, **`engine/producers/<genre>.json`**
+(schema loaded by `kidseq_engine/producer_manifest.py`): the producer keys +
+reference `legend`, `tempo`, the `pack` filename, the `build` maps (drum/melodic/
+fx voice → candidate section + trims), `gate` thresholds, the `battery`
+input→producer pairs, and a `recipe` block (bank globs + spectral target per
+producer/section) that drives triage. It lives under `engine/` because only
+`engine/` rides into the Modal image and the gate reads it there.
+
+The mechanical steps are then a driver, `tools/run_producer_pass.py`, with the
+mandatory human listening checkpoint in the middle:
+
+```
+python tools/run_producer_pass.py --genre <g> --phase audition
+    triage (rank owner banks -> tools/producer_candidates/<g>.json)
+    -> audition (contact sheets)   [STOP: owner listens + reorders picks]
+
+python tools/run_producer_pass.py --genre <g> --phase build
+    install (build engine/packs/producer_<g>.pack) -> fetch (unpack) -> local gate
+    [STOP: modal run populate_assets/run_tests/battery2/producers -> owner ears]
+```
+
+Each sub-step is content-verified (candidate de-dup, sheet counts, pack header +
+SHA, gate matrix); the driver aborts on a failed check. The four tools
+(`producer_triage`, `audition_producer_kits`, `install_producer_kits`,
+`fetch_producer_kits`) and `test_producer_sound.py` + `modal_app::battery2` are
+ALL genre-parameterized off the manifest — **adding a genre is dropping in a
+manifest + assets, not editing a tool.**
+
+### What's hand-authored per genre (musical, NOT push-button)
+
+Sections 1–6 above (research → signatures → the `_PRODUCER_*` decision rows +
+`LEAD_STACKS` + `KITS`/`SMP_VOICES`/master seasoning rows) plus the manifest's
+`build` maps, the `recipe`, the 6 `examples/showcase_<genre>_p*.json` battery
+inputs, and pinning `gate.t_drums`/`t_base` below the first observed matrix.
+
+### The seven sound layers (what the mechanical steps produce)
+
+1. **Recipes + triage** — the manifest `recipe` maps each producer's signature to
+   bank globs + a spectral target. `tools/producer_triage.py --genre <g>` ranks
+   the banks (decay/centroid/band-energy/tonalness), **de-dups so producers
+   sharing a bank get DISTINCT slot-0 picks**, and writes
+   `tools/producer_candidates/<g>.json`. Audition (`--phase audition`) → owner.
+   (Triage is a reconstruction of the original scratchpad ranker — a proposal
+   the owner corrects by ear.)
+2. **Drum kits** — `KITS["<genre>:<producer>"]` + `kit_key()`; `install` packs the
+   picks from the manifest `build.drum_map` → `producer_<g>.pack`; thread
+   `drum_kit` through the AUDIO drum calls + `master(kit_key=)` slot.
 3. **smp chops** — the producer's real vocal/stab/chant hook via
-   `render/smp_render.py` (octave-fold ±6 semis); re-point its lead stack slot.
+   `render/smp_render.py` (octave-fold ±6 semis); `build.melodic_map`.
 4. **VOICE_POST** — pedalboard colour per (producer, slot, voice) — the safe
-   place for character (no unproven Surge params). New Surge patches use only
-   proven param names.
-5. **Sampled FX** — `render/fx_samples.py` candy one-shots per producer
-   (breath-level, phrase boundaries); `_PRODUCER_CANDY` menus + `FX_FALLBACK`.
+   place for character. New Surge patches use only proven param names.
+5. **Sampled FX** — `render/fx_samples.py` candy one-shots per producer;
+   `build.fx_map` + `_PRODUCER_CANDY` menus + `FX_FALLBACK`.
 6. **Mix seasoning** — ≤2 dB per-producer deltas off `kit_key` in master.py.
-7. **DISTINCTNESS GATE** — extend `tests/test_producer_sound.py` to the new
-   genre: base pattern through each kit → mean-subtracted spectral fingerprint
-   → assert all distinct (thresholds pinned below the observed minima). This is
-   what makes "they all sound the same" fail CI.
+7. **DISTINCTNESS GATE** — `tests/test_producer_sound.py` is now config-driven: it
+   discovers every `engine/producers/*.json`, renders each genre's base pattern
+   through its kits, and asserts all distinct at that manifest's thresholds. A
+   new genre is covered by its manifest (+ pinned thresholds) — **no test edit**.
+   This is what makes "they all sound the same" fail CI.
 
 Every increment: `run_tests` green (asset-gated sound tests EXECUTE on Modal) +
 commit. The null contract holds by construction (non-producer ⇒ producer_style

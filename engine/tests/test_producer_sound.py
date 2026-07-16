@@ -1,13 +1,18 @@
-"""R32g — automated producer distinctness gate.
+"""R32g — automated producer distinctness gate (config-driven, per genre).
 
 The R31 failure ("they all sound the same") must FAIL CI, not pass silently.
-This renders the base techhouse drum pattern through each of the six producer
-kits and asserts they are spectrally distinct from EACH OTHER and from the base
-techhouse kit. The fingerprint is pure numpy (host-stable, unlike the Surge/
+For EACH genre that has a producer manifest (engine/producers/<genre>.json),
+this renders that genre's base drum pattern through each of its producer kits
+and asserts they are spectrally distinct from EACH OTHER and from the base
+genre kit. The fingerprint is pure numpy (host-stable, unlike the Surge/
 soundfont full-mix path), mean-subtracted so it compares spectral SHAPE not
-level. Assets-gated: executes on Modal where the producer pack is unpacked;
-skips on a clean checkout. Prints the distance matrix as audio-level evidence
-(the standing lesson: verify producer variety with audio, not decision logs).
+level. Assets-gated PER GENRE: a genre executes on Modal where its producer
+pack is unpacked, and skips on a clean checkout (or before its pack is built).
+Prints the distance matrix as audio-level evidence (the standing lesson: verify
+producer variety with audio, not decision logs).
+
+Add a genre by dropping in its manifest + pack — the producers, base tempo and
+thresholds come from the manifest, so this file never needs a per-genre edit.
 """
 
 import sys
@@ -18,20 +23,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from kidseq_engine.audio import SR  # noqa: E402
+from kidseq_engine.producer_manifest import (  # noqa: E402
+    assert_producer_keys_globally_unique, available_genres, load_manifest)
 from kidseq_engine.render import sample_kit  # noqa: E402
 from kidseq_engine.render.drums import DRUM_PATTERNS  # noqa: E402
 
 _N_BANDS = 24
 _F_LO, _F_HI = 40.0, 14000.0
-PRODUCERS = ("bassled", "discofunk", "latin", "pianohouse", "lofi", "bigroom")
-
-# min pairwise mean-abs band distance (dB/band). Observed on Modal: closest
-# producer pair 3.58, closest-to-base 2.83 (deterministic numpy fingerprint,
-# host-stable). Thresholds set below those with margin — strict enough to catch
-# a producer drifting halfway back toward similarity, loose enough never to
-# false-fail. "They all sound the same" would score ~0 and FAIL the gate.
-T_DRUMS = 2.0   # between any two producers  (observed min 3.58)
-T_BASE = 1.5    # each producer vs the base techhouse kit  (observed min 2.83)
 
 
 def _fingerprint(stereo: np.ndarray) -> np.ndarray:
@@ -52,36 +50,62 @@ def _dist(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.mean(np.abs(a - b)))
 
 
-def test_producer_drum_kits_are_spectrally_distinct():
-    keys = [f"techhouse:{p}" for p in PRODUCERS]
-    if not (sample_kit.kit_available("techhouse")
+def _check_genre(genre: str) -> bool:
+    """Render + assert distinctness for one genre. Returns True if it ran,
+    False if skipped (assets not fetched). Thresholds/tempo/producers come
+    from the manifest."""
+    man = load_manifest(genre)
+    producers = man.producers
+    keys = man.kit_keys()
+    if not (sample_kit.kit_available(genre)
             and all(sample_kit.kit_available(k) for k in keys)):
-        print("  (skipped: producer/techhouse assets not fetched)")
-        return
-    pat = DRUM_PATTERNS["techhouse"]
-    base = _fingerprint(sample_kit.render_drums_samples("techhouse", 124, 4, SR,
+        print(f"  ({genre}: skipped — producer/base assets not fetched)")
+        return False
+    pat = DRUM_PATTERNS[genre]
+    tempo = man.gate_tempo
+    base = _fingerprint(sample_kit.render_drums_samples(genre, tempo, 4, SR,
                                                         pattern=pat))
-    fps = {p: _fingerprint(sample_kit.render_drums_samples(k, 124, 4, SR,
+    fps = {p: _fingerprint(sample_kit.render_drums_samples(k, tempo, 4, SR,
                                                            pattern=pat))
-           for p, k in zip(PRODUCERS, keys)}
+           for p, k in zip(producers, keys)}
 
-    labels = ["base"] + list(PRODUCERS)
-    allfp = [base] + [fps[p] for p in PRODUCERS]
-    print("\n  producer drum-kit spectral distance (dB/band):")
+    labels = ["base"] + list(producers)
+    allfp = [base] + [fps[p] for p in producers]
+    print(f"\n  [{genre}] producer drum-kit spectral distance (dB/band):")
     print("         " + "".join(f"{lbl[:6]:>7}" for lbl in labels))
     for i, li in enumerate(labels):
         row = "".join(f"{_dist(allfp[i], allfp[j]):7.2f}" for j in range(len(labels)))
         print(f"  {li[:7]:>7} {row}")
 
-    for p in PRODUCERS:
+    t_base, t_drums = man.t_base, man.t_drums
+    for p in producers:
         d = _dist(fps[p], base)
-        assert d > T_BASE, f"{p} too close to base techhouse kit ({d:.2f} dB/band)"
+        assert d > t_base, (f"[{genre}] {p} too close to base kit "
+                            f"({d:.2f} dB/band < {t_base})")
     pairs = [(a, b, _dist(fps[a], fps[b]))
-             for i, a in enumerate(PRODUCERS) for b in PRODUCERS[i + 1:]]
+             for i, a in enumerate(producers) for b in producers[i + 1:]]
     a, b, mind = min(pairs, key=lambda t: t[2])
-    print(f"  closest producer pair: {a} / {b} = {mind:.2f} dB/band "
-          f"(gate {T_DRUMS})")
-    assert mind > T_DRUMS, f"{a}/{b} too similar ({mind:.2f} dB/band < {T_DRUMS})"
+    print(f"  [{genre}] closest producer pair: {a} / {b} = {mind:.2f} dB/band "
+          f"(gate {t_drums})")
+    assert mind > t_drums, (f"[{genre}] {a}/{b} too similar "
+                            f"({mind:.2f} dB/band < {t_drums})")
+    return True
+
+
+def test_producer_drum_kits_are_spectrally_distinct():
+    genres = available_genres()
+    if not genres:
+        print("  (no producer manifests found)")
+        return
+    ran = [g for g in genres if _check_genre(g)]
+    if not ran:
+        print("  (all genres skipped: producer assets not fetched)")
+
+
+def test_producer_keys_globally_unique():
+    # bare producer names key the style.py _PRODUCER_* tables; a name reused
+    # across two genres would collide. Asset-free structural check.
+    assert_producer_keys_globally_unique()
 
 
 if __name__ == "__main__":

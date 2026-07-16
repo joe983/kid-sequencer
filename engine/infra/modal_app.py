@@ -360,6 +360,7 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
 
     _sys.path.insert(0, str(ENGINE_LOCAL))
     from kidseq_engine.arrange.style import _PRODUCER_MENU, choose_style
+    from kidseq_engine.producer_manifest import load_manifest
     from kidseq_engine.sequence import parse_sequence
 
     payload = json.loads((ENGINE_LOCAL / riff_file).read_text(encoding="utf-8"))
@@ -368,6 +369,10 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
         print(f"genre {genre!r} has no producer menu yet "
               f"(have: {sorted(_PRODUCER_MENU)})")
         return
+    try:
+        legend = load_manifest(genre).legend or _PRODUCER_LEGEND
+    except Exception:  # noqa: BLE001
+        legend = _PRODUCER_LEGEND
     payload["drumStyle"] = genre
     payload["tempo"] = tempo
     riff = parse_sequence(payload)
@@ -378,7 +383,7 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
         hits.setdefault(choose_style(riff, v).producer_style, v)
         v += 1
     for k in keys:
-        tag = _PRODUCER_LEGEND.get(k, k)
+        tag = legend.get(k, k)
         print(f"  {k:<11} ({tag}): variation {hits.get(k, 'NOT FOUND')}")
     dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -392,11 +397,12 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
 
 
 @app.local_entrypoint()
-def battery2(base: int = 3000) -> None:
+def battery2(genre: str = "techhouse", base: int = 0) -> None:
     """Producer showcase on SIX DIFFERENT user inputs — one varied-note-length
     melody per producer, each rendered at a wildly different variation (greedy
-    song-shape diversity) so the six tracks show the engine's range across
-    distinct sequencer patterns. -> out/showcase/PRODUCERS/techhouse/battery2/.
+    song-shape diversity) so the tracks show the engine's range across distinct
+    sequencer patterns. Inputs, producer pairs and base variation come from the
+    genre manifest's 'battery' block. -> out/showcase/PRODUCERS/<genre>/battery2/.
     Each input carries its own instrument + tempo; the variation drives shape/
     progression/bass/pads/FX. Resumable (skips existing)."""
     import json
@@ -404,14 +410,14 @@ def battery2(base: int = 3000) -> None:
 
     _sys.path.insert(0, str(ENGINE_LOCAL))
     from kidseq_engine.arrange.style import choose_style
+    from kidseq_engine.producer_manifest import load_manifest
     from kidseq_engine.sequence import parse_sequence
 
-    pairs = [("examples/showcase_p1.json", "bassled"),
-             ("examples/showcase_p2.json", "discofunk"),
-             ("examples/showcase_p3.json", "latin"),
-             ("examples/showcase_p4.json", "pianohouse"),
-             ("examples/showcase_p5.json", "lofi"),
-             ("examples/showcase_p6.json", "bigroom")]
+    man = load_manifest(genre)
+    pairs = man.battery_pairs
+    if base <= 0:
+        base = man.battery_base
+    legend = man.legend
     plan, dests, used = [], [], {}
     for i, (rf, target) in enumerate(pairs):
         payload = json.loads((ENGINE_LOCAL / rf).read_text(encoding="utf-8"))
@@ -429,11 +435,12 @@ def battery2(base: int = 3000) -> None:
         hits.sort(key=lambda h: used.get(h[1], 0))   # least-used shape first
         v, shape = hits[0]
         used[shape] = used.get(shape, 0) + 1
-        print(f"  {target:<11} {Path(rf).name:<18} v={v} shape={shape} "
-              f"tempo={tempo} instr={payload.get('instrument')}")
-        plan.append((rf, "techhouse", tempo, v))
+        print(f"  {target:<11} {Path(rf).name:<20} v={v} shape={shape} "
+              f"tempo={tempo} instr={payload.get('instrument')} "
+              f"({legend.get(target, target)})")
+        plan.append((rf, genre, tempo, v))
         dests.append((target, v))
-    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / "techhouse" / "battery2"
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre / "battery2"
     dst_dir.mkdir(parents=True, exist_ok=True)
     pending = [(p, d) for p, d in zip(plan, dests)
                if not (dst_dir / f"b2_{d[0]}_v{d[1]}.mp3").exists()]

@@ -12,9 +12,10 @@ owner's local sample library LIB — same convention as install_engine_extras).
 The first entry per section is the spectral-triage top pick (my proposed
 default); the rest are a diverse spread to swap in.
 
-Standalone: numpy + pedalboard + lameenc, NO engine imports.
+Standalone: numpy + pedalboard + lameenc, NO engine imports (the candidate
+file for a genre is read from that genre's manifest with a plain json.load).
 
-    python tools/audition_producer_kits.py [--producers bassled,latin] [--sections kick,clap]
+    python tools/audition_producer_kits.py [--genre techhouse] [--producers bassled,latin] [--sections kick,clap]
     -> engine/out/audition/<producer>/<producer>__<section>.mp3  (+ .txt index)
 """
 
@@ -31,8 +32,15 @@ from pedalboard.io import AudioFile
 
 LIB = Path(r"C:\Users\Joe_C\Documents\MyMusic\Samples")
 ROOT = Path(__file__).resolve().parents[1]
-CAND_JSON = Path(__file__).resolve().parent / "producer_candidates.json"
 OUT = ROOT / "engine" / "out" / "audition"
+
+
+def _candidates_file_for(genre: str) -> Path:
+    """Resolve the genre's candidate spreads from its manifest (repo-root
+    relative candidates_file). Plain json — keeps this tool engine-import-free."""
+    man = json.loads((ROOT / "engine" / "producers" / f"{genre}.json")
+                     .read_text(encoding="utf-8"))
+    return ROOT / man["candidates_file"]
 
 SR = 44100
 SLOT_S = 0.9          # audible window per candidate
@@ -131,20 +139,26 @@ def render_sheet(producer: str, section: str, relpaths: list[str]) -> None:
 def main() -> None:
     args = sys.argv[1:]
     only_prod = only_sec = None
+    genre = "techhouse"
     for a in args:
         if a.startswith("--producers"):
             only_prod = set(a.split("=", 1)[1].split(",")) if "=" in a else None
         if a.startswith("--sections"):
             only_sec = set(a.split("=", 1)[1].split(",")) if "=" in a else None
-    # support "--producers x,y" (space-separated) too
+        if a.startswith("--genre="):
+            genre = a.split("=", 1)[1]
+    # support "--producers x,y" / "--genre g" (space-separated) too
     for i, a in enumerate(args):
         if a == "--producers" and i + 1 < len(args):
             only_prod = set(args[i + 1].split(","))
         if a == "--sections" and i + 1 < len(args):
             only_sec = set(args[i + 1].split(","))
+        if a == "--genre" and i + 1 < len(args):
+            genre = args[i + 1]
 
-    doc = json.loads(CAND_JSON.read_text(encoding="utf-8"))
+    doc = json.loads(_candidates_file_for(genre).read_text(encoding="utf-8"))
     cand = doc["candidates"]
+    print(f"== genre: {genre} ==")
     for producer, sections in cand.items():
         if only_prod and producer not in only_prod:
             continue
