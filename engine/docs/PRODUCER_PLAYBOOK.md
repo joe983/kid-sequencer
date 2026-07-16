@@ -73,3 +73,37 @@ r19 fx/bass tests that hard-code the old menus.
   run with the battery child riff). Copy to the MAIN repo checkout for the
   owner (worktree paths are invisible to them).
 - Standing A–D batteries are NEVER re-cut as part of a producer pass.
+
+## 7. SOUND pass — REQUIRED (R32 lesson: decisions ≠ sound)
+
+R31 varied per-press *decisions* but every producer shared one drum kit, one
+Surge family and identically-synthesized FX → the owner heard "they all sound
+the same." A producer axis is not done until each producer has REAL distinct
+sound SOURCES. The R32 techhouse pass is the template (`docs/producer_recipes.md`
++ `~/.claude/plans/ok-now-back-to-bubbly-allen.md`):
+
+1. **Recipes + triage** — map each producer's signature to files on the owner's
+   disk. Spectral-triage the banks (decay/centroid/band-energy/tonalness) into
+   `producer_candidates.json`; **de-dup so producers sharing a bank get DISTINCT
+   files**. Audition contact sheets (`tools/audition_producer_kits.py`) → owner.
+2. **Drum kits** — `KITS["<genre>:<producer>"]` + `kit_key()`; pack the picks
+   (`tools/install_producer_kits.py` → the genre pack); thread `drum_kit`
+   through the AUDIO drum calls + `master(kit_key=)` slot (symbolic pump stays
+   on `riff.drum_style`).
+3. **smp chops** — the producer's real vocal/stab/chant hook via
+   `render/smp_render.py` (octave-fold ±6 semis); re-point its lead stack slot.
+4. **VOICE_POST** — pedalboard colour per (producer, slot, voice) — the safe
+   place for character (no unproven Surge params). New Surge patches use only
+   proven param names.
+5. **Sampled FX** — `render/fx_samples.py` candy one-shots per producer
+   (breath-level, phrase boundaries); `_PRODUCER_CANDY` menus + `FX_FALLBACK`.
+6. **Mix seasoning** — ≤2 dB per-producer deltas off `kit_key` in master.py.
+7. **DISTINCTNESS GATE** — extend `tests/test_producer_sound.py` to the new
+   genre: base pattern through each kit → mean-subtracted spectral fingerprint
+   → assert all distinct (thresholds pinned below the observed minima). This is
+   what makes "they all sound the same" fail CI.
+
+Every increment: `run_tests` green (asset-gated sound tests EXECUTE on Modal) +
+commit. The null contract holds by construction (non-producer ⇒ producer_style
+None ⇒ every producer hook is bypassed). Success is claimed with the
+distinctness matrix + the content-verified battery, NOT decision logs.

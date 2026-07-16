@@ -1,5 +1,81 @@
 # Where we are / next session
 
+## NEW — R32: producer SOUND pass, techhouse (2026-07-16, NOT deployed)
+Answers the owner's R31 rejection ("they all sound the same"). R31 varied
+per-press *decisions* but every producer shared one drum kit, one Surge synth
+family and identically-synthesized FX. R32 puts REAL distinct sound SOURCES
+into each producer at every layer, and adds an automated gate so the failure
+can't recur silently. **Standing lesson baked in: producer variety is proven
+with audio-level evidence (spectral distinctness + ears), never a `producer=`
+log line.** Plan: `~/.claude/plans/ok-now-back-to-bubbly-allen.md`.
+
+**8 increments (R32a–g built + Modal-verified; R32h = these docs):**
+- **R32a** — `docs/producer_recipes.md` (per producer: DRUMS/SAMPLER/SYNTH+
+  POST/FX/MIX → verified source folder + FINAL PICK + target). `tools/
+  audition_producer_kits.py` + `tools/producer_candidates.json` (picks chosen
+  by spectral triage — "rank, not hear"). 49 contact sheets in main-repo
+  `engine/out/audition/<producer>/`.
+- **R32b** — six `KITS["techhouse:<producer>"]` drum kits +
+  `kit_key(genre, producer)` + `kick_slot_hz` producer fallback; threaded
+  through the 6 AUDIO drum calls in `build_song` (symbolic pump/pattern stay on
+  `riff.drum_style`) + `master(kit_key=)` slot. Picks de-duped so producers
+  sharing a bank get DISTINCT files (byte-verified).
+- **R32c** — `render/smp_render.py` repitch one-shot sampler (vocal chops/
+  stabs/chants; playback rate octave-folded ±6 semis — the vocal-chop idiom).
+  6 `LEAD_VOICES` smp voices; `_render_lead_stack` smp-first branch with synth
+  fallback; producer signature stacks re-pointed to lead with the real chop.
+- **R32d** — `VOICE_POST` generalizes `PAD_POST`: per-(producer,slot,voice)
+  pedalboard chains (bassled Erosion grit, lofi tape-wobble, discofunk Chic
+  phaser, latin slap-delay, bigroom saturation). felt_piano byte-compat via
+  `*:pad:felt_piano`. New Surge patches `bass_moog`/`lead_futurerave` +
+  `bass_wobble` v2 (proven params only; character lives in VOICE_POST, so the
+  probe was unnecessary).
+- **R32e** — `render/fx_samples.py` sampled ear-candy one-shots per producer
+  (bassled slide/rev, discofunk tom-zap, latin crowd/perk, lofi reverse-swell,
+  bigroom riser/impact/slide). Candy scheduler routes `smp_*` kinds via
+  `fx_shot`, remaps to synth candy without assets. Scoped to the candy layer
+  (fixed-length at phrase boundaries) — deliberately NOT the build-length synth
+  riser (duration-fitting risk, little gain).
+- **R32f** — per-producer mix seasoning (≤2 dB): `_PRODUCER_SEND_DELTA`/
+  `_ROOM_SIZE`/`_NY_DB`/`_DRUM_CLIP_K` off the producer parsed from `kit_key`.
+  None/non-producer misses every table = bit-identical null contract.
+- **R32g** — `tests/test_producer_sound.py`: renders the base pattern through
+  each producer kit → 24-band mean-subtracted spectral fingerprint → asserts
+  all six distinct from base + each other. **Modal matrix (dB/band): closest
+  pair bassled/bigroom 3.58, all-vs-base 2.83–4.52** (thresholds T_DRUMS 2.0 /
+  T_BASE 1.5). The automated "they all sound the same" catcher.
+
+**Pack `engine/packs/producer_techhouse.pack`** (committed, ~3 MB): 29 drum +
+6 melodic (smp chops, root_hz baked) + 10 fx voices. Container schema v1
+`{"drums"/"melodic"/"fx": {"techhouse:<producer>": {...}}}`. Rebuild:
+`tools/install_producer_kits.py` (reads `tools/producer_candidates.json` — put
+a different file first to swap a pick, rebuild = one command). Unpack:
+`scripts/fetch_producer_kits.py` (wired into `populate_assets`).
+
+**Verification:** all 11 remote suites green each increment (drum/smp/fx
+assets-gated tests EXECUTE on Modal). Null contract for non-techhouse is
+structural (producer_style None ⇒ drum_kit==genre, no VOICE_POST, no producer
+candy, no smp, kit_key None → master seasons nothing) + backed by the passing
+null-contract tests; a full cross-revision `::baseline` A/B is the remaining
+belt-and-suspenders (host-variance caveat applies — see R31 note below).
+
+**Owner-listen (open):** 49 R32a contact sheets + the R32g producer battery
+(`out/showcase/PRODUCERS/techhouse/`, base 1500). Any pick swap = reorder
+`producer_candidates.json` + rebuild.
+
+**Tuning levers:** picks in `producer_candidates.json`; kit gains/sub-lanes in
+`sample_kit.KITS`; smp octave-fold + `SMP_VOICES` fallbacks; `VOICE_POST`
+chains; `_PRODUCER_CANDY` menus + `FX_FALLBACK`; `_PRODUCER_*` mix deltas in
+master.py; gate thresholds in `test_producer_sound.py`.
+
+**Known pick swaps to consider after listening:** bigroom `rave_shot` root
+auto-detected 1520 Hz (bright); latin `smp_crowd` + bigroom `smp_impact`
+grabbed rave sweeps rather than a crowd/boom (rave_fx bank sorted
+long-sweep-first).
+
+**Deploy gate unchanged:** `modal deploy engine/infra/modal_app.py` ships
+R1–R32 together after owner ears. Endpoint URL + app/functions unchanged.
+
 ## NEW — R31: producer-style axis, techhouse (2026-07-15, NOT deployed)
 The genre-by-genre variety pass begins. Answers "a second press sounds like
 the same track": a 6-value **producer style** drawn per press recolours the
