@@ -2512,3 +2512,296 @@ html.js-loading #contentWrap{
    Greys + blocks the grid while leaving the fixed-position upgrade modal usable.
    No level uses this today — Level 1 is requiresTier:"guest" (fully open). */
 .level-locked #contentWrap { pointer-events: none; filter: grayscale(0.6) opacity(0.5); }
+
+/* ==================== LESSON MODE (Rhythm Trail) ====================
+   Applies only when <html> has .lesson-mode (?lesson=<id>). Stacks on top of
+   .learning-mode (which already hides drums/save/print/tempo/pots/etc). All
+   lesson chrome is absolutely positioned inside the fixed 1600x900 #page stage
+   so it scales with the app and never disturbs fitToViewport's layout math. */
+
+/* Lesson mode additionally hides: camera, the stave toggle (the runner opens the
+   stave itself at the reveal), Clear + Undo (they could wreck a scaffolded step),
+   and the whole account strip. */
+.lesson-mode #cameraBtn,
+.lesson-mode #staveBtn,
+.lesson-mode #controls button[aria-label="Clear"],
+.lesson-mode #controls button[aria-label="Undo"],
+.lesson-mode #loginCtaWrap { display: none !important; }
+
+/* ---- heartbeat row (the Kodaly beat chart, in-flow like #stavePanel) ---- */
+#heartbeatRow{
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  width: min(760px, calc(var(--cell) * 8 + var(--gap) * 7));
+  margin: 14px auto 0;
+}
+.lessonHeart{
+  font-size: calc(var(--cell) * 0.42);
+  line-height: 1;
+  color: #ff5166;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.15);
+  transform: scale(0.9);
+  opacity: 0.75;
+}
+.lessonHeart.beat{ animation: lessonHeartBeat 0.34s ease-out; }
+@keyframes lessonHeartBeat{
+  0%{ transform: scale(0.9); opacity: 0.75; }
+  35%{ transform: scale(1.35); opacity: 1; }
+  100%{ transform: scale(0.9); opacity: 0.75; }
+}
+/* stave + hearts are never co-visible (phone collapse rule #1) */
+#sequencerShell.staveShown #heartbeatRow{ display: none; }
+
+/* ---- top-right chrome: progress notes + forgiving exit door ---- */
+#lessonProgress{
+  position: absolute;
+  top: 26px;
+  right: 130px;
+  display: flex;
+  gap: 10px;
+  z-index: 6;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 16px;
+  padding: 8px 16px;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+}
+.lessonProgNote{
+  font-size: 34px;
+  line-height: 1;
+  color: #cfc9b8;
+  transition: color 0.25s;
+}
+.lessonProgNote.done{ color: #00b25a; }
+.lessonProgNote.pop{ animation: lessonPop 0.7s ease-out; }
+@keyframes lessonPop{
+  0%{ transform: scale(1); }
+  40%{ transform: scale(1.6) rotate(-8deg); }
+  100%{ transform: scale(1); }
+}
+#lessonExit{
+  position: absolute;
+  top: 20px;
+  right: 26px;
+  width: 84px;
+  height: 84px;
+  font-size: 42px;
+  line-height: 1;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 20px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.25);
+  cursor: pointer;
+  z-index: 6;
+}
+#lessonExit:active{ transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.25); }
+
+/* ---- mascot + speech bubble + demo hand ---- */
+#lessonMascot{
+  position: absolute;
+  left: 34px;
+  bottom: 44px;
+  width: 150px;
+  height: 165px;
+  z-index: 6;
+  cursor: pointer;
+  user-select: none;
+}
+#lessonMascot svg{ width: 100%; height: 100%; }
+#lessonMascot .mMouth{ transform-origin: 60px 88px; }
+#lessonMascot.talk .mMouth{ animation: lessonTalk 0.32s ease-in-out infinite; }
+@keyframes lessonTalk{
+  0%,100%{ transform: scaleY(1); }
+  50%{ transform: scaleY(0.35); }
+}
+#lessonMascot .mNeedle{ transform-origin: 60px 112px; }
+#lessonMascot.bob{ animation: lessonBob 0.34s ease-out; }
+#lessonMascot.bob .mNeedle{ animation: lessonTick 0.34s ease-out; }
+@keyframes lessonBob{
+  0%,100%{ transform: translateY(0); }
+  40%{ transform: translateY(-7px); }
+}
+@keyframes lessonTick{
+  0%,100%{ transform: rotate(-18deg); }
+  50%{ transform: rotate(18deg); }
+}
+#lessonMascot.freeze{ filter: saturate(0.4); transform: rotate(-6deg); }
+#lessonBubble{
+  position: absolute;
+  left: 190px;
+  bottom: 120px;
+  max-width: 430px;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 18px;
+  border-bottom-left-radius: 4px;
+  padding: 14px 20px;
+  font-family: Arial, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1d1d1d;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.2);
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity 0.18s, transform 0.18s;
+  pointer-events: none;
+  z-index: 6;
+}
+#lessonBubble.show{ opacity: 1; transform: translateY(0) scale(1); }
+#lessonHand{
+  position: absolute;
+  font-size: 62px;
+  line-height: 1;
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 0);
+  transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1), top 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
+  filter: drop-shadow(0 4px 4px rgba(0,0,0,0.35));
+}
+#lessonHand.show{ opacity: 1; }
+#lessonHand.tap{ transform: translate(-50%, 0) scale(0.8); }
+
+/* ---- locked scaffold notes + ghost hints + control nudges ---- */
+.noteBlock.lessonLocked{ outline: 3px dashed rgba(255,255,255,0.75); outline-offset: -6px; }
+.noteBlock.lockedShake{ animation: lessonShake 0.4s ease-in-out; }
+@keyframes lessonShake{
+  0%,100%{ margin-left: 0; }
+  25%{ margin-left: -5px; }
+  75%{ margin-left: 5px; }
+}
+.cell.ghostHint{
+  box-shadow: inset 0 0 0 4px #ffd34d;
+  animation: lessonGhost 1s ease-in-out infinite;
+}
+@keyframes lessonGhost{
+  0%,100%{ box-shadow: inset 0 0 0 4px rgba(255,211,77,0.9); }
+  50%{ box-shadow: inset 0 0 0 7px rgba(255,211,77,0.45); }
+}
+.lessonNudge{ animation: lessonNudgeHop 0.65s ease-in-out 3; }
+@keyframes lessonNudgeHop{
+  0%,100%{ transform: translateY(0) scale(1); }
+  40%{ transform: translateY(-6px) scale(1.06); }
+}
+
+/* ---- overlay (START / which-one / celebration) ---- */
+#lessonOverlay{
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29,29,29,0.45);
+}
+#lessonOverlay.show{ display: flex; }
+.lessonStart, .lessonDone{
+  background: #fffdf5;
+  border: 5px solid #1d1d1d;
+  border-radius: 26px;
+  box-shadow: 0 8px 0 rgba(0,0,0,0.3);
+  padding: 44px 70px;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+.lessonStartBand{
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #7A5CFF;
+  margin-bottom: 6px;
+}
+.lessonStartTitle, .lessonDoneTitle{
+  font-size: 52px;
+  font-weight: 900;
+  color: #1d1d1d;
+  margin-bottom: 26px;
+}
+.lessonBigBtn{
+  font-size: 54px;
+  line-height: 1;
+  font-weight: 900;
+  font-family: Arial, sans-serif;
+  color: #1d1d1d;
+  background: #ffd34d;
+  border: 5px solid #1d1d1d;
+  border-radius: 999px;
+  padding: 22px 58px;
+  cursor: pointer;
+  box-shadow: 0 7px 0 rgba(0,0,0,0.3);
+}
+.lessonBigBtn:active{ transform: translateY(4px); box-shadow: 0 3px 0 rgba(0,0,0,0.3); }
+.lessonStars{
+  font-size: 68px;
+  color: #ffb400;
+  margin-bottom: 8px;
+  text-shadow: 0 3px 0 rgba(0,0,0,0.2);
+}
+
+/* which-one 2AFC cards */
+.lessonWhich{ text-align: center; }
+.lessonWhichCards{ display: flex; gap: 36px; margin-bottom: 30px; }
+.lessonCard{
+  background: #fffdf5;
+  border: 5px solid #1d1d1d;
+  border-radius: 22px;
+  padding: 26px;
+  cursor: pointer;
+  box-shadow: 0 7px 0 rgba(0,0,0,0.3);
+}
+.lessonCard:active{ transform: translateY(4px); }
+.lessonCard.correct{ background: #d7ffe6; border-color: #00b25a; }
+.lessonCard.wrong{ background: #ffe2e2; opacity: 0.6; }
+.lessonMini{
+  display: grid;
+  grid-template-columns: repeat(8, 42px);
+  grid-auto-rows: 42px;
+  gap: 5px;
+}
+.miniCell{
+  border-radius: 8px;
+  background: #e9e4d4;
+  border: 2px solid #1d1d1d33;
+}
+.miniCell.on{ border: 2px solid #1d1d1d; }
+.miniCell.on.split{
+  background-image: linear-gradient(90deg, transparent 46%, #fffdf5 46%, #fffdf5 54%, transparent 54%);
+}
+.lessonReplay{
+  font-size: 44px;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 999px;
+  width: 92px;
+  height: 92px;
+  cursor: pointer;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.3);
+}
+
+/* confetti (lesson complete; <=2s, non-blocking) */
+#lessonConfetti{
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  overflow: hidden;
+}
+#lessonConfetti span{
+  position: absolute;
+  top: -30px;
+  width: 16px;
+  height: 26px;
+  border-radius: 4px;
+  animation: lessonConfettiFall 1.7s ease-in forwards;
+}
+@keyframes lessonConfettiFall{
+  0%{ transform: translateY(0) rotate(0deg); opacity: 1; }
+  100%{ transform: translateY(960px) rotate(540deg); opacity: 0.8; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .lessonHeart.beat, #lessonMascot.talk .mMouth, #lessonMascot.bob,
+  .lessonNudge, .cell.ghostHint, #lessonConfetti span{ animation: none; }
+}

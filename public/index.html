@@ -12,9 +12,11 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=59">
+<link rel="stylesheet" href="css/styles.css?v=60">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
+<script src="js/lessons-data.js?v=1"></script>
 </head>
 <body>
 <script>
@@ -461,13 +463,36 @@ const LEARN_LEVELS = {
   "3": _mkLearnLevel(3, [392.00, 329.63, 261.63], ["#3DA9FF", "#FFFF00", "#FF0000"], 112)
 };
 const _lvlParam = new URLSearchParams(location.search).get("level");
+/* -------------------- LESSON MODE (Rhythm Trail) --------------------
+   ?lesson=<id> derives a learning level from the lesson's config (reusing
+   _mkLearnLevel verbatim) and attaches the lesson runner (see LESSON RUNNER
+   section near init()). If both ?lesson and ?level are present the lesson
+   wins; a plain ?level=N (worksheet QR links) is untouched. */
+const _lsnParam = new URLSearchParams(location.search).get("lesson");
+const LESSON = (_lsnParam && window.KidSeqLessons && window.KidSeqLessons.LESSONS
+                && window.KidSeqLessons.LESSONS[_lsnParam]) ? window.KidSeqLessons.LESSONS[_lsnParam] : null;
+const LESSON_KEY = LESSON ? _lsnParam : null;
+// Build the lesson's grid config through the same builder as the scaffolding
+// levels, then apply per-lesson knobs (note-tool palette, tempo).
+function _mkLessonLevel(l){
+  const lv = _mkLearnLevel(l.level.rows, l.level.freqs, l.level.rowColors, l.level.maxCell);
+  if(l.palette && l.palette.length){
+    lv.toolSteps = _LEARN_TOOLS.filter(t => l.palette.includes(t.kind));
+    lv.selectedKind = lv.toolSteps.some(t => t.kind === "quarter") ? "quarter" : lv.toolSteps[0].kind;
+  }
+  if(l.tempo) lv.tempo = l.tempo;
+  return lv;
+}
 // NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
-const LEARN_LEVEL = (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
+const LEARN_LEVEL = LESSON ? _mkLessonLevel(LESSON)
+                  : (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
 if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <html> always exists at parse time
+if (LESSON) document.documentElement.classList.add("lesson-mode");
 // The level key for the page currently loaded: null for the full/main grid,
 // "1"/"2"/"3" for a scaffolding level. Used by the worksheet scanner to decide
-// whether a scanned sheet matches this page or needs a redirect.
-const CURRENT_LEVEL_KEY = LEARN_LEVEL ? _lvlParam : null;
+// whether a scanned sheet matches this page or needs a redirect. Lesson pages
+// are never scan targets (camera is hidden in lesson mode), so stay null there.
+const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
 
 /* -------------------- WORKSHEET SCANNER — SHEET GEOMETRY --------------------
    Maps a QR payload printed on a worksheet to the grid template it represents.
@@ -551,6 +576,13 @@ const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
 // Declared with state (not beside its functions) so the live-update hook in
 // redrawRowNotes can never hit a temporal-dead-zone reference.
 let _staveOpen = false;
+// Lesson-runner state — declared early for the same TDZ-safety reason (hooks in
+// redrawRowNotes/onCellClick/tick fire before the LESSON RUNNER section parses).
+let _lessonRunning = false;          // true once the child taps START
+let _lessonLockedIds = new Set();    // preset scaffold notes the child can't delete
+let _lessonPlayLimit = null;         // steps until playback auto-stops (playOnce); null = free
+let _lessonPlayDone = null;          // callback after a limited playback completes
+let _lessonCheckT = null;            // debounce timer for grid-change checks
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
 var isPaid = false;
@@ -3086,6 +3118,8 @@ function smartPlaceNote(r, clickCol, len, kind){
   }
 
   const overlaps = overlappingNoteIds(r, baseStart, len);
+  // Never bulldoze a locked lesson-scaffold note to make room.
+  if(LESSON && [...overlaps].some(id => _lessonLockedIds.has(id))) return;
   overlaps.forEach(id => deleteNoteById(r, id));
   placeNote(r, baseStart, len, kind);
 }
@@ -3093,6 +3127,9 @@ function smartPlaceNote(r, clickCol, len, kind){
 function onCellClick(r, c){
   const existing = occ[r][c];
   if(existing !== null){
+    // Lesson scaffold notes are locked: a tap wiggles them instead of deleting,
+    // so a fill-the-gap exercise can't be wrecked into an accidental free-build.
+    if(LESSON && _lessonLockedIds.has(existing)){ _lessonLockedNudge(r, existing); return; }
     pushUndo();
     deleteNoteById(r, existing);
     redrawRowNotes(r);
@@ -3165,6 +3202,8 @@ function redrawRowNotes(r){
   // the panel is open). Every grid mutation — place, delete, clear, undo, scan —
   // flows through redrawRowNotes, so this single hook keeps the staff in sync.
   if(LEARN_LEVEL && _staveOpen) renderStave();
+  // Lesson completion detection rides the same funnel (debounced in the runner).
+  if(LESSON) _lessonGridChanged();
 }
 
 /* -------------------- LEARNING STAVE (treble-clef notation) --------------------
@@ -3717,6 +3756,12 @@ async function play(){
 
   stop();
 
+  // In lesson mode the play button always plays exactly ONE bar (playOnce) and
+  // reports back to the runner — pressing play is how a build step is judged
+  // ("hearing the answer is part of the answer"). Internal runner playback
+  // (demos, celebration) sets its own limit before calling play().
+  if(LESSON) _lessonBeforePlay();
+
   step = 0;
   setPlayheadVisible(true);
   setPlayheadPlaying(false);
@@ -3774,6 +3819,19 @@ function startSequencer(){
   let stepCount = 0;
 
   function tick(){
+    // Lesson playOnce: stop cleanly at the bar boundary. This runs INSTEAD of
+    // playing the wrapped step, one full interval after the last step fired, so
+    // the final step's scheduled audio isn't clipped (_lessonSoftStop keeps the
+    // tails alive — it never calls stopAllAudioNow). It only wraps the exit; the
+    // self-correcting timer and tempo-ramp re-anchor below are untouched.
+    if(LESSON && _lessonPlayLimit !== null && stepCount >= _lessonPlayLimit){
+      _lessonPlayLimit = null;
+      const _lpd = _lessonPlayDone; _lessonPlayDone = null;
+      _lessonSoftStop();
+      if(_lpd){ try{ _lpd(); }catch(e){} }
+      return;
+    }
+
     movePlayheadToStep(step);
 
     if(firstTick){
@@ -3862,6 +3920,10 @@ function startSequencer(){
     // Drums (runs in time with the sequencer)
     playDrumsAtStep(step);
 
+    // Lesson heartbeat row: pulse the heart under the current beat (macrobeat
+    // layer made visible — Kodaly beat chart). No-op outside lesson mode.
+    if(LESSON) _lessonPulseStep(step);
+
     step = (step + 1) % cols;
     stepCount++;
 
@@ -3886,6 +3948,8 @@ function startSequencer(){
 }
 
 function stop(){
+  // A manual stop cancels any pending lesson playOnce limit + callback.
+  if(LESSON){ _lessonPlayLimit = null; _lessonPlayDone = null; }
   _triggeredNotes.clear();
   if(timer){
     clearTimeout(timer);
@@ -5259,6 +5323,677 @@ root.classList.add('stageScaled');
   setRotation(MAX_DEG);
 })();
 
+/* -------------------- LESSON RUNNER (Rhythm Trail, Band A MVP) --------------------
+   Everything below is LESSON-gated: with no ?lesson param, none of it runs and the
+   full app + ?level scaffolding are byte-for-byte unaffected. State lets that hook
+   functions touch (_lessonRunning, _lessonLockedIds, _lessonPlayLimit, …) are
+   declared early next to _staveOpen for TDZ safety. Design spec:
+   docs/specs/2026-07-17-note-length-course-design.md */
+
+let _stepIdx = 0;              // current step in LESSON.steps
+let _stepPhase = "idle";       // idle | building | ready | demo | overlay
+let _stepMisses = 0;           // misses on the CURRENT step (drives the hint ladder)
+let _assistCount = 0;          // steps completed by the demo hand (stars = 3 - min(2, assists))
+let _whichTries = 0;
+let _freezeRound = 0;
+let _lessonPlayIntent = null;  // {limit, cb} consumed by _lessonBeforePlay (internal playback)
+let _stepTimers = [];          // pending timeouts cancelled on step change
+let _idleT = null;             // idle-nudge timer
+let _idleFires = 0;
+let _narrAudio = null;         // the <audio> narration element (silent-switch-immune)
+let _narrT = null;
+let _saidPress = false;        // "press play!" said once per step
+let _heartEls = [];
+let _mascotEl = null, _bubbleEl = null, _handEl = null, _overlayEl = null;
+
+const _LS_LESSONS = "kidseq_lessons";
+function _lessonProg(){
+  try{
+    const p = JSON.parse(localStorage.getItem(_LS_LESSONS));
+    if(p && p.v === 1) return { stars: p.stars || {}, last: p.last || null, resume: p.resume || {}, v: 1 };
+  }catch(e){}
+  return { v: 1, stars: {}, last: null, resume: {} };
+}
+function _lessonProgSave(p){ try{ localStorage.setItem(_LS_LESSONS, JSON.stringify(p)); }catch(e){} }
+
+// ---------- tiny utilities ----------
+function _lt(fn, ms){ const t = setTimeout(fn, ms); _stepTimers.push(t); return t; }
+function _clearStepTimers(){ for(const t of _stepTimers) clearTimeout(t); _stepTimers = []; }
+function _cellEl(r, c){
+  const wrap = sequencerEl.children[r];
+  if(!wrap) return null;
+  const grid = wrap.querySelector(".grid");
+  return grid ? grid.children[c] : null;
+}
+function _playBtnEl(){ return document.querySelector('#controls button[aria-label="Play"]'); }
+
+// ---------- grid state, signatures, pass evaluation ----------
+function _curNotes(){
+  const out = [];
+  for(let r = 0; r < rows; r++) for(const n of notesByRow[r]) out.push({ row: r, start: n.start, len: n.len, kind: n.kind || null, id: n.id });
+  return out;
+}
+function _noteSig(n){ return `${n.row}:${n.start}:${n.len}:${n.kind || ""}`; }
+function _gridSig(){ return _curNotes().map(_noteSig).sort().join("|"); }
+function _setSig(notes){ return notes.map(_noteSig).sort().join("|"); }
+
+// Evaluate the current grid against a pass rule. Returns
+// { ok, shiftedBy, restViolation, missing:[targetNotes], extraIds:[ids] }.
+function _evalPass(pass, target){
+  const cur = _curNotes();
+  const res = { ok: false, shiftedBy: 0, restViolation: false, missing: [], extraIds: [] };
+  if(!pass) { res.ok = true; return res; }
+
+  if(pass.kind === "count"){
+    const byKind = {};
+    for(const n of cur) byKind[n.kind || "plain"] = (byKind[n.kind || "plain"] || 0) + 1;
+    let ok = cur.length >= (pass.minNotes || 0);
+    if(pass.maxNotes != null && cur.length > pass.maxNotes) ok = false;
+    if(pass.use) for(const k in pass.use) if((byKind[k] || 0) < pass.use[k]) ok = false;
+    if(pass.minEmptyBeats){
+      let empty = 0;
+      for(let b = 0; b < cols / 2; b++){
+        let occupied = false;
+        for(let r = 0; r < rows; r++) if(occ[r][b*2] !== null || occ[r][b*2+1] !== null) occupied = true;
+        if(!occupied) empty++;
+      }
+      if(empty < pass.minEmptyBeats) ok = false;
+    }
+    res.ok = ok;
+    return res;
+  }
+
+  // match / matchShifted against a target pattern
+  const tgt = target || [];
+  const curSig = _setSig(cur);
+  if(curSig === _setSig(tgt)){ res.ok = true; return res; }
+
+  // Shift-tolerant check (Bamberger's figural stage: right shape, wrong anchor).
+  if(pass.shifted){
+    for(let off = -(cols - 1); off < cols; off++){
+      if(off === 0) continue;
+      const moved = tgt.map(n => ({ ...n, start: n.start + off }));
+      if(moved.some(n => n.start < 0 || n.start + n.len > cols)) continue;
+      if(curSig === _setSig(moved)){ res.shiftedBy = off; break; }
+    }
+  }
+
+  // Rest discipline: filling a designated quiet beat IS the error.
+  if(pass.restBeats){
+    for(const b of pass.restBeats){
+      for(let r = 0; r < rows; r++){
+        if(occ[r][b*2] !== null || occ[r][b*2+1] !== null) res.restViolation = true;
+      }
+    }
+  }
+
+  // Per-note diff for ghost hints / hand-assist.
+  const curSet = new Set(cur.map(_noteSig));
+  const tgtSet = new Set(tgt.map(_noteSig));
+  res.missing = tgt.filter(n => !curSet.has(_noteSig(n)));
+  res.extraIds = cur.filter(n => !tgtSet.has(_noteSig(n))).map(n => n.id);
+  return res;
+}
+
+// ---------- narration (<audio> sprite; iOS silent switch can't mute it) ----------
+function _narrInit(){
+  try{
+    _narrAudio = new Audio(window.KidSeqLessons.SPRITE);
+    _narrAudio.preload = "auto";
+  }catch(e){ _narrAudio = null; }
+}
+function _narrUnlock(){
+  // Play the sprite's silent head inside the START tap gesture; afterwards the
+  // element can be re-seeked and played programmatically on iOS.
+  if(!_narrAudio) return;
+  try{
+    const p = _narrAudio.play();
+    if(p && p.then) p.then(() => setTimeout(() => { try{ _narrAudio.pause(); }catch(e){} }, 80)).catch(() => {});
+  }catch(e){}
+}
+function _say(key, cb){
+  const seg = (window.KidSeqLessons.NARR || {})[key];
+  _bubbleShow(seg && seg[2] ? seg[2] : "");
+  if(_narrT){ clearTimeout(_narrT); _narrT = null; }
+  if(!seg || !_narrAudio){ if(cb) _lt(cb, 700); return; }
+  try{
+    _narrAudio.currentTime = seg[0];
+    _narrAudio.play().catch(() => {});
+    if(_mascotEl) _mascotEl.classList.add("talk");
+    _narrT = setTimeout(() => {
+      try{ _narrAudio.pause(); }catch(e){}
+      if(_mascotEl) _mascotEl.classList.remove("talk");
+      if(cb){ try{ cb(); }catch(e){} }
+    }, seg[1] * 1000 + 120);
+  }catch(e){ if(cb) _lt(cb, 700); }
+}
+function _bubbleShow(text){
+  if(!_bubbleEl) return;
+  if(!text){ _bubbleEl.classList.remove("show"); return; }
+  _bubbleEl.textContent = text;
+  _bubbleEl.classList.add("show");
+  _lt(() => _bubbleEl.classList.remove("show"), 3600);
+}
+
+// ---------- playback plumbing ----------
+// Soft stop for lesson playOnce: halts the timer + playhead WITHOUT
+// stopAllAudioNow, so the final step's scheduled envelope/tail rings out.
+function _lessonSoftStop(){
+  if(timer){ clearTimeout(timer); timer = null; }
+  if(startTimeout){ clearTimeout(startTimeout); startTimeout = null; }
+  _triggeredNotes.clear();
+  try{ if(melodicMaster) melodicMaster.gain.setTargetAtTime(1, audioCtx.currentTime, 0.05); }catch(e){}
+  setPlayheadPlaying(false);
+  setPlayheadVisible(false);
+  lastStopAt = performance.now();
+}
+function _lessonBeforePlay(){
+  if(_lessonPlayIntent){
+    _lessonPlayLimit = _lessonPlayIntent.limit;
+    _lessonPlayDone = _lessonPlayIntent.cb || null;
+    _lessonPlayIntent = null;
+    return;
+  }
+  // The play button in lesson mode = exactly one bar, judged if we're building.
+  _lessonPlayLimit = cols;
+  _lessonPlayDone = (_stepPhase === "building" || _stepPhase === "ready") ? _onUserPlayEnd : null;
+}
+function _internalPlay(limitSteps, cb){
+  _lessonPlayIntent = { limit: limitSteps, cb: cb };
+  try{ play(); }catch(e){ _lessonPlayIntent = null; if(cb) _lt(cb, 600); }
+}
+// Audition a pattern WITHOUT touching the grid (which-one cards, target replays).
+// A light setTimeout scheduler is fine here — it's a demo, not the sequencer.
+function _playPatternOnce(pattern, cb){
+  ensureAudioReady().then(() => {
+    const iv = stepDurationSec() * 1000;
+    for(const n of pattern){
+      const attacks = n.kind === "eighth" ? [[n.start, 1], [n.start + 1, 1]] : [[n.start, n.len]];
+      for(const [s, l] of attacks) _lt(() => { try{ playInstrument(pitchFor(n.row), l); }catch(e){} }, s * iv);
+    }
+    for(let s = 0; s < cols; s++) _lt(() => _lessonPulseStep(s), s * iv);
+    if(cb) _lt(cb, cols * iv + 250);
+  }).catch(() => { if(cb) _lt(cb, 600); });
+}
+
+// ---------- hearts / mascot / hand / chrome ----------
+function _lessonPulseStep(s){
+  if(s % 2 === 0){
+    const h = _heartEls[s / 2];
+    if(h){ h.classList.remove("beat"); void h.offsetWidth; h.classList.add("beat"); }
+  }
+  if(_mascotEl && s % 2 === 0){ _mascotEl.classList.remove("bob"); void _mascotEl.offsetWidth; _mascotEl.classList.add("bob"); }
+}
+function _buildHearts(){
+  const shell = document.getElementById("sequencerShell");
+  const stave = document.getElementById("stavePanel");
+  const row = document.createElement("div");
+  row.id = "heartbeatRow";
+  _heartEls = [];
+  for(let b = 0; b < cols / 2; b++){
+    const h = document.createElement("span");
+    h.className = "lessonHeart";
+    h.textContent = "❤";
+    row.appendChild(h);
+    _heartEls.push(h);
+  }
+  shell.insertBefore(row, stave);
+}
+function _buildChrome(){
+  const page = document.getElementById("page");
+  // progress: one note glyph per step, filled as steps complete
+  const prog = document.createElement("div");
+  prog.id = "lessonProgress";
+  LESSON.steps.forEach(() => {
+    const s = document.createElement("span");
+    s.className = "lessonProgNote";
+    s.textContent = "♪";
+    prog.appendChild(s);
+  });
+  page.appendChild(prog);
+  // forgiving exit door: saves the exact step, no confirm dialog
+  const exit = document.createElement("button");
+  exit.id = "lessonExit";
+  exit.setAttribute("aria-label", "Leave lesson");
+  exit.textContent = "🏠";
+  exit.onclick = () => { _saveResume(); window.location.href = "./"; };
+  page.appendChild(exit);
+  // mascot + speech bubble (tap mascot = replay current instruction)
+  const m = document.createElement("div");
+  m.id = "lessonMascot";
+  m.innerHTML = `<svg viewBox="0 0 120 130" aria-hidden="true">
+    <ellipse cx="60" cy="72" rx="46" ry="50" fill="#FFD34D" stroke="#1d1d1d" stroke-width="5"/>
+    <circle class="mEye" cx="44" cy="58" r="6.5" fill="#1d1d1d"/>
+    <circle class="mEye" cx="76" cy="58" r="6.5" fill="#1d1d1d"/>
+    <path class="mMouth" d="M42 84 Q60 100 78 84" fill="none" stroke="#1d1d1d" stroke-width="5" stroke-linecap="round"/>
+    <line class="mNeedle" x1="60" y1="112" x2="60" y2="94" stroke="#1d1d1d" stroke-width="4" stroke-linecap="round"/>
+    <ellipse cx="38" cy="124" rx="12" ry="6" fill="#1d1d1d"/>
+    <ellipse cx="82" cy="124" rx="12" ry="6" fill="#1d1d1d"/>
+  </svg>`;
+  m.onclick = () => { const st = LESSON.steps[_stepIdx]; if(st && _lessonRunning) _say(st.narr); };
+  page.appendChild(m);
+  _mascotEl = m;
+  const b = document.createElement("div");
+  b.id = "lessonBubble";
+  page.appendChild(b);
+  _bubbleEl = b;
+  // demo hand (drives the REAL onCellClick path)
+  const hand = document.createElement("div");
+  hand.id = "lessonHand";
+  hand.textContent = "👆";
+  page.appendChild(hand);
+  _handEl = hand;
+  // overlay host (START / which-one / celebration)
+  const ov = document.createElement("div");
+  ov.id = "lessonOverlay";
+  page.appendChild(ov);
+  _overlayEl = ov;
+}
+function _handMoveToCell(r, c){
+  const cell = _cellEl(r, c);
+  const page = document.getElementById("page");
+  if(!cell || !page) return;
+  const pr = page.getBoundingClientRect();
+  const scale = pr.width / 1600 || 1;
+  const cr = cell.getBoundingClientRect();
+  _handEl.style.left = ((cr.left - pr.left + cr.width * 0.5) / scale) + "px";
+  _handEl.style.top = ((cr.top - pr.top + cr.height * 0.72) / scale) + "px";
+}
+async function _handBuild(pattern){
+  _handEl.classList.add("show");
+  const prevSteps = selectedSteps, prevKind = selectedKind;
+  for(const n of pattern){
+    _handMoveToCell(n.row, n.start);
+    await new Promise(res => _lt(res, 560));
+    selectedSteps = n.len;
+    selectedKind = n.kind || null;
+    _handEl.classList.add("tap");
+    try{ onCellClick(n.row, n.start); }catch(e){}
+    await new Promise(res => _lt(res, 240));
+    _handEl.classList.remove("tap");
+    await new Promise(res => _lt(res, 320));
+  }
+  selectedSteps = prevSteps; selectedKind = prevKind;
+  try{ buildTools(); }catch(e){}
+  _handEl.classList.remove("show");
+}
+function _lessonLockedNudge(r, id){
+  const block = noteLayerEls[r] && noteLayerEls[r].querySelector(`.noteBlock[data-id="${id}"]`);
+  if(block){ block.classList.remove("lockedShake"); void block.offsetWidth; block.classList.add("lockedShake"); }
+}
+
+// ---------- grid setup / teardown per step ----------
+function _clearNotes(){
+  for(let r = 0; r < rows; r++){
+    for(const n of notesByRow[r].slice()) deleteNoteById(r, n.id);
+    redrawRowNotes(r);
+  }
+  _lessonLockedIds = new Set();
+}
+function _placePreset(n, locked){
+  placeNote(n.row, n.start, n.len, n.kind || null);
+  const placed = notesByRow[n.row][notesByRow[n.row].length - 1];
+  if(locked) _lessonLockedIds.add(placed.id);
+  redrawRowNotes(n.row);
+  if(locked){
+    const block = noteLayerEls[n.row].querySelector(`.noteBlock[data-id="${placed.id}"]`);
+    if(block) block.classList.add("lessonLocked");
+  }
+}
+function _setupGrid(st){
+  _clearNotes();
+  if(st.preset) for(const n of st.preset) _placePreset(n, !!st.locked);
+}
+
+// ---------- idle nudges & ghosts ----------
+function _armIdle(st){
+  if(_idleT) clearTimeout(_idleT);
+  if(_idleFires >= 3) return;
+  _idleT = setTimeout(() => {
+    if(!_lessonRunning || (_stepPhase !== "building" && _stepPhase !== "ready")) return;
+    _idleFires++;
+    _say(st.narr);
+    let el = null;
+    if(_stepPhase === "ready") el = _playBtnEl();
+    else if(st.nudge === "tool-eighth"){
+      el = [...toolsListEl.querySelectorAll(".tool")].find(t => t.textContent.includes("8th")) || document.getElementById("tools");
+    }
+    else el = document.getElementById("sequencer");
+    if(el){ el.classList.remove("lessonNudge"); void el.offsetWidth; el.classList.add("lessonNudge"); _lt(() => el.classList.remove("lessonNudge"), 2600); }
+    _armIdle(st);
+  }, 9000);
+}
+function _ghostHint(missing){
+  for(const n of missing){
+    for(let c = n.start; c < n.start + n.len && c < cols; c++){
+      const cell = _cellEl(n.row, c);
+      if(cell) cell.classList.add("ghostHint");
+    }
+  }
+}
+function _clearGhosts(){ document.querySelectorAll(".cell.ghostHint").forEach(c => c.classList.remove("ghostHint")); }
+function _clearStepUx(){
+  _clearStepTimers();
+  _clearGhosts();
+  if(_idleT){ clearTimeout(_idleT); _idleT = null; }
+  _idleFires = 0;
+  _stepMisses = 0;
+  _whichTries = 0;
+  _saidPress = false;
+  const pb = _playBtnEl();
+  if(pb) pb.classList.remove("lessonNudge");
+  if(_overlayEl){ _overlayEl.classList.remove("show"); _overlayEl.innerHTML = ""; }
+}
+
+// ---------- completion detection (rides the redrawRowNotes funnel) ----------
+function _lessonGridChanged(){
+  if(!LESSON || !_lessonRunning) return;
+  if(_lessonCheckT) clearTimeout(_lessonCheckT);
+  _lessonCheckT = setTimeout(_lessonCheckNow, 220);
+}
+function _lessonCheckNow(){
+  if(!_lessonRunning || _stepPhase !== "building") return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st || st.type !== "build") return;
+  _armIdle(st); // any grid activity resets the idle clock
+  const res = _evalPass(st.pass, st.target);
+  if(res.ok){
+    _stepPhase = "ready";
+    _clearGhosts();
+    const pb = _playBtnEl();
+    if(pb){ pb.classList.add("lessonNudge"); }
+    if(!_saidPress){ _saidPress = true; _say("g_press"); }
+  }else if(_stepPhase === "ready"){
+    // grid changed back out of a passing state
+    _stepPhase = "building";
+    _saidPress = false;
+    const pb = _playBtnEl();
+    if(pb) pb.classList.remove("lessonNudge");
+  }
+}
+
+// ---------- the step machine ----------
+function _setProgress(){
+  const notes = _overlayEl ? document.querySelectorAll("#lessonProgress .lessonProgNote") : [];
+  notes.forEach((n, i) => n.classList.toggle("done", i < _stepIdx));
+}
+function _runStep(){
+  _clearStepUx();
+  _setProgress();
+  _stepPhase = "idle";
+  const st = LESSON.steps[_stepIdx];
+  if(!st){ _lessonComplete(); return; }
+  if(st.type === "listen") return _stepListen(st);
+  if(st.type === "freeze") return _stepFreeze(st);
+  if(st.type === "demo") return _stepDemo(st);
+  if(st.type === "which") return _stepWhich(st);
+  if(st.type === "build") return _stepBuild(st);
+  if(st.type === "reveal") return _stepReveal(st);
+  _advance();
+}
+function _advance(assisted){
+  if(assisted) _assistCount++;
+  _stepPhase = "idle";
+  _saveResume(_stepIdx + 1);
+  const notes = document.querySelectorAll("#lessonProgress .lessonProgNote");
+  const n = notes[_stepIdx];
+  if(n){ n.classList.add("done", "pop"); _lt(() => n.classList.remove("pop"), 900); }
+  _stepIdx++;
+  _lt(_runStep, 650);
+}
+
+function _stepListen(st){
+  _setupGrid({});
+  _say(st.narr, () => _internalPlay((st.bars || 1) * cols, () => _advance()));
+}
+function _stepFreeze(st){
+  _freezeRound = st.rounds || 2;
+  _setupGrid({});
+  const round = () => {
+    const bars = 1 + Math.floor(Math.random() * 2);
+    _internalPlay(bars * cols, () => {
+      if(_mascotEl){ _mascotEl.classList.add("freeze"); }
+      _say("a1_frozen", () => {
+        if(_mascotEl) _mascotEl.classList.remove("freeze");
+        _freezeRound--;
+        if(_freezeRound > 0) _lt(round, 900);
+        else _advance();
+      });
+    });
+  };
+  _say(st.narr, () => _lt(round, 400));
+}
+function _stepDemo(st){
+  _setupGrid({});
+  _stepPhase = "demo";
+  _say("g_watch", () => {
+    _handBuild(st.pattern).then(() => {
+      if(st.chant) _say(st.chant);
+      _internalPlay(cols, () => _lt(() => {
+        _clearNotes();
+        _say("g_turn", () => _advance());
+      }, 500));
+    });
+  });
+}
+function _stepWhich(st){
+  _stepPhase = "overlay";
+  _setupGrid({});
+  const answer = st.options[st.answer];
+  _overlayEl.innerHTML = `
+    <div class="lessonWhich">
+      <div class="lessonWhichCards"></div>
+      <button class="lessonReplay" aria-label="Hear it again">🔊</button>
+    </div>`;
+  const cardsHost = _overlayEl.querySelector(".lessonWhichCards");
+  st.options.forEach((opt, idx) => {
+    const card = document.createElement("button");
+    card.className = "lessonCard";
+    const mini = document.createElement("div");
+    mini.className = "lessonMini";
+    mini.style.setProperty("--miniRows", String(rows));
+    for(let r = 0; r < rows; r++){
+      for(let c = 0; c < cols; c++){
+        const mc = document.createElement("span");
+        mc.className = "miniCell";
+        const note = opt.find(n => n.row === r && c >= n.start && c < n.start + n.len);
+        if(note){
+          mc.classList.add("on");
+          if(note.kind === "eighth") mc.classList.add("split");
+          mc.style.background = rowColors[r];
+        }
+        mini.appendChild(mc);
+      }
+    }
+    card.appendChild(mini);
+    card.onclick = () => {
+      if(idx === st.answer){
+        card.classList.add("correct");
+        _say(_yayKey(), () => _advance(_whichTries >= 2));
+      }else{
+        card.classList.add("wrong");
+        _whichTries++;
+        if(_whichTries >= 2){
+          const right = cardsHost.children[st.answer];
+          if(right) right.classList.add("correct");
+          _say("g_help", () => _lt(() => _advance(true), 1400));
+        }else{
+          _say("g_listen", () => _playPatternOnce(answer));
+        }
+      }
+    };
+    cardsHost.appendChild(card);
+  });
+  _overlayEl.querySelector(".lessonReplay").onclick = () => _playPatternOnce(answer);
+  _overlayEl.classList.add("show");
+  _say(st.narr, () => _playPatternOnce(answer));
+}
+function _stepBuild(st){
+  _setupGrid(st);
+  _stepPhase = "building";
+  _say(st.narr, () => {
+    // TOUCH-style steps open on a playing pattern (never a blank canvas).
+    if(st.preset && st.preset.length) _internalPlay(cols);
+  });
+  _armIdle(st);
+}
+function _onUserPlayEnd(){
+  if(!_lessonRunning) return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st || st.type !== "build") return;
+  const res = _evalPass(st.pass, st.target);
+  if(res.ok){
+    _stepPhase = "idle";
+    _say(st.yayNarr || _yayKey(), () => _advance(false));
+    return;
+  }
+  // Miss ladder — kind, escalating, never a dead end.
+  _stepMisses++;
+  _stepPhase = "building";
+  if(res.shiftedBy !== 0){
+    _say("g_shift", () => { if(st.target) _playPatternOnce(st.target); });
+    return;
+  }
+  if(res.restViolation && st.pass.restNarr){
+    _say(st.pass.restNarr);
+    return;
+  }
+  if(_stepMisses === 1){
+    _say("g_try", () => { if(st.target) _playPatternOnce(st.target); });
+  }else if(_stepMisses === 2 && st.target){
+    _ghostHint(res.missing);
+    _say("g_ghost");
+  }else if(_stepMisses >= 3){
+    // Demo-hand terminus: the child who never solves it still gets the
+    // celebration and forward motion (complete no-dead-end guarantee).
+    _say("g_help", async () => {
+      _clearGhosts();
+      if(st.target){
+        for(const id of res.extraIds){
+          for(let r = 0; r < rows; r++) if(notesByRow[r].some(n => n.id === id)){ deleteNoteById(r, id); redrawRowNotes(r); }
+        }
+        const res2 = _evalPass(st.pass, st.target);
+        await _handBuild(res2.missing);
+      }else{
+        // count-based step: hand places simple valid notes to satisfy it
+        const wanted = [];
+        const needK = (st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
+        for(let b = 0; b < cols / 2 && wanted.length < (st.pass.minNotes || 1); b++){
+          if(occ[0][b*2] === null && occ[0][b*2+1] === null) wanted.push({ row: 0, start: b*2, len: 2, kind: needK });
+        }
+        await _handBuild(wanted);
+      }
+      _stepPhase = "idle";
+      _internalPlay(cols, () => _say(_yayKey(), () => _advance(true)));
+    });
+  }else{
+    _say("g_try");
+  }
+}
+function _stepReveal(st){
+  _stepPhase = "idle";
+  const shell = document.getElementById("sequencerShell");
+  if(shell) shell.classList.add("staveShown"); // hearts and stave never co-visible
+  if(!_staveOpen){ try{ toggleStave(); }catch(e){} }
+  _say(st.narr, () => _lt(() => _advance(), 1800));
+}
+let _yayIdx = 0;
+function _yayKey(){ _yayIdx = (_yayIdx + 1) % 3; return ["g_yay1", "g_yay2", "g_yay3"][_yayIdx]; }
+
+// ---------- start / resume / complete ----------
+function _saveResume(stepOverride){
+  const p = _lessonProg();
+  const idx = (stepOverride != null) ? stepOverride : _stepIdx;
+  if(idx > 0 && idx < LESSON.steps.length) p.resume[LESSON_KEY] = { step: idx };
+  else delete p.resume[LESSON_KEY];
+  p.last = LESSON_KEY;
+  _lessonProgSave(p);
+}
+function _lessonComplete(){
+  _stepPhase = "idle";
+  const p = _lessonProg();
+  const stars = 3 - Math.min(2, _assistCount);
+  p.stars[LESSON_KEY] = Math.max(p.stars[LESSON_KEY] || 0, stars);
+  delete p.resume[LESSON_KEY];
+  p.last = LESSON_KEY;
+  _lessonProgSave(p);
+  _confetti();
+  const done = () => {
+    const next = LESSON.next;
+    _overlayEl.innerHTML = `
+      <div class="lessonDone">
+        <div class="lessonStars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>
+        <div class="lessonDoneTitle">${LESSON.title} ✓</div>
+        ${next
+          ? `<button class="lessonBigBtn" id="lessonNextBtn">▶ Next</button>`
+          : `<button class="lessonBigBtn" id="lessonNextBtn">🎵 Make music!</button>`}
+      </div>`;
+    _overlayEl.classList.add("show");
+    document.getElementById("lessonNextBtn").onclick = () => {
+      window.location.href = next ? `?lesson=${next}` : "./";
+    };
+  };
+  // The real reward: the child's own bar played back, two bars with the groove.
+  _say(LESSON.doneNarr || _yayKey(), () => {
+    if(_curNotes().length) _internalPlay(cols * 2, () => _lt(done, 300));
+    else _lt(done, 300);
+  });
+}
+function _confetti(){
+  const page = document.getElementById("page");
+  const host = document.createElement("div");
+  host.id = "lessonConfetti";
+  const colors = ["#FF0000", "#FFD34D", "#3DA9FF", "#00CC66", "#FF4FD8", "#7A5CFF"];
+  for(let i = 0; i < 36; i++){
+    const c = document.createElement("span");
+    c.style.left = (Math.random() * 100) + "%";
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = (Math.random() * 0.35) + "s";
+    c.style.transform = `rotate(${Math.random() * 360}deg)`;
+    host.appendChild(c);
+  }
+  page.appendChild(host);
+  setTimeout(() => host.remove(), 2200);
+}
+function _lessonStart(resumeStep){
+  _lessonRunning = true;
+  _overlayEl.classList.remove("show");
+  _overlayEl.innerHTML = "";
+  _stepIdx = resumeStep || 0;
+  if(_stepIdx === 0) _say("g_hi", () => _runStep());
+  else _runStep();
+}
+function _lessonInit(){
+  if(!LESSON) return;
+  document.title = "Kid Sequencer — " + LESSON.title;
+  _narrInit();
+  _buildHearts();
+  _buildChrome();
+  const p = _lessonProg();
+  const resume = p.resume[LESSON_KEY] ? p.resume[LESSON_KEY].step : 0;
+  _overlayEl.innerHTML = `
+    <div class="lessonStart">
+      <div class="lessonStartBand">Rhythm Trail</div>
+      <div class="lessonStartTitle">${LESSON.title}</div>
+      <button class="lessonBigBtn" id="lessonStartBtn">▶</button>
+    </div>`;
+  _overlayEl.classList.add("show");
+  document.getElementById("lessonStartBtn").onclick = async () => {
+    _narrUnlock();                       // <audio> unlock inside the tap gesture
+    try{ await ensureAudioReady(); }catch(e){}
+    _lessonStart(resume);
+  };
+  // Dev/verification hooks (harmless in prod; used by the fairness bench).
+  window.KidSeqLessonDebug = {
+    evalPass: (pass, target) => _evalPass(pass, target),
+    sig: () => _gridSig(),
+    state: () => ({ step: _stepIdx, phase: _stepPhase, running: _lessonRunning, assists: _assistCount }),
+    start: (s) => _lessonStart(s || 0),
+    place: (n, locked) => _placePreset(n, !!locked),
+    clearNotes: () => _clearNotes(),
+  };
+}
+
 function init(){
   setInstrument(LEARN_LEVEL ? LEARN_LEVEL.instrument : "piano");
   if (LEARN_LEVEL) {
@@ -5274,6 +6009,8 @@ function init(){
   updateTempoBox();
   _updateKeyBtn();
   setPlayheadWobbleFromTempo(tempo);
+  // Rhythm Trail: build the lesson shell (hearts, mascot, START overlay).
+  if(LESSON) _lessonInit();
   // Layout is handled by the layout system (scheduleLayout/layoutPass).
   // Do NOT call fitToViewport() here — competing calls cause rightLift to flip-flop
   // between two values while the page is visible, causing a visible jump.
