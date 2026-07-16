@@ -2600,31 +2600,27 @@ html.js-loading #contentWrap{
 /* ---- mascot + speech bubble + demo hand ---- */
 #lessonMascot{
   position: absolute;
-  left: 34px;
-  bottom: 44px;
-  width: 150px;
-  height: 165px;
+  left: 30px;
+  bottom: 40px;
+  width: 175px;
+  height: 190px;
   z-index: 6;
   cursor: pointer;
   user-select: none;
 }
 #lessonMascot svg{ width: 100%; height: 100%; }
-#lessonMascot .mMouth{ transform-origin: 60px 88px; }
-#lessonMascot.talk .mMouth{ animation: lessonTalk 0.32s ease-in-out infinite; }
+.mascotFallback{ font-size: 96px; text-align: center; line-height: 165px; }
+/* the robot's mouth is its own path so it can chew while narration plays */
+#lessonMascot .mMouthR{ transform-box: fill-box; transform-origin: 50% 42%; }
+#lessonMascot.talk .mMouthR{ animation: lessonTalk 0.3s ease-in-out infinite; }
 @keyframes lessonTalk{
   0%,100%{ transform: scaleY(1); }
-  50%{ transform: scaleY(0.35); }
+  50%{ transform: scaleY(0.45); }
 }
-#lessonMascot .mNeedle{ transform-origin: 60px 112px; }
 #lessonMascot.bob{ animation: lessonBob 0.34s ease-out; }
-#lessonMascot.bob .mNeedle{ animation: lessonTick 0.34s ease-out; }
 @keyframes lessonBob{
   0%,100%{ transform: translateY(0); }
   40%{ transform: translateY(-7px); }
-}
-@keyframes lessonTick{
-  0%,100%{ transform: rotate(-18deg); }
-  50%{ transform: rotate(18deg); }
 }
 #lessonMascot.freeze{ filter: saturate(0.4); transform: rotate(-6deg); }
 #lessonBubble{

@@ -1,27 +1,28 @@
 """Build the Rhythm Trail narration sprite (Band A).
 
-MVP clips are Windows SAPI TTS placeholders (en-GB voice preferred) — the design
-doc flags that real 5-8s comprehend TTS measurably worse, so the ~15 load-bearing
-Band A clips should be re-recorded with a human voice before any kid test. This
-script keeps the CLIP KEYS stable so swapping in human recordings later is just
-"drop WAVs in the override folder and re-run".
+Voice = "fun kids cartoon robot friend" (owner spec 2026-07-17):
+  ENGINE 'edge' (default): Microsoft Edge neural TTS, en-GB-MaisieNeural (a
+  British child voice) pitched up a touch, then a light electronic sparkle
+  (tremolo + soft drive) so it reads as a friendly robot without hurting
+  intelligibility (research: 5-8s comprehend degraded speech worse — keep
+  ROBOT_FX subtle; set tremolo_depth 0 to disable entirely).
+  ENGINE 'sapi': the old offline Windows SAPI fallback (flat; placeholder only).
+  Needs: pip install edge-tts imageio-ffmpeg numpy  (edge engine is online).
 
-Pipeline:
-  1. Per-clip WAV via PowerShell System.Speech (22050 Hz, 16-bit, mono).
-     A clip key present in tools/narration_overrides/<key>.wav is used verbatim
-     (resampled check only) instead of TTS — the human-voice upgrade path.
-  2. Concatenate: 0.5 s silent head (the iOS <audio> unlock segment) + clips
-     separated by 0.3 s gaps -> public/samples/lessons_a.wav.
-  3. If ffmpeg is on PATH, transcode to lessons_a.mp3 (64k mono) and ship that.
-  4. Patch public/js/lessons-data.js: the NARR block gets {key: [off, dur, text]}
-     and the SPRITE line gets the shipped filename.
+A clip key present in tools/narration_overrides/<key>.wav (22050/16-bit/mono)
+is used verbatim instead of TTS — the human-voice upgrade path.
 
-Run from the repo root (or this worktree root):  python tools/install_lesson_narration.py
+Pipeline: per-clip TTS -> 22050 Hz mono WAV -> robotize -> trim -> concatenate
+(0.5 s silent head = the iOS <audio> unlock segment, 0.3 s gaps) -> MP3 sprite
+public/samples/lessons_a.mp3 -> patch public/js/lessons-data.js (NARR offsets
++ SPRITE name).
+
+Run from the repo root:  python tools/install_lesson_narration.py [--engine sapi]
 """
+import asyncio
 import json
 import os
 import re
-import shutil
 import struct
 import subprocess
 import sys
@@ -37,6 +38,12 @@ OVERRIDES = os.path.join(ROOT, "tools", "narration_overrides")
 RATE = 22050
 HEAD_SILENCE_S = 0.5   # iOS unlock segment at offset 0
 GAP_S = 0.3
+
+EDGE_VOICE = "en-GB-MaisieNeural"   # British child voice
+EDGE_RATE = "+4%"
+EDGE_PITCH = "+15Hz"
+# The robot flavour lever. Subtle by design; tremolo_depth 0 = clean voice.
+ROBOT_FX = {"tremolo_hz": 27.0, "tremolo_depth": 0.22, "drive": 1.25}
 
 # key -> (spoken text, display text). Chant clips are duration-voiced: the
 # syllable is physically held for its length (the channel that teaches duration).
@@ -71,7 +78,7 @@ CLIPS = {
     "a3_gap":      ("Fill the gaps with the right notes!", "Fill the gaps!"),
     "a3_create":   ("Make a pattern with running notes!", "Use running notes!"),
     "a4_touch":    ("Take one note away. Make a quiet beat!", "Make a quiet beat!"),
-    "a4_demo":     ("Ta, ta, shh, ta! The quiet beat!", "ta ta 🤫 ta"),
+    "a4_demo":     ("Tah, tah, shh, tah! The quiet beat!", "ta ta 🤫 ta"),
     "a4_which":    ("Which one has the quiet beat?", "Which has the quiet beat?"),
     "a4_copy":     ("Build it! Keep the quiet beat quiet!", "Keep the quiet beat quiet!"),
     "a4_rest":     ("Shh! That beat wants to stay quiet!", "Shh! Keep it quiet! 🤫"),
@@ -82,15 +89,44 @@ CLIPS = {
     "a5_create":   ("Make your best pattern ever!", "Your best pattern ever!"),
     "a5_reveal":   ("Look! You wrote real music!", "You wrote REAL music! 🎼"),
     "a5_done":     ("You finished! You're a real musician!", "You're a musician! ⭐"),
-    "chant_tttt":  ("taa. taa. taa. taa.", "ta ta ta ta"),
-    "chant_tatiti":("taa. taa. tee tee. taa.", "ta ta ti-ti ta"),
-    "chant_rest":  ("taa. taa. shh. taa.", "ta ta 🤫 ta"),
+    "chant_tttt":  ("tah. tah. tah. tah.", "ta ta ta ta"),
+    "chant_tatiti":("tah. tah. tee tee. tah.", "ta ta ti-ti ta"),
+    "chant_rest":  ("tah. tah. shh. tah.", "ta ta 🤫 ta"),
     "chant_titi":  ("tee tee!", "ti-ti!"),
 }
 
 
-def tts_generate(outdir):
-    """One PowerShell process renders every clip (fast, consistent voice)."""
+def ffmpeg_exe():
+    import imageio_ffmpeg
+    return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def tts_edge(outdir):
+    """Per-clip MP3 from the Edge neural voice, decoded to 22050/mono WAV."""
+    import edge_tts
+    ff = ffmpeg_exe()
+
+    async def gen(key, text, mp3):
+        await edge_tts.Communicate(text, EDGE_VOICE, rate=EDGE_RATE, pitch=EDGE_PITCH).save(mp3)
+
+    for key, (spoken, _d) in CLIPS.items():
+        mp3 = os.path.join(outdir, key + ".mp3")
+        for attempt in range(3):
+            try:
+                asyncio.run(gen(key, spoken, mp3))
+                break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                print(f"  {key}: retry {attempt + 1} ({e})")
+        wav = os.path.join(outdir, key + ".wav")
+        subprocess.run([ff, "-y", "-loglevel", "error", "-i", mp3,
+                        "-ar", str(RATE), "-ac", "1", "-sample_fmt", "s16", wav], check=True)
+    print(f"edge-tts: {len(CLIPS)} clips as {EDGE_VOICE} rate={EDGE_RATE} pitch={EDGE_PITCH}")
+
+
+def tts_sapi(outdir):
+    """Offline Windows SAPI fallback (flat placeholder voice)."""
     manifest = os.path.join(outdir, "clips.json")
     with open(manifest, "w", encoding="utf-8") as f:
         json.dump({k: v[0] for k, v in CLIPS.items()}, f)
@@ -126,8 +162,28 @@ def read_clip(path):
         return w.readframes(w.getnframes())
 
 
+def robotize(frames):
+    """Light electronic sparkle: slow tremolo + soft drive + edge fades."""
+    import numpy as np
+    if not ROBOT_FX.get("tremolo_depth"):
+        return frames
+    x = np.frombuffer(frames, dtype=np.int16).astype(np.float64) / 32768.0
+    t = np.arange(len(x)) / RATE
+    depth = ROBOT_FX["tremolo_depth"]
+    x = x * (1.0 - depth / 2 + (depth / 2) * np.sin(2 * np.pi * ROBOT_FX["tremolo_hz"] * t))
+    d = ROBOT_FX["drive"]
+    x = np.tanh(d * x) / np.tanh(d)
+    fade = int(0.005 * RATE)
+    if len(x) > 2 * fade:
+        x[:fade] *= np.linspace(0, 1, fade)
+        x[-fade:] *= np.linspace(1, 0, fade)
+    peak = np.max(np.abs(x)) or 1.0
+    x = x * (0.88 / peak if peak > 0.88 else 1.0)
+    return (x * 32767).astype(np.int16).tobytes()
+
+
 def trim_silence(frames, thresh=350):
-    """Trim SAPI's leading/trailing dead air so offsets are tight."""
+    """Trim leading/trailing dead air so offsets are tight."""
     n = len(frames) // 2
     vals = struct.unpack(f"<{n}h", frames)
     start, end = 0, n
@@ -140,10 +196,19 @@ def trim_silence(frames, thresh=350):
 
 
 def main():
+    engine = "sapi" if "--engine" in sys.argv and "sapi" in sys.argv else "edge"
     os.makedirs(SAMPLES, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="kidseq_narr_")
-    print(f"TTS -> {tmp}")
-    tts_generate(tmp)
+    print(f"TTS ({engine}) -> {tmp}")
+    if engine == "edge":
+        try:
+            tts_edge(tmp)
+        except Exception as e:
+            print(f"edge engine failed ({e}); falling back to SAPI")
+            engine = "sapi"
+            tts_sapi(tmp)
+    else:
+        tts_sapi(tmp)
 
     silence = lambda s: b"\x00" * (2 * int(s * RATE))
     parts = [silence(HEAD_SILENCE_S)]
@@ -151,32 +216,29 @@ def main():
     cursor = HEAD_SILENCE_S
     for key, (_spoken, display) in CLIPS.items():
         override = os.path.join(OVERRIDES, key + ".wav")
-        src = override if os.path.exists(override) else os.path.join(tmp, key + ".wav")
-        frames = trim_silence(read_clip(src))
+        if os.path.exists(override):
+            frames = trim_silence(read_clip(override))
+            print(f"  {key}: HUMAN override")
+        else:
+            frames = trim_silence(robotize(read_clip(os.path.join(tmp, key + ".wav"))))
         dur = len(frames) / 2 / RATE
         offsets[key] = [round(cursor, 3), round(dur, 3), display]
         parts.append(frames)
         parts.append(silence(GAP_S))
         cursor += dur + GAP_S
-        if src == override:
-            print(f"  {key}: HUMAN override ({dur:.2f}s)")
-    sprite_wav = os.path.join(SAMPLES, "lessons_a.wav")
+    sprite_wav = os.path.join(tmp, "lessons_a_sprite.wav")
     with wave.open(sprite_wav, "wb") as w:
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(RATE)
         w.writeframes(b"".join(parts))
-    total = os.path.getsize(sprite_wav)
-    print(f"sprite: {sprite_wav} ({total/1e6:.2f} MB, {cursor:.1f}s, {len(CLIPS)} clips)")
 
-    ship = "samples/lessons_a.wav"
-    if shutil.which("ffmpeg"):
-        mp3 = os.path.join(SAMPLES, "lessons_a.mp3")
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", sprite_wav,
-                        "-codec:a", "libmp3lame", "-b:a", "64k", "-ac", "1", mp3], check=True)
-        os.remove(sprite_wav)
-        ship = "samples/lessons_a.mp3"
-        print(f"mp3: {mp3} ({os.path.getsize(mp3)/1e6:.2f} MB)")
-    else:
-        print("ffmpeg not found - shipping WAV")
+    mp3 = os.path.join(SAMPLES, "lessons_a.mp3")
+    subprocess.run([ffmpeg_exe(), "-y", "-loglevel", "error", "-i", sprite_wav,
+                    "-codec:a", "libmp3lame", "-b:a", "64k", "-ac", "1", mp3], check=True)
+    old_wav = os.path.join(SAMPLES, "lessons_a.wav")
+    if os.path.exists(old_wav):
+        os.remove(old_wav)
+    ship = "samples/lessons_a.mp3"
+    print(f"sprite: {mp3} ({os.path.getsize(mp3)/1e6:.2f} MB, {cursor:.1f}s, {len(CLIPS)} clips, engine={engine})")
 
     with open(DATA_JS, "r", encoding="utf-8") as f:
         js = f.read()

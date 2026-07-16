@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=60">
+<link rel="stylesheet" href="css/styles.css?v=61">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -5558,18 +5558,18 @@ function _buildChrome(){
   exit.textContent = "🏠";
   exit.onclick = () => { _saveResume(); window.location.href = "./"; };
   page.appendChild(exit);
-  // mascot + speech bubble (tap mascot = replay current instruction)
+  // mascot + speech bubble (tap mascot = replay current instruction).
+  // The mascot IS the logo robot — a bubble-free extract of images/robot.svg
+  // with the mouth split into its own path (.mMouthR) so CSS can animate it
+  // while it talks. Built by tools/build_robot_mascot.py; fetched and inlined
+  // so page CSS reaches inside the SVG (an <img> would seal it off).
   const m = document.createElement("div");
   m.id = "lessonMascot";
-  m.innerHTML = `<svg viewBox="0 0 120 130" aria-hidden="true">
-    <ellipse cx="60" cy="72" rx="46" ry="50" fill="#FFD34D" stroke="#1d1d1d" stroke-width="5"/>
-    <circle class="mEye" cx="44" cy="58" r="6.5" fill="#1d1d1d"/>
-    <circle class="mEye" cx="76" cy="58" r="6.5" fill="#1d1d1d"/>
-    <path class="mMouth" d="M42 84 Q60 100 78 84" fill="none" stroke="#1d1d1d" stroke-width="5" stroke-linecap="round"/>
-    <line class="mNeedle" x1="60" y1="112" x2="60" y2="94" stroke="#1d1d1d" stroke-width="4" stroke-linecap="round"/>
-    <ellipse cx="38" cy="124" rx="12" ry="6" fill="#1d1d1d"/>
-    <ellipse cx="82" cy="124" rx="12" ry="6" fill="#1d1d1d"/>
-  </svg>`;
+  m.innerHTML = '<div class="mascotFallback">🤖</div>';
+  fetch("images/robot-mascot.svg")
+    .then(r => r.ok ? r.text() : null)
+    .then(t => { if(t && t.indexOf("<svg") === 0) m.innerHTML = t; })
+    .catch(() => {});
   m.onclick = () => { const st = LESSON.steps[_stepIdx]; if(st && _lessonRunning) _say(st.narr); };
   page.appendChild(m);
   _mascotEl = m;
