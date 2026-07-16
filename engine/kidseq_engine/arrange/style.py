@@ -242,6 +242,16 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "accordion": ("sf", "pad_accordion"),    # HUGEL cumbia riff
     "brass": ("sf", "pad_brass"),            # HUGEL mariachi stabs
     "organ_v": ("sf", "pad_organ"),          # MK M1-organ riff
+    # R32c SMP voices: the producer's REAL one-shot repitched (smp_render).
+    # kind "smp"; the name is an smp_render.SMP_VOICES key (which carries its
+    # own Surge/SF fallback for no-asset renders).
+    "chop_alien": ("smp", "chop_alien"),     # Dom Dolla talkbox-alien vocal
+    "funk_stab": ("smp", "funk_stab"),       # PDM funk stab
+    "chant_v": ("smp", "chant_v"),           # HUGEL cumbia chant
+    "chop_real": ("smp", "chop_real"),       # MK dub vocal-sample syllable
+    "chop_note": ("smp", "chop_note"),       # Fred voice-note fragment
+    "rave_shot": ("smp", "rave_shot"),       # Guetta supersaw/rave stab
+    "futurerave": ("vst", "lead_futurerave"),  # R32d Guetta saturated stab (VOICE_POST dist)
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -262,35 +272,37 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
     # R31 techhouse PRODUCER-STYLE stacks (lead_stack_key routes here; the
     # plain "techhouse" bank above is the required per-genre fallback and is
     # never drawn while a producer is set)
+    # R32c: each producer's SIGNATURE stack slot now leads with its REAL
+    # repitched one-shot (smp voice); the Surge/SF flavours stay as alternates.
     "techhouse:bassled": [
-        [("talkbox", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("chop_alien", 0, -9.0), ("shimmer", 12, -14.0)],
         [("talkbox", 0, -10.0)],
         [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
     "techhouse:discofunk": [
-        [("italo", 0, -9.0), ("machine_strings", 0, -13.0)],
+        [("funk_stab", 0, -9.0), ("machine_strings", 0, -13.0)],
         [("machine_strings", 0, -9.0), ("shimmer", 12, -14.0)],
         [("brass", 0, -10.0), ("italo", 12, -14.0)],
     ],
     "techhouse:latin": [
-        [("accordion", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("chant_v", 0, -9.0), ("shimmer", 12, -14.0)],
         [("brass", 0, -9.0)],
         [("marimba", 0, -10.0), ("accordion", 0, -13.0)],
     ],
     "techhouse:pianohouse": [
-        [("vocal_stab", 0, -9.0), ("piano", 0, -13.0)],
+        [("chop_real", 0, -9.0), ("piano", 0, -13.0)],
         [("piano", 0, -9.0), ("shimmer", 12, -14.0)],
         [("organ_v", 0, -10.0), ("vocal_stab", 12, -14.0)],
     ],
     "techhouse:lofi": [
-        [("vocal_stab", 0, -10.0), ("keys", 0, -13.0)],
+        [("chop_note", 0, -10.0), ("keys", 0, -13.0)],
         [("keys", 0, -9.0), ("shimmer", 12, -15.0)],
         [("piano", 0, -10.0)],
     ],
     "techhouse:bigroom": [
-        [("supersaw", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("rave_shot", 0, -9.0), ("shimmer", 12, -14.0)],
         [("piano", 0, -9.0), ("supersaw", 0, -13.0)],
-        [("supersaw", 0, -8.0)],
+        [("futurerave", 0, -9.0), ("shimmer", 12, -14.0)],
     ],
     "dnb": [
         [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
@@ -495,7 +507,7 @@ _PRODUCER_RHYTHM: dict[str, tuple[list, list | None]] = {
 # reference/fallback but are no longer drawn from)
 _PRODUCER_BASS: dict[str, tuple[list, list | None]] = {
     "bassled": (["bass_wobble", "bass_funk", "bass_fm"], [0.60, 0.25, 0.15]),
-    "discofunk": (["bass_funk", "bass_pluck"], [0.65, 0.35]),
+    "discofunk": (["bass_moog", "bass_pluck"], [0.65, 0.35]),
     "latin": (["bass_pluck", "bass_round"], [0.65, 0.35]),
     "pianohouse": (["bass_organ", "bass_round", "bass_pluck"],
                    [0.50, 0.25, 0.25]),
@@ -594,10 +606,17 @@ _PRODUCER_FILL_DEFAULT: list[int] = [0, 2, 4]
 _PRODUCER_SWELL: dict[str, tuple[list, list | None]] = {
     "lofi": (["reverb", None], [0.60, 0.40]),
 }
+# R32e: each producer's ear-candy menu now leads with its SAMPLED fx one-shots
+# (smp_*, played by fx_samples.fx_shot; remap to the synth kind when the pack is
+# absent). smp_slide/smp_riser are sweep-family (R28 cap applies). pianohouse
+# stays restrained (MK) — a subtle hat lift only, no sampled fx.
 _PRODUCER_CANDY: dict[str, tuple] = {
-    "lofi": ("rev_swell_riff",),
-    "latin": ("hat_lift", "sweep_up"),
-    "bigroom": ("sweep_up", "hat_lift", "sweep_down"),
+    "bassled": ("smp_slide", "smp_rev", "hat_lift"),
+    "discofunk": ("smp_tom_zap", "hat_lift"),
+    "latin": ("smp_crowd", "smp_perk", "smp_rev_perk", "hat_lift"),
+    "lofi": ("smp_rev_swell", "rev_swell_riff"),
+    "bigroom": ("smp_riser", "smp_impact", "smp_slide", "hat_lift"),
+    "pianohouse": ("hat_lift",),
 }
 # stack weights for the LEGACY techhouse fallback bank only (producer banks
 # draw uniform); kept because the renderability walk requires a per-genre bank

@@ -57,6 +57,24 @@ server) — satisfied by our downloaded copy.
   one-shots (the Feb-2026 Gen-AI uploader-preference flag is non-binding but adds
   ambiguity; the CC0 GitHub kits are cleaner for an AI-generation product).
 
+## Owner-provided commercial packs (bundled at the owner's direction)
+Per PROJECT_RULES.md rule 1 (revised): sample choice is the owner's call and
+this file is a record, not a gate. The owner owns these commercial packs and
+directed their curated one-shots be bundled into the committed engine packs.
+- **engine_extras.pack** (R17, 2026-07-14) — the owner's DnB library: 4 alt
+  snares + 1 hat + 4 breakbeat fills. `tools/install_engine_extras.py`.
+- **producer_techhouse.pack** (R32, 2026-07-16) — per-producer techhouse
+  drums / smp chops / fx one-shots curated from the owner's packs:
+  **AA Vengeance Essential House Vol.1** (VEH1 kicks/claps/hats/bongo/rim/
+  shaker/perc/tom/cutted-vocal-chops/reverse/slides), **Roland TR-909**
+  (pianohouse hats/clap/kick), **[VB] Hyperfunk** (discofunk funk-stab),
+  **musicradar carnival-rave** (latin vox-chant/perks/reverse),
+  **musicradar-rave** (bigroom stabs/crowd/impact), **musicradar-dnb-fx**
+  (bigroom riser), **Madeon Adventure Machine v2** (bigroom rave-shot),
+  **GarageSessions Vol.3** (lofi foley top). Owner-provided; bundled as
+  conditioned one-shots inside the committed pack (no full library shipped).
+  Rebuild `tools/install_producer_kits.py`.
+
 **VSCO 2 CE (CC0, AI-use OK), verified 2026-07-09** — the premium orchestral path,
 live on the Modal/Linux build. Repo LICENSE = **CC0 1.0 Universal**
 (https://github.com/sgossner/VSCO-2-CE, same author as VCSL). `scripts/fetch_vsco.py`

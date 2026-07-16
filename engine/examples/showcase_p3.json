@@ -1,0 +1,45 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 7,
+        "start": 0,
+        "len": 3
+      },
+      {
+        "row": 4,
+        "start": 3,
+        "len": 1
+      },
+      {
+        "row": 5,
+        "start": 4,
+        "len": 2
+      },
+      {
+        "row": 2,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 3,
+        "start": 8,
+        "len": 4
+      },
+      {
+        "row": 5,
+        "start": 12,
+        "len": 2
+      },
+      {
+        "row": 6,
+        "start": 14,
+        "len": 2
+      }
+    ]
+  },
+  "key": "C",
+  "tempo": 124,
+  "instrument": "trumpet",
+  "drumStyle": "techhouse"
+}

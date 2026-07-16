@@ -364,6 +364,47 @@ def test_kick_onsets_never_point_at_silent_drums():
             assert float(np.max(np.abs(seg))) > 1e-5, (v, o)
 
 
+def test_fx_samples_registry_and_fallbacks():
+    # R32e: every sampled-fx kind has a valid synth fallback (a real candy_blip
+    # kind or a placement kind, or None); sampled sweeps are registered; and
+    # every smp_* kind used in a producer candy menu has a fallback entry.
+    from kidseq_engine.arrange.style import _PRODUCER_CANDY
+    from kidseq_engine.render import fx_samples
+    from kidseq_engine.render.fx import CANDY_LEVELS
+    placement = {"kick_fill", "drum_stop", "rev_swell_riff", "rev_swell_delay"}
+    for kind, fb in fx_samples.FX_FALLBACK.items():
+        assert kind.startswith("smp_"), kind
+        if fb is not None:
+            assert fb in CANDY_LEVELS or fb in placement, (kind, fb)
+    assert fx_samples.SAMPLED_SWEEP_KINDS <= set(fx_samples.FX_FALLBACK)
+    for prod, menu in _PRODUCER_CANDY.items():
+        for kind in menu:
+            if kind.startswith("smp_"):
+                assert kind in fx_samples.FX_FALLBACK, (prod, kind)
+
+
+def test_fx_shot_when_assets_present():
+    # R32e: with the pack unpacked, each producer fx one-shot loads as stereo,
+    # non-silent, capped to the bar, deterministic; a missing kind is empty.
+    from kidseq_engine.render import fx_samples
+    prods = [f"techhouse:{p}"
+             for p in ("bassled", "latin", "lofi", "discofunk", "bigroom")]
+    avail = [(k, kind) for k in prods for kind in fx_samples.FX_FALLBACK
+             if fx_samples.fx_shot_available(k, kind)]
+    if not avail:
+        print("  (skipped: producer fx assets not fetched)")
+        return
+    bar_s = 60.0 / 124 * 4
+    for k, kind in avail:
+        sig = fx_samples.fx_shot(k, kind, bar_s, SR)
+        assert sig.ndim == 2 and sig.shape[1] == 2, (k, kind)
+        assert 0 < sig.shape[0] <= int(bar_s * SR) + 2, (k, kind)
+        assert float(np.max(np.abs(sig))) > 0.001, (k, kind)
+        assert np.array_equal(sig, fx_samples.fx_shot(k, kind, bar_s, SR)), (k, kind)
+    assert fx_samples.fx_shot("techhouse:bassled", "no_such_kind",
+                              bar_s, SR).shape == (0, 2)
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

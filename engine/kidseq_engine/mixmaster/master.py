@@ -147,6 +147,25 @@ _ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
 _DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
                 "reggaeton": 1.15, "drill": 1.1, "hiphop": 1.1}
 
+# R32f per-producer mix SEASONING (<=2 dB) — layered on the genre lookups.
+# producer is parsed from master()'s kit_key; a None/non-producer kit_key
+# misses every table => bit-identical null contract. Identity comes from the
+# sound sources (R32b-e); this is a light colour, not the differentiator.
+_PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
+    "lofi": {"riff": 2.0, "pads": 2.0},   # Fred: washed — wetter riff + pads
+    "bassled": {"pads": -2.0},            # Dom Dolla: dry, sparse — drier pads
+}
+_PRODUCER_ROOM_SIZE: dict[str, float] = {"lofi": 0.46, "bassled": 0.36}
+_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0}   # Guetta: denser drums
+_PRODUCER_DRUM_CLIP_K: dict[str, float] = {"bigroom": 1.5, "lofi": 1.15}
+
+
+def _producer_of(kit_key: str | None) -> str | None:
+    """The producer name from a "<genre>:<producer>" kit_key, else None."""
+    if kit_key and ":" in kit_key:
+        return kit_key.split(":", 1)[1]
+    return None
+
 # bass band-split saturation wet mix (Noisia: multiband dirt on EVERY bass,
 # sub band clean/mono; Young Guru: restraint — never everything). dnb runs
 # hottest (R15: its reese read cheap without harmonic thickness).
@@ -189,8 +208,11 @@ _PLR_FLOOR = {"default": 7.0, "dnb": 7.5, "techhouse": 7.5, "garage": 7.0,
 _DROP_PUSH_DB = 0.5
 
 
-def _reverb_return_board(genre: str | None) -> Pedalboard:
-    room = _ROOM_SIZE.get(genre or "", 0.40)
+def _reverb_return_board(genre: str | None,
+                         producer: str | None = None) -> Pedalboard:
+    room = _PRODUCER_ROOM_SIZE.get(producer)
+    if room is None:
+        room = _ROOM_SIZE.get(genre or "", 0.40)
     return Pedalboard([
         HighpassFilter(cutoff_frequency_hz=300.0),   # keep mud out of the tail
         LowpassFilter(cutoff_frequency_hz=7500.0),
@@ -254,23 +276,26 @@ def preset_for(genre: str | None) -> GenrePreset:
 # ---------------------------------------------------------------------------
 
 
-def _kick_slot(genre: str | None) -> float:
-    """Genre kick fundamental (Hz) — the frequency the mix slots around."""
+def _kick_slot(genre: str | None, kit_key: str | None = None) -> float:
+    """Genre kick fundamental (Hz) — the frequency the mix slots around. A
+    producer kit_key ("techhouse:bassled", R32b) slots around ITS kick; None
+    keeps the plain genre slot (byte-identical null contract)."""
     try:
         from ..render.sample_kit import kick_slot_hz
-        return kick_slot_hz(genre)
+        return kick_slot_hz(kit_key or genre)
     except Exception:  # noqa: BLE001 — never let slot detection break a master
         return 55.0
 
 
 def _board_for(name: str, genre: str | None,
-               percussive: bool = False) -> Pedalboard:
+               percussive: bool = False,
+               kit_key: str | None = None) -> Pedalboard:
     """Per-layer processing, EQ-slotted around the genre's kick fundamental:
     drums are boosted AT the kick slot, bass is notched exactly there (and takes
     80–120 Hz instead); the riff owns 2–4 kHz presence and pads are cut there
     so they physically cannot mask the melody."""
     if name == "drums":
-        slot = _kick_slot(genre)
+        slot = _kick_slot(genre, kit_key)
         # Owner rule: kicks PUNCH, never boom — tight slot boost (q1.4, +1 dB),
         # rumble HP, and on dnb (acoustic kit with real room) shelve the low
         # sustain down so the transient carries the weight.
@@ -295,7 +320,7 @@ def _board_for(name: str, genre: str | None,
             chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-1.5, q=0.8))
         return Pedalboard(chain)
     if name == "bass":
-        slot = _kick_slot(genre)
+        slot = _kick_slot(genre, kit_key)
         return Pedalboard([
             HighpassFilter(cutoff_frequency_hz=30.0),
             PeakFilter(cutoff_frequency_hz=slot, gain_db=-3.0, q=1.4),    # kick's slot
@@ -691,7 +716,8 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            riff_wet_spans: list[tuple[int, int]] | None = None,
            section_spans: list[tuple[str, int, int]] | None = None,
            pump_depth: float | None = None,
-           percussive: bool = False) -> MasterResult:
+           percussive: bool = False,
+           kit_key: str | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -709,6 +735,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         raise ValueError("master() needs a non-empty 'riff' layer")
 
     preset = preset_for(genre)
+    producer = _producer_of(kit_key)   # R32f per-producer mix seasoning
     target = lufs_target if lufs_target is not None else preset.lufs_target
     # R19: per-press pump override (ArrangeStyle.pump_depth via the caller) —
     # techhouse's fixed 0.50 pump on every take was part of the "cheesy" read
@@ -727,7 +754,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = np.zeros((n, 2), dtype=np.float32)
     send_acc = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
-        proc = _process(buf, _board_for(name, genre, percussive), sr)  # (M, 2)
+        proc = _process(buf, _board_for(name, genre, percussive, kit_key), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:
@@ -741,14 +768,19 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         if name == "drums":
             # clip the kit, don't limit it (Sub Focus): gentle memoryless
             # drive shaves peaks; calibration below restores the level
-            k = _DRUM_CLIP_K.get(genre or "", 1.15)
+            k = _PRODUCER_DRUM_CLIP_K.get(producer)
+            if k is None:
+                k = _DRUM_CLIP_K.get(genre or "", 1.15)
             proc = (np.tanh(k * proc) / np.tanh(k)).astype(np.float32)
             dry = proc
             # parallel NY crush under the dry kit (density without killing punch)
             crushed = _process(dry, _ny_crush_board(), sr)[:n]
             if crushed.shape[0] < n:
                 crushed = np.pad(crushed, ((0, n - crushed.shape[0]), (0, 0)))
-            proc = dry + crushed * (10.0 ** (_NY_GAIN_DB.get(genre or "", -8.0) / 20.0))
+            ny_db = _PRODUCER_NY_DB.get(producer)
+            if ny_db is None:
+                ny_db = _NY_GAIN_DB.get(genre or "", -8.0)
+            proc = dry + crushed * (10.0 ** (ny_db / 20.0))
             # parallel distorted 'room' (Noisia's overheads) — fed from the
             # DRY kit so the crush and the room stay independent colours
             room_db = _ROOM_GAIN_DB.get(genre or "")
@@ -771,6 +803,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
         # tap the shared-reverb send pre-pump (the return gets its own duck)
         send_db = _SEND_DB.get(name)
         if send_db is not None:
+            send_db += _PRODUCER_SEND_DELTA.get(producer, {}).get(name, 0.0)
             if name == "riff" and riff_wet_spans:
                 curve = np.full(n, 10.0 ** (send_db / 20.0), dtype=np.float32)
                 for s0, s1 in riff_wet_spans:
@@ -814,7 +847,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     if float(np.max(np.abs(send_acc))) > 1e-9:
         pre = int(_PREDELAY_S * sr)
         sent = np.pad(send_acc, ((pre, 0), (0, 0)))[:n]
-        ret = _process(sent, _reverb_return_board(genre), sr)[:n]
+        ret = _process(sent, _reverb_return_board(genre, producer), sr)[:n]
         if ret.shape[0] < n:
             ret = np.pad(ret, ((0, n - ret.shape[0]), (0, 0)))
         ret = ret * (1.0 - 0.8 * pump_base * shape)[:, None]

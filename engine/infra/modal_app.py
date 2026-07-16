@@ -112,6 +112,7 @@ def populate_assets(force_vsco: bool = False) -> str:
     out += _run("scripts/fetch_drumkits.py")
     out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_extras.py")  # engine-only alt hits + breakbeat fills (R17)
+    out += _run("scripts/fetch_producer_kits.py")  # R32 per-producer techhouse sound sources
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())
@@ -127,7 +128,8 @@ def run_tests() -> str:
     for t in ("tests/test_sequence.py", "tests/test_master.py",
               "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
               "tests/test_arrange.py", "tests/test_style.py",
-              "tests/test_master_gates.py", "tests/test_fx.py"):
+              "tests/test_master_gates.py", "tests/test_fx.py",
+              "tests/test_smp.py", "tests/test_producer_sound.py"):
         out += _run(t)
     return out
 
@@ -385,6 +387,59 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
     plan = [(riff_file, genre, tempo, n) for _, n in pending]
     for (k, n), mp3 in zip(pending, render_showcase_item.starmap(plan)):
         dst = dst_dir / f"producer_{k}_v{n}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
+@app.local_entrypoint()
+def battery2(base: int = 3000) -> None:
+    """Producer showcase on SIX DIFFERENT user inputs — one varied-note-length
+    melody per producer, each rendered at a wildly different variation (greedy
+    song-shape diversity) so the six tracks show the engine's range across
+    distinct sequencer patterns. -> out/showcase/PRODUCERS/techhouse/battery2/.
+    Each input carries its own instrument + tempo; the variation drives shape/
+    progression/bass/pads/FX. Resumable (skips existing)."""
+    import json
+    import sys as _sys
+
+    _sys.path.insert(0, str(ENGINE_LOCAL))
+    from kidseq_engine.arrange.style import choose_style
+    from kidseq_engine.sequence import parse_sequence
+
+    pairs = [("examples/showcase_p1.json", "bassled"),
+             ("examples/showcase_p2.json", "discofunk"),
+             ("examples/showcase_p3.json", "latin"),
+             ("examples/showcase_p4.json", "pianohouse"),
+             ("examples/showcase_p5.json", "lofi"),
+             ("examples/showcase_p6.json", "bigroom")]
+    plan, dests, used = [], [], {}
+    for i, (rf, target) in enumerate(pairs):
+        payload = json.loads((ENGINE_LOCAL / rf).read_text(encoding="utf-8"))
+        tempo = int(payload["tempo"])
+        riff = parse_sequence(payload)
+        b, hits, v = base + i * 211, [], base + i * 211
+        while len(hits) < 10 and v < b + 900:
+            st = choose_style(riff, v)
+            if st.producer_style == target:
+                hits.append((v, st.structure.song_shape))
+            v += 1
+        if not hits:
+            print(f"  {target}: NO HIT for {rf}")
+            continue
+        hits.sort(key=lambda h: used.get(h[1], 0))   # least-used shape first
+        v, shape = hits[0]
+        used[shape] = used.get(shape, 0) + 1
+        print(f"  {target:<11} {Path(rf).name:<18} v={v} shape={shape} "
+              f"tempo={tempo} instr={payload.get('instrument')}")
+        plan.append((rf, "techhouse", tempo, v))
+        dests.append((target, v))
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / "techhouse" / "battery2"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    pending = [(p, d) for p, d in zip(plan, dests)
+               if not (dst_dir / f"b2_{d[0]}_v{d[1]}.mp3").exists()]
+    for (p, (target, v)), mp3 in zip(pending,
+                                     render_showcase_item.starmap([p for p, _ in pending])):
+        dst = dst_dir / f"b2_{target}_v{v}.mp3"
         dst.write_bytes(mp3)
         print(f"saved {dst} ({len(mp3):,} bytes)")
 

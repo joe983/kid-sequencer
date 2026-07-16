@@ -94,10 +94,15 @@ def main() -> None:
         else:
             spans.append((s.name, a, e))
         bar += s.bars
+    # R32b: the mix slots around the PRODUCER kick when a producer kit fires
+    # (else None -> the plain genre slot, byte-identical for non-techhouse)
+    from kidseq_engine.render.sample_kit import kit_key
+    drum_kit = kit_key(riff.drum_style, st.producer_style)
     res = master(layers, SR, genre=riff.drum_style, kick_onsets=kick_onsets,
                  tempo=riff.tempo, riff_wet_spans=[(0, intro_end)],
                  section_spans=spans, pump_depth=st.pump_depth,
-                 percussive=(st.production_mode == "percussive"))
+                 percussive=(st.production_mode == "percussive"),
+                 kit_key=(drum_kit if drum_kit != riff.drum_style else None))
     out = Path(__file__).parent / "out"
     write_wav(out / "song_master.wav", res.audio)
     write_mp3(out / "song.mp3", res.audio, res.sr)

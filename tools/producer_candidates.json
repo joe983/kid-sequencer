@@ -1,0 +1,453 @@
+{
+ "_README": "R32a audition candidates for the 6 techhouse producers. Paths relative to the owner's sample library (LIB in tools/audition_producer_kits.py). First entry per section = the assigned FINAL PICK (spectral-triage, de-duplicated so producers sharing a bank get DISTINCT picks); the rest are a diverse spread to swap. Regenerate: scratchpad triage.py + gen_candidates_v2.",
+ "candidates": {
+  "bassled": {
+   "kick": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 047.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 092.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 043.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 115.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 138.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 171.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 002.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 137.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 135.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 109.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 191.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 002.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 136.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 126.wav"
+   ],
+   "hatC": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 78.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 30.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 47.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 36.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 16.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 05.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 143.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 094.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 175.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 114.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 099.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 042.wav"
+   ],
+   "chop": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 167.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 196.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 011.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 052.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 046.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 071.wav"
+   ],
+   "fx_sweep": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 12.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 15.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 24.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 23.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 21.wav"
+   ],
+   "fx_rev": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 03.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 05.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 06.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 07.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 15.wav"
+   ]
+  },
+  "discofunk": {
+   "kick": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 096.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 006.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 059.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 084.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 103.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 025.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 169.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 004.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 126.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 031.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 213.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 041.wav"
+   ],
+   "hatC": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 30.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 78.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 47.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 36.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 16.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 05.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 024.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 094.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 175.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 114.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 099.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 042.wav"
+   ],
+   "shaker": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 11.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 02.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 20.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 08.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 10.wav"
+   ],
+   "tom_zap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 26.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 03.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 27.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 19.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Tom/VEH1 Tom - 20.wav"
+   ],
+   "perc": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 51.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 27.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 02.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 50.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 12.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 54.wav"
+   ],
+   "funk_stab": [
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Lime [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Blue Screen FM [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Talking Yoi [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Saw Low Intro [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Thick Noise [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Saw Bass Retro [VB].wav",
+    "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Bass 11/BA Distorted Synth Layer [VB].wav"
+   ]
+  },
+  "latin": {
+   "kick": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 090.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 096.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 006.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 059.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 084.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 046.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 025.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 169.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 004.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 126.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 031.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 213.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 151.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 094.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 175.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 114.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 099.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 042.wav"
+   ],
+   "bongo": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 19.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 45.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 20.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 46.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 49.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 15.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Bongo/VEH1 Bongo - 27.wav"
+   ],
+   "rim": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 38.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 46.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 29.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 07.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 34.wav"
+   ],
+   "shaker": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 02.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 11.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 20.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 08.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Shakers/VEH1 Shaker - 10.wav"
+   ],
+   "perc": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 51.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 27.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 02.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 50.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 12.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 Percussive/VEH1 Percussive - 54.wav"
+   ],
+   "chant": [
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-94.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-52.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-36.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-56.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-2.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-22.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-95.wav"
+   ],
+   "fx_rev": [
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Bungle stylee.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Try four of these and call me in the morning.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Sequence this, mate.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Back-slapping.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Black to back.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Fluffing the lines.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Revers-a-perk/Back hatted compliment.wav"
+   ],
+   "perk": [
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Don't stop - pop.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Synth longo.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/More rinky plink.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Oo-verber.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Short and stout.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Synth bongo.wav",
+    "musicradar-carnival-rave-samples/Single Hits/Assorted perks/Snapped string.wav"
+   ],
+   "crowd": [
+    "musicradar-rave-samples/FX/Atmos_sweep02.wav",
+    "musicradar-rave-samples/FX/Atmos_sweep01.wav",
+    "musicradar-rave-samples/FX/Bass_Fart02.wav",
+    "musicradar-rave-samples/FX/Crowd01.wav",
+    "musicradar-rave-samples/FX/Crowd02.wav",
+    "musicradar-rave-samples/FX/Delay_Boom.wav",
+    "musicradar-rave-samples/FX/Lazer07.wav"
+   ]
+  },
+  "pianohouse": {
+   "kick_909": [
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/BTAAADA.WAV",
+    "Roland-TR-909/Roland TR-909/LT3D3.WAV",
+    "Roland-TR-909/Roland TR-909/LT0DA.WAV",
+    "Roland-TR-909/Roland TR-909/MT7D7.WAV",
+    "Roland-TR-909/Roland TR-909/LTAD0.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T0S0.WAV"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/HHCD0.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP1.WAV",
+    "Roland-TR-909/Roland TR-909/HHCD2.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL1.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP3.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL2.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S3.WAV"
+   ],
+   "hatO": [
+    "Roland-TR-909/Roland TR-909/RIDED8.WAV",
+    "Roland-TR-909/Roland TR-909/CSHDA.WAV",
+    "Roland-TR-909/Roland TR-909/RIDEDA.WAV",
+    "Roland-TR-909/Roland TR-909/HHODA.WAV",
+    "Roland-TR-909/Roland TR-909/HHOD8.WAV",
+    "Roland-TR-909/Roland TR-909/HHOD6.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T7S3.WAV"
+   ],
+   "clap": [
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP1.WAV"
+   ],
+   "rim": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 37.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 38.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 46.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 29.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 07.wav"
+   ],
+   "chop": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 167.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 196.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 011.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 052.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 046.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 071.wav"
+   ],
+   "kick_veh": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 084.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 096.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 006.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 059.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 103.wav"
+   ]
+  },
+  "lofi": {
+   "kick": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 096.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 006.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 059.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 084.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 103.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 041.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 025.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 169.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 004.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 126.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 031.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 213.wav"
+   ],
+   "hatC": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 70.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 78.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 30.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 47.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 36.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 16.wav"
+   ],
+   "foley": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_55.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_05.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_14.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_13.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_15.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_27.wav"
+   ],
+   "wutang": [
+    "WuTang_DRUMS_ BREAKS/RZABR24.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR12.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR07.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR32.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR04.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR20.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR27_A.wav"
+   ],
+   "chop": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 196.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 167.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 011.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 052.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 046.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 071.wav"
+   ],
+   "fx_rev": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 03.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 05.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 06.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 07.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 15.wav"
+   ]
+  },
+  "bigroom": {
+   "kick": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 188.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 047.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 092.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 043.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 115.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 138.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 171.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 135.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 109.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 137.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 191.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 002.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 136.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 126.wav"
+   ],
+   "hatC": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 05.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 78.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 41.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 30.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 47.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 36.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 16.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 058.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 094.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 175.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 098.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 114.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 099.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 042.wav"
+   ],
+   "stab_madeon": [
+    "Madeon Adventure Machine Samples v2/bass.1.3.wav",
+    "Madeon Adventure Machine Samples v2/bass.1.10.wav",
+    "Madeon Adventure Machine Samples v2/bass.1.6.wav",
+    "Madeon Adventure Machine Samples v2/bass.1.5.wav",
+    "Madeon Adventure Machine Samples v2/bass.1.4.wav",
+    "Madeon Adventure Machine Samples v2/sounds.1.8.wav",
+    "Madeon Adventure Machine Samples v2/sounds.1.9.wav"
+   ],
+   "stab_rave": [
+    "musicradar-rave-samples/DrumHits/Kick20.wav",
+    "musicradar-rave-samples/DrumHits/Dit05.wav",
+    "musicradar-rave-samples/DrumHits/Dit03.wav",
+    "musicradar-rave-samples/DrumHits/Kick14.wav",
+    "musicradar-rave-samples/DrumHits/Kick15.wav",
+    "musicradar-rave-samples/DrumHits/Dit04.wav",
+    "musicradar-rave-samples/DrumHits/OpenHat03.wav"
+   ],
+   "riser": [
+    "musicradar-dnb-fx-samples/DNB_FX_1.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_11.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_12.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_13.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_14.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_15.wav",
+    "musicradar-dnb-fx-samples/DNB_FX_71.wav"
+   ],
+   "impact": [
+    "musicradar-rave-samples/FX/Atmos_sweep01.wav",
+    "musicradar-rave-samples/FX/Atmos_sweep02.wav",
+    "musicradar-rave-samples/FX/Bass_Fart02.wav",
+    "musicradar-rave-samples/FX/Crowd01.wav",
+    "musicradar-rave-samples/FX/Crowd02.wav",
+    "musicradar-rave-samples/FX/Delay_Boom.wav",
+    "musicradar-rave-samples/FX/Lazer07.wav"
+   ],
+   "slide": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 12.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 15.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 24.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 23.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 21.wav"
+   ]
+  }
+ }
+}

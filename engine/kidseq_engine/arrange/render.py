@@ -46,7 +46,7 @@ def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str,
     return "statement" if (t == prev and t != "statement") else t
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
-from ..render import vst_render
+from ..render import fx_samples, smp_render, vst_render
 from ..mixmaster import kick_onsets_from_pattern
 
 # voices that keep playing in "lite" drum sections (no kick/snare/sub weight)
@@ -79,18 +79,100 @@ def _lite_pattern(pattern: dict) -> dict:
 # felt_piano = the Salamander grand played soft through a closed-down filter —
 # the lofi producer style's bittersweet chord bed. The role itself resolves to
 # a real renderer via PAD_ROLES (the renderability walk stays honest).
-PAD_POST: dict[str, tuple[float, float]] = {"felt_piano": (2800.0, 0.75)}
+# R32d VOICE_POST — generalizes R31's PAD_POST into a per-(producer, slot,
+# voice) pedalboard-chain hook. This is where each techhouse producer's synth
+# COLOUR lives (Erosion grit, tape wobble, Chic phaser, slap delay, rave
+# distortion) — pedalboard, not Surge params, so it's deterministic and needs
+# no unproven Surge parameters. key = "<producer|*>:<slot>:<name>" (slot ∈
+# pad/lead/bass) -> (vel_scale, wet, chain). chain ops are built fresh per call.
+# Lookup tries the producer-specific key, then the "*" wildcard.
+VOICE_POST: dict[str, tuple[float, float, list]] = {
+    # byte-compat: the old PAD_POST felt-piano treatment as a wildcard fallback
+    "*:pad:felt_piano": (0.75, 1.0, [("lpf12", 2800.0, 0.1)]),
+    # lofi (Fred): felt piano gets a tape-wobble chorus; the voice-note chop is
+    # softened + wobbled too
+    "lofi:pad:felt_piano": (0.75, 1.0, [("lpf12", 2800.0, 0.1),
+                                        ("chorus", 0.4, 0.35, 0.3)]),
+    "lofi:lead:chop_note": (1.0, 0.5, [("lpf", 3200.0), ("chorus", 0.3, 0.3, 0.3)]),
+    # discofunk (PDM): Chic chucked-guitar phaser colour on the funk stab
+    "discofunk:lead:funk_stab": (1.0, 0.45, [("phaser", 0.5, 0.4, 0.4)]),
+    # bassled (Dom Dolla): the Ableton-Erosion grit — HPF + distortion,
+    # wet-blended so the sub stays clean while the mids bite on small speakers
+    "bassled:bass:bass_wobble": (1.0, 0.5, [("hpf", 120.0), ("dist", 8.0)]),
+    # latin (HUGEL): tape slap-delay throw on the chant
+    "latin:lead:chant_v": (1.0, 0.35, [("delay_beats", 0.375, 0.25, 0.3)]),
+    # bigroom (Guetta): saturated future-rave stab
+    "bigroom:lead:futurerave": (1.0, 0.6, [("dist", 6.0)]),
+}
+
+
+def _voice_post_entry(producer, slot: str, name: str):
+    """VOICE_POST entry for (producer, slot, name): producer-specific first,
+    then the '*' wildcard, else None (no processing — byte-identical)."""
+    return (VOICE_POST.get(f"{producer}:{slot}:{name}")
+            or VOICE_POST.get(f"*:{slot}:{name}"))
+
+
+def _post_board(chain: list, tempo: float):
+    """Build a fresh pedalboard from VOICE_POST chain ops (deterministic)."""
+    from pedalboard import (Chorus, Compressor, Delay, Distortion,
+                            HighpassFilter, LadderFilter, LowpassFilter, Phaser,
+                            Pedalboard)
+    spb = seconds_per_beat(tempo)
+    ops = []
+    for op in chain:
+        k = op[0]
+        if k == "lpf12":
+            ops.append(LadderFilter(mode=LadderFilter.Mode.LPF12,
+                                    cutoff_hz=float(op[1]),
+                                    resonance=float(op[2]) if len(op) > 2 else 0.1))
+        elif k == "lpf":
+            ops.append(LowpassFilter(cutoff_frequency_hz=float(op[1])))
+        elif k == "hpf":
+            ops.append(HighpassFilter(cutoff_frequency_hz=float(op[1])))
+        elif k == "chorus":
+            ops.append(Chorus(rate_hz=float(op[1]), depth=float(op[2]),
+                              mix=float(op[3]) if len(op) > 3 else 0.5))
+        elif k == "phaser":
+            ops.append(Phaser(rate_hz=float(op[1]), depth=float(op[2]),
+                             mix=float(op[3]) if len(op) > 3 else 0.5))
+        elif k == "dist":
+            ops.append(Distortion(drive_db=float(op[1])))
+        elif k == "delay_beats":
+            ops.append(Delay(delay_seconds=float(op[1]) * spb,
+                            feedback=float(op[2]), mix=float(op[3])))
+        elif k == "comp":
+            ops.append(Compressor(threshold_db=float(op[1]), ratio=float(op[2])))
+    return Pedalboard(ops)
+
+
+def _apply_post(sig: np.ndarray, sr: int, tempo: float, entry) -> np.ndarray:
+    """Apply a VOICE_POST entry's chain to a rendered layer with a dry/wet
+    blend (wet>=1.0 = pure wet, which is byte-identical to the old PAD_POST
+    LadderFilter path)."""
+    _, wet, chain = entry
+    if not chain or sig.size == 0:
+        return sig
+    wetsig = _post_board(chain, tempo)(sig, sr).astype(np.float32)
+    if wet >= 1.0:
+        return wetsig
+    m = min(sig.shape[0], wetsig.shape[0])
+    out = sig.copy()
+    out[:m] = sig[:m] * np.float32(1.0 - wet) + wetsig[:m] * np.float32(wet)
+    return out
 
 
 def _render_pads(notes, tempo: float, span_beats: float, sr: int,
-                 pad_role: str = "supersaw") -> np.ndarray:
+                 pad_role: str = "supersaw", producer=None) -> np.ndarray:
     """Render the pads layer with the style's genre role: Surge patches for
     synth-family roles, GM presets for keys-family (organ/e-piano/pizz).
-    Cross-fallbacks keep SOME pad when a renderer is missing."""
+    Cross-fallbacks keep SOME pad when a renderer is missing. A VOICE_POST
+    entry (R32d) velocity-scales the notes + colours the render (felt_piano
+    keeps its R31 LadderFilter via the wildcard entry — byte-compat)."""
     kind, name = PAD_ROLES.get(pad_role, ("vst", "pad"))
-    post = PAD_POST.get(pad_role)
-    if post is not None:
-        notes = [dc_replace(n, velocity=max(1, min(127, int(n.velocity * post[1]))))
+    entry = _voice_post_entry(producer, "pad", pad_role)
+    if entry is not None and entry[0] != 1.0:
+        notes = [dc_replace(n, velocity=max(1, min(127, int(n.velocity * entry[0]))))
                  for n in notes]
     if kind == "vst" and vst_render.SURGE_VST3.exists():
         sig = as_stereo(vst_render.render_patch(notes, tempo, name, 1, span_beats, sr))
@@ -102,12 +184,8 @@ def _render_pads(notes, tempo: float, span_beats: float, sr: int,
         sig = as_stereo(render_riff_sf(notes, tempo, "pads", 1, span_beats, sr))
     else:
         return np.zeros((0, 2), dtype=np.float32)  # no pad fallback worth hearing
-    if post is not None and sig.size:
-        from pedalboard import LadderFilter
-
-        filt = LadderFilter(mode=LadderFilter.Mode.LPF12,
-                            cutoff_hz=float(post[0]), resonance=0.1)
-        sig = filt.process(sig, sr).astype(np.float32)
+    if entry is not None and sig.size:
+        sig = _apply_post(sig, sr, tempo, entry)
     return sig
 
 
@@ -133,11 +211,13 @@ def _render_texture(kind: str, dur_s: float, sr: int, seed: int, riff) -> np.nda
 
 
 def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
-                       sr: int, genre: str | None, stack_i: int) -> np.ndarray:
+                       sr: int, genre: str | None, stack_i: int,
+                       producer=None) -> np.ndarray:
     """The genre's lead-texture stack: LEAD_STACKS layers summed at their
     per-layer gains, rendered UNDER the main riff voice (which stays untouched
     and dominant — every layer sits >=9 dB down). Each voice routes Surge or
-    GM per LEAD_VOICES; a missing renderer just drops that layer."""
+    GM per LEAD_VOICES; a missing renderer just drops that layer. A VOICE_POST
+    entry (R32d) colours the producer's signature lead voice."""
     stacks = LEAD_STACKS.get(genre or "")
     if not stacks:
         return np.zeros((0, 2), dtype=np.float32)
@@ -145,17 +225,35 @@ def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
     out: np.ndarray | None = None
     for voice, semi, gain_db in stack:
         kind, name = LEAD_VOICES[voice]
-        shifted = [dc_replace(n, pitch=min(127, max(0, n.pitch + semi)))
+        entry = _voice_post_entry(producer, "lead", voice)
+        vscale = entry[0] if entry is not None else 1.0
+        shifted = [dc_replace(n, pitch=min(127, max(0, n.pitch + semi)),
+                              velocity=(max(1, min(127, int(n.velocity * vscale)))
+                                        if vscale != 1.0 else n.velocity))
                    for n in notes]
-        if kind == "vst" and vst_render.SURGE_VST3.exists():
-            sig = as_stereo(vst_render.render_patch(shifted, tempo, name, bars,
-                                                    bar_beats, sr))
-        elif default_soundfont():
-            sf_name = name if kind == "sf" else "pads"
-            sig = as_stereo(render_riff_sf(shifted, tempo, sf_name, bars,
-                                           bar_beats, sr))
-        else:
-            continue
+        sig = None
+        # R32c: an "smp" voice plays the producer's REAL one-shot (repitched).
+        # If the asset is missing it declares a fallback voice and falls through
+        # to the Surge/SF path so local dev without the pack still renders.
+        if kind == "smp":
+            s = smp_render.render_riff_smp(shifted, tempo, name, bars,
+                                           bar_beats, sr)
+            if s.size:
+                sig = s
+            else:
+                kind, name = smp_render.SMP_VOICES[name][1]
+        if sig is None:
+            if kind == "vst" and vst_render.SURGE_VST3.exists():
+                sig = as_stereo(vst_render.render_patch(shifted, tempo, name,
+                                                        bars, bar_beats, sr))
+            elif default_soundfont():
+                sf_name = name if kind == "sf" else "pads"
+                sig = as_stereo(render_riff_sf(shifted, tempo, sf_name, bars,
+                                               bar_beats, sr))
+            else:
+                continue
+        if entry is not None and sig.size:
+            sig = _apply_post(sig, sr, tempo, entry)
         sig = sig * np.float32(10.0 ** (gain_db / 20.0))
         if out is None:
             out = sig.copy()
@@ -191,17 +289,26 @@ def _sine_sub(notes, tempo: float, span_beats: float, sr: int) -> np.ndarray:
 
 def _render_bass(notes, tempo: float, span_beats: float, sr: int,
                  bass_patch: str = "bass",
-                 sub_double_db: float | None = None) -> np.ndarray:
+                 sub_double_db: float | None = None,
+                 producer=None) -> np.ndarray:
     """Render the bass LAYER with the style's genre patch (Surge). Falls back
     to the grid-voice chain (SF2 Lately Bass / numpy synth) without Surge —
     the kid's own 'bass' grid instrument is untouched by this.
     `sub_double_db` layers a sine sub under the patch at that level relative
-    to the patch's peak (garage: never raw bass)."""
+    to the patch's peak (garage: never raw bass). A VOICE_POST entry (R32d)
+    colours the producer's bass — e.g. bassled's Erosion grit — applied to the
+    patch before the sub double so the sub stays clean."""
+    entry = _voice_post_entry(producer, "bass", bass_patch)
+    if entry is not None and entry[0] != 1.0:
+        notes = [dc_replace(n, velocity=max(1, min(127, int(n.velocity * entry[0]))))
+                 for n in notes]
     if vst_render.SURGE_VST3.exists() and bass_patch in vst_render.PATCHES:
         sig = as_stereo(vst_render.render_patch(notes, tempo, bass_patch, 1,
                                                 span_beats, sr))
     else:
         sig = riff_audio(notes, tempo, "bass", 1, span_beats, sr)
+    if entry is not None and sig.size:
+        sig = _apply_post(sig, sr, tempo, entry)
     if sub_double_db is not None and sig.size:
         sub = _sine_sub(notes, tempo, span_beats, sr)
         peak_sig = float(np.max(np.abs(sig)))
@@ -466,6 +573,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     pattern = pattern_for(riff.drum_style, style.drum_variant,
                           style.drum_skeleton) if riff.drum_style else None
     takes = style.drum_takes   # per-press sample-take swaps (R17)
+    # R32b: the producer SOUND kit for the AUDIO drum renders only. Every
+    # SYMBOLIC use (pattern_for/perc_pattern_for, kick_onsets pump clock,
+    # gesture voice compares) stays on riff.drum_style — the producer swing is
+    # already threaded via swing=style.drum_swing. For non-producer genres
+    # producer_style is None -> drum_kit == riff.drum_style (byte-identical).
+    from ..render.sample_kit import kit_key
+    drum_kit = kit_key(riff.drum_style, style.producer_style)
     # R24 skeletal doctrine: percussive takes play the SPARSE patterns, and
     # the low end never sustains — sub stabs lock to the skeletal kick
     perc_kick_steps: list[int] = []
@@ -548,7 +662,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                              span_beats, sr,
                                              lead_stack_key(riff.drum_style,
                                                             style.producer_style),
-                                             style.lead_stack)
+                                             style.lead_stack,
+                                             producer=style.producer_style)
                     _add_at(layers["riff"], stk, at)
             else:
                 notes = riff_variant(riff.notes, sec.riff_variant)
@@ -605,7 +720,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                                 riff.drum_style, swapped,
                                                 pal.fill_shape)
                     b_at = at + int(b * bar_s * sr)
-                    sig = drums_audio_pattern(riff.drum_style, bpat,
+                    sig = drums_audio_pattern(drum_kit, bpat,
                                               riff.tempo, 1, sr, takes=takes,
                                               swing=style.drum_swing)
                     _add_at(layers["drums"], sig, b_at)
@@ -618,7 +733,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                         swing=style.drum_swing)]
             elif pat:
                 from ..render import drums_audio_pattern
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo,
                                           sec.bars, sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig, at)
@@ -660,7 +775,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                and style.bass_patch in ("bass_pluck", "bass_fm")) \
                 else None
             sig = _render_bass(notes, riff.tempo, span_beats, sr,
-                               style.bass_patch, sub_double_db=sub_db)
+                               style.bass_patch, sub_double_db=sub_db,
+                               producer=style.producer_style)
             _add_at(layers["bass"], sig, at)
 
         if sec.pads:
@@ -675,7 +791,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # tracks don't all share one drone sound
                 notes = drone_notes(riff, sec.bars, voicing=style.pad_rhythm)
                 sig = _render_pads(notes, riff.tempo, span_beats, sr,
-                                   style.pad_role)
+                                   style.pad_role, producer=style.producer_style)
             elif not style.pads_on:
                 # R20 sparse take: no pads/long sounds — riff + bass + drums
                 # (+ texture, guaranteed by choose_style when the stack is
@@ -685,7 +801,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
                                   voicing=style.pad_voicing)
-                sig = _render_pads(notes, riff.tempo, span_beats, sr, style.pad_role)
+                sig = _render_pads(notes, riff.tempo, span_beats, sr,
+                                   style.pad_role, producer=style.producer_style)
             _add_at(layers["pads"], sig, at)
 
         bar += sec.bars
@@ -829,7 +946,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         # drummer stops the groove to play it — so the kit is cut for the
         # fill's musical span; render_fill_sample returns None (→ legacy
         # synth fill) without assets or past the stretch guard.
-        sampled = (render_fill_sample(riff.drum_style, pal.fill_take,
+        sampled = (render_fill_sample(drum_kit, pal.fill_take,
                                       riff.tempo, sr)
                    if pal.fill_take else None)
         for i, (b_sec, b_a, b_e) in builds.items():
@@ -847,7 +964,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             bars = _fill_bars(riff.drum_style, pal.fill_shape, b_sec.bars)
             for bi, pat in enumerate(bars):
                 fill_at = b_e - int((len(bars) - bi) * bar_s * sr)
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo, 1,
                                           sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig, fill_at)
@@ -919,7 +1036,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                           for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm,
                                               voicing=style.pad_voicing)]
                 sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr,
-                                   style.pad_role)
+                                   style.pad_role, producer=style.producer_style)
                 _add_at(layers["pads"], sig * 0.5, a)
 
     # riff delay-throw into breaks — auto-decided per track unless forced.
@@ -963,7 +1080,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         # R28 (owner: "never have the swoosh going up and down over and
         # over"): sweep-family candy never fires twice in a row and is
         # capped at 2 per track — repeats remap to the menu's non-sweeps.
-        _SWEEP_KINDS = {"sweep_up", "sweep_down"}
+        # R32e: sampled sweep-family fx (smp_slide/smp_riser) join the cap.
+        _SWEEP_KINDS = {"sweep_up", "sweep_down"} | fx_samples.SAMPLED_SWEEP_KINDS
         sweeps_used = 0
         prev_sweep = False
         for pos, sname, b in _candy_slots(bounds, pal.earcandy_every, bar_s, sr):
@@ -994,7 +1112,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if kind == "kick_fill":
                 # UKG vocabulary: a 2-beat kick pickup INTO the phrase boundary
                 pat = {"kick": [0.0] * 8 + [0.55, 0, 0.65, 0, 0.75, 0, 0.85, 0]}
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo, 1,
                                           sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig * 0.8, pos - int(bar_s * sr))
@@ -1007,6 +1125,16 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 if sig.size:
                     _add_at(layers["fx"], sig, pos - sig.shape[0])
                 continue
+            # R32e: a producer's sampled fx one-shot (smp_*) plays its REAL
+            # sound; without the pack it remaps to the declared synth candy.
+            if kind.startswith("smp_"):
+                if fx_samples.fx_shot_available(drum_kit, kind):
+                    _add_at(layers["fx"],
+                            fx_samples.fx_shot(drum_kit, kind, bar_s, sr), pos)
+                    continue
+                kind = fx_samples.FX_FALLBACK.get(kind)
+                if not kind:
+                    continue
             sig = fx.candy_blip(kind, bar_s, sr,
                                 chirp_seed if kind == "sig_chirp"
                                 else seed + 900 + b)
@@ -1025,7 +1153,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                     [o / sr for o in ons], decay_s=1.5 * spb)
                 _add_at(layers["rumble"], sig, a)
             if pal.odd_loop_on:
-                cell = render_odd_cell(riff.drum_style, riff.tempo, dur, sr)
+                cell = render_odd_cell(drum_kit, riff.tempo, dur, sr)
                 # ~-20 dB under the kit: an added quiet lane, never a feature
                 _add_at(layers["drums"], as_stereo(cell) * np.float32(0.35), a)
 
