@@ -185,6 +185,65 @@ def test_render_is_non_silent_and_right_length_when_assets_present():
     assert float(np.max(np.abs(buf))) > 0.05  # real hits, not silence
 
 
+def test_producer_kits_static():
+    # R32b: the six techhouse producer kits each exist, cover the FULL techhouse
+    # voice set (so kit_available/kit render never leave a pattern voice silent),
+    # carry valid layer specs, and resolve via kit_key. Static, no assets.
+    from kidseq_engine.render.sample_kit import KITS, PRODUCER_KEYS, kit_key
+    base = set(KITS["techhouse"])
+    for p in PRODUCER_KEYS:
+        key = f"techhouse:{p}"
+        assert key in KITS, p
+        assert set(KITS[key]) == base, (p, set(KITS[key]) ^ base)
+        for voice, layers in KITS[key].items():
+            assert layers and all(isinstance(r, str) and r and 0.0 < g <= 1.5
+                                  for r, g in layers), (p, voice)
+        assert kit_key("techhouse", p) == key
+    assert kit_key("techhouse", "nope") == "techhouse"   # unknown producer
+    assert kit_key("dnb", None) == "dnb"                  # non-producer genre
+    assert kit_key("dnb", "bassled") == "dnb"             # no dnb producer kit
+    assert kit_key(None, None) == ""
+
+
+def test_producer_kick_slot_falls_back_without_assets():
+    # R32b: a producer key with no pack on disk slots around the BASE genre kick
+    # (not the raw 55 Hz default). With assets, kick_slot_hz FFT-detects the
+    # producer kick — the render test below covers the present-assets path.
+    from kidseq_engine.render.sample_kit import kick_slot_hz, kit_available
+    if kit_available("techhouse:bassled"):
+        print("  (skipped: producer assets present)")
+        return
+    assert kick_slot_hz("techhouse:bassled") == kick_slot_hz("techhouse")
+
+
+def test_producer_render_differs_from_base_and_peers_when_assets_present():
+    # R32b core (the R31 fix, at the SOUND level): with the producer pack
+    # unpacked, each producer kit renders a DIFFERENT drum sound from the base
+    # techhouse kit AND from the other producers, for the same pattern — and is
+    # deterministic per (kit, pattern).
+    from kidseq_engine.render.sample_kit import kit_available
+    prods = [f"techhouse:{p}"
+             for p in ("bassled", "discofunk", "latin", "pianohouse",
+                       "lofi", "bigroom")]
+    if not (kit_available("techhouse") and all(kit_available(k) for k in prods)):
+        print("  (skipped: producer/techhouse assets not fetched)")
+        return
+    pat = DRUM_PATTERNS["techhouse"]
+    base = sample_kit.render_drums_samples("techhouse", 124, 2, SR, pattern=pat)
+    outs = {k: sample_kit.render_drums_samples(k, 124, 2, SR, pattern=pat)
+            for k in prods}
+    for k, o in outs.items():
+        assert o.shape == base.shape, k
+        assert not np.array_equal(o, base), f"{k} identical to base techhouse"
+        o2 = sample_kit.render_drums_samples(k, 124, 2, SR, pattern=pat)
+        assert np.array_equal(o, o2), f"{k} not deterministic"
+    keys = list(outs)
+    for i in range(len(keys)):
+        for j in range(i + 1, len(keys)):
+            assert not np.array_equal(outs[keys[i]], outs[keys[j]]), \
+                (keys[i], keys[j])
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

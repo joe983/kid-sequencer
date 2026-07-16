@@ -466,6 +466,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
     pattern = pattern_for(riff.drum_style, style.drum_variant,
                           style.drum_skeleton) if riff.drum_style else None
     takes = style.drum_takes   # per-press sample-take swaps (R17)
+    # R32b: the producer SOUND kit for the AUDIO drum renders only. Every
+    # SYMBOLIC use (pattern_for/perc_pattern_for, kick_onsets pump clock,
+    # gesture voice compares) stays on riff.drum_style — the producer swing is
+    # already threaded via swing=style.drum_swing. For non-producer genres
+    # producer_style is None -> drum_kit == riff.drum_style (byte-identical).
+    from ..render.sample_kit import kit_key
+    drum_kit = kit_key(riff.drum_style, style.producer_style)
     # R24 skeletal doctrine: percussive takes play the SPARSE patterns, and
     # the low end never sustains — sub stabs lock to the skeletal kick
     perc_kick_steps: list[int] = []
@@ -605,7 +612,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                                 riff.drum_style, swapped,
                                                 pal.fill_shape)
                     b_at = at + int(b * bar_s * sr)
-                    sig = drums_audio_pattern(riff.drum_style, bpat,
+                    sig = drums_audio_pattern(drum_kit, bpat,
                                               riff.tempo, 1, sr, takes=takes,
                                               swing=style.drum_swing)
                     _add_at(layers["drums"], sig, b_at)
@@ -618,7 +625,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                         swing=style.drum_swing)]
             elif pat:
                 from ..render import drums_audio_pattern
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo,
                                           sec.bars, sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig, at)
@@ -829,7 +836,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         # drummer stops the groove to play it — so the kit is cut for the
         # fill's musical span; render_fill_sample returns None (→ legacy
         # synth fill) without assets or past the stretch guard.
-        sampled = (render_fill_sample(riff.drum_style, pal.fill_take,
+        sampled = (render_fill_sample(drum_kit, pal.fill_take,
                                       riff.tempo, sr)
                    if pal.fill_take else None)
         for i, (b_sec, b_a, b_e) in builds.items():
@@ -847,7 +854,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             bars = _fill_bars(riff.drum_style, pal.fill_shape, b_sec.bars)
             for bi, pat in enumerate(bars):
                 fill_at = b_e - int((len(bars) - bi) * bar_s * sr)
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo, 1,
                                           sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig, fill_at)
@@ -994,7 +1001,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             if kind == "kick_fill":
                 # UKG vocabulary: a 2-beat kick pickup INTO the phrase boundary
                 pat = {"kick": [0.0] * 8 + [0.55, 0, 0.65, 0, 0.75, 0, 0.85, 0]}
-                sig = drums_audio_pattern(riff.drum_style, pat, riff.tempo, 1,
+                sig = drums_audio_pattern(drum_kit, pat, riff.tempo, 1,
                                           sr, takes=takes,
                                           swing=style.drum_swing)
                 _add_at(layers["drums"], sig * 0.8, pos - int(bar_s * sr))
@@ -1025,7 +1032,7 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                                     [o / sr for o in ons], decay_s=1.5 * spb)
                 _add_at(layers["rumble"], sig, a)
             if pal.odd_loop_on:
-                cell = render_odd_cell(riff.drum_style, riff.tempo, dur, sr)
+                cell = render_odd_cell(drum_kit, riff.tempo, dur, sr)
                 # ~-20 dB under the kit: an added quiet lane, never a feature
                 _add_at(layers["drums"], as_stereo(cell) * np.float32(0.35), a)
 

@@ -112,6 +112,7 @@ def populate_assets(force_vsco: bool = False) -> str:
     out += _run("scripts/fetch_drumkits.py")
     out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_extras.py")  # engine-only alt hits + breakbeat fills (R17)
+    out += _run("scripts/fetch_producer_kits.py")  # R32 per-producer techhouse sound sources
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())

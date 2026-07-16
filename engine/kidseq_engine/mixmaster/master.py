@@ -254,23 +254,26 @@ def preset_for(genre: str | None) -> GenrePreset:
 # ---------------------------------------------------------------------------
 
 
-def _kick_slot(genre: str | None) -> float:
-    """Genre kick fundamental (Hz) — the frequency the mix slots around."""
+def _kick_slot(genre: str | None, kit_key: str | None = None) -> float:
+    """Genre kick fundamental (Hz) — the frequency the mix slots around. A
+    producer kit_key ("techhouse:bassled", R32b) slots around ITS kick; None
+    keeps the plain genre slot (byte-identical null contract)."""
     try:
         from ..render.sample_kit import kick_slot_hz
-        return kick_slot_hz(genre)
+        return kick_slot_hz(kit_key or genre)
     except Exception:  # noqa: BLE001 — never let slot detection break a master
         return 55.0
 
 
 def _board_for(name: str, genre: str | None,
-               percussive: bool = False) -> Pedalboard:
+               percussive: bool = False,
+               kit_key: str | None = None) -> Pedalboard:
     """Per-layer processing, EQ-slotted around the genre's kick fundamental:
     drums are boosted AT the kick slot, bass is notched exactly there (and takes
     80–120 Hz instead); the riff owns 2–4 kHz presence and pads are cut there
     so they physically cannot mask the melody."""
     if name == "drums":
-        slot = _kick_slot(genre)
+        slot = _kick_slot(genre, kit_key)
         # Owner rule: kicks PUNCH, never boom — tight slot boost (q1.4, +1 dB),
         # rumble HP, and on dnb (acoustic kit with real room) shelve the low
         # sustain down so the transient carries the weight.
@@ -295,7 +298,7 @@ def _board_for(name: str, genre: str | None,
             chain.insert(2, LowShelfFilter(cutoff_frequency_hz=85.0, gain_db=-1.5, q=0.8))
         return Pedalboard(chain)
     if name == "bass":
-        slot = _kick_slot(genre)
+        slot = _kick_slot(genre, kit_key)
         return Pedalboard([
             HighpassFilter(cutoff_frequency_hz=30.0),
             PeakFilter(cutoff_frequency_hz=slot, gain_db=-3.0, q=1.4),    # kick's slot
@@ -691,7 +694,8 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
            riff_wet_spans: list[tuple[int, int]] | None = None,
            section_spans: list[tuple[str, int, int]] | None = None,
            pump_depth: float | None = None,
-           percussive: bool = False) -> MasterResult:
+           percussive: bool = False,
+           kit_key: str | None = None) -> MasterResult:
     """Mix + master a dict of layers into the final stereo track.
 
     layers: {"riff": (N,2) or mono, ...}. Lengths may differ; all are zero-padded
@@ -727,7 +731,7 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
     bus = np.zeros((n, 2), dtype=np.float32)
     send_acc = np.zeros((n, 2), dtype=np.float32)
     for name, buf in st_layers.items():
-        proc = _process(buf, _board_for(name, genre, percussive), sr)  # (M, 2)
+        proc = _process(buf, _board_for(name, genre, percussive, kit_key), sr)  # (M, 2)
         if proc.shape[0] < n:
             proc = np.pad(proc, ((0, n - proc.shape[0]), (0, 0)))
         else:

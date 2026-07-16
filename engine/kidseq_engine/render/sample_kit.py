@@ -105,7 +105,94 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "hatO":  [("garage/hatO.wav", 1.0)],
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
+    # ---- R32b PRODUCER kits (techhouse) -----------------------------------
+    # Each "techhouse:<producer>" kit gives the producer its own SOUND (the
+    # R31 failure was one shared kit). Producer-specific voices point at files
+    # unpacked from producer_techhouse.pack (scripts/fetch_producer_kits.py ->
+    # assets/drums/techhouse/<producer>/<voice>.wav); the rest reuse the base
+    # techhouse relpaths so kit_available() still covers EVERY techhouse
+    # pattern/seasoning voice. Sub lane = weight not a 2nd kick (R25 policy),
+    # per-producer gain. Files chosen by spectral triage in producer_recipes.md
+    # (owner swaps via tools/producer_candidates.json -> rebuild the pack).
+    "techhouse:bassled": {   # Dom Dolla — clean, dry, punchy
+        "kick": [("techhouse/bassled/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.50)],
+        "clap": [("techhouse/bassled/clap.wav", 1.0)],
+        "hatC": [("techhouse/bassled/hatC.wav", 1.0)],
+        "hatO": [("techhouse/bassled/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)], "cowbell": [("perc/cowbell.wav", 1.0)],
+        "rim": [("perc/woodblock.wav", 1.0)], "conga": [("perc/conga.wav", 1.0)],
+        "bongo": [("perc/bongo.wav", 1.0)],
+    },
+    "techhouse:discofunk": {   # Purple Disco Machine — live, warm perc bed
+        "kick": [("techhouse/discofunk/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.45)],
+        "clap": [("techhouse/discofunk/clap.wav", 1.0)],
+        "hatC": [("techhouse/discofunk/hatC.wav", 1.0)],
+        "hatO": [("techhouse/discofunk/hatO.wav", 1.0)],
+        "shaker": [("techhouse/discofunk/shaker.wav", 1.0)],
+        "cowbell": [("perc/cowbell.wav", 1.0)], "rim": [("perc/woodblock.wav", 1.0)],
+        "conga": [("perc/conga.wav", 1.0)], "bongo": [("perc/bongo.wav", 1.0)],
+    },
+    "techhouse:latin": {   # HUGEL — live Latin hand perc on top
+        "kick": [("techhouse/latin/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.55)],
+        "clap": [("techhouse/latin/clap.wav", 1.0)],
+        "hatC": [("techhouse/hatC.wav", 1.0)],
+        "hatO": [("techhouse/latin/hatO.wav", 1.0)],
+        "shaker": [("techhouse/latin/shaker.wav", 1.0)],
+        "cowbell": [("perc/cowbell.wav", 1.0)],
+        "rim": [("techhouse/latin/rim.wav", 1.0)],
+        "conga": [("techhouse/latin/conga.wav", 1.0)],
+        "bongo": [("techhouse/latin/bongo.wav", 1.0)],
+    },
+    "techhouse:pianohouse": {   # MK — TR-909 hats/clap, round kick
+        "kick": [("techhouse/pianohouse/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.55)],
+        "clap": [("techhouse/pianohouse/clap.wav", 1.0)],
+        "hatC": [("techhouse/pianohouse/hatC.wav", 1.0)],
+        "hatO": [("techhouse/pianohouse/hatO.wav", 1.0)],
+        "rim":  [("techhouse/pianohouse/rim.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)], "cowbell": [("perc/cowbell.wav", 1.0)],
+        "conga": [("perc/conga.wav", 1.0)], "bongo": [("perc/bongo.wav", 1.0)],
+    },
+    "techhouse:lofi": {   # Fred again.. — soft dusty kit, foley top
+        "kick": [("techhouse/lofi/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.45)],
+        "clap": [("techhouse/lofi/clap.wav", 1.0)],
+        "hatC": [("techhouse/lofi/hatC.wav", 1.0)],
+        "hatO": [("techhouse/hatO.wav", 1.0)],
+        "shaker": [("techhouse/lofi/shaker.wav", 1.0)],   # foley top
+        "cowbell": [("perc/cowbell.wav", 1.0)], "rim": [("perc/woodblock.wav", 1.0)],
+        "conga": [("perc/conga.wav", 1.0)], "bongo": [("perc/bongo.wav", 1.0)],
+    },
+    "techhouse:bigroom": {   # David Guetta — festival-clean, loud
+        "kick": [("techhouse/bigroom/kick.wav", 1.0)],
+        "sub":  [("bounce/sub.wav", 0.60)],
+        "clap": [("techhouse/bigroom/clap.wav", 1.0)],
+        "hatC": [("techhouse/bigroom/hatC.wav", 1.0)],
+        "hatO": [("techhouse/bigroom/hatO.wav", 1.0)],
+        "shaker": [("perc/shaker.wav", 1.0)], "cowbell": [("perc/cowbell.wav", 1.0)],
+        "rim": [("perc/woodblock.wav", 1.0)], "conga": [("perc/conga.wav", 1.0)],
+        "bongo": [("perc/bongo.wav", 1.0)],
+    },
 }
+
+# The six producer keys under techhouse (kit_key builds "techhouse:<producer>").
+PRODUCER_KEYS = ("bassled", "discofunk", "latin", "pianohouse", "lofi", "bigroom")
+
+
+def kit_key(style: str | None, producer: str | None) -> str:
+    """The KITS key for a render: a producer style gets its own kit
+    ("<genre>:<producer>") when one exists; everything else stays the plain
+    genre. Mirrors arrange.style.lead_stack_key so the audio drum calls pick
+    the producer kit while the symbolic pump/pattern stay on the genre."""
+    g = style or ""
+    if producer:
+        key = f"{g}:{producer}"
+        if key in KITS:
+            return key
+    return g
 
 # ALTERNATE voice takes (R17 — owner: "I fed you a variety of drum hits and
 # fills … you aren't using them"). genre -> voice -> list of alternate layer
@@ -161,12 +248,20 @@ _slot_cache: dict[str, float] = {}
 def kick_slot_hz(style: str | None) -> float:
     """The genre kick's fundamental (35–70 Hz), FFT-detected from the actual
     one-shot. The mix boards slot around this: drums boosted AT it, bass
-    notched AT it. Falls back to genre-typical values without assets."""
+    notched AT it. Falls back to genre-typical values without assets. A
+    producer key ("techhouse:bassled") slots around ITS kick when the pack is
+    present, else the base genre slot (R32b — assets always present in prod)."""
     key = style or ""
     if key in _slot_cache:
         return _slot_cache[key]
-    val = _SLOT_FALLBACK.get(key, 55.0)
+    genre = key.split(":", 1)[0] if ":" in key else key
+    val = _SLOT_FALLBACK.get(genre, 55.0)
     kit = KITS.get(key)
+    if not (kit and kit.get("kick") and kit_available(key)) and ":" in key:
+        # producer kit absent -> the base genre slot (never the raw fallback)
+        val = kick_slot_hz(genre)
+        _slot_cache[key] = val
+        return val
     if kit and kit.get("kick") and kit_available(key):
         one = _voice_buffer("kick", kit["kick"])
         seg = one[: int(0.4 * SR)].astype(np.float64)

@@ -82,6 +82,29 @@ def test_master_works_without_drums():
     assert res.layers == ("riff",)
 
 
+def test_kit_key_null_contract():
+    # R32b: master(kit_key=None) is byte-identical to omitting kit_key — the
+    # null contract that keeps every non-producer genre unchanged. A producer
+    # key threads to the slot lookups; with no pack on disk it falls back to the
+    # base genre slot, so the master still matches the base.
+    np.random.seed(2)
+    riff = _tone(440, 1.2)
+    drums = (np.random.uniform(-1, 1, int(1.2 * SR)) * 0.3).astype(np.float32)
+    on = list(kick_onsets_from_pattern(DRUM_PATTERNS["techhouse"], 120, 1, SR))
+    a = master({"riff": riff.copy(), "drums": drums.copy()}, SR,
+               genre="techhouse", kick_onsets=list(on))
+    b = master({"riff": riff.copy(), "drums": drums.copy()}, SR,
+               genre="techhouse", kick_onsets=list(on), kit_key=None)
+    assert np.array_equal(a.audio, b.audio), "kit_key=None must equal omitting it"
+    from kidseq_engine.render.sample_kit import kit_available
+    if not kit_available("techhouse:bassled"):
+        c = master({"riff": riff.copy(), "drums": drums.copy()}, SR,
+                   genre="techhouse", kick_onsets=list(on),
+                   kit_key="techhouse:bassled")
+        assert np.array_equal(a.audio, c.audio), \
+            "a producer key with no pack must slot around the base genre kick"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
