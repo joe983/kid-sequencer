@@ -467,6 +467,8 @@ PATCHES: dict[str, dict] = {
     # high-mod filter envelope — each note does the filter "wobble" that
     # carries his bass-as-melody signature. Short release so syncopated
     # 16ths duck cleanly around the kick.
+    # R32d v2: deeper resonance + feg so the wobble moves harder (the Erosion
+    # grit that makes it Dom Dolla lives in VOICE_POST bassled:bass:bass_wobble)
     "bass_wobble": {
         "a_osc_1_type": "Classic",
         "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
@@ -477,8 +479,8 @@ PATCHES: dict[str, dict] = {
         "a_osc_2_volume": -5.0,
         "a_filter_1_type": "LP Vintage Ladder",
         "a_filter_1_cutoff": 300.0,
-        "a_filter_1_resonance": 35.0,
-        "a_filter_1_feg_mod_amount": ("raw", 0.78),
+        "a_filter_1_resonance": 40.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.84),
         "a_filter_eg_attack": ("raw", _env(0.004)),
         "a_filter_eg_decay": ("raw", _env(0.3)),
         "a_filter_eg_sustain": 12.0,
@@ -523,6 +525,49 @@ PATCHES: dict[str, dict] = {
         "a_amp_eg_decay": ("raw", _env(0.35)),
         "a_amp_eg_sustain": 60.0,
         "a_amp_eg_release": ("raw", _env(0.18)),
+        "fx_a1_fx_type": "Chorus",
+        "character": "Bright",
+    },
+    # R32d discofunk (PDM) octave-pop bass: springy Moog-style pluck — fast
+    # attack, SHORT snappy decay so the low-HIGH octave pops bounce and don't
+    # sustain. (Chic chuck colour is a VOICE_POST phaser on the funk stab.)
+    "bass_moog": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_filter_1_type": "LP Vintage Ladder",
+        "a_filter_1_cutoff": 550.0,
+        "a_filter_1_resonance": 22.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.65),
+        "a_filter_eg_attack": ("raw", _env(0.002)),
+        "a_filter_eg_decay": ("raw", _env(0.10)),
+        "a_filter_eg_sustain": 8.0,
+        "a_filter_eg_release": ("raw", _env(0.05)),
+        "a_amp_eg_attack": ("raw", _env(0.002)),
+        "a_amp_eg_decay": ("raw", _env(0.16)),
+        "a_amp_eg_sustain": 10.0,
+        "a_amp_eg_release": ("raw", _env(0.05)),
+        "character": "Warm",
+    },
+    # R32d bigroom (Guetta) future-rave stab: detuned saw stack, mid-open LP,
+    # short punchy stab envelope. The saturation that makes it "future rave" is
+    # a VOICE_POST distortion (bigroom:lead:lead_futurerave).
+    "lead_futurerave": {
+        "a_osc_1_type": "Classic",
+        "a_osc_1_retrigger": True,  # phase-lock: renders must be deterministic
+        "a_osc_1_unison_voices": "5 voices",
+        "a_osc_1_unison_detune": ("raw", 0.30),
+        "a_filter_1_type": "LP 24 dB",
+        "a_filter_1_cutoff": 2600.0,
+        "a_filter_1_resonance": 14.0,
+        "a_filter_1_feg_mod_amount": ("raw", 0.40),
+        "a_filter_eg_attack": ("raw", _env(0.003)),
+        "a_filter_eg_decay": ("raw", _env(0.18)),
+        "a_filter_eg_sustain": 25.0,
+        "a_filter_eg_release": ("raw", _env(0.12)),
+        "a_amp_eg_attack": ("raw", _env(0.003)),
+        "a_amp_eg_decay": ("raw", _env(0.22)),
+        "a_amp_eg_sustain": 40.0,
+        "a_amp_eg_release": ("raw", _env(0.12)),
         "fx_a1_fx_type": "Chorus",
         "character": "Bright",
     },

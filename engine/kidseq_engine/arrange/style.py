@@ -251,6 +251,7 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "chop_real": ("smp", "chop_real"),       # MK dub vocal-sample syllable
     "chop_note": ("smp", "chop_note"),       # Fred voice-note fragment
     "rave_shot": ("smp", "rave_shot"),       # Guetta supersaw/rave stab
+    "futurerave": ("vst", "lead_futurerave"),  # R32d Guetta saturated stab (VOICE_POST dist)
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -301,7 +302,7 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
     "techhouse:bigroom": [
         [("rave_shot", 0, -9.0), ("shimmer", 12, -14.0)],
         [("piano", 0, -9.0), ("supersaw", 0, -13.0)],
-        [("supersaw", 0, -8.0)],
+        [("futurerave", 0, -9.0), ("shimmer", 12, -14.0)],
     ],
     "dnb": [
         [("unison", 0, -10.0), ("shimmer", 12, -14.0)],
@@ -506,7 +507,7 @@ _PRODUCER_RHYTHM: dict[str, tuple[list, list | None]] = {
 # reference/fallback but are no longer drawn from)
 _PRODUCER_BASS: dict[str, tuple[list, list | None]] = {
     "bassled": (["bass_wobble", "bass_funk", "bass_fm"], [0.60, 0.25, 0.15]),
-    "discofunk": (["bass_funk", "bass_pluck"], [0.65, 0.35]),
+    "discofunk": (["bass_moog", "bass_pluck"], [0.65, 0.35]),
     "latin": (["bass_pluck", "bass_round"], [0.65, 0.35]),
     "pianohouse": (["bass_organ", "bass_round", "bass_pluck"],
                    [0.50, 0.25, 0.25]),

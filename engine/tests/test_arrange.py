@@ -497,6 +497,55 @@ def test_default_pad_notes_keep_the_whole_bar_wash():
     assert all(n.dur_beats == 4.0 for n in notes)
 
 
+def test_voice_post_well_formed():
+    # R32d: every VOICE_POST entry is "<producer|*>:<slot>:<name>" with a known
+    # slot, sane vel_scale/wet, recognized chain ops, and a target voice/patch
+    # that actually exists.
+    from kidseq_engine.arrange.render import VOICE_POST
+    from kidseq_engine.arrange.style import LEAD_VOICES, PAD_ROLES
+    from kidseq_engine.render import vst_render
+    ops = {"lpf12", "lpf", "hpf", "chorus", "phaser", "dist", "delay_beats", "comp"}
+    for key, entry in VOICE_POST.items():
+        _prod, slot, name = key.split(":", 2)
+        vscale, wet, chain = entry
+        assert slot in ("pad", "lead", "bass"), key
+        assert 0.0 < vscale <= 1.5, (key, vscale)
+        assert 0.0 <= wet <= 1.0, (key, wet)
+        assert chain and all(op[0] in ops for op in chain), key
+        if slot == "lead":
+            assert name in LEAD_VOICES, (key, name)
+        elif slot == "pad":
+            assert name in PAD_ROLES, (key, name)
+        elif slot == "bass":
+            assert name in vst_render.PATCHES, (key, name)
+    # the R32d patches + voice are registered
+    assert "bass_moog" in vst_render.PATCHES
+    assert "lead_futurerave" in vst_render.PATCHES
+    assert LEAD_VOICES["futurerave"] == ("vst", "lead_futurerave")
+
+
+def test_voice_post_applier_deterministic_bounded_and_felt_compat():
+    # R32d: the pedalboard applier is deterministic, never explodes, and the
+    # felt_piano wildcard reproduces R31's PAD_POST LadderFilter exactly.
+    import numpy as np
+    from pedalboard import LadderFilter
+
+    from kidseq_engine.arrange.render import VOICE_POST, _apply_post
+    from kidseq_engine.audio import SR
+    rng = np.random.default_rng(3)
+    sig = (rng.standard_normal((SR, 2)) * 0.2).astype(np.float32)
+    for key, entry in VOICE_POST.items():
+        a = _apply_post(sig.copy(), SR, 124.0, entry)
+        b = _apply_post(sig.copy(), SR, 124.0, entry)
+        assert np.array_equal(a, b), f"{key} not deterministic"
+        assert np.isfinite(a).all(), f"{key} produced non-finite"
+        assert float(np.max(np.abs(a))) < 8.0, f"{key} exploded"
+    got = _apply_post(sig.copy(), SR, 124.0, VOICE_POST["*:pad:felt_piano"])
+    want = LadderFilter(mode=LadderFilter.Mode.LPF12, cutoff_hz=2800.0,
+                        resonance=0.1).process(sig.copy(), SR).astype(np.float32)
+    assert np.array_equal(got, want), "felt_piano byte-compat broken"
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):
