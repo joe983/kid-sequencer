@@ -129,7 +129,7 @@ def run_tests() -> str:
               "tests/test_sample_kit.py", "tests/test_sfz.py", "tests/test_vst.py",
               "tests/test_arrange.py", "tests/test_style.py",
               "tests/test_master_gates.py", "tests/test_fx.py",
-              "tests/test_smp.py"):
+              "tests/test_smp.py", "tests/test_producer_sound.py"):
         out += _run(t)
     return out
 
