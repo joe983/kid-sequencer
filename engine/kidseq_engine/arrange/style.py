@@ -242,6 +242,15 @@ LEAD_VOICES: dict[str, tuple[str, str]] = {
     "accordion": ("sf", "pad_accordion"),    # HUGEL cumbia riff
     "brass": ("sf", "pad_brass"),            # HUGEL mariachi stabs
     "organ_v": ("sf", "pad_organ"),          # MK M1-organ riff
+    # R32c SMP voices: the producer's REAL one-shot repitched (smp_render).
+    # kind "smp"; the name is an smp_render.SMP_VOICES key (which carries its
+    # own Surge/SF fallback for no-asset renders).
+    "chop_alien": ("smp", "chop_alien"),     # Dom Dolla talkbox-alien vocal
+    "funk_stab": ("smp", "funk_stab"),       # PDM funk stab
+    "chant_v": ("smp", "chant_v"),           # HUGEL cumbia chant
+    "chop_real": ("smp", "chop_real"),       # MK dub vocal-sample syllable
+    "chop_note": ("smp", "chop_note"),       # Fred voice-note fragment
+    "rave_shot": ("smp", "rave_shot"),       # Guetta supersaw/rave stab
 }
 
 # Per-genre lead STACKS: always-on texture for the lead. Each stack is a list
@@ -262,33 +271,35 @@ LEAD_STACKS: dict[str, list[list[tuple[str, int, float]]]] = {
     # R31 techhouse PRODUCER-STYLE stacks (lead_stack_key routes here; the
     # plain "techhouse" bank above is the required per-genre fallback and is
     # never drawn while a producer is set)
+    # R32c: each producer's SIGNATURE stack slot now leads with its REAL
+    # repitched one-shot (smp voice); the Surge/SF flavours stay as alternates.
     "techhouse:bassled": [
-        [("talkbox", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("chop_alien", 0, -9.0), ("shimmer", 12, -14.0)],
         [("talkbox", 0, -10.0)],
         [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
     "techhouse:discofunk": [
-        [("italo", 0, -9.0), ("machine_strings", 0, -13.0)],
+        [("funk_stab", 0, -9.0), ("machine_strings", 0, -13.0)],
         [("machine_strings", 0, -9.0), ("shimmer", 12, -14.0)],
         [("brass", 0, -10.0), ("italo", 12, -14.0)],
     ],
     "techhouse:latin": [
-        [("accordion", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("chant_v", 0, -9.0), ("shimmer", 12, -14.0)],
         [("brass", 0, -9.0)],
         [("marimba", 0, -10.0), ("accordion", 0, -13.0)],
     ],
     "techhouse:pianohouse": [
-        [("vocal_stab", 0, -9.0), ("piano", 0, -13.0)],
+        [("chop_real", 0, -9.0), ("piano", 0, -13.0)],
         [("piano", 0, -9.0), ("shimmer", 12, -14.0)],
         [("organ_v", 0, -10.0), ("vocal_stab", 12, -14.0)],
     ],
     "techhouse:lofi": [
-        [("vocal_stab", 0, -10.0), ("keys", 0, -13.0)],
+        [("chop_note", 0, -10.0), ("keys", 0, -13.0)],
         [("keys", 0, -9.0), ("shimmer", 12, -15.0)],
         [("piano", 0, -10.0)],
     ],
     "techhouse:bigroom": [
-        [("supersaw", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("rave_shot", 0, -9.0), ("shimmer", 12, -14.0)],
         [("piano", 0, -9.0), ("supersaw", 0, -13.0)],
         [("supersaw", 0, -8.0)],
     ],

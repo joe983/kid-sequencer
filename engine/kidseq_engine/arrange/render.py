@@ -46,7 +46,7 @@ def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str,
     return "statement" if (t == prev and t != "statement") else t
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
-from ..render import vst_render
+from ..render import smp_render, vst_render
 from ..mixmaster import kick_onsets_from_pattern
 
 # voices that keep playing in "lite" drum sections (no kick/snare/sub weight)
@@ -147,15 +147,27 @@ def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
         kind, name = LEAD_VOICES[voice]
         shifted = [dc_replace(n, pitch=min(127, max(0, n.pitch + semi)))
                    for n in notes]
-        if kind == "vst" and vst_render.SURGE_VST3.exists():
-            sig = as_stereo(vst_render.render_patch(shifted, tempo, name, bars,
-                                                    bar_beats, sr))
-        elif default_soundfont():
-            sf_name = name if kind == "sf" else "pads"
-            sig = as_stereo(render_riff_sf(shifted, tempo, sf_name, bars,
-                                           bar_beats, sr))
-        else:
-            continue
+        sig = None
+        # R32c: an "smp" voice plays the producer's REAL one-shot (repitched).
+        # If the asset is missing it declares a fallback voice and falls through
+        # to the Surge/SF path so local dev without the pack still renders.
+        if kind == "smp":
+            s = smp_render.render_riff_smp(shifted, tempo, name, bars,
+                                           bar_beats, sr)
+            if s.size:
+                sig = s
+            else:
+                kind, name = smp_render.SMP_VOICES[name][1]
+        if sig is None:
+            if kind == "vst" and vst_render.SURGE_VST3.exists():
+                sig = as_stereo(vst_render.render_patch(shifted, tempo, name,
+                                                        bars, bar_beats, sr))
+            elif default_soundfont():
+                sf_name = name if kind == "sf" else "pads"
+                sig = as_stereo(render_riff_sf(shifted, tempo, sf_name, bars,
+                                               bar_beats, sr))
+            else:
+                continue
         sig = sig * np.float32(10.0 ** (gain_db / 20.0))
         if out is None:
             out = sig.copy()
