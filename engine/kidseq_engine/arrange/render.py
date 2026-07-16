@@ -46,7 +46,7 @@ def _phrase_treatment(seed: int, sec_name: str, pi: int, prev: str,
     return "statement" if (t == prev and t != "statement") else t
 from ..render import fx, riff_audio
 from ..render.sf_render import default_soundfont, render_riff_sf
-from ..render import smp_render, vst_render
+from ..render import fx_samples, smp_render, vst_render
 from ..mixmaster import kick_onsets_from_pattern
 
 # voices that keep playing in "lite" drum sections (no kick/snare/sub weight)
@@ -1080,7 +1080,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
         # R28 (owner: "never have the swoosh going up and down over and
         # over"): sweep-family candy never fires twice in a row and is
         # capped at 2 per track — repeats remap to the menu's non-sweeps.
-        _SWEEP_KINDS = {"sweep_up", "sweep_down"}
+        # R32e: sampled sweep-family fx (smp_slide/smp_riser) join the cap.
+        _SWEEP_KINDS = {"sweep_up", "sweep_down"} | fx_samples.SAMPLED_SWEEP_KINDS
         sweeps_used = 0
         prev_sweep = False
         for pos, sname, b in _candy_slots(bounds, pal.earcandy_every, bar_s, sr):
@@ -1124,6 +1125,16 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 if sig.size:
                     _add_at(layers["fx"], sig, pos - sig.shape[0])
                 continue
+            # R32e: a producer's sampled fx one-shot (smp_*) plays its REAL
+            # sound; without the pack it remaps to the declared synth candy.
+            if kind.startswith("smp_"):
+                if fx_samples.fx_shot_available(drum_kit, kind):
+                    _add_at(layers["fx"],
+                            fx_samples.fx_shot(drum_kit, kind, bar_s, sr), pos)
+                    continue
+                kind = fx_samples.FX_FALLBACK.get(kind)
+                if not kind:
+                    continue
             sig = fx.candy_blip(kind, bar_s, sr,
                                 chirp_seed if kind == "sig_chirp"
                                 else seed + 900 + b)

@@ -66,6 +66,49 @@ MELODIC_MAP: dict[str, dict[str, str]] = {
 }
 MELODIC_TRIM_MS = 1400   # chops repitch per note; cap the ring
 
+# R32e FX section: producer -> fx kind (smp_*) -> candidate-map section. These
+# become the "fx" pack section, unpacked to assets/fx_oneshots/techhouse/
+# <producer>/<kind>.wav and played by the candy scheduler (breath-level, at
+# phrase boundaries) via fx_samples.fx_shot. Producers with no fx candidate
+# (pianohouse — MK is restrained) use the genre's synth FX unchanged.
+FX_MAP: dict[str, dict[str, str]] = {
+    "bassled":   {"smp_slide": "fx_sweep", "smp_rev": "fx_rev"},
+    "discofunk": {"smp_tom_zap": "tom_zap"},
+    "latin":     {"smp_rev_perk": "fx_rev", "smp_crowd": "crowd", "smp_perk": "perk"},
+    "lofi":      {"smp_rev_swell": "fx_rev"},
+    "bigroom":   {"smp_riser": "riser", "smp_impact": "impact", "smp_slide": "slide"},
+}
+FX_PEAK_DBFS = -18.0     # breath-level (Tumay ear-candy law)
+FX_TRIM_MS = 1600        # candy-sized; risers/crowd are ~3 s raw
+
+
+def _condition_fx(src: Path, trim_ms: int, peak_dbfs: float) -> bytes:
+    """Mono-sum + peak to a breath-level spec + 25 Hz HP + trim/fade. Returns
+    conditioned WAV bytes (the peak is baked so fx_shot just loads + fades)."""
+    import io
+
+    import numpy as np
+    from pedalboard import HighpassFilter, Pedalboard
+    from pedalboard.io import AudioFile
+
+    with AudioFile(str(src)) as f:
+        sr = int(f.samplerate)
+        audio = f.read(f.frames)
+    mono = audio.mean(axis=0)[np.newaxis, :]  # (1, n)
+    a = Pedalboard([HighpassFilter(cutoff_frequency_hz=25.0)])(mono, sr)
+    if trim_ms:
+        keep = min(a.shape[1], int(sr * trim_ms / 1000.0))
+        a = a[:, :keep].copy()
+        fade = min(keep, int(0.03 * sr))
+        if fade:
+            a[:, -fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
+    peak = float(np.max(np.abs(a))) or 1.0
+    a = a * (10.0 ** (peak_dbfs / 20.0) / peak)
+    buf = io.BytesIO()
+    with AudioFile(buf, "w", format="wav", samplerate=sr, num_channels=1) as w:
+        w.write(a.astype(np.float32))
+    return buf.getvalue()
+
 
 def _detect_root_hz(mono, sr: int) -> float:
     """Autocorrelation pitch of the post-attack sustain (ported from
@@ -179,6 +222,22 @@ def main() -> None:
             n_files += 1
             print(f"  [mel] {producer:10s} {name:9s} <- {Path(rel).name}  "
                   f"root={root:.1f}Hz")
+    # ---- FX section (R32e): sampled candy one-shots + baked peak_dbfs -------
+    for producer, kinds in FX_MAP.items():
+        key = f"techhouse:{producer}"
+        header["fx"][key] = {}
+        for kind, section in kinds.items():
+            cands = CAND.get(producer, {}).get(section)
+            assert cands, f"no candidates for {producer}/{section} (fx)"
+            rel = cands[0]
+            src = LIB / rel
+            assert src.exists(), f"missing fx pick: {src}"
+            raw = _condition_fx(src, FX_TRIM_MS, FX_PEAK_DBFS)
+            header["fx"][key][kind] = {"o": len(data), "n": len(raw), "g": 1.0,
+                                       "peak_dbfs": FX_PEAK_DBFS}
+            data.extend(raw)
+            n_files += 1
+            print(f"  [fx]  {producer:10s} {kind:12s} <- {Path(rel).name}")
     head = json.dumps(header, separators=(",", ":")).encode("utf-8")
     pack = DST / "producer_techhouse.pack"
     with open(pack, "wb") as f:
@@ -187,7 +246,8 @@ def main() -> None:
         f.write(bytes(data))
     n_drum = sum(len(v) for v in header["drums"].values())
     n_mel = sum(len(v) for v in header["melodic"].values())
-    print(f"\npacked {n_drum} drum + {n_mel} melodic voices ({n_files} total) "
+    n_fx = sum(len(v) for v in header["fx"].values())
+    print(f"\npacked {n_drum} drum + {n_mel} melodic + {n_fx} fx ({n_files} total) "
           f"-> {pack} ({pack.stat().st_size:,} bytes, {len(data):,} audio)")
 
 

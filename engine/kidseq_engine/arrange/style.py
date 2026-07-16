@@ -606,10 +606,17 @@ _PRODUCER_FILL_DEFAULT: list[int] = [0, 2, 4]
 _PRODUCER_SWELL: dict[str, tuple[list, list | None]] = {
     "lofi": (["reverb", None], [0.60, 0.40]),
 }
+# R32e: each producer's ear-candy menu now leads with its SAMPLED fx one-shots
+# (smp_*, played by fx_samples.fx_shot; remap to the synth kind when the pack is
+# absent). smp_slide/smp_riser are sweep-family (R28 cap applies). pianohouse
+# stays restrained (MK) — a subtle hat lift only, no sampled fx.
 _PRODUCER_CANDY: dict[str, tuple] = {
-    "lofi": ("rev_swell_riff",),
-    "latin": ("hat_lift", "sweep_up"),
-    "bigroom": ("sweep_up", "hat_lift", "sweep_down"),
+    "bassled": ("smp_slide", "smp_rev", "hat_lift"),
+    "discofunk": ("smp_tom_zap", "hat_lift"),
+    "latin": ("smp_crowd", "smp_perk", "smp_rev_perk", "hat_lift"),
+    "lofi": ("smp_rev_swell", "rev_swell_riff"),
+    "bigroom": ("smp_riser", "smp_impact", "smp_slide", "hat_lift"),
+    "pianohouse": ("hat_lift",),
 }
 # stack weights for the LEGACY techhouse fallback bank only (producer banks
 # draw uniform); kept because the renderability walk requires a per-genre bank
