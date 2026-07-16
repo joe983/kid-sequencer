@@ -1,0 +1,341 @@
+{
+ "_README": "Triage candidates for the garage producers. Paths relative to LIB (KIDSEQ_SAMPLE_LIB / owner's sample library). First entry per section = the triage top pick (de-duplicated so producers get DISTINCT slot-0 picks); the rest are a farthest-point diverse spread to swap. Regenerate: python tools/producer_triage.py --genre garage  (reconstructed ranker — owner corrects by ear at the audition step).",
+ "candidates": {
+  "virji": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_11.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP4.WAV",
+    "Roland-TR-909/Roland TR-909/STAT0S3.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S7.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 116.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL3.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/BT7A0DA.WAV",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 044.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 007.wav"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/OPCL4.WAV",
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/RIM127.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S7.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_07.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Ride/VEH1 Ride - 05.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 151.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 59.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 167.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Reverse Cymbal/VEH1 Reverse Cymbal - 05.wav"
+   ],
+   "chop": [
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-22.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-10.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-16.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-31.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-86.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-71.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-3.wav"
+   ],
+   "horn": [
+    "musicradar-rave-samples/FX/Mad_Riser.wav",
+    "musicradar-rave-samples/DrumHits/ClosedHat07.wav",
+    "musicradar-rave-samples/DrumHits/Dit01.wav",
+    "musicradar-rave-samples/DrumHits/Kick16.wav",
+    "musicradar-rave-samples/DrumHits/BreakBeat_Slice28.wav",
+    "musicradar-rave-samples/FX/Sweep01.wav",
+    "musicradar-rave-samples/DrumHits/Cymbal02.wav"
+   ],
+   "rev": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 91.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 62.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 86.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Scratchy/VEH1 Scratchy - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 59.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Hallkicks/VEH1 Hallkick - 10.wav"
+   ]
+  },
+  "breakz": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_21.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR13.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR29.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR20.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR42.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR26.wav"
+   ],
+   "snare": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR46.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR26.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_21.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_05.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR24.wav"
+   ],
+   "hatC": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_09.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR46.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR29.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR26.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR42.wav",
+    "WuTang_DRUMS_ BREAKS/RZABR24.wav"
+   ],
+   "break": [
+    "Malice in Wonderland/breaks/43- dynamite1_wav.wav",
+    "Malice in Wonderland/breaks/186- space funk1_wav.wav",
+    "Malice in Wonderland/breaks/99- IM A MAN_WAV.wav",
+    "Malice in Wonderland/breaks/226- youre getting a little too smart_wav.wav",
+    "musicradar-rave-samples/DrumHits/BreakBeat_Slice35.wav",
+    "Malice in Wonderland/breaks/59- funny girl_wav.wav",
+    "Malice in Wonderland/breaks/60- gameoflove_wav.wav"
+   ],
+   "chop": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 100.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 162.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-75.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 011.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 108.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 046.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-16.wav"
+   ],
+   "dub": [
+    "musicradar-rave-samples/FX/Crowd01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "musicradar-rave-samples/FX/Lazer07.wav",
+    "musicradar-rave-samples/FX/Sweep02.wav",
+    "musicradar-rave-samples/FX/Skidd02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_05.wav",
+    "musicradar-rave-samples/FX/Stretcher01.wav"
+   ]
+  },
+  "sunny": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_19.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 090.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 054.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 105.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 103.wav"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 213.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 217.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 158.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 108.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 048.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 155.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 203.wav"
+   ],
+   "hatC": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_12.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_06.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_14.wav"
+   ],
+   "shaker": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_47.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_07.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_12.wav"
+   ],
+   "chop": [
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-92.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-10.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-16.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-86.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-48.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-71.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-3.wav"
+   ],
+   "siren": [
+    "musicradar-rave-samples/FX/Paddy01.wav",
+    "musicradar-rave-samples/FX/Lazer07.wav",
+    "musicradar-rave-samples/FX/Sweep02.wav",
+    "musicradar-rave-samples/FX/Mad_Roll01.wav",
+    "musicradar-rave-samples/FX/Slam02.wav",
+    "musicradar-rave-samples/FX/Lazer06.wav",
+    "musicradar-rave-samples/FX/Sweep01.wav"
+   ],
+   "riser": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 18.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 62.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 86.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 03.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Hallkicks/VEH1 Hallkick - 04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Scratchy/VEH1 Scratchy - 09.wav"
+   ]
+  },
+  "niche": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_14.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP4.WAV",
+    "Roland-TR-909/Roland TR-909/STAT3S3.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "Roland-TR-909/Roland TR-909/ST0T3SA.WAV"
+   ],
+   "clap": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 183.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL1.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/BT7A0DA.WAV",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 044.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/VEH1 Snares & Claps - 170.wav"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/CLOP2.WAV",
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/RIM127.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S7.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_07.wav"
+   ],
+   "hatO": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Open Hihat/VEH1 Open Hihat - 019.wav",
+    "Roland-TR-909/Roland TR-909/BTAA0D7.WAV",
+    "Roland-TR-909/Roland TR-909/STAT0S0.WAV",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Reverse Cymbal/VEH1 Reverse Cymbal - 05.wav",
+    "Roland-TR-909/Roland TR-909/OPCL1.WAV",
+    "Roland-TR-909/Roland TR-909/LT0D0.WAV",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Closed Hihat/VEH1 Closed Hihat - 57.wav"
+   ],
+   "stab": [
+    "musicradar-rave-samples/DrumHits/Dit02.wav",
+    "musicradar-rave-samples/DrumHits/ClosedHat07.wav",
+    "musicradar-rave-samples/DrumHits/BreakBeat_Slice11.wav",
+    "musicradar-rave-samples/DrumHits/Cymbal02.wav",
+    "musicradar-rave-samples/DrumHits/Kick16.wav",
+    "musicradar-rave-samples/DrumHits/Dit06.wav",
+    "musicradar-rave-samples/DrumHits/Dit01.wav"
+   ],
+   "impact": [
+    "musicradar-rave-samples/FX/Riser.wav",
+    "musicradar-rave-samples/FX/Lazer07.wav",
+    "musicradar-rave-samples/FX/Lazer01.wav",
+    "musicradar-rave-samples/FX/Sweep01.wav",
+    "musicradar-rave-samples/FX/Bass_Fart01.wav",
+    "musicradar-rave-samples/FX/Lazer03.wav",
+    "musicradar-rave-samples/FX/Mad_Riser.wav"
+   ]
+  },
+  "sincere": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_13.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/RIDED0.WAV",
+    "Roland-TR-909/Roland TR-909/STATAS3.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL2.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3SA.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav"
+   ],
+   "snare": [
+    "Roland-TR-909/Roland TR-909/STATAS3.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP4.WAV",
+    "Roland-TR-909/Roland TR-909/BT7A0DA.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3SA.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/OPCL1.WAV",
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/RIM127.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S7.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_07.wav"
+   ],
+   "chop": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 051.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 162.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-75.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 011.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 108.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/VEH1 Cutted Sounds - 046.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-16.wav"
+   ],
+   "swell": [
+    "musicradar-rave-samples/FX/Planecrash.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 62.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 14.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Scratchy/VEH1 Scratchy - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 15.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 17.wav"
+   ]
+  },
+  "dusk": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_06.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP4.WAV",
+    "Roland-TR-909/Roland TR-909/STAT0S3.WAV",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T3S7.WAV"
+   ],
+   "clap": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_15.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_07.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_12.wav"
+   ],
+   "hatC": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_17.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_06.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_02.wav"
+   ],
+   "chop": [
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-103.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-75.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-16.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-86.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-48.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-3.wav",
+    "musicradar-carnival-rave-samples/Vox slices/Zena Kitt vox slices-71.wav"
+   ],
+   "riser": [
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 23.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 62.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Slides/VEH1 Slides - 09.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 03.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 FX/VEH1 FX - 86.wav",
+    "musicradar-rave-samples/FX/Slam02.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/VEH1 Reverse/VEH1 Reverse - 29.wav"
+   ]
+  }
+ }
+}

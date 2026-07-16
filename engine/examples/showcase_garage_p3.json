@@ -1,0 +1,70 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 1,
+        "start": 0,
+        "len": 1
+      },
+      {
+        "row": 0,
+        "start": 1,
+        "len": 1
+      },
+      {
+        "row": 2,
+        "start": 2,
+        "len": 1
+      },
+      {
+        "row": 1,
+        "start": 3,
+        "len": 1
+      },
+      {
+        "row": 0,
+        "start": 4,
+        "len": 2
+      },
+      {
+        "row": 2,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 1,
+        "start": 8,
+        "len": 1
+      },
+      {
+        "row": 0,
+        "start": 9,
+        "len": 1
+      },
+      {
+        "row": 3,
+        "start": 10,
+        "len": 2
+      },
+      {
+        "row": 1,
+        "start": 12,
+        "len": 1
+      },
+      {
+        "row": 0,
+        "start": 13,
+        "len": 1
+      },
+      {
+        "row": 2,
+        "start": 14,
+        "len": 2
+      }
+    ]
+  },
+  "key": "G",
+  "tempo": 130,
+  "instrument": "bells",
+  "drumStyle": "garage"
+}

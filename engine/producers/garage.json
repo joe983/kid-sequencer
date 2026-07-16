@@ -1,0 +1,108 @@
+{
+  "genre": "garage",
+  "tempo": 133,
+  "pack": "producer_garage.pack",
+  "candidates_file": "tools/producer_candidates/garage.json",
+  "_note": "UK Garage producer strains (owner-approved 2026-07-16): virji=Sammy Virji, breakz=Interplanetary Criminal, sunny=Conducta, niche=Silva Bumpa, sincere=MJ Cole, dusk=salute. Signatures: engine/docs/producer_signatures_garage.md. Distinct per-producer KICK targets + triage de-dup drive drum-kit distinctness (the gate compares drums). recipe globs are relative to the owner's sample LIB; triage ranks + owner corrects by ear at the audition step. gate thresholds are PLACEHOLDERS — pin below the first observed Modal matrix minima.",
+  "producers": ["virji", "breakz", "sunny", "niche", "sincere", "dusk"],
+  "legend": {
+    "virji": "Sammy Virji",
+    "breakz": "Interplanetary Criminal",
+    "sunny": "Conducta",
+    "niche": "Silva Bumpa",
+    "sincere": "MJ Cole",
+    "dusk": "salute"
+  },
+  "build": {
+    "drum_map": {
+      "virji":   {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"},
+      "breakz":  {"kick": "kick", "snare": "snare", "hatC": "hatC", "perc": "break"},
+      "sunny":   {"kick": "kick", "clap": "clap", "hatC": "hatC", "shaker": "shaker"},
+      "niche":   {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"},
+      "sincere": {"kick": "kick", "snare": "snare", "hatC": "hatC"},
+      "dusk":    {"kick": "kick", "clap": "clap", "hatC": "hatC"}
+    },
+    "melodic_map": {
+      "virji":   {"chop": "chop"},
+      "breakz":  {"chop": "chop"},
+      "sunny":   {"chop": "chop"},
+      "niche":   {"stab": "stab"},
+      "sincere": {"chop": "chop"},
+      "dusk":    {"chop": "chop"}
+    },
+    "fx_map": {
+      "virji":   {"smp_horn": "horn", "smp_rev": "rev"},
+      "breakz":  {"smp_dub": "dub"},
+      "sunny":   {"smp_siren": "siren", "smp_riser": "riser"},
+      "niche":   {"smp_impact": "impact"},
+      "sincere": {"smp_swell": "swell"},
+      "dusk":    {"smp_riser": "riser"}
+    },
+    "trims_ms": {"sunny:shaker": 260, "breakz:perc": 600},
+    "melodic_trim_ms": 1400,
+    "fx_peak_dbfs": -18.0,
+    "fx_trim_ms": 1600
+  },
+  "gate": {"tempo": 133, "t_drums": 2.0, "t_base": 1.5},
+  "battery": {
+    "base": 4000,
+    "pairs": [
+      {"input": "examples/showcase_garage_p1.json", "producer": "virji"},
+      {"input": "examples/showcase_garage_p2.json", "producer": "breakz"},
+      {"input": "examples/showcase_garage_p3.json", "producer": "sunny"},
+      {"input": "examples/showcase_garage_p4.json", "producer": "niche"},
+      {"input": "examples/showcase_garage_p5.json", "producer": "sincere"},
+      {"input": "examples/showcase_garage_p6.json", "producer": "dusk"}
+    ]
+  },
+  "recipe": {
+    "virji": {
+      "kick":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 120, "centroid_hz": 200, "band": "low", "tonalness": "low"}},
+      "clap":  {"banks": ["AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/**/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 170, "centroid_hz": 1900, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 55, "centroid_hz": 9000, "band": "hi", "tonalness": "low"}},
+      "hatO":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/**/*.wav"], "target": {"decay_ms": 280, "centroid_hz": 7000, "band": "hi", "tonalness": "low"}},
+      "chop":  {"banks": ["musicradar-carnival-rave-samples/Vox slices/*.wav"], "target": {"decay_ms": 480, "centroid_hz": 1500, "band": "mid", "tonalness": "high"}},
+      "horn":  {"banks": ["musicradar-rave-samples/FX/*.wav", "musicradar-rave-samples/DrumHits/*.wav"], "target": {"decay_ms": 700, "centroid_hz": 1400, "band": "mid", "tonalness": "high"}},
+      "rev":   {"banks": ["musicradar-rave-samples/FX/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/**/*.wav"], "target": {"decay_ms": 1400, "centroid_hz": 3000, "band": "hi", "tonalness": "low"}}
+    },
+    "breakz": {
+      "kick":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "WuTang_DRUMS_ BREAKS/**/*.wav"], "target": {"decay_ms": 140, "centroid_hz": 160, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "WuTang_DRUMS_ BREAKS/**/*.wav"], "target": {"decay_ms": 220, "centroid_hz": 1500, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "WuTang_DRUMS_ BREAKS/**/*.wav"], "target": {"decay_ms": 65, "centroid_hz": 7500, "band": "hi", "tonalness": "low"}},
+      "break": {"banks": ["musicradar-rave-samples/DrumHits/BreakBeat_Slice*.wav", "Malice in Wonderland/breaks/**/*.wav"], "target": {"decay_ms": 450, "centroid_hz": 2200, "band": "mid", "tonalness": "low"}},
+      "chop":  {"banks": ["musicradar-carnival-rave-samples/Vox slices/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/**/*.wav"], "target": {"decay_ms": 380, "centroid_hz": 900, "band": "mid", "tonalness": "high"}},
+      "dub":   {"banks": ["musicradar-rave-samples/FX/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav"], "target": {"decay_ms": 900, "centroid_hz": 1800, "band": "mid", "tonalness": "low"}}
+    },
+    "sunny": {
+      "kick":   {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/**/*.wav"], "target": {"decay_ms": 110, "centroid_hz": 230, "band": "low", "tonalness": "low"}},
+      "clap":   {"banks": ["Roland TR-808/CP/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/**/*.wav"], "target": {"decay_ms": 190, "centroid_hz": 2100, "band": "mid", "tonalness": "low"}},
+      "hatC":   {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 50, "centroid_hz": 9500, "band": "hi", "tonalness": "low"}},
+      "shaker": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/*.wav"], "target": {"decay_ms": 120, "centroid_hz": 6500, "band": "hi", "tonalness": "low"}},
+      "chop":   {"banks": ["musicradar-carnival-rave-samples/Vox slices/*.wav"], "target": {"decay_ms": 420, "centroid_hz": 2000, "band": "hi", "tonalness": "high"}},
+      "siren":  {"banks": ["musicradar-rave-samples/FX/*.wav"], "target": {"decay_ms": 1200, "centroid_hz": 1600, "band": "mid", "tonalness": "high"}},
+      "riser":  {"banks": ["musicradar-rave-samples/FX/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/**/*.wav"], "target": {"decay_ms": 1500, "centroid_hz": 4000, "band": "hi", "tonalness": "low"}}
+    },
+    "niche": {
+      "kick":   {"banks": ["Roland-TR-909/**/*.wav", "Roland TR-808/BD/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav"], "target": {"decay_ms": 160, "centroid_hz": 150, "band": "low", "tonalness": "low"}},
+      "clap":   {"banks": ["Roland-TR-909/**/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/**/*.wav"], "target": {"decay_ms": 160, "centroid_hz": 1700, "band": "mid", "tonalness": "low"}},
+      "hatC":   {"banks": ["Roland-TR-909/**/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 60, "centroid_hz": 8000, "band": "hi", "tonalness": "low"}},
+      "hatO":   {"banks": ["Roland-TR-909/**/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/**/*.wav"], "target": {"decay_ms": 300, "centroid_hz": 6500, "band": "hi", "tonalness": "low"}},
+      "stab":   {"banks": ["musicradar-rave-samples/DrumHits/*.wav", "[VB] Hyperfunk/**/*.wav"], "target": {"decay_ms": 320, "centroid_hz": 900, "band": "mid", "tonalness": "high"}},
+      "impact": {"banks": ["musicradar-rave-samples/FX/*.wav"], "target": {"decay_ms": 500, "centroid_hz": 300, "band": "low", "tonalness": "low"}}
+    },
+    "sincere": {
+      "kick":  {"banks": ["Roland-TR-909/**/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav"], "target": {"decay_ms": 160, "centroid_hz": 130, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 180, "centroid_hz": 1400, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 55, "centroid_hz": 8500, "band": "hi", "tonalness": "low"}},
+      "chop":  {"banks": ["musicradar-carnival-rave-samples/Vox slices/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cutted Sounds/**/*.wav"], "target": {"decay_ms": 600, "centroid_hz": 1000, "band": "mid", "tonalness": "high"}},
+      "swell": {"banks": ["musicradar-rave-samples/FX/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/**/*.wav"], "target": {"decay_ms": 1600, "centroid_hz": 2000, "band": "mid", "tonalness": "high"}}
+    },
+    "dusk": {
+      "kick":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 190, "centroid_hz": 120, "band": "low", "tonalness": "low"}},
+      "clap":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "Roland TR-808/CP/*.wav"], "target": {"decay_ms": 210, "centroid_hz": 1500, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 70, "centroid_hz": 7000, "band": "hi", "tonalness": "low"}},
+      "chop":  {"banks": ["musicradar-carnival-rave-samples/Vox slices/*.wav"], "target": {"decay_ms": 700, "centroid_hz": 1300, "band": "mid", "tonalness": "high"}},
+      "riser": {"banks": ["musicradar-rave-samples/FX/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 FX/**/*.wav"], "target": {"decay_ms": 1800, "centroid_hz": 3500, "band": "hi", "tonalness": "low"}}
+    }
+  }
+}

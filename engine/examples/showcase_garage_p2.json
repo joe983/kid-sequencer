@@ -1,0 +1,25 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 7,
+        "start": 0,
+        "len": 4
+      },
+      {
+        "row": 7,
+        "start": 8,
+        "len": 2
+      },
+      {
+        "row": 6,
+        "start": 12,
+        "len": 4
+      }
+    ]
+  },
+  "key": "Am",
+  "tempo": 132,
+  "instrument": "bass",
+  "drumStyle": "garage"
+}
