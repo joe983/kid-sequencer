@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=61">
+<link rel="stylesheet" href="css/styles.css?v=62">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -85,6 +85,12 @@
 <rect fill="white" height="2.4" rx="0.4" width="3" x="8.4" y="15.4"></rect>
 <rect fill="white" height="2.4" rx="0.4" width="6" x="8.4" y="18.6" opacity="0.55"></rect>
 <circle cx="17.5" cy="11.6" fill="white" r="0.85"></circle>
+</svg></span></button>
+<button aria-label="Lessons" class="bigBtn iconBtn" id="lessonsBtn" onclick="goToLessons()" title="Lessons"><span class="icon lessonsIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
+<path d="M12 3 L23 8 L12 13 L1 8 Z" fill="currentColor"></path>
+<path d="M4.5 10 v4.2 c0 1.6 3.4 2.8 7.5 2.8 s7.5-1.2 7.5-2.8 V10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+<line x1="23" y1="8" x2="23" y2="15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></line>
+<circle cx="23" cy="16.6" r="1.4" fill="currentColor"></circle>
 </svg></span></button>
 </div>
 <div class="topBarSpacer" aria-hidden="true"></div>
@@ -3039,6 +3045,11 @@ function buildTools(){
 let noteLayerEls = [];
 let nextId = 1;
 
+// Columns per beat: a beat (quarter) spans stepDiv grid columns in learning
+// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th). Beat numbers
+// 1..N label each beat's first cell (faded, behind notes — see .beatNum CSS).
+const COLS_PER_BEAT = (LEARN_LEVEL && LEARN_LEVEL.stepDiv) ? LEARN_LEVEL.stepDiv : 4;
+
 function buildGrid(){
   sequencerEl.innerHTML = "";
   noteLayerEls = [];
@@ -3060,6 +3071,14 @@ function buildGrid(){
       cell.className = "cell";
       cell.onmousedown = (e) => e.preventDefault();
       cell.onclick = () => onCellClick(r, c);
+      // Beat number in the top row's beat-start cells (faded grey, pointer-none,
+      // sits behind note blocks so it shows only on empty beats).
+      if(r === 0 && c % COLS_PER_BEAT === 0){
+        const bn = document.createElement("span");
+        bn.className = "beatNum";
+        bn.textContent = String(c / COLS_PER_BEAT + 1);
+        cell.appendChild(bn);
+      }
       grid.appendChild(cell);
     }
 
@@ -5518,22 +5537,33 @@ function _playPatternOnce(pattern, cb){
 
 // ---------- hearts / mascot / hand / chrome ----------
 function _lessonPulseStep(s){
-  if(s % 2 === 0){
-    const h = _heartEls[s / 2];
+  if(s % COLS_PER_BEAT === 0){
+    const h = _heartEls[s / COLS_PER_BEAT];
     if(h){ h.classList.remove("beat"); void h.offsetWidth; h.classList.add("beat"); }
+    if(_mascotEl){ _mascotEl.classList.remove("bob"); void _mascotEl.offsetWidth; _mascotEl.classList.add("bob"); }
   }
-  if(_mascotEl && s % 2 === 0){ _mascotEl.classList.remove("bob"); void _mascotEl.offsetWidth; _mascotEl.classList.add("bob"); }
 }
 function _buildHearts(){
   const shell = document.getElementById("sequencerShell");
   const stave = document.getElementById("stavePanel");
   const row = document.createElement("div");
   row.id = "heartbeatRow";
+  // Same column geometry as a grid row (repeat(cols, cell) + gap), so each
+  // heart sits exactly under its beat's cells (owner feedback: hearts inline
+  // with beats 1-2-3-4). Widths reference the LIVE --cell/--gap vars (not the
+  // stale JS CELL/GAP, which aren't final when _buildHearts runs pre-layout),
+  // so the row tracks the grid as fitToViewport resizes cells. Centred by the
+  // CSS `margin: auto`. Each heart spans COLS_PER_BEAT columns, centred.
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+  row.style.columnGap = "var(--gap)";
+  row.style.width = `calc(var(--cell) * ${cols} + var(--gap) * ${cols - 1})`;
   _heartEls = [];
-  for(let b = 0; b < cols / 2; b++){
+  for(let b = 0; b < cols / COLS_PER_BEAT; b++){
     const h = document.createElement("span");
     h.className = "lessonHeart";
     h.textContent = "❤";
+    h.style.gridColumn = `${b * COLS_PER_BEAT + 1} / span ${COLS_PER_BEAT}`;
     row.appendChild(h);
     _heartEls.push(h);
   }
@@ -5551,13 +5581,20 @@ function _buildChrome(){
     prog.appendChild(s);
   });
   page.appendChild(prog);
-  // forgiving exit door: saves the exact step, no confirm dialog
+  // Forgiving home button — matches the play button and sits right after Stop
+  // in the controls row (owner feedback). Saves the exact step, no confirm.
   const exit = document.createElement("button");
   exit.id = "lessonExit";
-  exit.setAttribute("aria-label", "Leave lesson");
-  exit.textContent = "🏠";
+  exit.className = "bigBtn iconBtn";
+  exit.setAttribute("aria-label", "Home");
+  exit.title = "Home";
+  exit.innerHTML = '<span class="icon"><svg aria-hidden="true" viewBox="0 0 24 24">'
+    + '<path d="M12 3 L21.5 11.2 a1 1 0 0 1 -0.65 1.75 H19 v6.2 a1 1 0 0 1 -1 1 h-3.4 v-5.2 h-3.2 v5.2 H7 a1 1 0 0 1 -1 -1 v-6.2 H3.15 a1 1 0 0 1 -0.65 -1.75 Z" fill="currentColor"/>'
+    + '</svg></span>';
   exit.onclick = () => { _saveResume(); window.location.href = "./"; };
-  page.appendChild(exit);
+  const stopBtn = document.querySelector('#controls button[aria-label="Stop"]');
+  if(stopBtn && stopBtn.parentNode) stopBtn.parentNode.insertBefore(exit, stopBtn.nextSibling);
+  else page.appendChild(exit);
   // mascot + speech bubble (tap mascot = replay current instruction).
   // The mascot IS the logo robot — a bubble-free extract of images/robot.svg
   // with the mouth split into its own path (.mMouthR) so CSS can animate it
@@ -5646,22 +5683,63 @@ function _setupGrid(st){
 }
 
 // ---------- idle nudges & ghosts ----------
+// Learning tools carry no text (svg/glyph only), so match by kind via the
+// active toolSteps order rather than textContent.
+function _toolEl(kind){
+  const tools = [...toolsListEl.querySelectorAll(".tool")];
+  const idx = (LEARN_LEVEL ? LEARN_LEVEL.toolSteps : []).findIndex(t => t.kind === kind);
+  return (idx >= 0 && tools[idx]) ? tools[idx] : document.getElementById("tools");
+}
 function _armIdle(st){
   if(_idleT) clearTimeout(_idleT);
-  if(_idleFires >= 3) return;
   _idleT = setTimeout(() => {
     if(!_lessonRunning || (_stepPhase !== "building" && _stepPhase !== "ready")) return;
     _idleFires++;
+    // Terminus: never leave a child stuck. If the answer is already built,
+    // auto-press play; otherwise the demo hand finishes it and we move on.
+    if(_idleFires >= 4){
+      if(_stepPhase === "ready"){ const pb = _playBtnEl(); if(pb) pb.click(); }
+      else _assistComplete(st);
+      return;
+    }
     _say(st.narr);
     let el = null;
     if(_stepPhase === "ready") el = _playBtnEl();
-    else if(st.nudge === "tool-eighth"){
-      el = [...toolsListEl.querySelectorAll(".tool")].find(t => t.textContent.includes("8th")) || document.getElementById("tools");
-    }
+    else if(st.nudge === "tool-eighth") el = _toolEl("eighth");
+    else if(st.nudge === "tool-quarter") el = _toolEl("quarter");
     else el = document.getElementById("sequencer");
     if(el){ el.classList.remove("lessonNudge"); void el.offsetWidth; el.classList.add("lessonNudge"); _lt(() => el.classList.remove("lessonNudge"), 2600); }
     _armIdle(st);
-  }, 9000);
+  }, 8000);
+}
+// Shared demo-hand assist: complete the current build step FOR the child and
+// advance (assisted = costs a star). Called from the miss ladder AND the idle
+// terminus, so a stuck child is never dead-ended (owner feedback: a3 got stuck
+// after the timeout with no way forward).
+function _assistComplete(st){
+  _clearStepTimers();
+  _clearGhosts();
+  if(_idleT){ clearTimeout(_idleT); _idleT = null; }
+  _stepPhase = "assist";
+  _say("g_help", async () => {
+    if(st.target){
+      const res = _evalPass(st.pass, st.target);
+      for(const id of res.extraIds){
+        for(let r = 0; r < rows; r++) if(notesByRow[r].some(n => n.id === id)){ deleteNoteById(r, id); redrawRowNotes(r); }
+      }
+      const res2 = _evalPass(st.pass, st.target);
+      await _handBuild(res2.missing);
+    }else{
+      const wanted = [];
+      const needK = (st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
+      for(let b = 0; b < cols / 2 && wanted.length < (st.pass.minNotes || 1); b++){
+        if(occ[0][b*2] === null && occ[0][b*2+1] === null) wanted.push({ row: 0, start: b*2, len: 2, kind: needK });
+      }
+      await _handBuild(wanted);
+    }
+    _stepPhase = "idle";
+    _internalPlay(cols, () => _say(_yayKey(), () => _advance(true)));
+  });
 }
 function _ghostHint(missing){
   for(const n of missing){
@@ -5776,6 +5854,38 @@ function _stepDemo(st){
     });
   });
 }
+// A mini picture of a pattern for the which-one cards: real note BLOCKS (a
+// quarter = one solid block spanning its beat with ♩; an eighth pair = a
+// segmented block with ♫) instead of raw filled squares — so a quarter never
+// reads as two eighth cells (owner feedback: a2 options both looked like 8ths).
+function _miniOfPattern(opt){
+  const mini = document.createElement("div");
+  mini.className = "lessonMini";
+  for(let r = 0; r < rows; r++){
+    const track = document.createElement("div");
+    track.className = "lessonMiniRow";
+    track.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+    for(let c = 0; c < cols; c++){
+      const bg = document.createElement("span");
+      bg.className = "miniBg";
+      track.appendChild(bg);
+    }
+    for(const n of opt.filter(x => x.row === r)){
+      const blk = document.createElement("div");
+      blk.className = "miniBlock";
+      blk.dataset.kind = n.kind || "quarter";
+      blk.style.gridColumn = `${n.start + 1} / span ${n.len}`;
+      blk.style.backgroundColor = rowColors[r];
+      const g = document.createElement("span");
+      g.className = "miniGlyph";
+      g.textContent = NOTE_GLYPHS[n.kind] || "♩";
+      blk.appendChild(g);
+      track.appendChild(blk);
+    }
+    mini.appendChild(track);
+  }
+  return mini;
+}
 function _stepWhich(st){
   _stepPhase = "overlay";
   _setupGrid({});
@@ -5789,23 +5899,7 @@ function _stepWhich(st){
   st.options.forEach((opt, idx) => {
     const card = document.createElement("button");
     card.className = "lessonCard";
-    const mini = document.createElement("div");
-    mini.className = "lessonMini";
-    mini.style.setProperty("--miniRows", String(rows));
-    for(let r = 0; r < rows; r++){
-      for(let c = 0; c < cols; c++){
-        const mc = document.createElement("span");
-        mc.className = "miniCell";
-        const note = opt.find(n => n.row === r && c >= n.start && c < n.start + n.len);
-        if(note){
-          mc.classList.add("on");
-          if(note.kind === "eighth") mc.classList.add("split");
-          mc.style.background = rowColors[r];
-        }
-        mini.appendChild(mc);
-      }
-    }
-    card.appendChild(mini);
+    card.appendChild(_miniOfPattern(opt));
     card.onclick = () => {
       if(idx === st.answer){
         card.classList.add("correct");
@@ -5866,26 +5960,7 @@ function _onUserPlayEnd(){
   }else if(_stepMisses >= 3){
     // Demo-hand terminus: the child who never solves it still gets the
     // celebration and forward motion (complete no-dead-end guarantee).
-    _say("g_help", async () => {
-      _clearGhosts();
-      if(st.target){
-        for(const id of res.extraIds){
-          for(let r = 0; r < rows; r++) if(notesByRow[r].some(n => n.id === id)){ deleteNoteById(r, id); redrawRowNotes(r); }
-        }
-        const res2 = _evalPass(st.pass, st.target);
-        await _handBuild(res2.missing);
-      }else{
-        // count-based step: hand places simple valid notes to satisfy it
-        const wanted = [];
-        const needK = (st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
-        for(let b = 0; b < cols / 2 && wanted.length < (st.pass.minNotes || 1); b++){
-          if(occ[0][b*2] === null && occ[0][b*2+1] === null) wanted.push({ row: 0, start: b*2, len: 2, kind: needK });
-        }
-        await _handBuild(wanted);
-      }
-      _stepPhase = "idle";
-      _internalPlay(cols, () => _say(_yayKey(), () => _advance(true)));
-    });
+    _assistComplete(st);
   }else{
     _say("g_try");
   }
@@ -6032,9 +6107,23 @@ function init(){
    This is intentionally additive: UI + behaviour remain exactly the same.
 */
 
+// Mortar-board button on the main sequencer → Rhythm Trail lessons. Resumes an
+// in-progress lesson if there is one, else starts at the beginning (a1). (No
+// lesson-map UI yet — the MVP is a linear chain, so a1 is the entry point.)
+function goToLessons(){
+  let dest = "a1";
+  try{
+    const p = JSON.parse(localStorage.getItem("kidseq_lessons"));
+    const r = p && p.resume && Object.keys(p.resume)[0];
+    if(r) dest = r;
+  }catch(e){}
+  window.location.href = "?lesson=" + dest;
+}
+
 // Inline-handler globals (used by existing HTML attributes)
 window.play = play;
 window.stop = stop;
+window.goToLessons = goToLessons;
 window.clearGrid = clearGrid;
 window.undo = undo;
 window.openCameraModal = openCameraModal;

@@ -68,9 +68,11 @@
         title: "Running Notes", band: "A", unit: 1, next: "a4",
         level: ONE_ROW, palette: ["quarter", "eighth"],
         steps: [
+          // Demo FIRST — the child sees a running note before being asked to
+          // make one (sound-before-symbol; avoids a cold ask for a new tool).
+          { type: "demo", narr: "a3_demo", chant: "chant_tatiti", pattern: TA_TITI },
           { type: "build", narr: "a3_touch", preset: [ta(0,0), ta(0,1)],
             pass: { kind: "count", minNotes: 3, use: { eighth: 1 } }, nudge: "tool-eighth" },
-          { type: "demo", narr: "a3_demo", chant: "chant_tatiti", pattern: TA_TITI },
           { type: "which", narr: "a3_which", options: [TA_TITI, TTTT], answer: 0 },
           { type: "build", narr: "a3_copy", target: TA_TITI,
             pass: { kind: "match", shifted: true } },
