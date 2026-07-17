@@ -2879,6 +2879,55 @@ html.js-loading #contentWrap{
   box-shadow: 0 5px 0 rgba(0,0,0,0.3);
 }
 
+/* ---- stave reveal popup (a5): in front of everything, up high, with an X ---- */
+#lessonStavePopup{
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 46;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+}
+#lessonStavePopup.show{ opacity: 1; transform: translateX(-50%) translateY(0); }
+.lessonStaveCard{
+  position: relative;
+  background: #fffdf5;
+  border: 5px solid #1d1d1d;
+  border-radius: 26px;
+  box-shadow: 0 10px 0 rgba(0,0,0,0.28);
+  padding: 30px 40px 34px;
+  width: min(880px, 78vw);
+}
+.lessonStaveTitle{
+  font-family: Arial, sans-serif;
+  font-size: 40px;
+  font-weight: 900;
+  color: #1d1d1d;
+  text-align: center;
+  margin-bottom: 14px;
+}
+.lessonStaveHost{ background: #fff; border-radius: 14px; }
+.lessonStaveHost svg{ width: 100%; height: auto; display: block; }
+.lessonStaveClose{
+  position: absolute;
+  top: -22px;
+  right: -22px;
+  width: 64px;
+  height: 64px;
+  background: #ff5166;
+  color: #fff;
+  border: 5px solid #1d1d1d;
+  border-radius: 999px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.28);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lessonStaveClose svg{ width: 30px; height: 30px; }
+.lessonStaveClose:active{ transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.28); }
+
 /* confetti (lesson complete; <=2s, non-blocking) */
 #lessonConfetti{
   position: absolute;

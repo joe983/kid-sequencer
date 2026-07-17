@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=65">
+<link rel="stylesheet" href="css/styles.css?v=66">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -5362,6 +5362,7 @@ let _idleFires = 0;
 let _narrAudio = null;         // the <audio> narration element (silent-switch-immune)
 let _narrT = null;
 let _saidPress = false;        // "press play!" said once per step
+let _saidRest = false;         // rest-violation hint said once per step
 let _heartEls = [];
 let _mascotEl = null, _handEl = null, _overlayEl = null;
 let _instrEl = null;           // persistent instruction bar (always on screen)
@@ -5891,6 +5892,7 @@ function _clearStepUx(){
   _stepMisses = 0;
   _whichTries = 0;
   _saidPress = false;
+  _saidRest = false;
   _helping = false;
   _curWhichAnswer = null;
   const pb = _playBtnEl();
@@ -5898,6 +5900,8 @@ function _clearStepUx(){
   if(_choiceEl){ _choiceEl.classList.remove("show"); _choiceEl.innerHTML = ""; }
   const shell = document.getElementById("sequencerShell");
   if(shell) shell.classList.remove("choosing");
+  const pop = document.getElementById("lessonStavePopup");
+  if(pop) pop.remove();
 }
 
 // ---------- completion detection (rides the redrawRowNotes funnel) ----------
@@ -5916,13 +5920,25 @@ function _lessonCheckNow(){
   _idleFires = 0; _armIdle(st); // grid activity resets the idle clock
   const res = _evalPass(st.pass, st.target);
   if(res.ok){
-    _stepPhase = "ready";
     _clearGhosts();
-    const pb = _playBtnEl();
-    if(pb){ pb.classList.add("lessonNudge"); }
-    if(!_saidPress){ _saidPress = true; _say("g_press"); }
+    if(st.target){
+      // Recreate task matched → play their answer, celebrate, advance. No manual
+      // Play press needed (removes the "which button?" ambiguity on copy tasks).
+      _stepPhase = "idle";
+      _say(st.yayNarr || _yayKey(), null, true);
+      _internalPlay(cols, () => _lt(() => _advance(false), 250));
+    }else{
+      // Make-your-own task → the green Play button is the action (hear YOUR music).
+      _stepPhase = "ready";
+      const pb = _playBtnEl();
+      if(pb){ pb.classList.add("lessonNudge"); }
+      if(!_saidPress){ _saidPress = true; _say("g_press"); }
+    }
   }else{
     _refreshGaps(st);      // keep the empty-box outlines current
+    if(st.pass && st.pass.restBeats && res.restViolation && st.pass.restNarr && !_saidRest){
+      _saidRest = true; _say(st.pass.restNarr, null, true);
+    }
     if(_stepPhase === "ready"){
       _stepPhase = "building";
       _saidPress = false;
@@ -6070,13 +6086,23 @@ function _stepBuild(st){
   _refreshGaps(st);                      // gap tasks: show empty boxes to fill
   if(st.flashTool) _flashTool(st.flashTool);  // flash a new note-length tool
   _say(st.narr, () => {
+    // Recreate tasks (target): MODEL the pattern every time — play it now and
+    // pulse the Hear button so the child learns that button replays it.
+    if(st.target){ _playPatternOnce(st.target, () => _pulseHear()); }
     // TOUCH-style steps open on a playing pattern (never a blank canvas).
-    if(st.preset && st.preset.length) _internalPlay(cols);
+    else if(st.preset && st.preset.length){ _internalPlay(cols); }
   }, false);
   _armIdle(st);
 }
+// Draw attention to the Hear button (owner feedback: make hearing-again clear).
+function _pulseHear(){
+  if(!_tbHear || _tbHear.classList.contains("tbDisabled")) return;
+  _tbHear.classList.remove("lessonNudge"); void _tbHear.offsetWidth; _tbHear.classList.add("lessonNudge");
+  _lt(() => _tbHear.classList.remove("lessonNudge"), 3000);
+}
 function _onUserPlayEnd(){
   if(!_lessonRunning) return;
+  if(_stepPhase !== "building" && _stepPhase !== "ready") return; // auto-check may have advanced
   const st = LESSON.steps[_stepIdx];
   if(!st || st.type !== "build") return;
   const res = _evalPass(st.pass, st.target);
@@ -6102,10 +6128,24 @@ function _onUserPlayEnd(){
 }
 function _stepReveal(st){
   _stepPhase = "idle";
-  const shell = document.getElementById("sequencerShell");
-  if(shell) shell.classList.add("staveShown"); // hearts and stave never co-visible
-  if(!_staveOpen){ try{ toggleStave(); }catch(e){} }
-  _say(st.narr, () => _lt(() => _advance(), 1800), false);
+  // The reveal is a POPUP in front of everything, up high, with an X to close
+  // (owner feedback) — the child's created pattern rendered as real notation.
+  try{ renderStave(); }catch(e){}   // fills #stavePanel with the current pattern's SVG
+  const svg = document.querySelector("#stavePanel svg");
+  const pop = document.createElement("div");
+  pop.id = "lessonStavePopup";
+  pop.innerHTML =
+    '<div class="lessonStaveCard">'
+    + '<button class="lessonStaveClose" aria-label="Close">' + '<svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>' + '</button>'
+    + '<div class="lessonStaveTitle">You wrote real music! 🎼</div>'
+    + '<div class="lessonStaveHost"></div>'
+    + '</div>';
+  if(svg) pop.querySelector(".lessonStaveHost").appendChild(svg.cloneNode(true));
+  document.getElementById("page").appendChild(pop);
+  requestAnimationFrame(() => pop.classList.add("show"));
+  const close = () => { pop.remove(); _advance(); };
+  pop.querySelector(".lessonStaveClose").onclick = close;
+  _say(st.narr, null, false);       // wait for the X — no auto-advance
 }
 let _yayIdx = 0;
 function _yayKey(){ _yayIdx = (_yayIdx + 1) % 3; return ["g_yay1", "g_yay2", "g_yay3"][_yayIdx]; }
