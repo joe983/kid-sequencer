@@ -2601,11 +2601,13 @@ html.js-loading #contentWrap{
   100%{ transform: scale(1); }
 }
 
-/* ---- mascot + speech bubble + demo hand ---- */
+/* ---- mascot + speech bubble + demo hand ----
+   NB: on iPhone-landscape the stage is pinned to the top and its bottom ~90px
+   overflows off-screen, so all lesson chrome sits well above the stage floor. */
 #lessonMascot{
   position: absolute;
   left: 30px;
-  bottom: 40px;
+  bottom: 190px;
   width: 175px;
   height: 190px;
   z-index: 6;
@@ -2810,7 +2812,7 @@ html.js-loading #contentWrap{
 /* ---- persistent instruction bar (always on screen) ---- */
 #lessonInstruction{
   position: absolute;
-  bottom: 150px;
+  bottom: 300px;
   left: 50%;
   transform: translateX(-50%);
   max-width: 1120px;
@@ -2833,7 +2835,7 @@ html.js-loading #contentWrap{
 /* ---- icon toolbar (back · ? · hear · help · forward) ---- */
 #lessonToolbar{
   position: absolute;
-  bottom: 40px;
+  bottom: 190px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
