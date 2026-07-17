@@ -5589,7 +5589,9 @@ function _buildHearts(){
     const h = document.createElement("span");
     h.className = "lessonHeart";
     h.textContent = "❤";
-    h.style.gridColumn = `${b * COLS_PER_BEAT + 1} / span ${COLS_PER_BEAT}`;
+    // Sit the heart in the SAME single column as this beat's number (the
+    // beat-start cell), centred under it — not across the whole 2-cell beat.
+    h.style.gridColumn = `${b * COLS_PER_BEAT + 1}`;
     row.appendChild(h);
     _heartEls.push(h);
   }
