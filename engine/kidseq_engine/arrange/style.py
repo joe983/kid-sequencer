@@ -639,145 +639,172 @@ _STACK_W: dict[str, list[float]] = {
 # fill_shape 0-2 (_FILL_MENU["garage"] has 3). Every treatment stays inside the
 # pinned 2-step backbone; swing moves odd 16ths only.
 # ---------------------------------------------------------------------------
+# R34: per-producer skeleton preference — a strain's grid IS part of its
+# identity (partybounce is 4x4-shuffle, crewdark is the sparse A grid). Falls
+# back to the genre _SKELETON_MENU when a producer has no row.
+_PRODUCER_SKEL: dict[str, tuple[list, list | None]] = {}
+
 _PRODUCER_MENU["garage"] = (
-    ["virji", "breakz", "sunny", "niche", "sincere", "dusk"], [1, 1, 1, 1, 1, 1])
-# R33b UKG-authenticity (owner: "sounds like nu school breakz"): the rave/
-# techno pads (dub_chord/dark/string_machine/supersaw_chord/glass) are OUT of
-# every garage row — organ skank, Rhodes/FM tines, clav and warm pads are the
-# quintessential UKG chord palette.
+    ["crewdark", "partybounce", "stabriddim", "coldbass", "sincere",
+     "boinkpop"], [1, 1, 1, 1, 1, 1])
+# R34 CREW-ERA re-anchor (owner: "So Solid Crew, Pay As You Go Cartel, More
+# Fire Crew, Heartless Crew" + Artful Dodger; R33's 2023-25 revival anchors
+# retired). Kid-safe instrumental signatures only. References:
+#   crewdark    - So Solid Crew ("21 Seconds"): sparse dark 2-step, string stabs
+#   partybounce - Heartless Crew: 4x4 shuffle-bounce, organ skank, carnival
+#   stabriddim  - More Fire Crew ("Oi!"): the square stab IS the bass, rowdy
+#   coldbass    - Pay As U Go ("Champagne Dance"): icy minimal, sub riff = hook
+#   sincere     - MJ Cole ("Sincere"): Rhodes/piano musicianship (kept key)
+#   boinkpop    - Artful Dodger: GM organ bass "boink", music-box toy-GM hook
 _PRODUCER_PAD_MENU.update({
-    "virji": ["organ", "pluck"],
-    "breakz": ["fmep", "warm"],
-    "sunny": ["pluck", "organ", "clav"],
-    "niche": ["organ", "clav"],
+    "crewdark": ["strings_pad", "warm"],
+    "partybounce": ["organ", "piano"],
+    "stabriddim": ["clav", "organ"],
+    "coldbass": ["pluck", "fmep"],
     "sincere": ["epiano", "piano"],
-    "dusk": ["warm", "strings_pad", "epiano"],
+    "boinkpop": ["epiano", "warm"],
 })
 _PRODUCER_RHYTHM.update({
-    "virji": ([1, 0], None),        # offbeat organ skank
-    "breakz": ([0], None),          # sparse — a lone stab
-    "sunny": ([1, 0], None),
-    "niche": ([0, 1], None),        # bass carries the harmony; pads minimal
+    "crewdark": ([0, 1], None),      # staccato string stabs on the offbeats
+    "partybounce": ([0], None),      # organ skank every offbeat 8th
+    "stabriddim": ([1, 0], None),    # displaced comping under the stab riff
+    "coldbass": ([1], None),         # sparse cold answers
     "sincere": ([0, 1], None),
-    "dusk": ([1, 0], None),
+    "boinkpop": ([0, 1], None),
 })
 _PRODUCER_BASS.update({
-    "virji": (["bass_organ", "bass_funk"], [0.70, 0.30]),      # organ bass = hook
-    "breakz": (["bass_sub_roll", "bass_sub808"], [0.60, 0.40]),  # dark minimal sub
-    "sunny": (["bass_pluck", "bass_round"], [0.65, 0.35]),     # springy warm
-    "niche": (["bass_wobble", "bass_organ"], [0.65, 0.35]),    # growl lead / organ stabs
-    "sincere": (["bass_round", "bass"], [0.70, 0.30]),         # soft round jazzy
-    "dusk": (["bass_sub_roll", "bass_round"], [0.60, 0.40]),   # deep rolling sub
+    "crewdark": (["bass_sub_roll", "bass"], [0.70, 0.30]),     # warm minor sub
+    "partybounce": (["bass_pluck", "bass_organ"], [0.60, 0.40]),  # bouncing octave
+    "stabriddim": (["bass_fm", "bass"], [0.70, 0.30]),         # square-knock stab
+    "coldbass": (["bass_sub_roll", "bass_sub808"], [0.65, 0.35]),  # the icy hook
+    "sincere": (["bass_round", "bass"], [0.70, 0.30]),         # soft walking
+    "boinkpop": (["bass_organ", "bass_pluck"], [0.70, 0.30]),  # JV1080 GM organ
 })
 _PRODUCER_FEEL.update({
-    "virji": ([1, 2], [0.60, 0.40]),
-    "breakz": ([0], None),
-    "sunny": ([1, 2], [0.55, 0.45]),
-    "niche": ([1, 0], [0.60, 0.40]),
-    "sincere": ([0, 3], [0.60, 0.40]),
-    "dusk": ([3, 0], [0.60, 0.40]),
+    "crewdark": ([3], None),                 # sparse dark w/ swung pickup
+    "partybounce": ([2, 1], [0.60, 0.40]),   # octave pops on each kick
+    "stabriddim": ([1], None),               # Grid-B lock
+    "coldbass": ([3, 1], [0.65, 0.35]),
+    "sincere": ([0, 1], [0.60, 0.40]),
+    "boinkpop": ([1, 2], [0.60, 0.40]),      # boink anchors 1 + 1.5
 })
 _PRODUCER_GATE.update({
-    "virji": ([0.6, 0.35], [0.60, 0.40]),   # bouncy short organ bass
-    "breakz": ([1.0, 0.6], [0.55, 0.45]),
-    "sunny": ([0.6, 1.0], [0.60, 0.40]),
-    "niche": ([0.6, 0.35], [0.60, 0.40]),   # tight
-    "sincere": ([1.0, 0.6], [0.65, 0.35]),  # round walking
-    "dusk": ([1.0], None),                  # rolling continuous sub
+    "crewdark": ([1.0, 0.6], [0.60, 0.40]),
+    "partybounce": ([0.6, 0.35], [0.60, 0.40]),   # bouncy short
+    "stabriddim": ([0.35, 0.6], [0.60, 0.40]),    # stabby
+    "coldbass": ([1.0, 0.6], [0.65, 0.35]),
+    "sincere": ([1.0, 0.6], [0.65, 0.35]),
+    "boinkpop": ([0.6, 0.35], [0.60, 0.40]),      # poppy
 })
-_PRODUCER_PUMP.update({
-    "virji": ([None], None),
-    "breakz": ([None], None),
-    "sunny": ([0.35, None], [0.60, 0.40]),
-    "niche": ([None, 0.35], [0.60, 0.40]),
+_PRODUCER_PUMP.update({    # the era predates heavy sidechain — pumps stay off
+    "crewdark": ([None], None),
+    "partybounce": ([None, 0.35], [0.60, 0.40]),
+    "stabriddim": ([None], None),
+    "coldbass": ([None], None),
     "sincere": ([None], None),
-    "dusk": ([0.62, None], [0.60, 0.40]),   # pumped euphoric pads
+    "boinkpop": ([None], None),
 })
 _PRODUCER_RUMBLE.update({
-    "virji": ([False], None),
-    "breakz": ([False], None),
-    "sunny": ([False], None),
-    "niche": ([False, True], [0.70, 0.30]),  # heavy sub-bed taste
+    "crewdark": ([False], None),
+    "partybounce": ([False], None),
+    "stabriddim": ([False], None),
+    "coldbass": ([False], None),
     "sincere": ([False], None),
-    "dusk": ([False], None),
+    "boinkpop": ([False], None),
 })
+# R34 swing floor 0.22 (crew-era MPC band 61-66%; research-pinned per strain)
 _PRODUCER_SWING.update({
-    "virji": ([0.16], None),        # heavy garage swing
-    "breakz": ([0.14], None),       # rawer, looser
-    "sunny": ([0.16], None),
-    "niche": ([0.13], None),        # driving, tighter
-    "sincere": ([0.15], None),      # understated
-    "dusk": ([0.16], None),
+    "crewdark": ([0.24], None),
+    "partybounce": ([0.30], None),    # maximum bounce
+    "stabriddim": ([0.22], None),     # rowdier = slightly straighter
+    "coldbass": ([0.24], None),
+    "sincere": ([0.26], None),
+    "boinkpop": ([0.28], None),
 })
+# R34 per-strain grids (indices into _SKELETON_MENU/DRUM_SKELETONS["garage"]:
+# 0=legacy base, 1=displaced, 2=Grid A sparse, 3=Grid B boink, 4=Grid C 4x4)
+_PRODUCER_SKEL.update({
+    "crewdark": ([2, 1], [0.70, 0.30]),
+    "partybounce": ([4], None),
+    "stabriddim": ([3, 1], [0.60, 0.40]),
+    "coldbass": ([2, 1], [0.60, 0.40]),
+    "sincere": ([2, 0], [0.60, 0.40]),
+    "boinkpop": ([3], None),
+})
+# seasoning (1=rim skips, 2=hatO, 3=shaker contour, 4=skip-hat pairs, 5=tamb)
 _PRODUCER_DRUMV.update({
-    "virji": [0, 1],
-    "breakz": [0, 2],
-    "sunny": [1, 0, 2],
-    "niche": [0, 1],
-    "sincere": [0, 1],
-    "dusk": [0, 2],
+    "crewdark": [1, 0],
+    "partybounce": [3, 5, 2],
+    "stabriddim": [4, 0],
+    "coldbass": [0, 1],
+    "sincere": [1, 4],
+    "boinkpop": [4, 3],
 })
 _PRODUCER_FILL.update({          # indices into _FILL_MENU["garage"] (0-2)
-    "virji": [0, 2],
-    "breakz": [0],
-    "sunny": [2, 0],
-    "niche": [0, 1],
+    "crewdark": [0],
+    "partybounce": [2, 0],
+    "stabriddim": [0, 1],
+    "coldbass": [0],
     "sincere": [0],
-    "dusk": [2, 0],
+    "boinkpop": [2, 0],
 })
-_PRODUCER_CANDY.update({         # smp_* kinds -> fx_samples.FX_FALLBACK
-    "virji": ("smp_horn", "smp_rev", "hat_lift"),
-    "breakz": ("smp_dub", "hat_lift"),
-    "sunny": ("smp_siren", "smp_riser", "hat_lift"),
-    "niche": ("smp_impact", "hat_lift"),
+_PRODUCER_CANDY.update({         # kid-safe era candy (smp_* -> FX_FALLBACK)
+    "crewdark": ("smp_swell", "hat_lift"),
+    "partybounce": ("smp_crowd", "smp_horn", "hat_lift"),
+    "stabriddim": ("smp_dub", "hat_lift"),
+    "coldbass": ("smp_riser", "hat_lift"),
     "sincere": ("smp_swell", "hat_lift"),
-    "dusk": ("smp_riser", "hat_lift"),
+    "boinkpop": ("smp_rev", "hat_lift"),
 })
-_PRODUCER_SWELL.update({         # salute's filtered reverse-reverb lift
-    "dusk": (["reverb", None], [0.60, 0.40]),
+_PRODUCER_SWELL.update({         # So Solid's cinematic string swell only
+    "crewdark": (["reverb", None], [0.50, 0.50]),
 })
-# each producer's SIGNATURE lead stack leads with its REAL repitched one-shot
-# (smp voice -> smp_render.SMP_VOICES); Surge/SF flavours stay as alternates.
+# bass-led strains: the lead stack often sits out (the bassline IS the hook)
+_PRODUCER_LEAD_NONE.update({"coldbass": 0.35, "stabriddim": 0.30})
+_PRODUCER_PADS_ON.update({
+    "partybounce": ([True], None),            # the skank is the identity
+    "stabriddim": ([False, True], [0.55, 0.45]),  # riddim = riff + drums
+})
+# each strain's SIGNATURE lead stack leads with its REAL repitched one-shot
+# (smp voice -> smp_render.SMP_VOICES); era-correct flavours as alternates.
 LEAD_VOICES.update({
-    "g_virji": ("smp", "g_virji"),
-    "g_breakz": ("smp", "g_breakz"),
-    "g_sunny": ("smp", "g_sunny"),
-    "g_niche": ("smp", "g_niche"),
+    "g_crewdark": ("smp", "g_crewdark"),
+    "g_party": ("smp", "g_party"),
+    "g_stab": ("smp", "g_stab"),
+    "g_cold": ("smp", "g_cold"),
     "g_sincere": ("smp", "g_sincere"),
-    "g_dusk": ("smp", "g_dusk"),
+    "g_boink": ("smp", "g_boink"),
 })
 LEAD_STACKS.update({
-    "garage:virji": [
-        [("g_virji", 0, -9.0), ("organ_v", 0, -14.0)],
-        [("organ_v", 0, -10.0), ("shimmer", 12, -14.0)],
-        [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
+    "garage:crewdark": [
+        [("g_crewdark", 0, -9.0), ("strings", 0, -13.0)],
+        [("strings", 0, -9.0), ("keys", 0, -14.0)],
+        [("harp", 12, -11.0), ("strings", 0, -14.0)],
     ],
-    # R33b: the rave layers (body/pad_dark, rave_stab, dub/dub_chord,
-    # machine_strings) are OUT — UKG lead texture is organ/Rhodes/piano/vocal.
-    "garage:breakz": [
-        [("g_breakz", 0, -10.0), ("keys", 0, -14.0)],
-        [("keys", 0, -10.0)],
-        [("vocal_stab", 0, -11.0), ("keys", 0, -14.0)],
+    "garage:partybounce": [
+        [("g_party", 0, -9.0), ("organ_v", 0, -13.0)],
+        [("organ_v", 0, -9.0), ("shimmer", 12, -14.0)],
+        [("piano", 0, -10.0), ("organ_v", 0, -14.0)],
     ],
-    "garage:sunny": [
-        [("g_sunny", 0, -9.0), ("shimmer", 12, -14.0)],
-        [("vibes", 0, -10.0), ("twinkle", 12, -14.0)],
-        [("bellglass", 12, -10.0), ("keys", 0, -14.0)],
+    "garage:stabriddim": [
+        [("g_stab", 0, -9.0), ("square", 0, -14.0)],
+        [("square", 0, -10.0)],
+        [("vocal_stab", 0, -10.0), ("square", 0, -14.0)],
     ],
-    "garage:niche": [
-        [("g_niche", 0, -9.0), ("organ_v", 0, -14.0)],
-        [("organ_v", 0, -10.0)],
-        [("vocal_stab", 0, -10.0), ("organ_v", 0, -14.0)],
+    "garage:coldbass": [
+        [("g_cold", 0, -10.0), ("keys", 0, -14.0)],
+        [("keys", 0, -11.0)],
+        [("vocal_stab", 0, -11.0), ("keys", 0, -15.0)],
     ],
     "garage:sincere": [
         [("g_sincere", 0, -9.0), ("keys", 0, -13.0)],
         [("keys", 0, -9.0), ("shimmer", 12, -14.0)],
         [("piano", 0, -10.0)],
     ],
-    "garage:dusk": [
-        [("g_dusk", 0, -9.0), ("strings", 0, -14.0)],
-        [("strings", 0, -10.0), ("shimmer", 12, -14.0)],
-        [("keys", 0, -10.0), ("strings", 0, -14.0)],
+    "garage:boinkpop": [
+        [("g_boink", 0, -9.0), ("musicbox", 12, -13.0)],
+        [("musicbox", 12, -9.0), ("keys", 0, -13.0)],
+        [("kalimba", 0, -10.0), ("keys", 0, -13.0)],
     ],
 })
 
@@ -902,7 +929,9 @@ _SKELETON_MENU: dict[str, tuple[list, list | None]] = {
     # as the half_switch section switch-up instead
     "dnb": ([0, 1, 2], [0.40, 0.30, 0.30]),
     "drill": ([0, 1, 2], [0.60, 0.25, 0.15]),
-    "garage": ([0, 1], [0.70, 0.30]),
+    # R34: crew-era grids joined (2=sparse A, 3=boink B, 4=4x4-shuffle C);
+    # the straight-kick legacy base becomes the MINORITY
+    "garage": ([0, 1, 2, 3, 4], [0.15, 0.25, 0.20, 0.25, 0.15]),
     "hiphop": ([0, 1], [0.70, 0.30]),
     "reggaeton": ([0, 1], [0.75, 0.25]),
     "techhouse": ([0, 1], [0.75, 0.25]),
@@ -1256,8 +1285,9 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
                            (_PRODUCER_DRUMV[producer] if producer
                             else menu["drum_variant"])),
         drum_skeleton=_pick(seed, "drum_skeleton",
-                            *_SKELETON_MENU.get(riff.drum_style or "",
-                                                ([0], None))),
+                            *((producer and _PRODUCER_SKEL.get(producer))
+                              or _SKELETON_MENU.get(riff.drum_style or "",
+                                                    ([0], None)))),
         snare_take=_pick(seed, "snare_take",
                          *_SNARE_TAKES.get(riff.drum_style or "", ([0], None))),
         hat_take=_pick(seed, "hat_take",

@@ -169,6 +169,16 @@ DRUM_SKELETONS: dict[str, list[dict[str, list[float]]]] = {
     "garage": [
         # 2-step kick displacement: the second kick lands later, third answers
         {"kick":  [1,0,0,0, 0,0,0,.90, 0,0,.85,0, 0,0,.60,0]},
+        # R34 crew-era grids (research: Attack/MusicRadar/Producer School).
+        # Grid A — sparse So-Solid 2-step: TWO anchors only (1 + the "and of
+        # 3"); the missing beats ARE the genre's identity
+        {"kick":  [1,0,0,0, 0,0,0,0, 0,0,.90,0, 0,0,0,0]},
+        # Grid B — the "boink" (Artful Dodger / MusicRadar kick 1+7) with a
+        # low-velocity bar-end double-kick pickup on an ODD 16th (it swings)
+        {"kick":  [1,0,0,0, 0,0,.92,0, 0,0,0,0, 0,.55,0,0]},
+        # Grid C — 4x4 shuffle-bounce (Heartless/DJ Luck party side): four-
+        # floor + bar-end ghost; the swung tops make it garage, not techno
+        {"kick":  [1,0,0,0, .95,0,0,0, 1,0,0,0, .95,0,.50,0]},
     ],
     "hiphop": [
         # boom-bap push: kick doubles on the 'and' of 2 (backbeat untouched)
@@ -220,8 +230,19 @@ DRUM_VARIANTS: dict[str, list[dict[str, list[float]]]] = {
         {"rim": [0, .25, 0, 0, 0, 0, 0, .25, 0, 0, .25, 0, 0, .30, 0, 0]},
         # denser open-hat offbeats
         {"hatO": [0, 0, .22, 0, 0, .18, .22, 0, 0, 0, .22, 0, 0, .18, .22, 0]},
-        # shaker 16ths under the swing
-        {"shaker": [.16] * 16},
+        # R34 shaker 16ths CONTOURED weak-STRONG (flat 16ths read mechanical;
+        # the alternating accent on the swung odd steps is the era "skip" —
+        # Attack: "without velocity variation even a swung pattern feels
+        # mechanical")
+        {"shaker": [.10, .18, .10, .20, .10, .18, .10, .20,
+                    .10, .18, .10, .20, .10, .18, .10, .22]},
+        # R34 skip-hat PAIRS: two 16th hats close together leading into each
+        # snare main — "accentuates the swing" (Attack); odd halves shuffle
+        {"hatC": [0, 0, .12, .18, 0, 0, 0, 0, 0, 0, .12, .18, 0, 0, .14, .20]},
+        # R34 tambourine-feel top: shaker contour + rim ghost conversation
+        {"shaker": [.10, .16, 0, .18, .10, .16, 0, .18,
+                    .10, .16, 0, .18, .10, .16, 0, .20],
+         "rim": [0, 0, 0, .20, 0, 0, 0, 0, 0, .22, 0, 0, 0, 0, 0, .24]},
     ],
     "drill": [
         # the triplet-feel hat stutter on the back half
@@ -382,7 +403,11 @@ def pattern_for(style: str | None, variant: int = 0,
 
 # Per-style swing (mirrors the app's SWING map in playDrumsAtStep): odd 16th
 # steps are delayed by swing x one step. garage = UK Garage's defining shuffle.
-SWING: dict[str, float] = {"garage": 0.16, "techhouse": 0.08}
+# R34: garage raised 0.16→0.26 (~58%→~63% MPC shuffle). The crew-era band is
+# 61-66%; 0.16 sits BELOW it — the root of the owner's "no bounce, no swing".
+# (For producer genres this default is overridden per strain; it governs any
+# non-producer garage path and documents the genre's centre.)
+SWING: dict[str, float] = {"garage": 0.26, "techhouse": 0.08}
 
 
 def swung_step_offset(style: str | None, step: int,

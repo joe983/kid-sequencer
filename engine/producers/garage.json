@@ -1,656 +1,112 @@
 {
   "genre": "garage",
-  "tempo": 133,
+  "tempo": 134,
   "pack": "producer_garage.pack",
   "candidates_file": "tools/producer_candidates/garage.json",
-  "_note": "UK Garage producer strains (owner-approved 2026-07-16): virji=Sammy Virji, breakz=Interplanetary Criminal, sunny=Conducta, niche=Silva Bumpa, sincere=MJ Cole, dusk=salute. Signatures: engine/docs/producer_signatures_garage.md. R33b UKG-AUTHENTICITY PASS (owner: 'sounds like nu school breakz, not using quintessentially ukgarage sounds'): recipe pools are now style-correct — drums from GarageSessions + LCHZ (garage/bassline packs) with 909/808 only where genre-appropriate; ALL vocal chops from sliced sung R&B/UKG vocal loops (tools/extract_chops.py stages them under Kid-Sequencer samples/ukg-chops/); niche stab from Hyperfunk keys one-shots; ALL tonal FX from GS_GSV3_Fxs (UKG-native). Zero musicradar-rave / carnival / WuTang / Malice anywhere. VOICE SET: garage plays kick/snare/hatC/hatO/rim (+ shaker seasoning) — NOT clap/sub. Every producer overrides kick+snare+hatC + one character voice. gate thresholds pinned from the observed Modal matrix. R33c: Loop Cult CONTROL (dedicated UKG pack, owner-added 2026-07-16) joins every relevant pool — 110 drum one-shots, 18 fx, 13 synth + 23 bass one-shots, 4 vox fx, key-tagged synth/combi loops sliced via extract_chops (lc_synth/lc_combi).",
+  "_note": "R34 CREW-ERA strains (owner-directed: So Solid / Heartless / More Fire / Pay As U Go + Artful Dodger + MJ Cole; the 2023-25 revival anchors are retired). Signatures: engine/docs/producer_signatures_garage.md. VOICE SET: garage plays kick/snare/hatC/hatO/rim (+ shaker seasoning). drum_map rows mirror the KITS overrides exactly. Pools: GarageSessions + LCHZ + Loop Cult CONTROL core, VEH1 House Rimshots, 808/909 hardware for coldbass, sung-vocal ukg-chops for the chops. AUDITION-FIRST: the owner picks every sound from the contact sheets BEFORE the pack is built. gate thresholds are PLACEHOLDERS until the first Modal matrix.",
   "ensure": [
     {"match": "Loop Cult", "min": 2}
   ],
-  "producers": [
-    "virji",
-    "breakz",
-    "sunny",
-    "niche",
-    "sincere",
-    "dusk"
-  ],
+  "producers": ["crewdark", "partybounce", "stabriddim", "coldbass", "sincere", "boinkpop"],
   "legend": {
-    "virji": "Sammy Virji",
-    "breakz": "Interplanetary Criminal",
-    "sunny": "Conducta",
-    "niche": "Silva Bumpa",
+    "crewdark": "So Solid Crew",
+    "partybounce": "Heartless Crew",
+    "stabriddim": "More Fire Crew",
+    "coldbass": "Pay As U Go Cartel",
     "sincere": "MJ Cole",
-    "dusk": "salute"
+    "boinkpop": "Artful Dodger"
   },
   "build": {
     "drum_map": {
-      "virji": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "hatO": "hatO"
-      },
-      "breakz": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "rim": "dust"
-      },
-      "sunny": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "shaker": "shaker"
-      },
-      "niche": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "hatO": "hatO"
-      },
-      "sincere": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "rim": "rim"
-      },
-      "dusk": {
-        "kick": "kick",
-        "snare": "snare",
-        "hatC": "hatC",
-        "hatO": "hatO"
-      }
+      "crewdark":    {"kick": "kick", "snare": "snare", "hatC": "hatC", "rim": "rim"},
+      "partybounce": {"kick": "kick", "snare": "snare", "hatC": "hatC", "shaker": "shaker"},
+      "stabriddim":  {"kick": "kick", "snare": "snare", "hatC": "hatC", "hatO": "hatO"},
+      "coldbass":    {"kick": "kick", "snare": "snare", "hatC": "hatC", "hatO": "hatO"},
+      "sincere":     {"kick": "kick", "snare": "snare", "hatC": "hatC", "rim": "rim"},
+      "boinkpop":    {"kick": "kick", "snare": "snare", "hatC": "hatC", "hatO": "hatO"}
     },
     "melodic_map": {
-      "virji": {
-        "chop": "chop"
-      },
-      "breakz": {
-        "chop": "chop"
-      },
-      "sunny": {
-        "chop": "chop"
-      },
-      "niche": {
-        "stab": "stab"
-      },
-      "sincere": {
-        "chop": "chop"
-      },
-      "dusk": {
-        "chop": "chop"
-      }
+      "crewdark":    {"chop": "chop"},
+      "partybounce": {"chop": "chop"},
+      "stabriddim":  {"stab": "stab"},
+      "coldbass":    {"chop": "chop"},
+      "sincere":     {"chop": "chop"},
+      "boinkpop":    {"chop": "chop"}
     },
     "fx_map": {
-      "virji": {
-        "smp_horn": "horn",
-        "smp_rev": "rev"
-      },
-      "breakz": {
-        "smp_dub": "dub"
-      },
-      "sunny": {
-        "smp_siren": "siren",
-        "smp_riser": "riser"
-      },
-      "niche": {
-        "smp_impact": "impact"
-      },
-      "sincere": {
-        "smp_swell": "swell"
-      },
-      "dusk": {
-        "smp_riser": "riser"
-      }
+      "crewdark":    {"smp_swell": "swell"},
+      "partybounce": {"smp_crowd": "crowd", "smp_horn": "horn"},
+      "stabriddim":  {"smp_dub": "dub"},
+      "coldbass":    {"smp_riser": "riser"},
+      "sincere":     {"smp_swell": "swell"},
+      "boinkpop":    {"smp_rev": "rev"}
     },
-    "trims_ms": {
-      "sunny:shaker": 260,
-      "breakz:rim": 400
-    },
+    "trims_ms": {"partybounce:shaker": 260},
     "melodic_trim_ms": 1400,
     "fx_peak_dbfs": -18.0,
     "fx_trim_ms": 1600
   },
-  "_gate_evidence": "R33a Modal matrix 2026-07-16 (pre-UKG-retarget): closest pair sunny/dusk = 3.33 dB/band; range 3.33-8.77; vs base 2.84-5.52. Thresholds pinned below with margin (2.0/1.5, same logic as techhouse). Re-check after the R33b retarget matrix.",
-  "gate": {
-    "tempo": 133,
-    "t_drums": 2.0,
-    "t_base": 1.5
-  },
+  "gate": {"tempo": 134, "t_drums": 2.0, "t_base": 1.5},
   "battery": {
     "base": 4000,
     "pairs": [
-      {
-        "input": "examples/showcase_garage_p1.json",
-        "producer": "virji"
-      },
-      {
-        "input": "examples/showcase_garage_p2.json",
-        "producer": "breakz"
-      },
-      {
-        "input": "examples/showcase_garage_p3.json",
-        "producer": "sunny"
-      },
-      {
-        "input": "examples/showcase_garage_p4.json",
-        "producer": "niche"
-      },
-      {
-        "input": "examples/showcase_garage_p5.json",
-        "producer": "sincere"
-      },
-      {
-        "input": "examples/showcase_garage_p6.json",
-        "producer": "dusk"
-      }
+      {"input": "examples/showcase_garage_p6.json", "producer": "crewdark"},
+      {"input": "examples/showcase_garage_p3.json", "producer": "partybounce"},
+      {"input": "examples/showcase_garage_p4.json", "producer": "stabriddim"},
+      {"input": "examples/showcase_garage_p2.json", "producer": "coldbass"},
+      {"input": "examples/showcase_garage_p5.json", "producer": "sincere"},
+      {"input": "examples/showcase_garage_p1.json", "producer": "boinkpop"}
     ]
   },
   "recipe": {
-    "virji": {
-      "kick": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_kicks/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 120,
-          "centroid_hz": 200,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_snares/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 170,
-          "centroid_hz": 1900,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_hats/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 55,
-          "centroid_hz": 9000,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "hatO": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 280,
-          "centroid_hz": 7000,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "chop": {
-        "banks": [
-          "Kid-Sequencer samples/ukg-chops/orchid/*.wav",
-          "Kid-Sequencer samples/ukg-chops/gs_vox/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 500,
-          "centroid_hz": 1500,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "horn": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 700,
-          "centroid_hz": 1400,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "rev": {
-        "banks": [
-          "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Reverse/*.wav",
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 1400,
-          "centroid_hz": 3000,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      }
+    "crewdark": {
+      "kick":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav", "LCHZ_samples/LCHZ_one shots/LCHZ_kicks/*.wav"], "target": {"decay_ms": 140, "centroid_hz": 130, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"], "target": {"decay_ms": 170, "centroid_hz": 1600, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"], "target": {"decay_ms": 55, "centroid_hz": 8000, "band": "hi", "tonalness": "low"}},
+      "rim":   {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/*.wav"], "target": {"decay_ms": 100, "centroid_hz": 2400, "band": "mid", "tonalness": "low"}},
+      "chop":  {"banks": ["Kid-Sequencer samples/ukg-chops/lchz_vox/*.wav", "Kid-Sequencer samples/ukg-chops/gs_vox/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 420, "centroid_hz": 900, "band": "mid", "tonalness": "high"}},
+      "swell": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"], "target": {"decay_ms": 1600, "centroid_hz": 2000, "band": "mid", "tonalness": "high"}}
     },
-    "breakz": {
-      "kick": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 145,
-          "centroid_hz": 160,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 250,
-          "centroid_hz": 1200,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 80,
-          "centroid_hz": 6500,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "dust": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_percussion/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav"
-        ],
-        "target": {
-          "decay_ms": 260,
-          "centroid_hz": 2400,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "chop": {
-        "banks": [
-          "Kid-Sequencer samples/ukg-chops/lchz_vox/*.wav",
-          "Kid-Sequencer samples/ukg-chops/gs_vox/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 380,
-          "centroid_hz": 900,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "dub": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 900,
-          "centroid_hz": 1800,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      }
+    "partybounce": {
+      "kick":   {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav", "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/**/*.wav"], "target": {"decay_ms": 105, "centroid_hz": 240, "band": "low", "tonalness": "low"}},
+      "snare":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "Roland TR-808/CP/*.wav"], "target": {"decay_ms": 190, "centroid_hz": 2100, "band": "mid", "tonalness": "low"}},
+      "hatC":   {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 48, "centroid_hz": 9600, "band": "hi", "tonalness": "low"}},
+      "shaker": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav"], "target": {"decay_ms": 120, "centroid_hz": 6800, "band": "hi", "tonalness": "low"}},
+      "chop":   {"banks": ["Kid-Sequencer samples/ukg-chops/orchid/*.wav", "Kid-Sequencer samples/ukg-chops/gs_vox/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 380, "centroid_hz": 1800, "band": "hi", "tonalness": "high"}},
+      "crowd":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 900, "centroid_hz": 1800, "band": "mid", "tonalness": "low"}},
+      "horn":   {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav"], "target": {"decay_ms": 700, "centroid_hz": 1400, "band": "mid", "tonalness": "high"}}
     },
-    "sunny": {
-      "kick": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav",
-          "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 105,
-          "centroid_hz": 240,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "Roland TR-808/CP/*.wav",
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav",
-          "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Snares und Claps/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 195,
-          "centroid_hz": 2200,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_hats/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 48,
-          "centroid_hz": 9800,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "shaker": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/*.wav",
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav"
-        ],
-        "target": {
-          "decay_ms": 120,
-          "centroid_hz": 6500,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "chop": {
-        "banks": [
-          "Kid-Sequencer samples/ukg-chops/orchid/*.wav",
-          "Kid-Sequencer samples/ukg-chops/lchz_vox/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 380,
-          "centroid_hz": 2000,
-          "band": "hi",
-          "tonalness": "high"
-        }
-      },
-      "siren": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 1200,
-          "centroid_hz": 1600,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "riser": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 1500,
-          "centroid_hz": 4000,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      }
+    "stabriddim": {
+      "kick":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav"], "target": {"decay_ms": 150, "centroid_hz": 160, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav"], "target": {"decay_ms": 150, "centroid_hz": 1900, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 60, "centroid_hz": 8400, "band": "hi", "tonalness": "low"}},
+      "hatO":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav", "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/*.wav"], "target": {"decay_ms": 280, "centroid_hz": 6800, "band": "hi", "tonalness": "low"}},
+      "stab":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/*.wav", "Kid-Sequencer samples/ukg-chops/lc_synth/*.wav", "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Keys 7/*.wav"], "target": {"decay_ms": 300, "centroid_hz": 800, "band": "mid", "tonalness": "high"}},
+      "dub":   {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"], "target": {"decay_ms": 900, "centroid_hz": 1800, "band": "mid", "tonalness": "low"}}
     },
-    "niche": {
-      "kick": {
-        "banks": [
-          "LCHZ_samples/LCHZ_one shots/LCHZ_kicks/*.wav",
-          "Roland TR-808/BD/*.wav",
-          "Roland-TR-909/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 175,
-          "centroid_hz": 145,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "LCHZ_samples/LCHZ_one shots/LCHZ_snares/*.wav",
-          "Roland-TR-909/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 140,
-          "centroid_hz": 2000,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "LCHZ_samples/LCHZ_one shots/LCHZ_hats/*.wav",
-          "Roland-TR-909/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 62,
-          "centroid_hz": 8200,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "hatO": {
-        "banks": [
-          "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/*.wav",
-          "Roland-TR-909/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 310,
-          "centroid_hz": 6400,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "stab": {
-        "banks": [
-          "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Keys 7/*.wav",
-          "[VB] Hyperfunk/[VB] Hyperfunk/Oneshots (if you don't have Serum)/Pluck 8/*.wav",
-          "Kid-Sequencer samples/ukg-chops/lchz_synth/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/*.wav",
-          "Kid-Sequencer samples/ukg-chops/lc_synth/*.wav",
-          "Kid-Sequencer samples/ukg-chops/lc_combi/*.wav"
-        ],
-        "target": {
-          "decay_ms": 320,
-          "centroid_hz": 900,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "impact": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 500,
-          "centroid_hz": 300,
-          "band": "low",
-          "tonalness": "low"
-        }
-      }
+    "coldbass": {
+      "kick":  {"banks": ["LCHZ_samples/LCHZ_one shots/LCHZ_kicks/*.wav", "Roland TR-808/BD/*.wav", "Roland-TR-909/**/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"], "target": {"decay_ms": 175, "centroid_hz": 140, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["LCHZ_samples/LCHZ_one shots/LCHZ_snares/*.wav", "Roland-TR-909/**/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"], "target": {"decay_ms": 140, "centroid_hz": 2000, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["LCHZ_samples/LCHZ_one shots/LCHZ_hats/*.wav", "Roland-TR-909/**/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"], "target": {"decay_ms": 55, "centroid_hz": 8800, "band": "hi", "tonalness": "low"}},
+      "hatO":  {"banks": ["LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav"], "target": {"decay_ms": 300, "centroid_hz": 6200, "band": "hi", "tonalness": "low"}},
+      "chop":  {"banks": ["Kid-Sequencer samples/ukg-chops/lchz_vox/*.wav", "Kid-Sequencer samples/ukg-chops/infinity/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 380, "centroid_hz": 800, "band": "mid", "tonalness": "high"}},
+      "riser": {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav"], "target": {"decay_ms": 1500, "centroid_hz": 3500, "band": "hi", "tonalness": "low"}}
     },
     "sincere": {
-      "kick": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav",
-          "Roland-TR-909/**/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 165,
-          "centroid_hz": 128,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_snares/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 185,
-          "centroid_hz": 1350,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_hats/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 58,
-          "centroid_hz": 8600,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "rim": {
-        "banks": [
-          "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/*.wav",
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav"
-        ],
-        "target": {
-          "decay_ms": 110,
-          "centroid_hz": 2600,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "chop": {
-        "banks": [
-          "Kid-Sequencer samples/ukg-chops/orchid/*.wav",
-          "Kid-Sequencer samples/ukg-chops/infinity/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 700,
-          "centroid_hz": 1100,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "swell": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Cymbals/VEH1 Reverse/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 1600,
-          "centroid_hz": 2000,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      }
+      "kick":  {"banks": ["Roland-TR-909/**/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"], "target": {"decay_ms": 165, "centroid_hz": 128, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 180, "centroid_hz": 1350, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav", "Roland-TR-909/**/*.wav"], "target": {"decay_ms": 58, "centroid_hz": 8600, "band": "hi", "tonalness": "low"}},
+      "rim":   {"banks": ["AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/*.wav"], "target": {"decay_ms": 110, "centroid_hz": 2600, "band": "mid", "tonalness": "low"}},
+      "chop":  {"banks": ["Kid-Sequencer samples/ukg-chops/orchid/*.wav", "Kid-Sequencer samples/ukg-chops/infinity/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 620, "centroid_hz": 1000, "band": "mid", "tonalness": "high"}},
+      "swell": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"], "target": {"decay_ms": 1600, "centroid_hz": 2000, "band": "mid", "tonalness": "high"}}
     },
-    "dusk": {
-      "kick": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_kicks/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav"
-        ],
-        "target": {
-          "decay_ms": 200,
-          "centroid_hz": 115,
-          "band": "low",
-          "tonalness": "low"
-        }
-      },
-      "snare": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_snares/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"
-        ],
-        "target": {
-          "decay_ms": 215,
-          "centroid_hz": 1550,
-          "band": "mid",
-          "tonalness": "low"
-        }
-      },
-      "hatC": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 75,
-          "centroid_hz": 6800,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "hatO": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav",
-          "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav"
-        ],
-        "target": {
-          "decay_ms": 330,
-          "centroid_hz": 5800,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      },
-      "chop": {
-        "banks": [
-          "Kid-Sequencer samples/ukg-chops/infinity/*.wav",
-          "Kid-Sequencer samples/ukg-chops/orchid/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"
-        ],
-        "target": {
-          "decay_ms": 900,
-          "centroid_hz": 1400,
-          "band": "mid",
-          "tonalness": "high"
-        }
-      },
-      "riser": {
-        "banks": [
-          "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav",
-          "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"
-        ],
-        "target": {
-          "decay_ms": 1800,
-          "centroid_hz": 3500,
-          "band": "hi",
-          "tonalness": "low"
-        }
-      }
+    "boinkpop": {
+      "kick":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/*.wav"], "target": {"decay_ms": 110, "centroid_hz": 220, "band": "low", "tonalness": "low"}},
+      "snare": {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/*.wav"], "target": {"decay_ms": 175, "centroid_hz": 2000, "band": "mid", "tonalness": "low"}},
+      "hatC":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 50, "centroid_hz": 9200, "band": "hi", "tonalness": "low"}},
+      "hatO":  {"banks": ["UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/*.wav", "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/*.wav"], "target": {"decay_ms": 260, "centroid_hz": 7200, "band": "hi", "tonalness": "low"}},
+      "chop":  {"banks": ["Kid-Sequencer samples/ukg-chops/orchid/*.wav", "Kid-Sequencer samples/ukg-chops/gs_vox/*.wav", "Kid-Sequencer samples/ukg-chops/infinity/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/*.wav"], "target": {"decay_ms": 450, "centroid_hz": 1600, "band": "mid", "tonalness": "high"}},
+      "rev":   {"banks": ["GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/*.wav", "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/*.wav"], "target": {"decay_ms": 1400, "centroid_hz": 3000, "band": "hi", "tonalness": "low"}}
     }
   }
 }

@@ -612,14 +612,20 @@ _BASS_FEELS: dict[str, list[list[tuple[float, float, int]]]] = {
         [(0.0, 1.9, 102), (2.0, 1.9, 98)],
     ],
     "garage": [
-        _FEEL_OFFBEAT,
-        # 2-step bounce: long-short pairing around the swung skip
-        [(0.0, 0.9, 106), (1.75, 0.45, 98), (2.5, 0.9, 104), (3.5, 0.45, 98)],
-        # 2-step with octave pops on the skips
-        [(0.0, 0.9, 106, 0), (1.75, 0.45, 98, 12),
-         (2.5, 0.9, 104, 0), (3.5, 0.45, 98, 12)],
-        # R19 funk 16th syncopation
-        _FEEL_FUNK_SYNC,
+        # R34 bass LOCK rule (crew-era): bass onsets = kick anchors + swung
+        # off-16th answers; NEVER on beats 2/4 (1.0/3.0 — the snare's). Odd-
+        #16th starts (1.75, 3.25, 3.75) ride the drums' swing clock via
+        # bass_notes(swing=) — the kick-and-bass interlock at 62-66% shuffle
+        # IS the bounce.
+        _FEEL_OFFBEAT,                                    # 0: organ offbeat 8ths
+        # 1: Grid-B lock — anchors 1 + "boink" (1.5) + swung bar-end pickup
+        [(0.0, 0.7, 106), (1.5, 0.45, 102), (3.25, 0.3, 96)],
+        # 2: 2-step with octave pops on the swung skips
+        [(0.0, 0.7, 106, 0), (1.75, 0.35, 98, 12),
+         (2.5, 0.6, 104, 0), (3.25, 0.3, 96, 12)],
+        # 3: sparse dark sub (So Solid / Pay As U Go) — long anchors, one
+        # swung pickup into the next bar
+        [(0.0, 1.2, 106), (2.5, 0.8, 102), (3.75, 0.25, 94)],
     ],
     "reggaeton": [
         _FEEL_OFFBEAT,
@@ -675,9 +681,25 @@ def bass_feel_for(genre: str | None, variant: int = 0) -> list[tuple[float, floa
     return variants[variant % len(variants)]
 
 
+def swung_beat(start: float, swing: float | None) -> float:
+    """R34: the ONE groove clock, beat-domain twin of drums.swung_step_offset.
+    A start whose 16th-step index is ODD is delayed by `swing` fractions of a
+    16th (0.25 beats) — the MPC-style whole-arrangement shuffle (crew-era UKG
+    swings bass and stabs WITH the drums, not just the hats). `swing` None/0
+    returns `start` untouched, so every genre without a drum_swing override is
+    byte-identical by construction (the null contract)."""
+    if not swing:
+        return start
+    step = start * 4.0
+    idx = round(step)
+    if abs(step - idx) < 1e-6 and idx % 2 == 1:
+        return start + swing * 0.25
+    return start
+
+
 def bass_notes(riff: Riff, prog: list[int], bars: int,
                feel: list[tuple] | None = None,
-               gate: float = 1.0) -> list[Note]:
+               gate: float = 1.0, swing: float | None = None) -> list[Note]:
     """Chord roots around C2–B2 in a genre feel — `feel` is a list of
     (start_beat, dur, vel[, octave_shift]) hits per bar (default: the genre's
     legacy bucket). The optional 4th element lifts a hit an octave (C3–B3 —
@@ -685,7 +707,8 @@ def bass_notes(riff: Riff, prog: list[int], bars: int,
     root (the root-pc test relies on it). Pitches are absolute (no -24 shift
     downstream — these are not grid notes). `gate` (R19) multiplies every
     duration — the staccato articulation lever (1.0 = legacy, floor 0.12
-    beats so a hit never vanishes)."""
+    beats so a hit never vanishes). `swing` (R34) shuffles odd-16th starts on
+    the drums' clock (see swung_beat)."""
     feel = feel if feel is not None else _default_feel(riff.drum_style)
     semi, steps = _scale_steps(riff.key)
     out: list[Note] = []
@@ -699,12 +722,14 @@ def bass_notes(riff: Riff, prog: list[int], bars: int,
             if gate != 1.0:
                 dur = max(0.12, dur * gate)
             out.append(Note(pitch=pitch + shift, velocity=vel,
-                            start_beats=bar0 + start, dur_beats=dur))
+                            start_beats=bar0 + swung_beat(start, swing),
+                            dur_beats=dur))
     return out
 
 
 def perc_bass_notes(riff: Riff, pedal_prog: list[int], bars: int, mode: str,
-                    kick_steps: list[int] | None = None) -> list[Note]:
+                    kick_steps: list[int] | None = None,
+                    swing: float | None = None) -> list[Note]:
     """R24 percussive low end (owner: NEVER a sustained pedal — "a mix of
     kick-carries-it-with-sub-accents and short rhythmic sub stabs").
 
@@ -726,7 +751,8 @@ def perc_bass_notes(riff: Riff, pedal_prog: list[int], bars: int, mode: str,
             continue
         for step in (kick_steps or [0]):
             out.append(Note(pitch=pitch, velocity=104,
-                            start_beats=bar0 + step / 4.0, dur_beats=0.3))
+                            start_beats=bar0 + swung_beat(step / 4.0, swing),
+                            dur_beats=0.3))
     return out
 
 
@@ -776,7 +802,7 @@ def pad_rhythm_for(genre: str | None, variant: int = 0) -> list[tuple[float, flo
 
 def pad_notes(riff: Riff, prog: list[int], bars: int,
               rhythm: list[tuple[float, float]] | None = None,
-              voicing: str = "close") -> list[Note]:
+              voicing: str = "close", swing: float | None = None) -> list[Note]:
     """Diatonic triad voicings around C4–B5, comped per `rhythm` — a list of
     (start_beat, dur) chord onsets within one bar (default: one whole-bar
     wash). Short stabs hit slightly harder.
@@ -800,5 +826,6 @@ def pad_notes(riff: Riff, prog: list[int], bars: int,
             vel = 96 if dur < 1.0 else 88
             for pitch in chord:
                 out.append(Note(pitch=pitch, velocity=vel,
-                                start_beats=b * 4.0 + start, dur_beats=dur))
+                                start_beats=b * 4.0 + swung_beat(start, swing),
+                                dur_beats=dur))
     return out

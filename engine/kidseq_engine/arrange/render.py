@@ -103,28 +103,22 @@ VOICE_POST: dict[str, tuple[float, float, list]] = {
     "latin:lead:chant_v": (1.0, 0.35, [("delay_beats", 0.375, 0.25, 0.3)]),
     # bigroom (Guetta): saturated future-rave stab
     "bigroom:lead:futurerave": (1.0, 0.6, [("dist", 6.0)]),
-    # ---- R33 garage producers -------------------------------------------
-    # virji (Sammy Virji): the rubbery organ bass bites; the diva chop gets a
-    # short garage slap-delay
-    "virji:bass:bass_organ": (1.0, 0.45, [("dist", 5.0)]),
-    "virji:lead:g_virji": (1.0, 0.35, [("delay_beats", 0.375, 0.20, 0.25)]),
-    # breakz (Interplanetary Criminal): cassette/DIY lo-fi — dulled + gritty
-    "breakz:lead:g_breakz": (1.0, 0.55, [("lpf", 3000.0), ("dist", 5.0)]),
-    # sunny (Conducta): sugary confetti shimmer
-    "sunny:lead:g_sunny": (1.0, 0.40, [("chorus", 0.5, 0.35, 0.3)]),
-    # niche (Silva Bumpa): Sheffield growl — harder than bassled's Erosion grit
-    "niche:bass:bass_wobble": (1.0, 0.60, [("hpf", 100.0), ("dist", 10.0)]),
-    "niche:lead:g_niche": (1.0, 0.40, [("dist", 5.0)]),
-    # sincere (MJ Cole): smooth + silky; the Rhodes bed sits warm and rolled off
-    "sincere:lead:g_sincere": (1.0, 0.35, [("lpf", 4000.0),
-                                           ("chorus", 0.3, 0.25, 0.25)]),
-    "sincere:pad:epiano": (0.85, 0.5, [("lpf12", 3200.0, 0.1)]),
-    # dusk (salute): filtered euphoric wash — long float + filtered pads
-    # (R33b: the filtered-wash pad colour moved from string_machine to warm)
-    "dusk:lead:g_dusk": (1.0, 0.60, [("lpf", 2800.0),
-                                     ("delay_beats", 0.5, 0.30, 0.35)]),
-    "dusk:pad:warm": (0.9, 0.55, [("lpf12", 2400.0, 0.15),
-                                  ("chorus", 0.4, 0.3, 0.3)]),
+    # ---- R34 garage crew-era strains -------------------------------------
+    # DE-WASH doctrine (owner: "too washy, too much reverb everywhere"; era
+    # mixes are DRY and punchy): EQ/saturation colour only — NO delay_beats,
+    # no long-tail chains, chorus wet capped low. Bounce reads best dry.
+    # stabriddim (More Fire): the rowdy Music-2000 square bites
+    "stabriddim:lead:g_stab": (1.0, 0.5, [("dist", 8.0)]),
+    # partybounce (Heartless): organ skank gets a little drive, stays dry
+    "partybounce:lead:g_party": (1.0, 0.3, [("dist", 4.0)]),
+    # boinkpop (Artful Dodger): sweet light chorus on the chop — small wet
+    "boinkpop:lead:g_boink": (1.0, 0.25, [("chorus", 0.4, 0.25, 0.25)]),
+    # sincere (MJ Cole): silky rolled-off top, chorus wet reduced from R33
+    "sincere:lead:g_sincere": (1.0, 0.3, [("lpf", 4200.0),
+                                          ("chorus", 0.3, 0.2, 0.2)]),
+    "sincere:pad:epiano": (0.85, 0.4, [("lpf12", 3200.0, 0.1)]),
+    # crewdark (So Solid): tight filtered string stabs — dry, cinematic
+    "crewdark:lead:g_crewdark": (1.0, 0.35, [("hpf", 160.0)]),
 }
 
 
@@ -773,11 +767,13 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                 # stabs locked to the skeletal kick, or no bassline at all
                 # bar one phrase-end accent — the kick owns the lows
                 notes = perc_bass_notes(riff, prog, sec.bars, style.perc_low,
-                                        perc_kick_steps)
+                                        perc_kick_steps,
+                                        swing=style.drum_swing)
             else:
                 feel = bass_feel_for(riff.drum_style, style.bass_feel)
                 notes = bass_notes(riff, prog, sec.bars, feel=feel,
-                                   gate=style.bass_gate)
+                                   gate=style.bass_gate,
+                                   swing=style.drum_swing)
             # R18: the bass answers the drummer's fill bars — the bar's final
             # note pops an octave (small, feel-aware; drums and bass move
             # together the way a live rhythm section does)
@@ -822,7 +818,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
             else:
                 rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                 notes = pad_notes(riff, prog, sec.bars, rhythm=rhythm,
-                                  voicing=style.pad_voicing)
+                                  voicing=style.pad_voicing,
+                                  swing=style.drum_swing)
                 sig = _render_pads(notes, riff.tempo, span_beats, sr,
                                    style.pad_role, producer=style.producer_style)
             _add_at(layers["pads"], sig, at)
@@ -1056,7 +1053,8 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                     rhythm = pad_rhythm_for(riff.drum_style, style.pad_rhythm)
                     hi = [dc_replace(nt, pitch=nt.pitch + 12)
                           for nt in pad_notes(riff, prog, sec.bars, rhythm=rhythm,
-                                              voicing=style.pad_voicing)]
+                                              voicing=style.pad_voicing,
+                                              swing=style.drum_swing)]
                 sig = _render_pads(hi, riff.tempo, sec.bars * riff.bar_beats, sr,
                                    style.pad_role, producer=style.producer_style)
                 _add_at(layers["pads"], sig * 0.5, a)
