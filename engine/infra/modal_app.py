@@ -521,12 +521,14 @@ def signatures(genre: str = "garage", base: int = 7000) -> None:
         print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
-# Null-A/B fixtures (R31): non-techhouse genres at pinned variations. Rendered
-# once per engine revision; producer-axis rounds must leave these byte-identical
-# (cross-process compare — see NEXT.md determinism caveat).
+# Null-A/B fixtures (R31): genres WITHOUT a producer menu, at pinned variations.
+# Rendered once per engine revision; producer-axis rounds must leave these
+# byte-identical (cross-process compare — see NEXT.md determinism caveat).
+# R33: garage LEFT this set when it became a producer genre (its renders now
+# legitimately change per round) — remaining null genres: dnb/reggaeton/
+# hiphop/drill. Remove each genre's row as its producer pass lands.
 _BASELINE_FIXTURES: list[tuple[str, str, int, int]] = [
     ("examples/a2_major.json", "dnb", 172, 11),
-    ("examples/a2_major.json", "garage", 132, 12),
     ("examples/a2_major.json", "reggaeton", 96, 13),
     ("examples/a2_major.json", "hiphop", 92, 14),
     ("examples/a2_major.json", "drill", 142, 15),
