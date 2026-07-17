@@ -40,8 +40,9 @@
           { type: "listen", narr: "a1_intro", bars: 1 },
           { type: "freeze", narr: "a1_freeze", rounds: 2 },
           // First touch: any sound placed on the heartbeat is a win (can't fail).
+          // Flash the (only) note tool so the child sees how to select it.
           { type: "build", narr: "a1_touch", pass: { kind: "count", minNotes: 1 },
-            yayNarr: "a1_great", nudge: "grid" },
+            yayNarr: "a1_great", nudge: "grid", flashTool: "quarter" },
         ],
       },
 
@@ -72,7 +73,8 @@
           // make one (sound-before-symbol; avoids a cold ask for a new tool).
           { type: "demo", narr: "a3_demo", chant: "chant_tatiti", pattern: TA_TITI },
           { type: "build", narr: "a3_touch", preset: [ta(0,0), ta(0,1)],
-            pass: { kind: "count", minNotes: 3, use: { eighth: 1 } }, nudge: "tool-eighth" },
+            pass: { kind: "count", minNotes: 3, use: { eighth: 1 } },
+            nudge: "tool-eighth", flashTool: "eighth" },
           { type: "which", narr: "a3_which", options: [TA_TITI, TTTT], answer: 0 },
           { type: "build", narr: "a3_copy", target: TA_TITI,
             pass: { kind: "match", shifted: true } },

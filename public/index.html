@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=62">
+<link rel="stylesheet" href="css/styles.css?v=64">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -5363,7 +5363,17 @@ let _narrAudio = null;         // the <audio> narration element (silent-switch-i
 let _narrT = null;
 let _saidPress = false;        // "press play!" said once per step
 let _heartEls = [];
-let _mascotEl = null, _bubbleEl = null, _handEl = null, _overlayEl = null;
+let _mascotEl = null, _handEl = null, _overlayEl = null;
+let _instrEl = null;           // persistent instruction bar (always on screen)
+let _toolbarEl = null;         // ?/hear/help/back/forward icon toolbar
+let _choiceEl = null;          // inline which-one card host (non-modal)
+let _curInstruction = "";      // current task's instruction text (bar default)
+let _barRestoreT = null;       // restores the bar after a transient flash
+let _curWhichAnswer = null;    // active which-step answer pattern (hear/help)
+let _flashToolEl = null;       // tool button flashing yellow for a new note length
+let _flashKind = null;         // the kind that tool places
+let _flashBaseline = 0;        // count of that kind at flash time (preset-proof)
+let _helping = false;          // guard so Help can't re-enter
 
 const _LS_LESSONS = "kidseq_lessons";
 function _lessonProg(){
@@ -5470,9 +5480,13 @@ function _narrUnlock(){
     if(p && p.then) p.then(() => setTimeout(() => { try{ _narrAudio.pause(); }catch(e){} }, 80)).catch(() => {});
   }catch(e){}
 }
-function _say(key, cb){
+// Play a narration clip (mouth animates). `flash` (default true) briefly shows
+// the clip's text over the persistent instruction bar then restores it — used
+// for praise/hints. The task instruction itself is set by _setInstruction and
+// stays on screen the whole task, so its _say calls pass flash=false.
+function _say(key, cb, flash){
   const seg = (window.KidSeqLessons.NARR || {})[key];
-  _bubbleShow(seg && seg[2] ? seg[2] : "");
+  if(flash !== false && seg && seg[2]) _flashBar(seg[2]);
   if(_narrT){ clearTimeout(_narrT); _narrT = null; }
   if(!seg || !_narrAudio){ if(cb) _lt(cb, 700); return; }
   try{
@@ -5486,12 +5500,24 @@ function _say(key, cb){
     }, seg[1] * 1000 + 120);
   }catch(e){ if(cb) _lt(cb, 700); }
 }
-function _bubbleShow(text){
-  if(!_bubbleEl) return;
-  if(!text){ _bubbleEl.classList.remove("show"); return; }
-  _bubbleEl.textContent = text;
-  _bubbleEl.classList.add("show");
-  _lt(() => _bubbleEl.classList.remove("show"), 3600);
+// The persistent instruction bar shows the current task's instruction and never
+// auto-hides (owner feedback: instruction must stay on screen all the time).
+function _setInstruction(text){
+  _curInstruction = text || "";
+  if(_barRestoreT){ clearTimeout(_barRestoreT); _barRestoreT = null; }
+  if(_instrEl){ _instrEl.textContent = _curInstruction; _instrEl.classList.remove("flash"); }
+}
+function _flashBar(text){
+  if(!_instrEl) return;
+  _instrEl.textContent = text;
+  _instrEl.classList.add("flash");
+  if(_barRestoreT) clearTimeout(_barRestoreT);
+  _barRestoreT = _lt(() => { _instrEl.textContent = _curInstruction; _instrEl.classList.remove("flash"); }, 2600);
+}
+// Replay the current task's instruction (the ? button).
+function _replayInstruction(){
+  const st = LESSON.steps[_stepIdx];
+  if(st && st.narr){ _setInstruction((window.KidSeqLessons.NARR[st.narr] || [,,""])[2]); _say(st.narr, null, false); }
 }
 
 // ---------- playback plumbing ----------
@@ -5607,25 +5633,61 @@ function _buildChrome(){
     .then(r => r.ok ? r.text() : null)
     .then(t => { if(t && t.indexOf("<svg") === 0) m.innerHTML = t; })
     .catch(() => {});
-  m.onclick = () => { const st = LESSON.steps[_stepIdx]; if(st && _lessonRunning) _say(st.narr); };
+  m.onclick = () => { if(_lessonRunning) _replayInstruction(); };
   page.appendChild(m);
   _mascotEl = m;
-  const b = document.createElement("div");
-  b.id = "lessonBubble";
-  page.appendChild(b);
-  _bubbleEl = b;
+  // Persistent instruction bar — always on screen, shows the current task.
+  const instr = document.createElement("div");
+  instr.id = "lessonInstruction";
+  page.appendChild(instr);
+  _instrEl = instr;
+  // Icon toolbar: back · ? (replay instruction) · hear (target pattern) ·
+  // help (show me) · forward. Icons only (owner feedback).
+  const bar = document.createElement("div");
+  bar.id = "lessonToolbar";
+  const mkBtn = (id, label, svg, fn) => {
+    const btn = document.createElement("button");
+    btn.className = "lessonToolBtn";
+    btn.id = id;
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+    btn.innerHTML = svg;
+    btn.onclick = fn;
+    bar.appendChild(btn);
+    return btn;
+  };
+  const I = {
+    back: '<svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    fwd:  '<svg viewBox="0 0 24 24"><path d="M9 5 L16 12 L9 19" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ask:  '<svg viewBox="0 0 24 24"><path d="M8.5 9 a3.5 3.5 0 1 1 5 3.2 c-1 0.6 -1.5 1.2 -1.5 2.3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="18.4" r="1.5" fill="currentColor"/></svg>',
+    hear: '<svg viewBox="0 0 24 24"><path d="M4 9 h3 l5 -4 v14 l-5 -4 H4 Z" fill="currentColor"/><path d="M15.5 8.5 a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 6 a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    help: '<svg viewBox="0 0 24 24"><path d="M12 3 a6 6 0 0 1 3.5 10.8 c-0.9 0.7 -1.5 1.3 -1.5 2.2 H10 c0 -0.9 -0.6 -1.5 -1.5 -2.2 A6 6 0 0 1 12 3 Z" fill="currentColor"/><rect x="9.5" y="18" width="5" height="1.8" rx="0.9" fill="currentColor"/><rect x="10" y="20.4" width="4" height="1.6" rx="0.8" fill="currentColor"/></svg>',
+  };
+  _tbBack = mkBtn("lessonBack", "Back", I.back, () => _goStep(-1));
+  mkBtn("lessonAsk", "Hear the instruction", I.ask, () => _replayInstruction());
+  _tbHear = mkBtn("lessonHear", "Hear the pattern", I.hear, () => _hearPattern());
+  _tbHelp = mkBtn("lessonHelp", "Show me how", I.help, () => _helpCurrent());
+  _tbFwd = mkBtn("lessonFwd", "Next", I.fwd, () => _goStep(1));
+  page.appendChild(bar);
+  _toolbarEl = bar;
+  // Inline which-one host (non-modal, so the toolbar stays usable).
+  const ch = document.createElement("div");
+  ch.id = "lessonChoice";
+  page.appendChild(ch);
+  _choiceEl = ch;
   // demo hand (drives the REAL onCellClick path)
   const hand = document.createElement("div");
   hand.id = "lessonHand";
   hand.textContent = "👆";
   page.appendChild(hand);
   _handEl = hand;
-  // overlay host (START / which-one / celebration)
+  // overlay host (START / celebration only — modal)
   const ov = document.createElement("div");
   ov.id = "lessonOverlay";
   page.appendChild(ov);
   _overlayEl = ov;
 }
+let _tbBack = null, _tbFwd = null, _tbHear = null, _tbHelp = null;
 function _handMoveToCell(r, c){
   const cell = _cellEl(r, c);
   const page = document.getElementById("page");
@@ -5690,56 +5752,124 @@ function _toolEl(kind){
   const idx = (LEARN_LEVEL ? LEARN_LEVEL.toolSteps : []).findIndex(t => t.kind === kind);
   return (idx >= 0 && tools[idx]) ? tools[idx] : document.getElementById("tools");
 }
+// Gentle idle affordance ONLY — a single silent sparkle on the relevant control
+// after a while. No auto-repeat of the question, no auto-completion (owner
+// feedback): the child stays in control; the Help button is the escape hatch.
 function _armIdle(st){
   if(_idleT) clearTimeout(_idleT);
   _idleT = setTimeout(() => {
     if(!_lessonRunning || (_stepPhase !== "building" && _stepPhase !== "ready")) return;
-    _idleFires++;
-    // Terminus: never leave a child stuck. If the answer is already built,
-    // auto-press play; otherwise the demo hand finishes it and we move on.
-    if(_idleFires >= 4){
-      if(_stepPhase === "ready"){ const pb = _playBtnEl(); if(pb) pb.click(); }
-      else _assistComplete(st);
-      return;
-    }
-    _say(st.narr);
     let el = null;
     if(_stepPhase === "ready") el = _playBtnEl();
     else if(st.nudge === "tool-eighth") el = _toolEl("eighth");
     else if(st.nudge === "tool-quarter") el = _toolEl("quarter");
-    else el = document.getElementById("sequencer");
-    if(el){ el.classList.remove("lessonNudge"); void el.offsetWidth; el.classList.add("lessonNudge"); _lt(() => el.classList.remove("lessonNudge"), 2600); }
-    _armIdle(st);
-  }, 8000);
+    else el = _tbHelp; // point at the Help button when there's no obvious control
+    if(el){ el.classList.remove("lessonNudge"); void el.offsetWidth; el.classList.add("lessonNudge"); _lt(() => el.classList.remove("lessonNudge"), 3000); }
+    // re-arm once more, then stop (no endless nudging)
+    _idleFires++;
+    if(_idleFires < 3) _armIdle(st);
+  }, 11000);
 }
-// Shared demo-hand assist: complete the current build step FOR the child and
-// advance (assisted = costs a star). Called from the miss ladder AND the idle
-// terminus, so a stuck child is never dead-ended (owner feedback: a3 got stuck
-// after the timeout with no way forward).
-function _assistComplete(st){
+// Flash a note-length tool yellow so a child sees how to select a NEW length
+// (owner feedback). Cleared when that tool is picked OR a note of that kind is
+// placed (tracked against the count at flash time, so a preset doesn't clear it).
+function _countKind(kind){
+  let n = 0;
+  for(let r = 0; r < rows; r++) for(const x of notesByRow[r]) if((x.kind || "quarter") === kind) n++;
+  return n;
+}
+function _flashTool(kind){
+  _clearToolFlash();
+  const el = _toolEl(kind);
+  if(!el || el.id === "tools") return;
+  el.classList.add("toolFlash");
+  _flashToolEl = el;
+  _flashKind = kind;
+  _flashBaseline = _countKind(kind);
+  el.addEventListener("click", _clearToolFlash, { once: true });
+}
+function _clearToolFlash(){
+  if(_flashToolEl){ _flashToolEl.classList.remove("toolFlash"); _flashToolEl = null; _flashKind = null; }
+}
+// Show the gap positions as empty outlined boxes for a fill-the-gap task, and
+// keep them in sync as the child fills them (owner feedback: start with empty
+// boxes). No-op for non-gap steps.
+function _refreshGaps(st){
+  if(!(st && st.locked && st.target)) return;
+  _clearGhosts();
+  const res = _evalPass(st.pass, st.target);
+  _ghostHint(res.missing);
+}
+// HELP (user-triggered): the robot shows what to do, says "now you try", then
+// RESETS the question so the child does it themselves — never auto-completes.
+function _helpCurrent(){
+  if(!_lessonRunning || _helping) return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st) return;
+  if(st.type === "which"){
+    // no "doing" to demo — replay the pattern and gently point at the answer
+    if(_curWhichAnswer) _playPatternOnce(_curWhichAnswer);
+    const cards = _choiceEl.querySelectorAll(".lessonCard");
+    const right = cards[st.answer];
+    if(right){ right.classList.add("hintPulse"); _lt(() => right.classList.remove("hintPulse"), 2600); }
+    return;
+  }
+  if(st.type !== "build") return;
+  _helpShow(st);
+}
+function _helpShow(st){
+  _helping = true;
   _clearStepTimers();
   _clearGhosts();
+  _clearToolFlash();
   if(_idleT){ clearTimeout(_idleT); _idleT = null; }
-  _stepPhase = "assist";
-  _say("g_help", async () => {
-    if(st.target){
-      const res = _evalPass(st.pass, st.target);
-      for(const id of res.extraIds){
-        for(let r = 0; r < rows; r++) if(notesByRow[r].some(n => n.id === id)){ deleteNoteById(r, id); redrawRowNotes(r); }
-      }
-      const res2 = _evalPass(st.pass, st.target);
-      await _handBuild(res2.missing);
-    }else{
-      const wanted = [];
-      const needK = (st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
-      for(let b = 0; b < cols / 2 && wanted.length < (st.pass.minNotes || 1); b++){
-        if(occ[0][b*2] === null && occ[0][b*2+1] === null) wanted.push({ row: 0, start: b*2, len: 2, kind: needK });
-      }
-      await _handBuild(wanted);
-    }
-    _stepPhase = "idle";
-    _internalPlay(cols, () => _say(_yayKey(), () => _advance(true)));
+  _stepPhase = "help";
+  _clearNotes();
+  const example = [];
+  if(!st.target){
+    const needK = (st.pass && st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
+    const n = (st.pass && st.pass.minNotes) || 1;
+    for(let b = 0; b < n && b < cols / 2; b++) example.push({ row: 0, start: b*2, len: 2, kind: needK });
+  }
+  const pattern = st.target || example;
+  _say("g_watch", () => {
+    _handBuild(pattern).then(() => {
+      _internalPlay(cols, () => _lt(() => {
+        _say("g_turn", () => {           // "Your turn!"
+          _setupGrid(st);                // reset the question for the child
+          _refreshGaps(st);
+          if(st.flashTool) _flashTool(st.flashTool);
+          _stepPhase = "building";
+          _setInstruction(_instrTextOf(st));
+          _helping = false;
+          _armIdle(st);
+        });
+      }, 500));
+    });
   });
+}
+// Hear the pattern the child must recreate or choose (owner feedback).
+function _hearPattern(){
+  if(!_lessonRunning) return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st) return;
+  if(st.type === "which" && _curWhichAnswer) return _playPatternOnce(_curWhichAnswer);
+  if(st.target) return _playPatternOnce(st.target);
+  if(st.pattern) return _playPatternOnce(st.pattern);
+  // no fixed pattern (make-your-own) — play whatever is on the grid
+  const cur = _curNotes();
+  if(cur.length) _internalPlay(cols);
+}
+function _instrTextOf(st){ return (window.KidSeqLessons.NARR[st.narr] || [,,""])[2] || ""; }
+// Toolbar button enable/disable + nav-boundary state for the current step.
+function _syncToolbar(){
+  const st = LESSON.steps[_stepIdx];
+  const hasPattern = !!(st && (st.target || st.pattern || (st.type === "which")));
+  const canHelp = !!(st && (st.type === "build" || st.type === "which"));
+  if(_tbHear) _tbHear.classList.toggle("tbDisabled", !hasPattern);
+  if(_tbHelp) _tbHelp.classList.toggle("tbDisabled", !canHelp);
+  const firstEver = (_stepIdx === 0 && !_prevLesson());
+  if(_tbBack) _tbBack.classList.toggle("tbDisabled", firstEver);
 }
 function _ghostHint(missing){
   for(const n of missing){
@@ -5753,14 +5883,19 @@ function _clearGhosts(){ document.querySelectorAll(".cell.ghostHint").forEach(c 
 function _clearStepUx(){
   _clearStepTimers();
   _clearGhosts();
+  _clearToolFlash();
   if(_idleT){ clearTimeout(_idleT); _idleT = null; }
   _idleFires = 0;
   _stepMisses = 0;
   _whichTries = 0;
   _saidPress = false;
+  _helping = false;
+  _curWhichAnswer = null;
   const pb = _playBtnEl();
   if(pb) pb.classList.remove("lessonNudge");
-  if(_overlayEl){ _overlayEl.classList.remove("show"); _overlayEl.innerHTML = ""; }
+  if(_choiceEl){ _choiceEl.classList.remove("show"); _choiceEl.innerHTML = ""; }
+  const shell = document.getElementById("sequencerShell");
+  if(shell) shell.classList.remove("choosing");
 }
 
 // ---------- completion detection (rides the redrawRowNotes funnel) ----------
@@ -5773,7 +5908,10 @@ function _lessonCheckNow(){
   if(!_lessonRunning || _stepPhase !== "building") return;
   const st = LESSON.steps[_stepIdx];
   if(!st || st.type !== "build") return;
-  _armIdle(st); // any grid activity resets the idle clock
+  // Stop flashing once the child places a note of the flashed kind (compared to
+  // the count at flash time, so a preset placed during setup doesn't clear it).
+  if(_flashToolEl && _flashKind && _countKind(_flashKind) > _flashBaseline) _clearToolFlash();
+  _idleFires = 0; _armIdle(st); // grid activity resets the idle clock
   const res = _evalPass(st.pass, st.target);
   if(res.ok){
     _stepPhase = "ready";
@@ -5781,12 +5919,14 @@ function _lessonCheckNow(){
     const pb = _playBtnEl();
     if(pb){ pb.classList.add("lessonNudge"); }
     if(!_saidPress){ _saidPress = true; _say("g_press"); }
-  }else if(_stepPhase === "ready"){
-    // grid changed back out of a passing state
-    _stepPhase = "building";
-    _saidPress = false;
-    const pb = _playBtnEl();
-    if(pb) pb.classList.remove("lessonNudge");
+  }else{
+    _refreshGaps(st);      // keep the empty-box outlines current
+    if(_stepPhase === "ready"){
+      _stepPhase = "building";
+      _saidPress = false;
+      const pb = _playBtnEl();
+      if(pb) pb.classList.remove("lessonNudge");
+    }
   }
 }
 
@@ -5801,6 +5941,9 @@ function _runStep(){
   _stepPhase = "idle";
   const st = LESSON.steps[_stepIdx];
   if(!st){ _lessonComplete(); return; }
+  // The task instruction goes up on the persistent bar immediately and stays.
+  _setInstruction(_instrTextOf(st));
+  _syncToolbar();
   if(st.type === "listen") return _stepListen(st);
   if(st.type === "freeze") return _stepFreeze(st);
   if(st.type === "demo") return _stepDemo(st);
@@ -5822,7 +5965,7 @@ function _advance(assisted){
 
 function _stepListen(st){
   _setupGrid({});
-  _say(st.narr, () => _internalPlay((st.bars || 1) * cols, () => _advance()));
+  _say(st.narr, () => _internalPlay((st.bars || 1) * cols, () => _advance()), false);
 }
 function _stepFreeze(st){
   _freezeRound = st.rounds || 2;
@@ -5839,7 +5982,7 @@ function _stepFreeze(st){
       });
     });
   };
-  _say(st.narr, () => _lt(round, 400));
+  _say(st.narr, () => _lt(round, 400), false);
 }
 function _stepDemo(st){
   _setupGrid({});
@@ -5886,49 +6029,48 @@ function _miniOfPattern(opt){
   }
   return mini;
 }
+// Which-one is INLINE (not a blocking modal), so the persistent instruction bar
+// and the ?/hear/help/nav toolbar stay usable while choosing. The grid + hearts
+// hide; the big cards sit centre-stage.
 function _stepWhich(st){
   _stepPhase = "overlay";
   _setupGrid({});
   const answer = st.options[st.answer];
-  _overlayEl.innerHTML = `
-    <div class="lessonWhich">
-      <div class="lessonWhichCards"></div>
-      <button class="lessonReplay" aria-label="Hear it again">🔊</button>
-    </div>`;
-  const cardsHost = _overlayEl.querySelector(".lessonWhichCards");
+  _curWhichAnswer = answer;
+  const shell = document.getElementById("sequencerShell");
+  if(shell) shell.classList.add("choosing");
+  _choiceEl.innerHTML = '<div class="lessonWhichCards"></div>';
+  const cardsHost = _choiceEl.querySelector(".lessonWhichCards");
   st.options.forEach((opt, idx) => {
     const card = document.createElement("button");
     card.className = "lessonCard";
     card.appendChild(_miniOfPattern(opt));
     card.onclick = () => {
+      if(_stepPhase !== "overlay") return;
       if(idx === st.answer){
         card.classList.add("correct");
-        _say(_yayKey(), () => _advance(_whichTries >= 2));
+        _stepPhase = "idle";
+        _say(_yayKey(), () => _advance(false), true);
       }else{
         card.classList.add("wrong");
-        _whichTries++;
-        if(_whichTries >= 2){
-          const right = cardsHost.children[st.answer];
-          if(right) right.classList.add("correct");
-          _say("g_help", () => _lt(() => _advance(true), 1400));
-        }else{
-          _say("g_listen", () => _playPatternOnce(answer));
-        }
+        _lt(() => card.classList.remove("wrong"), 900);
+        _say("g_listen", () => _playPatternOnce(answer), true);
       }
     };
     cardsHost.appendChild(card);
   });
-  _overlayEl.querySelector(".lessonReplay").onclick = () => _playPatternOnce(answer);
-  _overlayEl.classList.add("show");
-  _say(st.narr, () => _playPatternOnce(answer));
+  _choiceEl.classList.add("show");
+  _say(st.narr, () => _playPatternOnce(answer), false);
 }
 function _stepBuild(st){
   _setupGrid(st);
   _stepPhase = "building";
+  _refreshGaps(st);                      // gap tasks: show empty boxes to fill
+  if(st.flashTool) _flashTool(st.flashTool);  // flash a new note-length tool
   _say(st.narr, () => {
     // TOUCH-style steps open on a playing pattern (never a blank canvas).
     if(st.preset && st.preset.length) _internalPlay(cols);
-  });
+  }, false);
   _armIdle(st);
 }
 function _onUserPlayEnd(){
@@ -5938,31 +6080,22 @@ function _onUserPlayEnd(){
   const res = _evalPass(st.pass, st.target);
   if(res.ok){
     _stepPhase = "idle";
-    _say(st.yayNarr || _yayKey(), () => _advance(false));
+    _say(st.yayNarr || _yayKey(), () => _advance(false), true);
     return;
   }
-  // Miss ladder — kind, escalating, never a dead end.
+  // Miss ladder — kind hints, NO auto-completion (owner feedback). The child
+  // uses the Help button for a demo, or navigates. Never a forced finish.
   _stepMisses++;
   _stepPhase = "building";
   if(res.shiftedBy !== 0){
-    _say("g_shift", () => { if(st.target) _playPatternOnce(st.target); });
-    return;
-  }
-  if(res.restViolation && st.pass.restNarr){
-    _say(st.pass.restNarr);
-    return;
-  }
-  if(_stepMisses === 1){
-    _say("g_try", () => { if(st.target) _playPatternOnce(st.target); });
-  }else if(_stepMisses === 2 && st.target){
-    _ghostHint(res.missing);
-    _say("g_ghost");
-  }else if(_stepMisses >= 3){
-    // Demo-hand terminus: the child who never solves it still gets the
-    // celebration and forward motion (complete no-dead-end guarantee).
-    _assistComplete(st);
+    _say("g_shift", () => { if(st.target) _playPatternOnce(st.target); }, true);
+  }else if(res.restViolation && st.pass.restNarr){
+    _say(st.pass.restNarr, null, true);
+  }else if(_stepMisses >= 2 && st.target){
+    _refreshGaps(st); _ghostHint(res.missing);
+    _say("g_ghost", null, true);
   }else{
-    _say("g_try");
+    _say("g_try", () => { if(st.target) _playPatternOnce(st.target); }, true);
   }
 }
 function _stepReveal(st){
@@ -5970,10 +6103,46 @@ function _stepReveal(st){
   const shell = document.getElementById("sequencerShell");
   if(shell) shell.classList.add("staveShown"); // hearts and stave never co-visible
   if(!_staveOpen){ try{ toggleStave(); }catch(e){} }
-  _say(st.narr, () => _lt(() => _advance(), 1800));
+  _say(st.narr, () => _lt(() => _advance(), 1800), false);
 }
 let _yayIdx = 0;
 function _yayKey(){ _yayIdx = (_yayIdx + 1) % 3; return ["g_yay1", "g_yay2", "g_yay3"][_yayIdx]; }
+
+// ---------- navigation (owner feedback: back/forth through tasks + sections) --
+// Within a lesson, ◀/▶ switch tasks instantly. Crossing a boundary reloads the
+// adjacent lesson (a fresh audio-unlock tap is unavoidable across a page load,
+// since each lesson's grid config is applied at load time).
+function _prevLesson(){
+  const order = (window.KidSeqLessons && window.KidSeqLessons.ORDER) || [];
+  const i = order.indexOf(LESSON_KEY);
+  return i > 0 ? order[i - 1] : null;
+}
+function _gotoLesson(id, step){
+  try{ sessionStorage.setItem("kidseq_lesson_goto", JSON.stringify({ lesson: id, step: step })); }catch(e){}
+  window.location.href = "?lesson=" + id;
+}
+function _goStep(delta){
+  if(!_lessonRunning) return;
+  try{ stop(); }catch(e){}
+  if(_narrT){ clearTimeout(_narrT); _narrT = null; }
+  try{ if(_narrAudio) _narrAudio.pause(); }catch(e){}
+  if(_mascotEl) _mascotEl.classList.remove("talk");
+  _helping = false;
+  const target = _stepIdx + delta;
+  if(target < 0){
+    const pv = _prevLesson();
+    if(pv) _gotoLesson(pv, -1);
+    return;
+  }
+  if(target >= LESSON.steps.length){
+    if(LESSON.next) _gotoLesson(LESSON.next, 0);
+    else _lessonComplete();
+    return;
+  }
+  _stepIdx = target;
+  _saveResume(_stepIdx);
+  _runStep();
+}
 
 // ---------- start / resume / complete ----------
 function _saveResume(stepOverride){
@@ -6045,7 +6214,16 @@ function _lessonInit(){
   _buildHearts();
   _buildChrome();
   const p = _lessonProg();
-  const resume = p.resume[LESSON_KEY] ? p.resume[LESSON_KEY].step : 0;
+  // Resume step: a cross-lesson nav stash wins (step -1 = land on the last
+  // task); else the saved in-progress step; else the start.
+  let resume = p.resume[LESSON_KEY] ? p.resume[LESSON_KEY].step : 0;
+  try{
+    const g = JSON.parse(sessionStorage.getItem("kidseq_lesson_goto"));
+    if(g && g.lesson === LESSON_KEY){
+      resume = (g.step === -1) ? (LESSON.steps.length - 1) : (g.step || 0);
+      sessionStorage.removeItem("kidseq_lesson_goto");
+    }
+  }catch(e){}
   _overlayEl.innerHTML = `
     <div class="lessonStart">
       <div class="lessonStartBand">Rhythm Trail</div>
@@ -6058,6 +6236,12 @@ function _lessonInit(){
     try{ await ensureAudioReady(); }catch(e){}
     _lessonStart(resume);
   };
+  // Verification aid: ?lesson=<id>&auto=<step> skips the START gesture and jumps
+  // straight to a step (audio stays locked — for headless screenshots only).
+  try{
+    const auto = new URLSearchParams(location.search).get("auto");
+    if(auto !== null) requestAnimationFrame(() => requestAnimationFrame(() => _lessonStart(parseInt(auto, 10) || 0)));
+  }catch(e){}
   // Dev/verification hooks (harmless in prod; used by the fairness bench).
   window.KidSeqLessonDebug = {
     evalPass: (pass, target) => _evalPass(pass, target),

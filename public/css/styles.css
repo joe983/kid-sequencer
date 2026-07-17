@@ -2671,13 +2671,17 @@ html.js-loading #contentWrap{
   25%{ margin-left: -5px; }
   75%{ margin-left: 5px; }
 }
+/* Empty-box placeholder for a gap to fill: a clear dashed amber outline + tint
+   that gently pulses, so it always reads as "put a note here". */
 .cell.ghostHint{
-  box-shadow: inset 0 0 0 4px #ffd34d;
+  border-color: #e0a800;
+  border-style: dashed;
+  background: #fff7d6;
   animation: lessonGhost 1s ease-in-out infinite;
 }
 @keyframes lessonGhost{
-  0%,100%{ box-shadow: inset 0 0 0 4px rgba(255,211,77,0.9); }
-  50%{ box-shadow: inset 0 0 0 7px rgba(255,211,77,0.45); }
+  0%,100%{ box-shadow: inset 0 0 0 3px rgba(224,168,0,0.85); }
+  50%{ box-shadow: inset 0 0 0 6px rgba(224,168,0,0.45); }
 }
 .lessonNudge{ animation: lessonNudgeHop 0.65s ease-in-out 3; }
 @keyframes lessonNudgeHop{
@@ -2755,12 +2759,14 @@ html.js-loading #contentWrap{
 .lessonCard.correct{ background: #d7ffe6; border-color: #00b25a; }
 .lessonCard.wrong{ background: #ffe2e2; opacity: 0.6; }
 /* which-one mini pictures: real note blocks (solid ♩ / segmented ♫) over a
-   faint cell grid, so a quarter reads as ONE block, not two eighth squares. */
-.lessonMini{ display: flex; flex-direction: column; gap: 6px; }
-.lessonMiniRow{ display: grid; grid-auto-rows: 34px; column-gap: 4px; }
+   faint cell grid, so a quarter reads as ONE block, not two eighth squares.
+   Cells are LARGE (owner feedback: the choose-the-pattern options need to be
+   bigger) — mini cell size is set via --miniCell. */
+.lessonMini{ display: flex; flex-direction: column; gap: 10px; --miniCell: 58px; }
+.lessonMiniRow{ display: grid; grid-auto-rows: var(--miniCell); column-gap: 7px; }
 .miniBg{
   grid-row: 1;
-  border-radius: 7px;
+  border-radius: 10px;
   background: #ece7d7;
   border: 2px solid rgba(29,29,29,0.14);
 }
@@ -2768,8 +2774,8 @@ html.js-loading #contentWrap{
   grid-row: 1;
   position: relative;
   z-index: 1;
-  border: 2.5px solid #1d1d1d;
-  border-radius: 9px;
+  border: 3px solid #1d1d1d;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2777,7 +2783,89 @@ html.js-loading #contentWrap{
 .miniBlock[data-kind="eighth"]{
   background-image: linear-gradient(90deg, transparent 46%, rgba(255,253,245,0.9) 46%, rgba(255,253,245,0.9) 54%, transparent 54%);
 }
-.miniGlyph{ font-size: 20px; line-height: 1; color: #1d1d1d; transform: translateY(1px); }
+.miniGlyph{ font-size: 34px; line-height: 1; color: #1d1d1d; transform: translateY(1px); }
+
+/* ---- inline which-one host (non-modal, so the toolbar stays usable) ---- */
+#lessonChoice{
+  position: absolute;
+  top: 96px;
+  left: 0; right: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+#lessonChoice.show{ display: flex; }
+/* while choosing, the grid + hearts step aside to give the big cards room */
+#sequencerShell.choosing #sequencerWrapper,
+#sequencerShell.choosing #heartbeatRow{ visibility: hidden; }
+.lessonWhichCards{ display: flex; gap: 44px; }
+.lessonCard.hintPulse{ animation: lessonCardPulse 0.7s ease-in-out 3; border-color: #00b25a; }
+@keyframes lessonCardPulse{
+  0%,100%{ transform: translateY(0) scale(1); }
+  40%{ transform: translateY(-6px) scale(1.05); }
+}
+
+/* ---- persistent instruction bar (always on screen) ---- */
+#lessonInstruction{
+  position: absolute;
+  bottom: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 1120px;
+  min-height: 40px;
+  padding: 18px 34px;
+  background: #fffdf5;
+  border: 5px solid #1d1d1d;
+  border-radius: 22px;
+  box-shadow: 0 6px 0 rgba(0,0,0,0.2);
+  font-family: Arial, sans-serif;
+  font-size: 34px;
+  font-weight: 800;
+  color: #1d1d1d;
+  text-align: center;
+  z-index: 12;
+}
+#lessonInstruction:empty{ display: none; }
+#lessonInstruction.flash{ background: #fff6cf; border-color: #e0a800; }
+
+/* ---- icon toolbar (back · ? · hear · help · forward) ---- */
+#lessonToolbar{
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  z-index: 12;
+}
+.lessonToolBtn{
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  background: #fffdf5;
+  border: 4px solid #1d1d1d;
+  border-radius: 22px;
+  box-shadow: 0 5px 0 rgba(0,0,0,0.22);
+  color: #1d1d1d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lessonToolBtn svg{ width: 46px; height: 46px; }
+.lessonToolBtn:active{ transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.22); }
+.lessonToolBtn#lessonHelp{ background: #ffe89a; }
+.lessonToolBtn#lessonHear{ background: #cfeaff; }
+.lessonToolBtn.tbDisabled{ opacity: 0.32; pointer-events: none; }
+
+/* ---- flash a note-length tool yellow (new length introduced) ---- */
+.tool.toolFlash{ animation: toolFlashPulse 0.8s ease-in-out infinite; border-color: #e0a800 !important; }
+@keyframes toolFlashPulse{
+  0%,100%{ box-shadow: 0 0 0 0 rgba(255,200,0,0.15); }
+  50%{ box-shadow: 0 0 0 10px rgba(255,200,0,0.85); }
+}
 .lessonReplay{
   font-size: 44px;
   background: #fffdf5;
@@ -2812,5 +2900,6 @@ html.js-loading #contentWrap{
 
 @media (prefers-reduced-motion: reduce){
   .lessonHeart.beat, #lessonMascot.talk .mMouthR, #lessonMascot.bob,
-  .lessonNudge, .cell.ghostHint, #lessonConfetti span{ animation: none; }
+  .lessonNudge, .cell.ghostHint, #lessonConfetti span,
+  .tool.toolFlash, .lessonCard.hintPulse{ animation: none; }
 }
