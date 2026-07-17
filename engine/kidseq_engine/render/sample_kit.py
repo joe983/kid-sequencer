@@ -176,6 +176,55 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "rim": [("perc/woodblock.wav", 1.0)], "conga": [("perc/conga.wav", 1.0)],
         "bongo": [("perc/bongo.wav", 1.0)],
     },
+    # ---- R33 PRODUCER kits (garage) ---------------------------------------
+    # Garage plays kick/snare/hatC/hatO/rim (+ shaker seasoning) — NOT clap/sub
+    # (that's techhouse). Every producer overrides kick+snare+hatC (what the ear
+    # and the distinctness gate actually hear) plus one character voice; the rest
+    # reuse the base garage relpaths so kit_available() still covers every
+    # pattern/seasoning voice. Files come from producer_garage.pack
+    # (scripts/fetch_producer_kits.py -> assets/drums/garage/<producer>/).
+    "garage:virji": {        # Sammy Virji — punchy bouncy, crisp top
+        "kick":  [("garage/virji/kick.wav", 1.0)],
+        "snare": [("garage/virji/snare.wav", 1.0)],
+        "hatC":  [("garage/virji/hatC.wav", 1.0)],
+        "hatO":  [("garage/virji/hatO.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+    },
+    "garage:breakz": {       # Interplanetary Criminal — raw dusty, break ghosts
+        "kick":  [("garage/breakz/kick.wav", 1.0)],
+        "snare": [("garage/breakz/snare.wav", 1.0)],
+        "hatC":  [("garage/breakz/hatC.wav", 0.95)],
+        "rim":   [("garage/breakz/rim.wav", 0.9)],   # chopped breakbeat slice
+        "hatO":  [("garage/hatO.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+    },
+    "garage:sunny": {        # Conducta — bright airy, sparkly foley top
+        "kick":   [("garage/sunny/kick.wav", 1.0)],
+        "snare":  [("garage/sunny/snare.wav", 1.0)],
+        "hatC":   [("garage/sunny/hatC.wav", 1.0)],
+        "shaker": [("garage/sunny/shaker.wav", 1.0)],
+        "rim":    [("garage/rim.wav", 1.0)], "hatO": [("garage/hatO.wav", 1.0)],
+    },
+    "garage:niche": {        # Silva Bumpa — heavy driving, system-tuned
+        "kick":  [("garage/niche/kick.wav", 1.0)],
+        "snare": [("garage/niche/snare.wav", 1.0)],
+        "hatC":  [("garage/niche/hatC.wav", 1.0)],
+        "hatO":  [("garage/niche/hatO.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+    },
+    "garage:sincere": {      # MJ Cole — smooth soft, silky top
+        "kick":  [("garage/sincere/kick.wav", 1.0)],
+        "snare": [("garage/sincere/snare.wav", 0.95)],
+        "hatC":  [("garage/sincere/hatC.wav", 0.9)],
+        "rim":   [("garage/sincere/rim.wav", 1.0)],
+        "hatO":  [("garage/hatO.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+    },
+    "garage:dusk": {         # salute — rolling atmospheric, softened transients
+        "kick":  [("garage/dusk/kick.wav", 1.0)],
+        "snare": [("garage/dusk/snare.wav", 0.95)],
+        "hatC":  [("garage/dusk/hatC.wav", 0.9)],
+        "hatO":  [("garage/dusk/hatO.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+    },
 }
 
 # The six producer keys under techhouse (kit_key builds "techhouse:<producer>").

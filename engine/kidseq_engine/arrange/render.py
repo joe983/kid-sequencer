@@ -103,6 +103,27 @@ VOICE_POST: dict[str, tuple[float, float, list]] = {
     "latin:lead:chant_v": (1.0, 0.35, [("delay_beats", 0.375, 0.25, 0.3)]),
     # bigroom (Guetta): saturated future-rave stab
     "bigroom:lead:futurerave": (1.0, 0.6, [("dist", 6.0)]),
+    # ---- R33 garage producers -------------------------------------------
+    # virji (Sammy Virji): the rubbery organ bass bites; the diva chop gets a
+    # short garage slap-delay
+    "virji:bass:bass_organ": (1.0, 0.45, [("dist", 5.0)]),
+    "virji:lead:g_virji": (1.0, 0.35, [("delay_beats", 0.375, 0.20, 0.25)]),
+    # breakz (Interplanetary Criminal): cassette/DIY lo-fi — dulled + gritty
+    "breakz:lead:g_breakz": (1.0, 0.55, [("lpf", 3000.0), ("dist", 5.0)]),
+    # sunny (Conducta): sugary confetti shimmer
+    "sunny:lead:g_sunny": (1.0, 0.40, [("chorus", 0.5, 0.35, 0.3)]),
+    # niche (Silva Bumpa): Sheffield growl — harder than bassled's Erosion grit
+    "niche:bass:bass_wobble": (1.0, 0.60, [("hpf", 100.0), ("dist", 10.0)]),
+    "niche:lead:g_niche": (1.0, 0.40, [("dist", 5.0)]),
+    # sincere (MJ Cole): smooth + silky; the Rhodes bed sits warm and rolled off
+    "sincere:lead:g_sincere": (1.0, 0.35, [("lpf", 4000.0),
+                                           ("chorus", 0.3, 0.25, 0.25)]),
+    "sincere:pad:epiano": (0.85, 0.5, [("lpf12", 3200.0, 0.1)]),
+    # dusk (salute): filtered euphoric wash — long float + filtered pads
+    "dusk:lead:g_dusk": (1.0, 0.60, [("lpf", 2800.0),
+                                     ("delay_beats", 0.5, 0.30, 0.35)]),
+    "dusk:pad:string_machine": (0.9, 0.55, [("lpf12", 2400.0, 0.15),
+                                            ("chorus", 0.4, 0.3, 0.3)]),
 }
 
 

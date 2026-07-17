@@ -154,10 +154,24 @@ _DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
 _PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
     "lofi": {"riff": 2.0, "pads": 2.0},   # Fred: washed — wetter riff + pads
     "bassled": {"pads": -2.0},            # Dom Dolla: dry, sparse — drier pads
+    # R33 garage
+    "dusk": {"riff": 2.0, "pads": 2.0},   # salute: euphoric wash
+    "sincere": {"pads": 1.5},             # MJ Cole: tasteful reverb bed
+    "sunny": {"riff": 1.0},               # Conducta: airy tops
+    "virji": {"pads": -1.5},              # Sammy Virji: dry, punchy, party
+    "breakz": {"pads": -2.0},             # IPC: raw, dry, close
+    "niche": {"pads": -2.0},              # Silva Bumpa: dry + heavy
 }
-_PRODUCER_ROOM_SIZE: dict[str, float] = {"lofi": 0.46, "bassled": 0.36}
-_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0}   # Guetta: denser drums
-_PRODUCER_DRUM_CLIP_K: dict[str, float] = {"bigroom": 1.5, "lofi": 1.15}
+_PRODUCER_ROOM_SIZE: dict[str, float] = {
+    "lofi": 0.46, "bassled": 0.36,
+    "dusk": 0.50, "sincere": 0.44, "breakz": 0.32, "niche": 0.34,
+}
+_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0,    # Guetta: denser drums
+                                     "niche": -6.0}      # Silva Bumpa: heavy
+_PRODUCER_DRUM_CLIP_K: dict[str, float] = {
+    "bigroom": 1.5, "lofi": 1.15,
+    "niche": 1.40, "breakz": 1.25, "sincere": 1.05, "dusk": 1.10,
+}
 
 
 def _producer_of(kit_key: str | None) -> str | None:

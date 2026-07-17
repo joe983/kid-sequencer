@@ -141,6 +141,29 @@ def _diverse_spread(ranked_idx: list[int], z: np.ndarray, count: int) -> list[in
     return chosen
 
 
+def _locked_elsewhere(genre: str) -> set[str]:
+    """Slot-0 picks already LOCKED by other genres' producers. Never reuse them:
+    a producer's sound must be its own, across genres as well as within one
+    (techhouse's pianohouse chop and garage's breakz chop grabbing the same
+    VEH1 file rendered byte-identical leads — the smp distinctness test caught
+    it). Missing/unreadable candidate files are simply skipped."""
+    taken: set[str] = set()
+    for man_path in sorted((ROOT / "engine" / "producers").glob("*.json")):
+        if man_path.stem == genre:
+            continue
+        try:
+            other = json.loads(man_path.read_text(encoding="utf-8"))
+            cf = ROOT / other["candidates_file"]
+            cand = json.loads(cf.read_text(encoding="utf-8"))["candidates"]
+        except Exception:  # noqa: BLE001
+            continue
+        for sections in cand.values():
+            for rels in sections.values():
+                if rels:
+                    taken.add(rels[0])
+    return taken
+
+
 def triage(genre: str) -> Path:
     man = json.loads((ROOT / "engine" / "producers" / f"{genre}.json")
                      .read_text(encoding="utf-8"))
@@ -166,7 +189,10 @@ def triage(genre: str) -> Path:
             print(f"  {producer:12s} {section:10s}: {len(scored):3d} candidates"
                   f"{'' if scored else '  !! NONE — check banks globs'}")
 
-    taken: set[str] = set()
+    taken: set[str] = _locked_elsewhere(genre)
+    if taken:
+        print(f"  (cross-genre de-dup: {len(taken)} file(s) already locked by "
+              f"other genres are excluded from slot-0)")
     candidates: dict[str, dict[str, list[str]]] = {}
     for (producer, section), items in ranked.items():
         if not items:
