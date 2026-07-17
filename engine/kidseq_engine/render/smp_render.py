@@ -39,7 +39,7 @@ SMP_VOICES: dict[str, tuple[str, tuple[str, str]]] = {
     "g_virji":    ("garage/virji/chop.wav", ("sf", "pad_organ")),
     "g_breakz":   ("garage/breakz/chop.wav", ("vst", "stab_vocal")),
     "g_sunny":    ("garage/sunny/chop.wav", ("vst", "stab_vocal")),
-    "g_niche":    ("garage/niche/stab.wav", ("vst", "stab_rave")),
+    "g_niche":    ("garage/niche/stab.wav", ("vst", "stab_vocal")),
     "g_sincere":  ("garage/sincere/chop.wav", ("sf", "pad_epiano")),
     "g_dusk":     ("garage/dusk/chop.wav", ("vst", "stab_vocal")),
 }

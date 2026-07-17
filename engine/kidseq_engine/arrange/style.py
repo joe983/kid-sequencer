@@ -641,13 +641,17 @@ _STACK_W: dict[str, list[float]] = {
 # ---------------------------------------------------------------------------
 _PRODUCER_MENU["garage"] = (
     ["virji", "breakz", "sunny", "niche", "sincere", "dusk"], [1, 1, 1, 1, 1, 1])
+# R33b UKG-authenticity (owner: "sounds like nu school breakz"): the rave/
+# techno pads (dub_chord/dark/string_machine/supersaw_chord/glass) are OUT of
+# every garage row — organ skank, Rhodes/FM tines, clav and warm pads are the
+# quintessential UKG chord palette.
 _PRODUCER_PAD_MENU.update({
     "virji": ["organ", "pluck"],
-    "breakz": ["dub_chord", "dark"],
-    "sunny": ["pluck", "organ", "glass"],
-    "niche": ["dark", "organ"],
+    "breakz": ["fmep", "warm"],
+    "sunny": ["pluck", "organ", "clav"],
+    "niche": ["organ", "clav"],
     "sincere": ["epiano", "piano"],
-    "dusk": ["string_machine", "warm", "supersaw_chord"],
+    "dusk": ["warm", "strings_pad", "epiano"],
 })
 _PRODUCER_RHYTHM.update({
     "virji": ([1, 0], None),        # offbeat organ skank
@@ -659,9 +663,9 @@ _PRODUCER_RHYTHM.update({
 })
 _PRODUCER_BASS.update({
     "virji": (["bass_organ", "bass_funk"], [0.70, 0.30]),      # organ bass = hook
-    "breakz": (["bass_sub_roll", "bass_reese"], [0.60, 0.40]), # dark minimal sub
+    "breakz": (["bass_sub_roll", "bass_sub808"], [0.60, 0.40]),  # dark minimal sub
     "sunny": (["bass_pluck", "bass_round"], [0.65, 0.35]),     # springy warm
-    "niche": (["bass_wobble", "bass_reese"], [0.65, 0.35]),    # growl mid-bass lead
+    "niche": (["bass_wobble", "bass_organ"], [0.65, 0.35]),    # growl lead / organ stabs
     "sincere": (["bass_round", "bass"], [0.70, 0.30]),         # soft round jazzy
     "dusk": (["bass_sub_roll", "bass_round"], [0.60, 0.40]),   # deep rolling sub
 })
@@ -748,10 +752,12 @@ LEAD_STACKS.update({
         [("organ_v", 0, -10.0), ("shimmer", 12, -14.0)],
         [("keys", 0, -10.0), ("shimmer", 12, -14.0)],
     ],
+    # R33b: the rave layers (body/pad_dark, rave_stab, dub/dub_chord,
+    # machine_strings) are OUT — UKG lead texture is organ/Rhodes/piano/vocal.
     "garage:breakz": [
-        [("g_breakz", 0, -10.0), ("body", -12, -14.0)],
-        [("body", 0, -10.0)],
-        [("keys", 0, -11.0), ("body", -12, -14.0)],
+        [("g_breakz", 0, -10.0), ("keys", 0, -14.0)],
+        [("keys", 0, -10.0)],
+        [("vocal_stab", 0, -11.0), ("keys", 0, -14.0)],
     ],
     "garage:sunny": [
         [("g_sunny", 0, -9.0), ("shimmer", 12, -14.0)],
@@ -759,9 +765,9 @@ LEAD_STACKS.update({
         [("bellglass", 12, -10.0), ("keys", 0, -14.0)],
     ],
     "garage:niche": [
-        [("g_niche", 0, -9.0), ("body", -12, -14.0)],
-        [("body", 0, -10.0), ("rave_stab", 0, -14.0)],
-        [("dub", 0, -10.0)],
+        [("g_niche", 0, -9.0), ("organ_v", 0, -14.0)],
+        [("organ_v", 0, -10.0)],
+        [("vocal_stab", 0, -10.0), ("organ_v", 0, -14.0)],
     ],
     "garage:sincere": [
         [("g_sincere", 0, -9.0), ("keys", 0, -13.0)],
@@ -769,9 +775,9 @@ LEAD_STACKS.update({
         [("piano", 0, -10.0)],
     ],
     "garage:dusk": [
-        [("g_dusk", 0, -9.0), ("machine_strings", 0, -14.0)],
-        [("machine_strings", 0, -10.0), ("shimmer", 12, -14.0)],
-        [("strings", 12, -11.0), ("body", -12, -14.0)],
+        [("g_dusk", 0, -9.0), ("strings", 0, -14.0)],
+        [("strings", 0, -10.0), ("shimmer", 12, -14.0)],
+        [("keys", 0, -10.0), ("strings", 0, -14.0)],
     ],
 })
 

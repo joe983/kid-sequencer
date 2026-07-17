@@ -112,7 +112,11 @@ def populate_assets(force_vsco: bool = False) -> str:
     out += _run("scripts/fetch_drumkits.py")
     out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_extras.py")  # engine-only alt hits + breakbeat fills (R17)
-    out += _run("scripts/fetch_producer_kits.py")  # R32 per-producer techhouse sound sources
+    # R32/R33 per-producer sound sources. ALWAYS --force: pack contents change
+    # across producer rounds under the SAME voice filenames, so a skip-existing
+    # unpack would leave stale audio on the volume (the gate would then measure
+    # the previous round's samples — the owner's verify-by-content lesson).
+    out += _run("scripts/fetch_producer_kits.py", "--force")
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())

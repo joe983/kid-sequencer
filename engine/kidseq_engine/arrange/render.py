@@ -120,10 +120,11 @@ VOICE_POST: dict[str, tuple[float, float, list]] = {
                                            ("chorus", 0.3, 0.25, 0.25)]),
     "sincere:pad:epiano": (0.85, 0.5, [("lpf12", 3200.0, 0.1)]),
     # dusk (salute): filtered euphoric wash — long float + filtered pads
+    # (R33b: the filtered-wash pad colour moved from string_machine to warm)
     "dusk:lead:g_dusk": (1.0, 0.60, [("lpf", 2800.0),
                                      ("delay_beats", 0.5, 0.30, 0.35)]),
-    "dusk:pad:string_machine": (0.9, 0.55, [("lpf12", 2400.0, 0.15),
-                                            ("chorus", 0.4, 0.3, 0.3)]),
+    "dusk:pad:warm": (0.9, 0.55, [("lpf12", 2400.0, 0.15),
+                                  ("chorus", 0.4, 0.3, 0.3)]),
 }
 
 
