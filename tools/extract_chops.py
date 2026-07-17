@@ -44,6 +44,10 @@ SOURCES: dict[str, str] = {
     "gs_vox": "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Vox Loops/*.wav",
     "lchz_vox": "LCHZ_samples/LCHZ_vox loops/*.wav",
     "lchz_synth": "LCHZ_samples/LCHZ_synth loops/*.wav",
+    # Loop Cult CONTROL (owner-added 2026-07-16 — a dedicated UKG pack):
+    # key-tagged synth chords/leads + melodic-combi loops -> stab/chop segments
+    "lc_synth": "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth Loops/*.wav",
+    "lc_combi": "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Melodic Combi Loops/*.wav",
 }
 
 MIN_S, MAX_S = 0.35, 1.4

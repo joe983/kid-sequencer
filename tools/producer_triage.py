@@ -208,6 +208,27 @@ def triage(genre: str) -> Path:
         z = _zmatrix(feats)
         count = int(recipe[producer][section].get("count", _DEFAULT_COUNT))
         picks = _diverse_spread(list(range(len(order))), z, count)
+        # manifest "ensure" rules: guarantee named banks appear in the sheet.
+        # Farthest-point diversity can drown a small NEW bank among hundreds of
+        # older candidates (the owner bought Loop Cult and 7/12 kick+snare
+        # sheets offered zero LC slots) — the owner can only pick what they can
+        # hear. Replace tail picks (never slot 0, never an already-matching
+        # slot) with the bank's best-ranked candidates until min is met.
+        for rule in man.get("ensure", []):
+            substr, need = rule["match"], int(rule.get("min", 1))
+            def _m(i):
+                return substr in items[order[i]][0]
+            have = sum(1 for i in picks if _m(i))
+            if have >= need:
+                continue
+            pool = [i for i in range(len(order)) if _m(i) and i not in picks]
+            repl = [i for i in reversed(range(1, len(picks)))
+                    if not _m(picks[i])]
+            for i in repl:
+                if have >= need or not pool:
+                    break
+                picks[i] = pool.pop(0)   # best-ranked bank candidate first
+                have += 1
         rels = [items[order[i]][0] for i in picks]
         candidates.setdefault(producer, {})[section] = rels
 
