@@ -451,6 +451,72 @@ def battery2(genre: str = "techhouse", base: int = 0) -> None:
         print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
+@app.local_entrypoint()
+def signatures(genre: str = "garage", base: int = 7000) -> None:
+    """SHOWCASE: each producer at its MOST characteristic — "how wildly
+    different can these six sound".
+
+    battery2 optimises song-SHAPE diversity, which routinely lands takes where
+    the producer's identity ISN'T speaking (lead_stack=None so the real chop
+    never plays, a secondary bass patch, or percussive mode — which ignores the
+    producer pad menu entirely and applies the skeletal doctrine). Those takes
+    converge no matter how distinct the sound sources are.
+
+    This scans, per producer, for a SIGNATURE take:
+      * its OWN user sequence (manifest battery pairs — a different melody,
+        instrument, key and tempo per producer),
+      * production_mode == melodic  (so the producer palette expresses),
+      * lead_stack == 0             (the signature stack, led by the producer's
+                                     REAL repitched one-shot),
+      * bass_patch == the producer's signature patch (first in _PRODUCER_BASS),
+    then picks the least-used song_shape among the hits so the six still differ
+    structurally. Real, reproducible variation numbers — no forced-style hook
+    in prod code. -> out/showcase/PRODUCERS/<genre>/signatures/. Resumable."""
+    import json
+    import sys as _sys
+
+    _sys.path.insert(0, str(ENGINE_LOCAL))
+    from kidseq_engine.arrange.style import _PRODUCER_BASS, choose_style
+    from kidseq_engine.producer_manifest import load_manifest
+    from kidseq_engine.sequence import parse_sequence
+
+    man = load_manifest(genre)
+    legend = man.legend
+    plan, dests, used = [], [], {}
+    for i, (rf, target) in enumerate(man.battery_pairs):
+        payload = json.loads((ENGINE_LOCAL / rf).read_text(encoding="utf-8"))
+        tempo = int(payload["tempo"])
+        riff = parse_sequence(payload)
+        sig_bass = _PRODUCER_BASS[target][0][0]
+        b, hits, v = base + i * 211, [], base + i * 211
+        while len(hits) < 12 and v < b + 4000:
+            st = choose_style(riff, v)
+            if (st.producer_style == target and st.production_mode == "melodic"
+                    and st.lead_stack == 0 and st.bass_patch == sig_bass):
+                hits.append((v, st.structure.song_shape))
+            v += 1
+        if not hits:
+            print(f"  {target}: NO SIGNATURE take found for {rf}")
+            continue
+        hits.sort(key=lambda h: used.get(h[1], 0))   # least-used shape first
+        v, shape = hits[0]
+        used[shape] = used.get(shape, 0) + 1
+        print(f"  {target:<9} {Path(rf).name:<26} v={v} shape={shape:<12} "
+              f"tempo={tempo} instr={payload.get('instrument'):<8} "
+              f"bass={sig_bass:<14} ({legend.get(target, target)})")
+        plan.append((rf, genre, tempo, v))
+        dests.append((target, v))
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre / "signatures"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    pending = [(p, d) for p, d in zip(plan, dests)
+               if not (dst_dir / f"sig_{d[0]}_v{d[1]}.mp3").exists()]
+    for (p, (target, v)), mp3 in zip(pending,
+                                     render_showcase_item.starmap([p for p, _ in pending])):
+        dst = dst_dir / f"sig_{target}_v{v}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
 # Null-A/B fixtures (R31): non-techhouse genres at pinned variations. Rendered
 # once per engine revision; producer-axis rounds must leave these byte-identical
 # (cross-process compare — see NEXT.md determinism caveat).
