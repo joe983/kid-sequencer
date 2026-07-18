@@ -712,14 +712,15 @@ _PRODUCER_RUMBLE.update({
     "sincere": ([False], None),
     "boinkpop": ([False], None),
 })
-# R34 swing floor 0.22 (crew-era MPC band 61-66%; research-pinned per strain)
+# R34 swing floor 0.22 (crew-era MPC band 61-66%). R34c: whole band bumped
+# +0.02-0.04 (owner: "hats need more swing") — ceiling 0.32 ≈ the 66% triplet.
 _PRODUCER_SWING.update({
-    "crewdark": ([0.24], None),
-    "partybounce": ([0.30], None),    # maximum bounce
-    "stabriddim": ([0.22], None),     # rowdier = slightly straighter
-    "coldbass": ([0.24], None),
-    "sincere": ([0.26], None),
-    "boinkpop": ([0.28], None),
+    "crewdark": ([0.28], None),
+    "partybounce": ([0.32], None),    # maximum bounce
+    "stabriddim": ([0.24], None),     # rowdier = slightly straighter
+    "coldbass": ([0.26], None),
+    "sincere": ([0.28], None),
+    "boinkpop": ([0.30], None),
 })
 # R34 per-strain grids (indices into _SKELETON_MENU/DRUM_SKELETONS["garage"]:
 # 0=legacy base, 1=displaced, 2=Grid A sparse, 3=Grid B boink, 4=Grid C 4x4)
@@ -1208,6 +1209,13 @@ def choose_style(riff: Riff, variation: int = 0) -> ArrangeStyle:
         elif producer in ("discofunk", "bigroom"):
             # zero lo-fi grit in the glossy palettes — crackle stays rare
             texture_menu, texture_w = [None, "crackle"], [0.70, 0.30]
+        elif producer in ("sincere", "partybounce", "boinkpop", "coldbass"):
+            # R34c (owner: "too much crackle and noise for the genre. This
+            # was a cleaner sexier sound"): crew-era UKG is CLEAN — no bed
+            texture_menu, texture_w = [None], None
+        elif producer in ("crewdark", "stabriddim"):
+            # a taste of grit at most in the two dark strains
+            texture_menu, texture_w = [None, "crackle"], [0.85, 0.15]
     else:
         texture_menu, texture_w = _PERC_TEXTURE.get(
             riff.drum_style or "", (["drone", "wash", "metal"], None))

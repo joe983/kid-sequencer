@@ -34,7 +34,9 @@ DRUM_PATTERNS: dict[str, dict[str, list[float]]] = {
         "kick":  [1,0,0,0, 0,0,.90,0, 0,0,.85,0, 0,0,0,0],
         "snare": [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0],
         "rim":   [0,0,0,.25, 0,0,0,0, 0,.25,0,0, 0,0,0,.30],
-        "hatC":  [.28,0,.16,.12, .28,0,.16,0, .28,0,.16,.12, .28,0,.18,0],
+        # R34c skippier hats: odd-16th content at 3,7,11,15 so the swing has
+        # something to move on every beat (era 16th shuffle), velocities up
+        "hatC":  [.34,0,.20,.15, .34,0,.20,.14, .34,0,.20,.15, .34,0,.22,.16],
         "hatO":  [0,0,.22,0, 0,0,.22,0, 0,0,.22,0, 0,0,.22,0],
     },
     # Ported from the approved 140bpm pack beat (2026-07-02): harder kicks +

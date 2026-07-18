@@ -140,7 +140,9 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 # 'drums just need to knock' (Metro Boomin's engineer). R17: pulled 4 dB and
 # the board de-boxed (owner: "reverb on the drums … boxey, not in the same
 # space as the rest") — the shared return carries more of the space instead.
-_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
+# R34c: garage drum-room bus -21 -> -24 (owner: "too much reverb on
+# snare/drums in general" — the era kit is dry and close)
+_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -24.0,
                  "reggaeton": -21.0}
 
 # drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
@@ -159,12 +161,12 @@ _PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
     # R34 garage crew-era DE-WASH (owner: "too washy, too much reverb
     # everywhere"; the era's club mixes are dry and punchy): every strain
     # trims the sends — no positive send delta anywhere in garage.
-    "crewdark": {"pads": -1.0},           # cinematic but tight
-    "partybounce": {"pads": -1.5},        # dry party bounce
-    "stabriddim": {"pads": -2.0, "riff": -1.0},  # riddim = riff + drums, close
-    "coldbass": {"pads": -2.0},           # icy, minimal, near-field
-    "sincere": {"pads": -0.5},            # tasteful, no longer wet
-    "boinkpop": {"pads": -1.0},           # pop-tight
+    "crewdark": {"pads": -1.0, "drums": -3.0},   # R34c: drums drier still
+    "partybounce": {"pads": -1.5, "drums": -3.0},
+    "stabriddim": {"pads": -2.0, "riff": -1.0, "drums": -3.0},
+    "coldbass": {"pads": -2.0, "drums": -3.0},
+    "sincere": {"pads": -0.5, "drums": -3.0},
+    "boinkpop": {"pads": -1.0, "drums": -3.0},
 }
 _PRODUCER_ROOM_SIZE: dict[str, float] = {
     "lofi": 0.46, "bassled": 0.36,

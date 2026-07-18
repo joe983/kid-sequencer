@@ -101,8 +101,10 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
         "kick":  [("garage/kick.wav", 1.0)],
         "snare": [("garage/snare.wav", 1.0)],
         "rim":   [("garage/rim.wav", 1.0)],
-        "hatC":  [("garage/hatC.wav", 1.0)],
-        "hatO":  [("garage/hatO.wav", 1.0)],
+        # R34c hats up 1.0 -> 1.2 (owner: "hi hats need to be much more
+        # prominent in the mix, this is a defining feature of the genre")
+        "hatC":  [("garage/hatC.wav", 1.2)],
+        "hatO":  [("garage/hatO.wav", 1.15)],
         "shaker": [("perc/shaker.wav", 1.0)],   # seasoning-variant voice
     },
     # ---- R32b PRODUCER kits (techhouse) -----------------------------------
@@ -185,43 +187,43 @@ KITS: dict[str, dict[str, list[tuple[str, float]]]] = {
     "garage:crewdark": {     # So Solid — sparse dark, tight pitched-up hits
         "kick":  [("garage/crewdark/kick.wav", 1.0)],
         "snare": [("garage/crewdark/snare.wav", 1.0)],
-        "hatC":  [("garage/crewdark/hatC.wav", 0.95)],
+        "hatC":  [("garage/crewdark/hatC.wav", 1.35)],
         "rim":   [("garage/crewdark/rim.wav", 1.0)],
-        "hatO":  [("garage/hatO.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+        "hatO":  [("garage/hatO.wav", 1.15)], "shaker": [("perc/shaker.wav", 1.0)],
     },
     "garage:partybounce": {  # Heartless — bright 4x4 bounce, tambourine top
         "kick":  [("garage/partybounce/kick.wav", 1.0)],
         "snare": [("garage/partybounce/snare.wav", 1.0)],
-        "hatC":  [("garage/partybounce/hatC.wav", 1.0)],
+        "hatC":  [("garage/partybounce/hatC.wav", 1.35)],
         "shaker": [("garage/partybounce/shaker.wav", 1.0)],
-        "rim":   [("garage/rim.wav", 1.0)], "hatO": [("garage/hatO.wav", 1.0)],
+        "rim":   [("garage/rim.wav", 1.0)], "hatO": [("garage/hatO.wav", 1.15)],
     },
     "garage:stabriddim": {   # More Fire — harder kicks, proto-grime snap
         "kick":  [("garage/stabriddim/kick.wav", 1.0)],
         "snare": [("garage/stabriddim/snare.wav", 1.0)],
-        "hatC":  [("garage/stabriddim/hatC.wav", 1.0)],
-        "hatO":  [("garage/stabriddim/hatO.wav", 1.0)],
+        "hatC":  [("garage/stabriddim/hatC.wav", 1.35)],
+        "hatO":  [("garage/stabriddim/hatO.wav", 1.25)],
         "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
     },
     "garage:coldbass": {     # Pay As U Go — icy thin tops, deep kick
         "kick":  [("garage/coldbass/kick.wav", 1.0)],
         "snare": [("garage/coldbass/snare.wav", 1.0)],
-        "hatC":  [("garage/coldbass/hatC.wav", 0.9)],
-        "hatO":  [("garage/coldbass/hatO.wav", 0.95)],
+        "hatC":  [("garage/coldbass/hatC.wav", 1.35)],
+        "hatO":  [("garage/coldbass/hatO.wav", 1.25)],
         "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
     },
     "garage:sincere": {      # MJ Cole — brushed, soft, silky
         "kick":  [("garage/sincere/kick.wav", 1.0)],
         "snare": [("garage/sincere/snare.wav", 0.95)],
-        "hatC":  [("garage/sincere/hatC.wav", 0.9)],
+        "hatC":  [("garage/sincere/hatC.wav", 1.35)],
         "rim":   [("garage/sincere/rim.wav", 1.0)],
-        "hatO":  [("garage/hatO.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
+        "hatO":  [("garage/hatO.wav", 1.15)], "shaker": [("perc/shaker.wav", 1.0)],
     },
     "garage:boinkpop": {     # Artful Dodger — punchy pop 2-step, crisp top
         "kick":  [("garage/boinkpop/kick.wav", 1.0)],
         "snare": [("garage/boinkpop/snare.wav", 1.0)],
-        "hatC":  [("garage/boinkpop/hatC.wav", 1.0)],
-        "hatO":  [("garage/boinkpop/hatO.wav", 1.0)],
+        "hatC":  [("garage/boinkpop/hatC.wav", 1.35)],
+        "hatO":  [("garage/boinkpop/hatO.wav", 1.25)],
         "rim":   [("garage/rim.wav", 1.0)], "shaker": [("perc/shaker.wav", 1.0)],
     },
 }
