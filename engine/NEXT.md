@@ -19,6 +19,18 @@ signatures set is in the main checkout
 WAITING ON OWNER EARS. The freeze on NEW genres (dnb/hiphop/drill/reggaeton)
 still stands until the owner explicitly reopens the playbook.
 
+## OWNER VERDICT on R34f (2026-07-20): five of six APPROVED — "they all sound good"
+
+Garage drums signed off except ONE known issue, deliberately parked (owner:
+"don't remake for now, let's move along"): **the sincere take has background
+noise — "kind of like the hat frequency but more like a scraping sound".**
+When this reopens, prime suspects (its hat/snare are now clean template
+picks, so look at the OTHER hf sources in that take): sincere's rim
+`LC_CNTRL_Perc_08` (a perc one-shot playing the dense rim rows), the
+`smp_swell` candy `LC_CNTRL_Fx_Atmos_03`, or the shaker contour overlay
+riding every 16th at swing 0.32. Diagnose by muting one at a time on
+v7862 / `showcase_garage_p5.json` before swapping anything.
+
 ## R34f: sincere in-family + drums up front/drier (2026-07-20, Modal-verified, awaiting ears)
 
 Owner notes on R34e: "sincere one drums are still bad — make them more like
