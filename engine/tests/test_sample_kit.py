@@ -185,6 +185,24 @@ def test_render_is_non_silent_and_right_length_when_assets_present():
     assert float(np.max(np.abs(buf))) > 0.05  # real hits, not silence
 
 
+def test_garage_drums_render_mono_others_keep_stereo():
+    # R34e: garage (incl. producer strains) renders drums MONO — owner: era
+    # garage was mixed mono for mono club systems; the L/R hat spread read as
+    # confusing. Null contract: other genres keep their stereo pan image.
+    for style in ("garage", "garage:boinkpop", "garage:coldbass"):
+        if not sample_kit.kit_available(style):
+            print(f"  (skipped {style}: drum assets not fetched)")
+            continue
+        buf = sample_kit.render_drums_samples(style, 134, 2, SR)
+        assert np.array_equal(buf[:, 0], buf[:, 1]), f"{style} not mono"
+    for style in ("techhouse", "drill"):
+        if not sample_kit.kit_available(style):
+            print(f"  (skipped {style}: drum assets not fetched)")
+            continue
+        buf = sample_kit.render_drums_samples(style, 128, 2, SR)
+        assert not np.array_equal(buf[:, 0], buf[:, 1]), f"{style} lost stereo"
+
+
 def test_producer_kits_static():
     # R32b: the six techhouse producer kits each exist, cover the FULL techhouse
     # voice set (so kit_available/kit render never leave a pattern voice silent),

@@ -429,9 +429,13 @@ def render_drums_samples(style: str, tempo: float, bars: int, sr: int = SR,
         return np.zeros((bars * bar_samples + sr, 2), dtype=np.float32)
     step_s = spb / 4.0  # 16 steps/bar
     buf = np.zeros((bars * bar_samples + sr, 2), dtype=np.float32)
-    # pan each mono one-shot to stereo once, up front (not per hit)
+    # pan each mono one-shot to stereo once, up front (not per hit).
+    # R34e: garage (incl. producer strains) renders drums MONO — owner: era
+    # garage was mixed mono for mono club systems; the L/R hat spread read as
+    # confusing and soft. Other genres keep their stereo image.
+    _mono = style.startswith("garage")
     voices = {name: pan_stereo(_voice_buffer(name, _voice_layers(style, name, takes)),
-                               _PAN.get(name, 0.0))
+                               0.0 if _mono else _PAN.get(name, 0.0))
               for name in pat if name in kit}
     from .drums import swung_step_offset  # shared groove clock (pump uses it too)
 

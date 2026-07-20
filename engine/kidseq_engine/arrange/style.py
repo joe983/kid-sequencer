@@ -712,36 +712,41 @@ _PRODUCER_RUMBLE.update({
     "sincere": ([False], None),
     "boinkpop": ([False], None),
 })
-# R34 swing floor 0.22 (crew-era MPC band 61-66%). R34c: whole band bumped
-# +0.02-0.04 (owner: "hats need more swing") — ceiling 0.32 ≈ the 66% triplet.
+# R34e: TRIPLET band 0.30-0.33 for every strain (owner: "it has to have the
+# triplets to be garage" — 0.333 = the swung 16th lands exactly on the triplet
+# grid; the old 0.24-0.28 lower half read as nu-school-breaks straightness).
+# boinkpop 0.30 unchanged = the owner-approved reference groove.
 _PRODUCER_SWING.update({
-    "crewdark": ([0.28], None),
-    "partybounce": ([0.32], None),    # maximum bounce
-    "stabriddim": ([0.24], None),     # rowdier = slightly straighter
-    "coldbass": ([0.26], None),
-    "sincere": ([0.28], None),
+    "crewdark": ([0.31], None),
+    "partybounce": ([0.33], None),    # maximum bounce, exact triplet
+    "stabriddim": ([0.30], None),
+    "coldbass": ([0.31], None),
+    "sincere": ([0.32], None),
     "boinkpop": ([0.30], None),
 })
 # R34 per-strain grids (indices into _SKELETON_MENU/DRUM_SKELETONS["garage"]:
 # 0=legacy base, 1=displaced, 2=Grid A sparse, 3=Grid B boink, 4=Grid C 4x4)
+# R34e: boinkpop's Grid B "boink" LEADS every strain (owner: "copy those
+# drums for the rest, with minor alterations in rhythm" — boinkpop is the
+# approved reference). Each strain keeps its old grid as the minority ALT =
+# the minor rhythm alteration; partybounce's 4x4 shuffle survives as its alt.
 _PRODUCER_SKEL.update({
-    "crewdark": ([2, 1], [0.70, 0.30]),
-    "partybounce": ([4], None),
-    "stabriddim": ([3, 1], [0.60, 0.40]),
-    "coldbass": ([2, 1], [0.60, 0.40]),
-    "sincere": ([2, 0], [0.60, 0.40]),
+    "crewdark": ([3, 2], [0.65, 0.35]),
+    "partybounce": ([3, 4], [0.60, 0.40]),
+    "stabriddim": ([3, 1], [0.65, 0.35]),
+    "coldbass": ([3, 2], [0.60, 0.40]),
+    "sincere": ([3, 0], [0.60, 0.40]),
     "boinkpop": ([3], None),
 })
 # seasoning (1=rim skips, 2=hatO, 3=shaker contour, 4=skip-hat pairs, 5=tamb)
+# R34e: boinkpop's variant pair [4, 3] (skip-hat pairs + shaker contour) is
+# the template; each strain leads with 4 and keeps one identity alt.
 _PRODUCER_DRUMV.update({
-    "crewdark": [1, 0],
-    "partybounce": [3, 5, 2],
-    "stabriddim": [4, 0],
-    # R34d: coldbass rides the skip-hat-pair row half its takes (was [0, 1] =
-    # dense base hatC on EVERY take — the only strain never thinned; "icy
-    # minimal" wants sparse tops and the owner heard its hats as the worst).
+    "crewdark": [4, 1],
+    "partybounce": [3, 5],          # Heartless keeps its carnival shaker/tamb
+    "stabriddim": [4, 1],
     "coldbass": [4, 1],
-    "sincere": [1, 4],
+    "sincere": [4, 1],
     "boinkpop": [4, 3],
 })
 _PRODUCER_FILL.update({          # indices into _FILL_MENU["garage"] (0-2)

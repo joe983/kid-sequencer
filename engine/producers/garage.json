@@ -3,7 +3,7 @@
  "tempo": 134,
  "pack": "producer_garage.pack",
  "candidates_file": "tools/producer_candidates/garage.json",
- "_note": "R34 CREW-ERA strains (owner-directed: So Solid / Heartless / More Fire / Pay As U Go + Artful Dodger + MJ Cole; the 2023-25 revival anchors are retired). Signatures: engine/docs/producer_signatures_garage.md. VOICE SET: garage plays kick/snare/hatC/hatO/rim (+ shaker seasoning). drum_map rows mirror the KITS overrides exactly. Pools: GarageSessions + LCHZ + Loop Cult CONTROL core, VEH1 House Rimshots, 808/909 hardware for coldbass, sung-vocal ukg-chops for the chops. AUDITION-FIRST: the owner picks every sound from the contact sheets BEFORE the pack is built. gate thresholds are PLACEHOLDERS until the first Modal matrix. R34c producer-notes pass: snare trims 150ms all strains (tighter/snappier, less sustain), hats boosted in kits, drum sends -3dB, room bus -24, crackle rare/off, swing band 0.24-0.32. R34d owner-notes pass: hat picks de-washed (coldbass hatC was a 512ms open->closed 909 sample; hatO cymbals swapped), hatC trim 140ms/hatO 320ms non-boinkpop, hatC gain 1.25 non-boinkpop, chop steady-head trims + frame-median root detection (3 baked roots were 2-17 st wrong = the off-key leads), stabriddim stab -> steady SynthBass single note, crewdark kick -> punchier Kick_08.",
+ "_note": "R34 CREW-ERA strains (owner-directed: So Solid / Heartless / More Fire / Pay As U Go + Artful Dodger + MJ Cole; the 2023-25 revival anchors are retired). Signatures: engine/docs/producer_signatures_garage.md. VOICE SET: garage plays kick/snare/hatC/hatO/rim (+ shaker seasoning). drum_map rows mirror the KITS overrides exactly. Pools: GarageSessions + LCHZ + Loop Cult CONTROL core, VEH1 House Rimshots, 808/909 hardware for coldbass, sung-vocal ukg-chops for the chops. AUDITION-FIRST: the owner picks every sound from the contact sheets BEFORE the pack is built. gate thresholds are PLACEHOLDERS until the first Modal matrix. R34c producer-notes pass: snare trims 150ms all strains (tighter/snappier, less sustain), hats boosted in kits, drum sends -3dB, room bus -24, crackle rare/off, swing band 0.24-0.32. R34d owner-notes pass: hat picks de-washed (coldbass hatC was a 512ms open->closed 909 sample; hatO cymbals swapped), hatC trim 140ms/hatO 320ms non-boinkpop, hatC gain 1.25 non-boinkpop, chop steady-head trims + frame-median root detection (3 baked roots were 2-17 st wrong = the off-key leads), stabriddim stab -> steady SynthBass single note, crewdark kick -> punchier Kick_08. R34e owner-notes pass: garage drums MONO (era club systems; hat L/R spread confused), triplet swing band 0.30-0.33 all strains, boinkpop = drum template (grid B leads every strain w/ old grid as minority alt, variant 4 skip-hat pairs leads, LC hat family + snappy low-body snares everywhere; boinkpop itself byte-untouched), snare picks re-chosen for SNAP not punch (crewdark Snare_15, partybounce LC_06, coldbass LCHZ_10, sincere 909 HANDCLP2; stabriddim keeps LC_07).",
  "ensure": [
   {
    "match": "Loop Cult",
@@ -128,8 +128,9 @@
  },
  "gate": {
   "tempo": 134,
-  "t_drums": 2.0,
-  "t_base": 1.5
+  "t_drums": 1.0,
+  "t_base": 0.7,
+  "_note": "R34e: thresholds LOWERED deliberately — owner: 'copy boinkpop's drums for the rest with minor alterations'. Drum kits now share one sound family (LC hats / GS snappy snares / GS kicks) by design; strain identity carries in bass/lead/pads. Gate still catches byte-identical/converged kits."
  },
  "battery": {
   "base": 4000,
