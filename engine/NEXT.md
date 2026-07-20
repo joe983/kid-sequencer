@@ -1,5 +1,28 @@
 # Where we are / next session
 
+## ✅ DEPLOYED 2026-07-20 — R1–R34f IS LIVE IN PRODUCTION
+
+`modal deploy engine/infra/modal_app.py` was run after owner sign-off. The AI
+button now generates on this engine (endpoint URL unchanged:
+`https://joe983--kidseq-engine-render.modal.run`; no app/functions changes
+were needed). **Verified by content, not exit code:** the DEPLOYED image's own
+suite contains and PASSES `test_garage_drums_render_mono_others_keep_stereo`
+(an R34e-only test that asserts garage drums render mono against real assets)
+— 11/11 suites green on the live image, garage gate 2.51, techhouse 3.58.
+
+⚠️ A first verification attempt gave a FALSE NEGATIVE ("still the old
+engine"): it measured `render_drums`' drums-only audition, which passes
+through `master()` — Haas width + the reverb/room buses re-introduce side
+energy, so channel difference there can NEVER prove render-level mono. To
+check a deploy, call the deployed function via
+`modal.Function.from_name("kidseq-engine", ...)` and look for code-level
+markers (a new test name, a new table value), not mixed-audio properties.
+
+Remaining end-to-end check nobody has done: ONE real AI-button press by a
+logged-in Pro user on the live site (needs an account; the engine side is
+proven).
+
+
 ## ⛔ PRODUCER PASSES FROZEN (owner decision 2026-07-20) — do NOT start new genres
 
 The genre-by-genre producer passes (`docs/PRODUCER_PLAYBOOK.md` §7) are
@@ -31,7 +54,7 @@ picks, so look at the OTHER hf sources in that take): sincere's rim
 riding every 16th at swing 0.32. Diagnose by muting one at a time on
 v7862 / `showcase_garage_p5.json` before swapping anything.
 
-## R34f: sincere in-family + drums up front/drier (2026-07-20, Modal-verified, awaiting ears)
+## R34f: sincere in-family + drums up front/drier (2026-07-20, Modal-verified, DEPLOYED 2026-07-20)
 
 Owner notes on R34e: "sincere one drums are still bad — make them more like
 the rest"; "drums are not too low in the mix, they need to be really up front
@@ -54,7 +77,7 @@ in this style, so not too much verb either".
   `_PRODUCER_LAYER_DB` (+1.5 → +2.5), NY comp `_NY_GAIN_DB["garage"]` −9 →
   −7, or drum send −6 → −9.
 
-## R34e: mono drums + triplets + boinkpop-template kits (2026-07-20, Modal-verified, awaiting ears)
+## R34e: mono drums + triplets + boinkpop-template kits (2026-07-20, Modal-verified, DEPLOYED 2026-07-20)
 
 Owner notes on the R34d set: hats panned L/R "very confusing" (era garage was
 mixed MONO for mono club systems — harder hitting); still reads nu-school
@@ -91,7 +114,7 @@ one signatures run rendered OLD code against the NEW volume (caught via
 the worktree). ALWAYS `cd` with the absolute worktree path in the same
 command, and read the `saved` paths in the render log before delivering.
 
-## R34d: garage owner-notes pass (2026-07-20, Modal-verified, awaiting ears)
+## R34d: garage owner-notes pass (2026-07-20, Modal-verified, DEPLOYED 2026-07-20)
 
 All three R34c notes diagnosed with audio-level evidence, then fixed:
 
@@ -157,7 +180,7 @@ genre ≈ one session). Plan:
 `~/.claude/plans/have-i-lost-focus-vivid-quiche.md`. Do not auto-continue the
 playbook in a future session without the owner re-opening it.
 
-## NEW — R32: producer SOUND pass, techhouse (2026-07-16, NOT deployed)
+## NEW — R32: producer SOUND pass, techhouse (2026-07-16, DEPLOYED 2026-07-20)
 Answers the owner's R31 rejection ("they all sound the same"). R31 varied
 per-press *decisions* but every producer shared one drum kit, one Surge synth
 family and identically-synthesized FX. R32 puts REAL distinct sound SOURCES
@@ -230,10 +253,10 @@ auto-detected 1520 Hz (bright); latin `smp_crowd` + bigroom `smp_impact`
 grabbed rave sweeps rather than a crowd/boom (rave_fx bank sorted
 long-sweep-first).
 
-**Deploy gate unchanged:** `modal deploy engine/infra/modal_app.py` ships
-R1–R32 together after owner ears. Endpoint URL + app/functions unchanged.
+**SHIPPED 2026-07-20:** `modal deploy engine/infra/modal_app.py` run after
+owner sign-off — R1–R34f is LIVE. Endpoint URL + app/functions unchanged.
 
-## NEW — R31: producer-style axis, techhouse (2026-07-15, NOT deployed)
+## NEW — R31: producer-style axis, techhouse (2026-07-15, DEPLOYED 2026-07-20)
 The genre-by-genre variety pass begins. Answers "a second press sounds like
 the same track": a 6-value **producer style** drawn per press recolours the
 whole techhouse take. Each value is a coherent palette modeled on a modern
@@ -287,7 +310,7 @@ Virji was banked for the future Garage pass — 2-step belongs to that genre):
 - Playbook for the other five genres: `docs/PRODUCER_PLAYBOOK.md`; producer
   sonic signatures: `docs/producer_signatures.md`.
 
-## NEW — R30: percussive backbones + swoosh purge (2026-07-14, NOT deployed)
+## NEW — R30: percussive backbones + swoosh purge (2026-07-14, DEPLOYED 2026-07-20)
 Owner on battery three (percussive focus; "apply to all"): half-tempo dnb
 too long + wrong there; swooshes as continuous background AGAIN
 (drill/garage/reggaeton "all the way through — sounds crap"); reggaeton
@@ -308,7 +331,7 @@ a little more variety to each separately.
 - Levers: PERC_SKELETAL rows; _PERC_TEXTURE weights; percussive riser
   menu; riff_echo feedback/LUFS.
 
-## NEW — R29 + battery THREE (2026-07-14, NOT deployed)
+## NEW — R29 + battery THREE (2026-07-14, DEPLOYED 2026-07-20)
 Owner confirmed the R26 half-feel switch-up is what they meant, lifted the
 Modal spend limit, and asked for a fresh listening set: ALL base melodies
 swapped, and each battery's percussive slot = a different NON-MUSICAL
@@ -328,7 +351,7 @@ child-experiment pattern, from very sparse to far too busy.
   takes carry the riff_echo layer) → copied to MAIN repo
   `engine/out/showcase/` — **this is the owner's current listening set**.
 
-## NEW — Rounds 24–28: battery-two ear feedback ("nearly there for launch") (2026-07-14, NOT deployed)
+## NEW — Rounds 24–28: battery-two ear feedback ("nearly there for launch") (2026-07-14, DEPLOYED 2026-07-20)
 Owner on the R17–R23 battery: drill + reggaeton nailed bar minor fx tweaks;
 standouts B/garage_minor, B/drill_major_a, B/hiphop_percussive,
 B/reggaeton_major_a+b, C/hiphop_major_b. Remaining: techhouse mixes boomy;
@@ -366,7 +389,7 @@ references = early Photek/Source Direct + Burial + Rhythm & Sound.
   techhouse sub-lane gain + shelf; `half_switch` weight; `_DRUMMER_MENU`;
   hiphop `_IMPACT`/crash menu; sweep cap + downlifter menus.
 
-## NEW — Rounds 17–23: owner ear-feedback epic on the A–D batteries (2026-07-14, NOT deployed)
+## NEW — Rounds 17–23: owner ear-feedback epic on the A–D batteries (2026-07-14, DEPLOYED 2026-07-20)
 Owner listened to the 96-track A–D grid. Garage + hiphop good (menus left
 alone), drill great except muddy percussive mixes, and: DnB stuck on reese +
 identical beat every song + unused library fills + boxey drum reverb; bass
@@ -430,7 +453,7 @@ Detroit); reggaeton amateur; not every song needs pads/long sounds.
   `tools/install_engine_extras.py` → re-run → commit the pack → re-run
   `modal run infra/modal_app.py::populate_assets`.
 
-## NEW — Round 16: Photek percussive + A-D showcase batteries (2026-07-12, NOT deployed)
+## NEW — Round 16: Photek percussive + A-D showcase batteries (2026-07-12, DEPLOYED 2026-07-20)
 Owner: (1) restructure the showcase into folders — A = the existing battery,
 B/C/D = the same 24-track grid on COMPLETELY different sequencer melodies,
 each folder as far from the others as the engine can reach; (2) swooshes are
@@ -464,7 +487,7 @@ at all — just hits and a dark industrial space.
   _choose_fx_palette/choose_style; metal_drone partials/level in fx.py;
   battery bases/steps/tempos in _BATTERIES.
 
-## NEW — Round 15: owner ear-feedback on the R10-14 battery (2026-07-11, NOT deployed)
+## NEW — Round 15: owner ear-feedback on the R10-14 battery (2026-07-11, DEPLOYED 2026-07-20)
 Owner listened to the showcase: risers samey / too prominent / not pro, no
 audible shepard, gaps overused (hiphop never needs one; one take stacked a
 big gap on starvation), dnb bass reads cheap, dnb swooshes amateur. Fixes:
@@ -492,7 +515,7 @@ big gap on starvation), dnb bass reads cheap, dnb swooshes amateur. Fixes:
 Tuning levers: _RISER_DB_MENU/_RISER_COLOR/_GAP_BEATS/_BASS_SAT_WET/
 _BASS_SAT_DRIVE, fx._RISER_COLORS table, bass_reese patch params.
 
-## NEW — Rounds 10–13: PRO POLISH epic (2026-07-11, NOT deployed)
+## NEW — Rounds 10–13: PRO POLISH epic (2026-07-11, DEPLOYED 2026-07-20)
 Owner: tracks need the professional finish of top-tier DnB/techno records —
 more (tasteful, modern) swooshes/rises/sirens/SFX, richer layering, better
 mix/master. Method: 119 adversarially-verified techniques from NAMED master
@@ -558,7 +581,7 @@ design doc: `~/.claude/plans/having-listened-to-the-witty-ritchie.md`.
   bomb ×8, scratch ×1, drop_open ×3, rumble ×4, odd_loop ×3, candy ×14).
   smoke_song now prints the fx palette line per render (ears ↔ decisions).
 
-## NEW — Round 9: percussive de-reciped + battery re-cut (2026-07-10, NOT deployed)
+## NEW — Round 9: percussive de-reciped + battery re-cut (2026-07-10, DEPLOYED 2026-07-20)
 Owner: fixed per-category recipes would converge. Audit: minor never was one
 (it's the kid's key); percussive had two — fixed drone voice + static pedal.
 Now variation-driven: drone role per genre (_DRONE_ROLES), drone voicing ×3
@@ -569,7 +592,7 @@ percussive configs. Showcase uses per-genre variation numbers (1+i*7 etc.)
 23 changed vs R8 (1 same-draw = determinism), percussive spread visible in
 MODE lines. All 9 suites green. Ears: engine/out/showcase/.
 
-## NEW — Round 8: tonality fix + SHOWCASE battery (2026-07-10 late night, NOT deployed)
+## NEW — Round 8: tonality fix + SHOWCASE battery (2026-07-10 late night, DEPLOYED 2026-07-20)
 Owner caught percussive_dnb rendering with chord pads (tonality 0.579 =
 borderline; v3 tipped melodic; mode never printed in logs). Fixes:
 - riff_tonality now MULTIPLICATIVE (explain × (1−cluster)²) — cluster riff
@@ -587,7 +610,7 @@ borderline; v3 tipped melodic; mode never printed in logs). Fixes:
   if the battery should show structural spread per column.
 - Say "variation number", not "nonce" (owner).
 
-## NEW — Round 7: percussive production mode (2026-07-10 night, NOT deployed)
+## NEW — Round 7: percussive production mode (2026-07-10 night, DEPLOYED 2026-07-20)
 Owner: discordant user patterns (early-Photek ref) shouldn't get chords
 forced under them; intros too samey; asked what "nonce" means (say
 "variation number"!).
@@ -608,7 +631,7 @@ forced under them; intros too samey; asked what "nonce" means (say
 - All 9 suites green on Modal. Tuning: tonality thresholds in choose_style,
   _TREATMENT_W_PERC, drone_notes voicing.
 
-## NEW — Round 6: palette explosion + discordance fix (2026-07-10 night, NOT deployed)
+## NEW — Round 6: palette explosion + discordance fix (2026-07-10 night, DEPLOYED 2026-07-20)
 Owner: intros samey; garage variation discordant; wants LOADS more sounds
 (twinkles/rave synths) per genre; asked re render-time UX + per-genre
 similarity risk.
@@ -628,7 +651,7 @@ similarity risk.
 - Diversity: 40 nonces → 31-37 distinct (pad,bass,stack,intro) combos/genre
   on 4 of ~15 axes. All 9 suites green; 12 ear files hash-fresh delivered.
 
-## NEW — Round 5: phrase-level motif DEVELOPMENT (2026-07-10 late, NOT deployed)
+## NEW — Round 5: phrase-level motif DEVELOPMENT (2026-07-10 late, DEPLOYED 2026-07-20)
 Owner: R4 still read as one tiny variation / 16 bars; wants it REALLY
 interesting, motif intact. Root cause: variation was an exception (one bar
 per cadence). Now `develop_phrase` treats EVERY 4-bar phrase: statement
