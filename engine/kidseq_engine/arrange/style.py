@@ -737,7 +737,10 @@ _PRODUCER_DRUMV.update({
     "crewdark": [1, 0],
     "partybounce": [3, 5, 2],
     "stabriddim": [4, 0],
-    "coldbass": [0, 1],
+    # R34d: coldbass rides the skip-hat-pair row half its takes (was [0, 1] =
+    # dense base hatC on EVERY take — the only strain never thinned; "icy
+    # minimal" wants sparse tops and the owner heard its hats as the worst).
+    "coldbass": [4, 1],
     "sincere": [1, 4],
     "boinkpop": [4, 3],
 })

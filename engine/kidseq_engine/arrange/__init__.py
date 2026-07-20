@@ -473,10 +473,18 @@ def develop_phrase(notes: list[Note], treatment: str, key: str,
     raise ValueError(f"unknown treatment {treatment!r}")
 
 
-def resolve_clashes(notes: list[Note], chord_pcs: set[int]) -> list[Note]:
+def resolve_clashes(notes: list[Note], chord_pcs: set[int],
+                    strict: bool = False) -> list[Note]:
     """On VARIATION bars: notes a semitone against a chord tone are SNAPPED to
     that chord tone (+-1 semitone) — makes discordant riffs work with the
-    progression. Only ever a semitone move, only on clash notes."""
+    progression. Only ever a semitone move, only on clash notes.
+
+    strict (R34d, garage producer takes): additionally snap SUSTAINED
+    (>=1 beat) beat-start non-chord tones to the nearest chord tone. The
+    diatonic develop_phrase shifts (call_response / vary_end answers) land
+    whole-tone non-chord tones the semitone rule never touched; held against
+    the pads they read as "lead variations off key" (owner note). Short
+    passing tones keep their freedom."""
     out: list[Note] = []
     for n in notes:
         pc = n.pitch % 12
@@ -486,7 +494,16 @@ def resolve_clashes(notes: list[Note], chord_pcs: set[int]) -> list[Note]:
                     out.append(replace(n, pitch=n.pitch + d))
                     break
             else:
-                out.append(n)
+                if (strict and n.dur_beats >= 1.0
+                        and abs(n.start_beats - round(n.start_beats)) < 1e-6):
+                    best = min(
+                        (d for d in range(-5, 6)
+                         if (pc + d) % 12 in chord_pcs),
+                        key=lambda d: (abs(d), d), default=None)
+                    out.append(replace(n, pitch=n.pitch + best)
+                               if best is not None else n)
+                else:
+                    out.append(n)
         else:
             out.append(n)
     return out

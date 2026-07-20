@@ -3,9 +3,9 @@
  "candidates": {
   "crewdark": {
    "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
     "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_21.wav",
     "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
-    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
     "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_02.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_02.wav",
     "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_09.wav",
@@ -151,20 +151,20 @@
     "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav"
    ],
    "hatO": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Cymbal_02(1).wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_Reverse_01.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_06(1).wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_03.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_01(1).wav",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_01.wav"
    ],
    "stab": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/LC_CNTRL_Synth_Chords_Fm_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_E_03.wav",
     "Kid-Sequencer samples/ukg-chops/lc_synth/LC_CNTRL_134_D_Synth_Arp_c03.wav",
     "Kid-Sequencer samples/ukg-chops/lc_synth/LC_CNTRL_135_Am_Synth_Pluck_c03.wav",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_E_03.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_F_03.wav",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/LC_CNTRL_Synth_Chords_Fm_02.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/LC_CNTRL_Synth_Chords_Fm_01.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_D#_04.wav"
    ],
@@ -198,27 +198,27 @@
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
    ],
    "hatC": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_09.wav",
     "Roland-TR-909/Roland TR-909/OPCL4.WAV",
     "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
     "Roland-TR-909/Roland TR-909/RIM127.WAV",
     "LCHZ_samples/LCHZ_one shots/LCHZ_hats/LCHZ_OpenHat_03.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_hats/LCHZ_Hat_02(1).wav",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_31.wav",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_09.wav"
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_31.wav"
    ],
    "hatO": [
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_01(1).wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Cymbal_02.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_Reverse_01.wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_06(1).wav",
     "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_03.wav",
-    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_01(1).wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_01.wav"
    ],
    "chop": [
+    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_140_Vox_05_c00.wav",
     "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_Wait_For_Me_-_89_BPM_F_c05.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
-    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_140_Vox_05_c00.wav",
     "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_130_Vox_02_c00.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",
@@ -254,11 +254,11 @@
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
    ],
    "hatC": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
     "Roland-TR-909/Roland TR-909/OPCL3.WAV",
     "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
     "Roland-TR-909/Roland TR-909/RIM127.WAV",
     "Roland-TR-909/Roland TR-909/CSHD0.WAV",
-    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
     "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_09.wav"
    ],
@@ -272,8 +272,8 @@
     "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 46.wav"
    ],
    "chop": [
-    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_Wait_For_Me_-_89_BPM_F_c00.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_Wait_For_Me_-_89_BPM_F_c00.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
     "Kid-Sequencer samples/ukg-chops/orchid/Cymatics_-_Rose_Colored_Glasses_Vocal_-_130_BPM__c01.wav",
     "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",

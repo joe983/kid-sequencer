@@ -73,20 +73,86 @@ def _condition_fx(src: Path, trim_ms: int, peak_dbfs: float) -> bytes:
 
 
 def _detect_root_hz(mono, sr: int) -> float:
-    """Autocorrelation pitch of the post-attack sustain (ported from
-    install_melodic_kits). Repitch uses this as the sample's natural pitch."""
+    """R34d: frame-median autocorrelation pitch of the chop HEAD with an
+    octave-error guard. The old single-window global-peak version (ported from
+    install_melodic_kits, fine for steady instrument multisamples) mis-rooted
+    sung/melismatic chops by up to 4 st and locked onto harmonics for square
+    bass stabs — every note of that strain's lead then played off key."""
     import numpy as np
-    s = int(0.05 * sr)
-    seg = mono[s:s + int(0.4 * sr)].astype(np.float64)
-    if len(seg) < sr // 40:
-        seg = mono.astype(np.float64)
-    seg = seg - seg.mean()
-    corr = np.correlate(seg, seg, "full")[len(seg) - 1:]
-    lo, hi = int(sr / 1500), int(sr / 50)
-    if hi <= lo or hi >= len(corr):
+
+    win, hop = int(0.046 * sr), int(0.010 * sr)
+    head = mono[:int(0.60 * sr)].astype(np.float64)
+    if len(head) < win + hop:
+        head = mono.astype(np.float64)
+    pk = float(np.max(np.abs(head))) or 1.0
+    head = head / pk
+    f0s = []
+    for s in range(0, len(head) - win, hop):
+        f0 = _frame_f0(head[s:s + win], sr)
+        if f0:
+            f0s.append(f0)
+    if len(f0s) < 4:
         return 220.0
-    lag = int(np.argmax(corr[lo:hi]) + lo)
-    return sr / lag if lag else 220.0
+    f0s = np.asarray(f0s)
+    med = float(np.median(f0s))
+    # fold residual octave outliers onto the median, then re-take the median
+    folded = f0s * 2.0 ** np.round(np.log2(med / f0s))
+    return float(np.median(folded))
+
+
+def _frame_f0(fr, sr: int) -> float | None:
+    """Single-frame autocorrelation f0, or None when unvoiced. Octave guard:
+    take the global-max lag, then step UP an octave while the half-lag peak is
+    nearly as strong — autocorrelation peaks at every period MULTIPLE, so a
+    'prefer longer lags' rule is a subharmonic magnet (first build of R34d
+    rooted crewdark at 103.5 Hz, half its true 208)."""
+    import numpy as np
+    if float(np.sqrt((fr ** 2).mean())) < 0.02:
+        return None
+    fr = fr - fr.mean()
+    win = len(fr)
+    ac = np.correlate(fr, fr, "full")[win - 1:]
+    lo, hi = int(sr / 1200), int(sr / 55)
+    if hi <= lo or hi >= len(ac):
+        return None
+    seg = ac[lo:hi]
+    best = float(seg.max())
+    if best < 0.35 * float(ac[0]):
+        return None
+    lag = int(np.argmax(seg)) + lo
+    while lag // 2 >= lo and float(ac[lag // 2]) >= 0.90 * float(ac[lag]):
+        lag = lag // 2
+    return sr / lag if lag else None
+
+
+def _steady_head_ms(mono, sr: int, root: float, trim_ms: int) -> int:
+    """R34d: how much of the chop holds the root before the melisma departs.
+
+    Sliced sung phrases stay on pitch for a syllable then slide; a held grid
+    note used to play the whole slide (heard as "lead variations off key").
+    Returns a trim (ms) at the first sustained >1 st departure from root —
+    floor 350 ms so a chop always speaks, ceiling trim_ms."""
+    import numpy as np
+
+    win, hop = int(0.046 * sr), int(0.010 * sr)
+    m = mono.astype(np.float64)
+    pk = float(np.max(np.abs(m))) or 1.0
+    m = m / pk
+    off_run, t_ms = 0, trim_ms
+    for s in range(0, len(m) - win, hop):
+        f0 = _frame_f0(m[s:s + win], sr)
+        if f0 is None:
+            continue
+        dev = abs(12.0 * np.log2(f0 / root))
+        dev = min(dev, abs(12.0 - dev))  # octave-fold the deviation
+        if dev > 1.0:
+            off_run += 1
+            if off_run >= 6:  # ~60 ms sustained off-root -> cut before the run
+                t_ms = int((s - 5 * hop) / sr * 1000)
+                break
+        else:
+            off_run = 0
+    return max(350, min(trim_ms, t_ms))
 
 
 def _condition_melodic(src: Path, trim_ms: int) -> tuple[bytes, float]:
@@ -103,12 +169,15 @@ def _condition_melodic(src: Path, trim_ms: int) -> tuple[bytes, float]:
         audio = f.read(f.frames)  # (ch, n)
     mono = audio.mean(axis=0)
     root = _detect_root_hz(mono, sr)
+    # R34d: cut the chop at its steady head so a held grid note decays instead
+    # of singing the source phrase's melisma (which drifts off the root).
+    trim_ms = _steady_head_ms(mono, sr, root, trim_ms) if trim_ms else trim_ms
     a = Pedalboard([HighpassFilter(cutoff_frequency_hz=25.0)])(
         mono[np.newaxis, :], sr)  # (1, n)
     if trim_ms:
         keep = min(a.shape[1], int(sr * trim_ms / 1000.0))
         a = a[:, :keep].copy()
-        fade = min(keep, int(0.02 * sr))
+        fade = min(keep, int(0.04 * sr))
         if fade:
             a[:, -fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
     peak = float(np.max(np.abs(a))) or 1.0

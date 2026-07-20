@@ -238,6 +238,28 @@ def _render_lead_stack(notes, tempo: float, bars: int, bar_beats: float,
     if not stacks:
         return np.zeros((0, 2), dtype=np.float32)
     stack = stacks[stack_i % len(stacks)]
+    # R34d: when the stack leads with a real repitched one-shot, fold the
+    # WHOLE stack's notes into the chop's playable octave band up front.
+    # fold_rate() always folded the smp layer into +-6 st of its root while
+    # the clean co-layers (shimmer/musicbox/keys at 0 or +12) traced the full
+    # written contour — two different melodic shapes at once (owner heard the
+    # lead layering as disjointed). Octave-only moves: pitch classes, clash
+    # fixes and the main riff voice are untouched.
+    root = next((smp_render.smp_root_hz(LEAD_VOICES[v][1])
+                 for v, _s, _g in stack
+                 if LEAD_VOICES[v][0] == "smp"
+                 and smp_render.smp_root_hz(LEAD_VOICES[v][1])), None)
+    if root is not None:
+        root_midi = 69.0 + 12.0 * float(np.log2(root / 440.0))
+        folded = []
+        for n in notes:
+            p = float(n.pitch)
+            while p > root_midi + 6.0:
+                p -= 12.0
+            while p <= root_midi - 6.0:
+                p += 12.0
+            folded.append(dc_replace(n, pitch=int(min(127, max(0, round(p))))))
+        notes = folded
     out: np.ndarray | None = None
     for voice, semi, gain_db in stack:
         kind, name = LEAD_VOICES[voice]
@@ -655,7 +677,14 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
                         # pattern's own character alone
                         if b >= pure_phrases * 4 and not percussive:
                             pcs = chord_pcs_for_bar(riff, prog, b)
-                            bar_notes = resolve_clashes(bar_notes, pcs) \
+                            # R34d strict snap on garage producer takes only —
+                            # sustained non-chord tones in developed phrases
+                            # read as "lead variations off key" (owner note).
+                            # Other genres keep the exact R32 behaviour.
+                            strict = (riff.drum_style == "garage"
+                                      and style.producer_style is not None)
+                            bar_notes = resolve_clashes(bar_notes, pcs,
+                                                        strict=strict) \
                                 if bar_notes != riff.notes else \
                                 soften_clashes(bar_notes, pcs)
                         span_notes += [dc_replace(nt, start_beats=nt.start_beats
