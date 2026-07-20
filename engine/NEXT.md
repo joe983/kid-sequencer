@@ -19,6 +19,43 @@ signatures set is in the main checkout
 WAITING ON OWNER EARS. The freeze on NEW genres (dnb/hiphop/drill/reggaeton)
 still stands until the owner explicitly reopens the playbook.
 
+## R34e: mono drums + triplets + boinkpop-template kits (2026-07-20, Modal-verified, awaiting ears)
+
+Owner notes on the R34d set: hats panned L/R "very confusing" (era garage was
+mixed MONO for mono club systems — harder hitting); still reads nu-school
+breaks — "it has to have the TRIPLETS to be garage" + "snappy snares not
+punchy"; and "remember which song sounded good [boinkpop] — copy those drums
+for the rest, with minor alterations in rhythm and sounds".
+
+- **MONO drums**: `render_drums_samples` zeroes every voice pan when the style
+  starts with "garage" (producer strains included). Other genres keep their
+  `_PAN` image — pinned by `test_garage_drums_render_mono_others_keep_stereo`
+  (assets-gated; EXERCISES on Modal, skips locally). Delivered-audio check:
+  side/mid at 6–12 kHz now 0.02–0.10 on five takes (rest = stereo leads/pads).
+- **Triplets**: `_PRODUCER_SWING` band 0.30–0.33 all strains (0.333 = the
+  swung 16th exactly on the triplet grid; the old 0.24–0.28 half of the band
+  was the nu-school straightness). boinkpop 0.30 unchanged (the reference).
+- **Boinkpop = drum template**: `_PRODUCER_SKEL` — Grid B "boink" LEADS every
+  strain, old grid demoted to minority alt (partybounce's 4x4 survives as its
+  alt); `_PRODUCER_DRUMV` — skip-hat-pair variant leads everywhere
+  (partybounce keeps carnival shaker/tamb); all six hatC now the LC CONTROL
+  family (crewdark Hat_25, partybounce Hat_26 joined); snares re-picked for
+  SNAP not punch — measured body(120–350 Hz) ≤5%, t90 20–57 ms: crewdark
+  GS_Snare_15, partybounce LC_Snare_06, coldbass LCHZ_Snare_10 (replaced the
+  909 STATAS at 52% body — the "punchy" offender), sincere 909 HANDCLP2
+  clap-snare, stabriddim keeps LC_Snare_07. **boinkpop byte-untouched.**
+- **Gate re-scoped**: garage t_drums 2.0→1.0 / t_base 1.5→0.7 (manifest) —
+  kits share one family BY OWNER DIRECTION; identity carries in
+  bass/leads/pads. Actual Modal matrix still 2.51 closest (partybounce/
+  boinkpop); techhouse 3.58 unchanged.
+
+⚠️ PROCESS TRAP hit twice this session: the Bash shell's cwd RESETS between
+calls (sleep/restart) — a `cd engine` then landed in the MAIN checkout and
+one signatures run rendered OLD code against the NEW volume (caught via
+"saved ..." paths + byte-identical sizes; hybrids deleted, re-rendered from
+the worktree). ALWAYS `cd` with the absolute worktree path in the same
+command, and read the `saved` paths in the render log before delivering.
+
 ## R34d: garage owner-notes pass (2026-07-20, Modal-verified, awaiting ears)
 
 All three R34c notes diagnosed with audio-level evidence, then fixed:
