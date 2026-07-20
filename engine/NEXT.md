@@ -19,6 +19,29 @@ signatures set is in the main checkout
 WAITING ON OWNER EARS. The freeze on NEW genres (dnb/hiphop/drill/reggaeton)
 still stands until the owner explicitly reopens the playbook.
 
+## R34f: sincere in-family + drums up front/drier (2026-07-20, Modal-verified, awaiting ears)
+
+Owner notes on R34e: "sincere one drums are still bad — make them more like
+the rest"; "drums are not too low in the mix, they need to be really up front
+in this style, so not too much verb either".
+
+- **sincere**: was the outlier on four axes — the set's only DARK hat (5.8k
+  centroid vs everyone's 8.7–9.9k), the one clap-snare, the softest clip
+  drive (1.05) and the biggest room (0.38). Now: hatC → `LC_CNTRL_Hat_31`
+  (33 ms, 8.9k), snare → `GS_GSV3_Snare_14` (16 ms crack), clip 1.2, room
+  0.32. Files appended from sibling candidate pools (same sheets for swaps).
+- **Drums up front (all six)**: new `_PRODUCER_LAYER_DB` table in master.py —
+  +1.5 dB on the drums layer AFTER `_calibrate_layer` (explicit offset over
+  the −18 LUFS reference; table miss = 0.0 → null contract elsewhere).
+- **Drier**: `_PRODUCER_SEND_DELTA` drums −3 → −6 dB (net send −26);
+  `_ROOM_GAIN_DB["garage"]` −24 → −28; crewdark room 0.40 → 0.36.
+- Verified: gate matrix rows moved for sincere only (closest pair still
+  partybounce/boinkpop 2.51, both untouched); delivered A/B vs R34e —
+  all six hashes changed, kick-band share + transient crest up on the
+  unchanged-kit strains. Intensity levers if "up front" still isn't enough:
+  `_PRODUCER_LAYER_DB` (+1.5 → +2.5), NY comp `_NY_GAIN_DB["garage"]` −9 →
+  −7, or drum send −6 → −9.
+
 ## R34e: mono drums + triplets + boinkpop-template kits (2026-07-20, Modal-verified, awaiting ears)
 
 Owner notes on the R34d set: hats panned L/R "very confusing" (era garage was
