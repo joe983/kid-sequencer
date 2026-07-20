@@ -12,9 +12,11 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=59">
+<link rel="stylesheet" href="css/styles.css?v=66">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
+<script src="js/lessons-data.js?v=1"></script>
 </head>
 <body>
 <script>
@@ -83,6 +85,12 @@
 <rect fill="white" height="2.4" rx="0.4" width="3" x="8.4" y="15.4"></rect>
 <rect fill="white" height="2.4" rx="0.4" width="6" x="8.4" y="18.6" opacity="0.55"></rect>
 <circle cx="17.5" cy="11.6" fill="white" r="0.85"></circle>
+</svg></span></button>
+<button aria-label="Lessons" class="bigBtn iconBtn" id="lessonsBtn" onclick="goToLessons()" title="Lessons"><span class="icon lessonsIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
+<path d="M12 3 L23 8 L12 13 L1 8 Z" fill="currentColor"></path>
+<path d="M4.5 10 v4.2 c0 1.6 3.4 2.8 7.5 2.8 s7.5-1.2 7.5-2.8 V10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+<line x1="23" y1="8" x2="23" y2="15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></line>
+<circle cx="23" cy="16.6" r="1.4" fill="currentColor"></circle>
 </svg></span></button>
 </div>
 <div class="topBarSpacer" aria-hidden="true"></div>
@@ -461,13 +469,36 @@ const LEARN_LEVELS = {
   "3": _mkLearnLevel(3, [392.00, 329.63, 261.63], ["#3DA9FF", "#FFFF00", "#FF0000"], 112)
 };
 const _lvlParam = new URLSearchParams(location.search).get("level");
+/* -------------------- LESSON MODE (Rhythm Trail) --------------------
+   ?lesson=<id> derives a learning level from the lesson's config (reusing
+   _mkLearnLevel verbatim) and attaches the lesson runner (see LESSON RUNNER
+   section near init()). If both ?lesson and ?level are present the lesson
+   wins; a plain ?level=N (worksheet QR links) is untouched. */
+const _lsnParam = new URLSearchParams(location.search).get("lesson");
+const LESSON = (_lsnParam && window.KidSeqLessons && window.KidSeqLessons.LESSONS
+                && window.KidSeqLessons.LESSONS[_lsnParam]) ? window.KidSeqLessons.LESSONS[_lsnParam] : null;
+const LESSON_KEY = LESSON ? _lsnParam : null;
+// Build the lesson's grid config through the same builder as the scaffolding
+// levels, then apply per-lesson knobs (note-tool palette, tempo).
+function _mkLessonLevel(l){
+  const lv = _mkLearnLevel(l.level.rows, l.level.freqs, l.level.rowColors, l.level.maxCell);
+  if(l.palette && l.palette.length){
+    lv.toolSteps = _LEARN_TOOLS.filter(t => l.palette.includes(t.kind));
+    lv.selectedKind = lv.toolSteps.some(t => t.kind === "quarter") ? "quarter" : lv.toolSteps[0].kind;
+  }
+  if(l.tempo) lv.tempo = l.tempo;
+  return lv;
+}
 // NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
-const LEARN_LEVEL = (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
+const LEARN_LEVEL = LESSON ? _mkLessonLevel(LESSON)
+                  : (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
 if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <html> always exists at parse time
+if (LESSON) document.documentElement.classList.add("lesson-mode");
 // The level key for the page currently loaded: null for the full/main grid,
 // "1"/"2"/"3" for a scaffolding level. Used by the worksheet scanner to decide
-// whether a scanned sheet matches this page or needs a redirect.
-const CURRENT_LEVEL_KEY = LEARN_LEVEL ? _lvlParam : null;
+// whether a scanned sheet matches this page or needs a redirect. Lesson pages
+// are never scan targets (camera is hidden in lesson mode), so stay null there.
+const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
 
 /* -------------------- WORKSHEET SCANNER — SHEET GEOMETRY --------------------
    Maps a QR payload printed on a worksheet to the grid template it represents.
@@ -551,6 +582,13 @@ const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
 // Declared with state (not beside its functions) so the live-update hook in
 // redrawRowNotes can never hit a temporal-dead-zone reference.
 let _staveOpen = false;
+// Lesson-runner state — declared early for the same TDZ-safety reason (hooks in
+// redrawRowNotes/onCellClick/tick fire before the LESSON RUNNER section parses).
+let _lessonRunning = false;          // true once the child taps START
+let _lessonLockedIds = new Set();    // preset scaffold notes the child can't delete
+let _lessonPlayLimit = null;         // steps until playback auto-stops (playOnce); null = free
+let _lessonPlayDone = null;          // callback after a limited playback completes
+let _lessonCheckT = null;            // debounce timer for grid-change checks
 
 try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){ isLoggedIn = false; }
 var isPaid = false;
@@ -3007,6 +3045,11 @@ function buildTools(){
 let noteLayerEls = [];
 let nextId = 1;
 
+// Columns per beat: a beat (quarter) spans stepDiv grid columns in learning
+// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th). Beat numbers
+// 1..N label each beat's first cell (faded, behind notes — see .beatNum CSS).
+const COLS_PER_BEAT = (LEARN_LEVEL && LEARN_LEVEL.stepDiv) ? LEARN_LEVEL.stepDiv : 4;
+
 function buildGrid(){
   sequencerEl.innerHTML = "";
   noteLayerEls = [];
@@ -3028,6 +3071,14 @@ function buildGrid(){
       cell.className = "cell";
       cell.onmousedown = (e) => e.preventDefault();
       cell.onclick = () => onCellClick(r, c);
+      // Beat number in the top row's beat-start cells (faded grey, pointer-none,
+      // sits behind note blocks so it shows only on empty beats).
+      if(r === 0 && c % COLS_PER_BEAT === 0){
+        const bn = document.createElement("span");
+        bn.className = "beatNum";
+        bn.textContent = String(c / COLS_PER_BEAT + 1);
+        cell.appendChild(bn);
+      }
       grid.appendChild(cell);
     }
 
@@ -3086,6 +3137,8 @@ function smartPlaceNote(r, clickCol, len, kind){
   }
 
   const overlaps = overlappingNoteIds(r, baseStart, len);
+  // Never bulldoze a locked lesson-scaffold note to make room.
+  if(LESSON && [...overlaps].some(id => _lessonLockedIds.has(id))) return;
   overlaps.forEach(id => deleteNoteById(r, id));
   placeNote(r, baseStart, len, kind);
 }
@@ -3093,6 +3146,9 @@ function smartPlaceNote(r, clickCol, len, kind){
 function onCellClick(r, c){
   const existing = occ[r][c];
   if(existing !== null){
+    // Lesson scaffold notes are locked: a tap wiggles them instead of deleting,
+    // so a fill-the-gap exercise can't be wrecked into an accidental free-build.
+    if(LESSON && _lessonLockedIds.has(existing)){ _lessonLockedNudge(r, existing); return; }
     pushUndo();
     deleteNoteById(r, existing);
     redrawRowNotes(r);
@@ -3165,6 +3221,8 @@ function redrawRowNotes(r){
   // the panel is open). Every grid mutation — place, delete, clear, undo, scan —
   // flows through redrawRowNotes, so this single hook keeps the staff in sync.
   if(LEARN_LEVEL && _staveOpen) renderStave();
+  // Lesson completion detection rides the same funnel (debounced in the runner).
+  if(LESSON) _lessonGridChanged();
 }
 
 /* -------------------- LEARNING STAVE (treble-clef notation) --------------------
@@ -3717,6 +3775,12 @@ async function play(){
 
   stop();
 
+  // In lesson mode the play button always plays exactly ONE bar (playOnce) and
+  // reports back to the runner — pressing play is how a build step is judged
+  // ("hearing the answer is part of the answer"). Internal runner playback
+  // (demos, celebration) sets its own limit before calling play().
+  if(LESSON) _lessonBeforePlay();
+
   step = 0;
   setPlayheadVisible(true);
   setPlayheadPlaying(false);
@@ -3774,6 +3838,19 @@ function startSequencer(){
   let stepCount = 0;
 
   function tick(){
+    // Lesson playOnce: stop cleanly at the bar boundary. This runs INSTEAD of
+    // playing the wrapped step, one full interval after the last step fired, so
+    // the final step's scheduled audio isn't clipped (_lessonSoftStop keeps the
+    // tails alive — it never calls stopAllAudioNow). It only wraps the exit; the
+    // self-correcting timer and tempo-ramp re-anchor below are untouched.
+    if(LESSON && _lessonPlayLimit !== null && stepCount >= _lessonPlayLimit){
+      _lessonPlayLimit = null;
+      const _lpd = _lessonPlayDone; _lessonPlayDone = null;
+      _lessonSoftStop();
+      if(_lpd){ try{ _lpd(); }catch(e){} }
+      return;
+    }
+
     movePlayheadToStep(step);
 
     if(firstTick){
@@ -3862,6 +3939,10 @@ function startSequencer(){
     // Drums (runs in time with the sequencer)
     playDrumsAtStep(step);
 
+    // Lesson heartbeat row: pulse the heart under the current beat (macrobeat
+    // layer made visible — Kodaly beat chart). No-op outside lesson mode.
+    if(LESSON) _lessonPulseStep(step);
+
     step = (step + 1) % cols;
     stepCount++;
 
@@ -3886,6 +3967,8 @@ function startSequencer(){
 }
 
 function stop(){
+  // A manual stop cancels any pending lesson playOnce limit + callback.
+  if(LESSON){ _lessonPlayLimit = null; _lessonPlayDone = null; }
   _triggeredNotes.clear();
   if(timer){
     clearTimeout(timer);
@@ -5259,6 +5342,959 @@ root.classList.add('stageScaled');
   setRotation(MAX_DEG);
 })();
 
+/* -------------------- LESSON RUNNER (Rhythm Trail, Band A MVP) --------------------
+   Everything below is LESSON-gated: with no ?lesson param, none of it runs and the
+   full app + ?level scaffolding are byte-for-byte unaffected. State lets that hook
+   functions touch (_lessonRunning, _lessonLockedIds, _lessonPlayLimit, …) are
+   declared early next to _staveOpen for TDZ safety. Design spec:
+   docs/specs/2026-07-17-note-length-course-design.md */
+
+let _stepIdx = 0;              // current step in LESSON.steps
+let _stepPhase = "idle";       // idle | building | ready | demo | overlay
+let _stepMisses = 0;           // misses on the CURRENT step (drives the hint ladder)
+let _assistCount = 0;          // steps completed by the demo hand (stars = 3 - min(2, assists))
+let _whichTries = 0;
+let _freezeRound = 0;
+let _lessonPlayIntent = null;  // {limit, cb} consumed by _lessonBeforePlay (internal playback)
+let _stepTimers = [];          // pending timeouts cancelled on step change
+let _idleT = null;             // idle-nudge timer
+let _idleFires = 0;
+let _narrAudio = null;         // the <audio> narration element (silent-switch-immune)
+let _narrT = null;
+let _saidPress = false;        // "press play!" said once per step
+let _saidRest = false;         // rest-violation hint said once per step
+let _heartEls = [];
+let _mascotEl = null, _handEl = null, _overlayEl = null;
+let _instrEl = null;           // persistent instruction bar (always on screen)
+let _toolbarEl = null;         // ?/hear/help/back/forward icon toolbar
+let _choiceEl = null;          // inline which-one card host (non-modal)
+let _curInstruction = "";      // current task's instruction text (bar default)
+let _barRestoreT = null;       // restores the bar after a transient flash
+let _curWhichAnswer = null;    // active which-step answer pattern (hear/help)
+let _flashToolEl = null;       // tool button flashing yellow for a new note length
+let _flashKind = null;         // the kind that tool places
+let _flashBaseline = 0;        // count of that kind at flash time (preset-proof)
+let _helping = false;          // guard so Help can't re-enter
+
+const _LS_LESSONS = "kidseq_lessons";
+function _lessonProg(){
+  try{
+    const p = JSON.parse(localStorage.getItem(_LS_LESSONS));
+    if(p && p.v === 1) return { stars: p.stars || {}, last: p.last || null, resume: p.resume || {}, v: 1 };
+  }catch(e){}
+  return { v: 1, stars: {}, last: null, resume: {} };
+}
+function _lessonProgSave(p){ try{ localStorage.setItem(_LS_LESSONS, JSON.stringify(p)); }catch(e){} }
+
+// ---------- tiny utilities ----------
+function _lt(fn, ms){ const t = setTimeout(fn, ms); _stepTimers.push(t); return t; }
+function _clearStepTimers(){ for(const t of _stepTimers) clearTimeout(t); _stepTimers = []; }
+function _cellEl(r, c){
+  const wrap = sequencerEl.children[r];
+  if(!wrap) return null;
+  const grid = wrap.querySelector(".grid");
+  return grid ? grid.children[c] : null;
+}
+function _playBtnEl(){ return document.querySelector('#controls button[aria-label="Play"]'); }
+
+// ---------- grid state, signatures, pass evaluation ----------
+function _curNotes(){
+  const out = [];
+  for(let r = 0; r < rows; r++) for(const n of notesByRow[r]) out.push({ row: r, start: n.start, len: n.len, kind: n.kind || null, id: n.id });
+  return out;
+}
+function _noteSig(n){ return `${n.row}:${n.start}:${n.len}:${n.kind || ""}`; }
+function _gridSig(){ return _curNotes().map(_noteSig).sort().join("|"); }
+function _setSig(notes){ return notes.map(_noteSig).sort().join("|"); }
+
+// Evaluate the current grid against a pass rule. Returns
+// { ok, shiftedBy, restViolation, missing:[targetNotes], extraIds:[ids] }.
+function _evalPass(pass, target){
+  const cur = _curNotes();
+  const res = { ok: false, shiftedBy: 0, restViolation: false, missing: [], extraIds: [] };
+  if(!pass) { res.ok = true; return res; }
+
+  if(pass.kind === "count"){
+    const byKind = {};
+    for(const n of cur) byKind[n.kind || "plain"] = (byKind[n.kind || "plain"] || 0) + 1;
+    let ok = cur.length >= (pass.minNotes || 0);
+    if(pass.maxNotes != null && cur.length > pass.maxNotes) ok = false;
+    if(pass.use) for(const k in pass.use) if((byKind[k] || 0) < pass.use[k]) ok = false;
+    if(pass.minEmptyBeats){
+      let empty = 0;
+      for(let b = 0; b < cols / 2; b++){
+        let occupied = false;
+        for(let r = 0; r < rows; r++) if(occ[r][b*2] !== null || occ[r][b*2+1] !== null) occupied = true;
+        if(!occupied) empty++;
+      }
+      if(empty < pass.minEmptyBeats) ok = false;
+    }
+    res.ok = ok;
+    return res;
+  }
+
+  // match / matchShifted against a target pattern
+  const tgt = target || [];
+  const curSig = _setSig(cur);
+  if(curSig === _setSig(tgt)){ res.ok = true; return res; }
+
+  // Shift-tolerant check (Bamberger's figural stage: right shape, wrong anchor).
+  if(pass.shifted){
+    for(let off = -(cols - 1); off < cols; off++){
+      if(off === 0) continue;
+      const moved = tgt.map(n => ({ ...n, start: n.start + off }));
+      if(moved.some(n => n.start < 0 || n.start + n.len > cols)) continue;
+      if(curSig === _setSig(moved)){ res.shiftedBy = off; break; }
+    }
+  }
+
+  // Rest discipline: filling a designated quiet beat IS the error.
+  if(pass.restBeats){
+    for(const b of pass.restBeats){
+      for(let r = 0; r < rows; r++){
+        if(occ[r][b*2] !== null || occ[r][b*2+1] !== null) res.restViolation = true;
+      }
+    }
+  }
+
+  // Per-note diff for ghost hints / hand-assist.
+  const curSet = new Set(cur.map(_noteSig));
+  const tgtSet = new Set(tgt.map(_noteSig));
+  res.missing = tgt.filter(n => !curSet.has(_noteSig(n)));
+  res.extraIds = cur.filter(n => !tgtSet.has(_noteSig(n))).map(n => n.id);
+  return res;
+}
+
+// ---------- narration (<audio> sprite; iOS silent switch can't mute it) ----------
+function _narrInit(){
+  try{
+    _narrAudio = new Audio(window.KidSeqLessons.SPRITE);
+    _narrAudio.preload = "auto";
+  }catch(e){ _narrAudio = null; }
+}
+function _narrUnlock(){
+  // Play the sprite's silent head inside the START tap gesture; afterwards the
+  // element can be re-seeked and played programmatically on iOS.
+  if(!_narrAudio) return;
+  try{
+    const p = _narrAudio.play();
+    if(p && p.then) p.then(() => setTimeout(() => { try{ _narrAudio.pause(); }catch(e){} }, 80)).catch(() => {});
+  }catch(e){}
+}
+// Play a narration clip (mouth animates). `flash` (default true) briefly shows
+// the clip's text over the persistent instruction bar then restores it — used
+// for praise/hints. The task instruction itself is set by _setInstruction and
+// stays on screen the whole task, so its _say calls pass flash=false.
+function _say(key, cb, flash){
+  const seg = (window.KidSeqLessons.NARR || {})[key];
+  if(flash !== false && seg && seg[2]) _flashBar(seg[2]);
+  if(_narrT){ clearTimeout(_narrT); _narrT = null; }
+  if(!seg || !_narrAudio){ if(cb) _lt(cb, 700); return; }
+  try{
+    _narrAudio.currentTime = seg[0];
+    _narrAudio.play().catch(() => {});
+    if(_mascotEl) _mascotEl.classList.add("talk");
+    _narrT = setTimeout(() => {
+      try{ _narrAudio.pause(); }catch(e){}
+      if(_mascotEl) _mascotEl.classList.remove("talk");
+      if(cb){ try{ cb(); }catch(e){} }
+    }, seg[1] * 1000 + 120);
+  }catch(e){ if(cb) _lt(cb, 700); }
+}
+// The persistent instruction bar shows the current task's instruction and never
+// auto-hides (owner feedback: instruction must stay on screen all the time).
+function _setInstruction(text){
+  _curInstruction = text || "";
+  if(_barRestoreT){ clearTimeout(_barRestoreT); _barRestoreT = null; }
+  if(_instrEl){ _instrEl.textContent = _curInstruction; _instrEl.classList.remove("flash"); }
+}
+function _flashBar(text){
+  if(!_instrEl) return;
+  _instrEl.textContent = text;
+  _instrEl.classList.add("flash");
+  if(_barRestoreT) clearTimeout(_barRestoreT);
+  _barRestoreT = _lt(() => { _instrEl.textContent = _curInstruction; _instrEl.classList.remove("flash"); }, 2600);
+}
+// Replay the current task's instruction (the ? button).
+function _replayInstruction(){
+  const st = LESSON.steps[_stepIdx];
+  if(st && st.narr){ _setInstruction((window.KidSeqLessons.NARR[st.narr] || [,,""])[2]); _say(st.narr, null, false); }
+}
+
+// ---------- playback plumbing ----------
+// Soft stop for lesson playOnce: halts the timer + playhead WITHOUT
+// stopAllAudioNow, so the final step's scheduled envelope/tail rings out.
+function _lessonSoftStop(){
+  if(timer){ clearTimeout(timer); timer = null; }
+  if(startTimeout){ clearTimeout(startTimeout); startTimeout = null; }
+  _triggeredNotes.clear();
+  try{ if(melodicMaster) melodicMaster.gain.setTargetAtTime(1, audioCtx.currentTime, 0.05); }catch(e){}
+  setPlayheadPlaying(false);
+  setPlayheadVisible(false);
+  lastStopAt = performance.now();
+}
+function _lessonBeforePlay(){
+  if(_lessonPlayIntent){
+    _lessonPlayLimit = _lessonPlayIntent.limit;
+    _lessonPlayDone = _lessonPlayIntent.cb || null;
+    _lessonPlayIntent = null;
+    return;
+  }
+  // The play button in lesson mode = exactly one bar, judged if we're building.
+  _lessonPlayLimit = cols;
+  _lessonPlayDone = (_stepPhase === "building" || _stepPhase === "ready") ? _onUserPlayEnd : null;
+}
+function _internalPlay(limitSteps, cb){
+  _lessonPlayIntent = { limit: limitSteps, cb: cb };
+  try{ play(); }catch(e){ _lessonPlayIntent = null; if(cb) _lt(cb, 600); }
+}
+// Audition a pattern WITHOUT touching the grid (which-one cards, target replays).
+// A light setTimeout scheduler is fine here — it's a demo, not the sequencer.
+function _playPatternOnce(pattern, cb){
+  ensureAudioReady().then(() => {
+    const iv = stepDurationSec() * 1000;
+    for(const n of pattern){
+      const attacks = n.kind === "eighth" ? [[n.start, 1], [n.start + 1, 1]] : [[n.start, n.len]];
+      for(const [s, l] of attacks) _lt(() => { try{ playInstrument(pitchFor(n.row), l); }catch(e){} }, s * iv);
+    }
+    for(let s = 0; s < cols; s++) _lt(() => _lessonPulseStep(s), s * iv);
+    if(cb) _lt(cb, cols * iv + 250);
+  }).catch(() => { if(cb) _lt(cb, 600); });
+}
+
+// ---------- hearts / mascot / hand / chrome ----------
+function _lessonPulseStep(s){
+  if(s % COLS_PER_BEAT === 0){
+    const h = _heartEls[s / COLS_PER_BEAT];
+    if(h){ h.classList.remove("beat"); void h.offsetWidth; h.classList.add("beat"); }
+    if(_mascotEl){ _mascotEl.classList.remove("bob"); void _mascotEl.offsetWidth; _mascotEl.classList.add("bob"); }
+  }
+}
+function _buildHearts(){
+  const shell = document.getElementById("sequencerShell");
+  const stave = document.getElementById("stavePanel");
+  const row = document.createElement("div");
+  row.id = "heartbeatRow";
+  // Same column geometry as a grid row (repeat(cols, cell) + gap), so each
+  // heart sits exactly under its beat's cells (owner feedback: hearts inline
+  // with beats 1-2-3-4). Widths reference the LIVE --cell/--gap vars (not the
+  // stale JS CELL/GAP, which aren't final when _buildHearts runs pre-layout),
+  // so the row tracks the grid as fitToViewport resizes cells. Centred by the
+  // CSS `margin: auto`. Each heart spans COLS_PER_BEAT columns, centred.
+  row.style.display = "grid";
+  row.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+  row.style.columnGap = "var(--gap)";
+  row.style.width = `calc(var(--cell) * ${cols} + var(--gap) * ${cols - 1})`;
+  _heartEls = [];
+  for(let b = 0; b < cols / COLS_PER_BEAT; b++){
+    const h = document.createElement("span");
+    h.className = "lessonHeart";
+    h.textContent = "❤";
+    // Sit the heart in the SAME single column as this beat's number (the
+    // beat-start cell), centred under it — not across the whole 2-cell beat.
+    h.style.gridColumn = `${b * COLS_PER_BEAT + 1}`;
+    row.appendChild(h);
+    _heartEls.push(h);
+  }
+  shell.insertBefore(row, stave);
+}
+function _buildChrome(){
+  const page = document.getElementById("page");
+  // progress: one note glyph per step, filled as steps complete
+  const prog = document.createElement("div");
+  prog.id = "lessonProgress";
+  LESSON.steps.forEach(() => {
+    const s = document.createElement("span");
+    s.className = "lessonProgNote";
+    s.textContent = "♪";
+    prog.appendChild(s);
+  });
+  page.appendChild(prog);
+  // Forgiving home button — matches the play button and sits right after Stop
+  // in the controls row (owner feedback). Saves the exact step, no confirm.
+  const exit = document.createElement("button");
+  exit.id = "lessonExit";
+  exit.className = "bigBtn iconBtn";
+  exit.setAttribute("aria-label", "Home");
+  exit.title = "Home";
+  exit.innerHTML = '<span class="icon"><svg aria-hidden="true" viewBox="0 0 24 24">'
+    + '<path d="M12 3 L21.5 11.2 a1 1 0 0 1 -0.65 1.75 H19 v6.2 a1 1 0 0 1 -1 1 h-3.4 v-5.2 h-3.2 v5.2 H7 a1 1 0 0 1 -1 -1 v-6.2 H3.15 a1 1 0 0 1 -0.65 -1.75 Z" fill="currentColor"/>'
+    + '</svg></span>';
+  exit.onclick = () => { _saveResume(); window.location.href = "./"; };
+  const stopBtn = document.querySelector('#controls button[aria-label="Stop"]');
+  if(stopBtn && stopBtn.parentNode) stopBtn.parentNode.insertBefore(exit, stopBtn.nextSibling);
+  else page.appendChild(exit);
+  // mascot + speech bubble (tap mascot = replay current instruction).
+  // The mascot IS the logo robot — a bubble-free extract of images/robot.svg
+  // with the mouth split into its own path (.mMouthR) so CSS can animate it
+  // while it talks. Built by tools/build_robot_mascot.py; fetched and inlined
+  // so page CSS reaches inside the SVG (an <img> would seal it off).
+  const m = document.createElement("div");
+  m.id = "lessonMascot";
+  m.innerHTML = '<div class="mascotFallback">🤖</div>';
+  fetch("images/robot-mascot.svg")
+    .then(r => r.ok ? r.text() : null)
+    .then(t => { if(t && t.indexOf("<svg") === 0) m.innerHTML = t; })
+    .catch(() => {});
+  m.onclick = () => { if(_lessonRunning) _replayInstruction(); };
+  page.appendChild(m);
+  _mascotEl = m;
+  // Persistent instruction bar — always on screen, shows the current task.
+  const instr = document.createElement("div");
+  instr.id = "lessonInstruction";
+  page.appendChild(instr);
+  _instrEl = instr;
+  // Icon toolbar: back · ? (replay instruction) · hear (target pattern) ·
+  // help (show me) · forward. Icons only (owner feedback).
+  const bar = document.createElement("div");
+  bar.id = "lessonToolbar";
+  const mkBtn = (id, label, svg, fn) => {
+    const btn = document.createElement("button");
+    btn.className = "lessonToolBtn";
+    btn.id = id;
+    btn.setAttribute("aria-label", label);
+    btn.title = label;
+    btn.innerHTML = svg;
+    btn.onclick = fn;
+    bar.appendChild(btn);
+    return btn;
+  };
+  const I = {
+    back: '<svg viewBox="0 0 24 24"><path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    fwd:  '<svg viewBox="0 0 24 24"><path d="M9 5 L16 12 L9 19" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ask:  '<svg viewBox="0 0 24 24"><path d="M8.5 9 a3.5 3.5 0 1 1 5 3.2 c-1 0.6 -1.5 1.2 -1.5 2.3" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="18.4" r="1.5" fill="currentColor"/></svg>',
+    hear: '<svg viewBox="0 0 24 24"><path d="M4 9 h3 l5 -4 v14 l-5 -4 H4 Z" fill="currentColor"/><path d="M15.5 8.5 a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 6 a8 8 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+    help: '<svg viewBox="0 0 24 24"><path d="M12 3 a6 6 0 0 1 3.5 10.8 c-0.9 0.7 -1.5 1.3 -1.5 2.2 H10 c0 -0.9 -0.6 -1.5 -1.5 -2.2 A6 6 0 0 1 12 3 Z" fill="currentColor"/><rect x="9.5" y="18" width="5" height="1.8" rx="0.9" fill="currentColor"/><rect x="10" y="20.4" width="4" height="1.6" rx="0.8" fill="currentColor"/></svg>',
+  };
+  _tbBack = mkBtn("lessonBack", "Back", I.back, () => _goStep(-1));
+  mkBtn("lessonAsk", "Hear the instruction", I.ask, () => _replayInstruction());
+  _tbHear = mkBtn("lessonHear", "Hear the pattern", I.hear, () => _hearPattern());
+  _tbHelp = mkBtn("lessonHelp", "Show me how", I.help, () => _helpCurrent());
+  _tbFwd = mkBtn("lessonFwd", "Next", I.fwd, () => _goStep(1));
+  page.appendChild(bar);
+  _toolbarEl = bar;
+  // Inline which-one host (non-modal, so the toolbar stays usable).
+  const ch = document.createElement("div");
+  ch.id = "lessonChoice";
+  page.appendChild(ch);
+  _choiceEl = ch;
+  // demo hand (drives the REAL onCellClick path)
+  const hand = document.createElement("div");
+  hand.id = "lessonHand";
+  hand.textContent = "👆";
+  page.appendChild(hand);
+  _handEl = hand;
+  // overlay host (START / celebration only — modal)
+  const ov = document.createElement("div");
+  ov.id = "lessonOverlay";
+  page.appendChild(ov);
+  _overlayEl = ov;
+}
+let _tbBack = null, _tbFwd = null, _tbHear = null, _tbHelp = null;
+function _handMoveToCell(r, c){
+  const cell = _cellEl(r, c);
+  const page = document.getElementById("page");
+  if(!cell || !page) return;
+  const pr = page.getBoundingClientRect();
+  const scale = pr.width / 1600 || 1;
+  const cr = cell.getBoundingClientRect();
+  _handEl.style.left = ((cr.left - pr.left + cr.width * 0.5) / scale) + "px";
+  _handEl.style.top = ((cr.top - pr.top + cr.height * 0.72) / scale) + "px";
+}
+async function _handBuild(pattern){
+  _handEl.classList.add("show");
+  const prevSteps = selectedSteps, prevKind = selectedKind;
+  for(const n of pattern){
+    _handMoveToCell(n.row, n.start);
+    await new Promise(res => _lt(res, 560));
+    selectedSteps = n.len;
+    selectedKind = n.kind || null;
+    _handEl.classList.add("tap");
+    try{ onCellClick(n.row, n.start); }catch(e){}
+    await new Promise(res => _lt(res, 240));
+    _handEl.classList.remove("tap");
+    await new Promise(res => _lt(res, 320));
+  }
+  selectedSteps = prevSteps; selectedKind = prevKind;
+  try{ buildTools(); }catch(e){}
+  _handEl.classList.remove("show");
+}
+function _lessonLockedNudge(r, id){
+  const block = noteLayerEls[r] && noteLayerEls[r].querySelector(`.noteBlock[data-id="${id}"]`);
+  if(block){ block.classList.remove("lockedShake"); void block.offsetWidth; block.classList.add("lockedShake"); }
+}
+
+// ---------- grid setup / teardown per step ----------
+function _clearNotes(){
+  for(let r = 0; r < rows; r++){
+    for(const n of notesByRow[r].slice()) deleteNoteById(r, n.id);
+    redrawRowNotes(r);
+  }
+  _lessonLockedIds = new Set();
+}
+function _placePreset(n, locked){
+  placeNote(n.row, n.start, n.len, n.kind || null);
+  const placed = notesByRow[n.row][notesByRow[n.row].length - 1];
+  if(locked) _lessonLockedIds.add(placed.id);
+  redrawRowNotes(n.row);
+  if(locked){
+    const block = noteLayerEls[n.row].querySelector(`.noteBlock[data-id="${placed.id}"]`);
+    if(block) block.classList.add("lessonLocked");
+  }
+}
+function _setupGrid(st){
+  _clearNotes();
+  if(st.preset) for(const n of st.preset) _placePreset(n, !!st.locked);
+}
+
+// ---------- idle nudges & ghosts ----------
+// Learning tools carry no text (svg/glyph only), so match by kind via the
+// active toolSteps order rather than textContent.
+function _toolEl(kind){
+  const tools = [...toolsListEl.querySelectorAll(".tool")];
+  const idx = (LEARN_LEVEL ? LEARN_LEVEL.toolSteps : []).findIndex(t => t.kind === kind);
+  return (idx >= 0 && tools[idx]) ? tools[idx] : document.getElementById("tools");
+}
+// Gentle idle affordance ONLY — a single silent sparkle on the relevant control
+// after a while. No auto-repeat of the question, no auto-completion (owner
+// feedback): the child stays in control; the Help button is the escape hatch.
+function _armIdle(st){
+  if(_idleT) clearTimeout(_idleT);
+  _idleT = setTimeout(() => {
+    if(!_lessonRunning || (_stepPhase !== "building" && _stepPhase !== "ready")) return;
+    let el = null;
+    if(_stepPhase === "ready") el = _playBtnEl();
+    else if(st.nudge === "tool-eighth") el = _toolEl("eighth");
+    else if(st.nudge === "tool-quarter") el = _toolEl("quarter");
+    else el = _tbHelp; // point at the Help button when there's no obvious control
+    if(el){ el.classList.remove("lessonNudge"); void el.offsetWidth; el.classList.add("lessonNudge"); _lt(() => el.classList.remove("lessonNudge"), 3000); }
+    // re-arm once more, then stop (no endless nudging)
+    _idleFires++;
+    if(_idleFires < 3) _armIdle(st);
+  }, 11000);
+}
+// Flash a note-length tool yellow so a child sees how to select a NEW length
+// (owner feedback). Cleared when that tool is picked OR a note of that kind is
+// placed (tracked against the count at flash time, so a preset doesn't clear it).
+function _countKind(kind){
+  let n = 0;
+  for(let r = 0; r < rows; r++) for(const x of notesByRow[r]) if((x.kind || "quarter") === kind) n++;
+  return n;
+}
+function _flashTool(kind){
+  _clearToolFlash();
+  const el = _toolEl(kind);
+  if(!el || el.id === "tools") return;
+  el.classList.add("toolFlash");
+  _flashToolEl = el;
+  _flashKind = kind;
+  _flashBaseline = _countKind(kind);
+  el.addEventListener("click", _clearToolFlash, { once: true });
+}
+function _clearToolFlash(){
+  if(_flashToolEl){ _flashToolEl.classList.remove("toolFlash"); _flashToolEl = null; _flashKind = null; }
+}
+// Show the gap positions as empty outlined boxes for a fill-the-gap task, and
+// keep them in sync as the child fills them (owner feedback: start with empty
+// boxes). No-op for non-gap steps.
+function _refreshGaps(st){
+  if(!(st && st.locked && st.target)) return;
+  _clearGhosts();
+  const res = _evalPass(st.pass, st.target);
+  _ghostHint(res.missing);
+}
+// HELP (user-triggered): the robot shows what to do, says "now you try", then
+// RESETS the question so the child does it themselves — never auto-completes.
+function _helpCurrent(){
+  if(!_lessonRunning || _helping) return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st) return;
+  if(st.type === "which"){
+    // no "doing" to demo — replay the pattern and gently point at the answer
+    if(_curWhichAnswer) _playPatternOnce(_curWhichAnswer);
+    const cards = _choiceEl.querySelectorAll(".lessonCard");
+    const right = cards[st.answer];
+    if(right){ right.classList.add("hintPulse"); _lt(() => right.classList.remove("hintPulse"), 2600); }
+    return;
+  }
+  if(st.type !== "build") return;
+  _helpShow(st);
+}
+function _helpShow(st){
+  _helping = true;
+  _clearStepTimers();
+  _clearGhosts();
+  _clearToolFlash();
+  if(_idleT){ clearTimeout(_idleT); _idleT = null; }
+  _stepPhase = "help";
+  _clearNotes();
+  const example = [];
+  if(!st.target){
+    const needK = (st.pass && st.pass.use && st.pass.use.eighth) ? "eighth" : "quarter";
+    const n = (st.pass && st.pass.minNotes) || 1;
+    for(let b = 0; b < n && b < cols / 2; b++) example.push({ row: 0, start: b*2, len: 2, kind: needK });
+  }
+  const pattern = st.target || example;
+  _say("g_watch", () => {
+    _handBuild(pattern).then(() => {
+      _internalPlay(cols, () => _lt(() => {
+        _say("g_turn", () => {           // "Your turn!"
+          _setupGrid(st);                // reset the question for the child
+          _refreshGaps(st);
+          if(st.flashTool) _flashTool(st.flashTool);
+          _stepPhase = "building";
+          _setInstruction(_instrTextOf(st));
+          _helping = false;
+          _armIdle(st);
+        });
+      }, 500));
+    });
+  });
+}
+// Hear the pattern the child must recreate or choose (owner feedback).
+function _hearPattern(){
+  if(!_lessonRunning) return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st) return;
+  if(st.type === "which" && _curWhichAnswer) return _playPatternOnce(_curWhichAnswer);
+  if(st.target) return _playPatternOnce(st.target);
+  if(st.pattern) return _playPatternOnce(st.pattern);
+  // no fixed pattern (make-your-own) — play whatever is on the grid
+  const cur = _curNotes();
+  if(cur.length) _internalPlay(cols);
+}
+function _instrTextOf(st){ return (window.KidSeqLessons.NARR[st.narr] || [,,""])[2] || ""; }
+// Toolbar button enable/disable + nav-boundary state for the current step.
+function _syncToolbar(){
+  const st = LESSON.steps[_stepIdx];
+  const hasPattern = !!(st && (st.target || st.pattern || (st.type === "which")));
+  const canHelp = !!(st && (st.type === "build" || st.type === "which"));
+  if(_tbHear) _tbHear.classList.toggle("tbDisabled", !hasPattern);
+  if(_tbHelp) _tbHelp.classList.toggle("tbDisabled", !canHelp);
+  const firstEver = (_stepIdx === 0 && !_prevLesson());
+  if(_tbBack) _tbBack.classList.toggle("tbDisabled", firstEver);
+}
+function _ghostHint(missing){
+  for(const n of missing){
+    for(let c = n.start; c < n.start + n.len && c < cols; c++){
+      const cell = _cellEl(n.row, c);
+      if(cell) cell.classList.add("ghostHint");
+    }
+  }
+}
+function _clearGhosts(){ document.querySelectorAll(".cell.ghostHint").forEach(c => c.classList.remove("ghostHint")); }
+function _clearStepUx(){
+  _clearStepTimers();
+  _clearGhosts();
+  _clearToolFlash();
+  if(_idleT){ clearTimeout(_idleT); _idleT = null; }
+  _idleFires = 0;
+  _stepMisses = 0;
+  _whichTries = 0;
+  _saidPress = false;
+  _saidRest = false;
+  _helping = false;
+  _curWhichAnswer = null;
+  const pb = _playBtnEl();
+  if(pb) pb.classList.remove("lessonNudge");
+  if(_choiceEl){ _choiceEl.classList.remove("show"); _choiceEl.innerHTML = ""; }
+  const shell = document.getElementById("sequencerShell");
+  if(shell) shell.classList.remove("choosing");
+  const pop = document.getElementById("lessonStavePopup");
+  if(pop) pop.remove();
+}
+
+// ---------- completion detection (rides the redrawRowNotes funnel) ----------
+function _lessonGridChanged(){
+  if(!LESSON || !_lessonRunning) return;
+  if(_lessonCheckT) clearTimeout(_lessonCheckT);
+  _lessonCheckT = setTimeout(_lessonCheckNow, 220);
+}
+function _lessonCheckNow(){
+  if(!_lessonRunning || _stepPhase !== "building") return;
+  const st = LESSON.steps[_stepIdx];
+  if(!st || st.type !== "build") return;
+  // Stop flashing once the child places a note of the flashed kind (compared to
+  // the count at flash time, so a preset placed during setup doesn't clear it).
+  if(_flashToolEl && _flashKind && _countKind(_flashKind) > _flashBaseline) _clearToolFlash();
+  _idleFires = 0; _armIdle(st); // grid activity resets the idle clock
+  const res = _evalPass(st.pass, st.target);
+  if(res.ok){
+    _clearGhosts();
+    if(st.target){
+      // Recreate task matched → play their answer, celebrate, advance. No manual
+      // Play press needed (removes the "which button?" ambiguity on copy tasks).
+      _stepPhase = "idle";
+      _say(st.yayNarr || _yayKey(), null, true);
+      _internalPlay(cols, () => _lt(() => _advance(false), 250));
+    }else{
+      // Make-your-own task → the green Play button is the action (hear YOUR music).
+      _stepPhase = "ready";
+      const pb = _playBtnEl();
+      if(pb){ pb.classList.add("lessonNudge"); }
+      if(!_saidPress){ _saidPress = true; _say("g_press"); }
+    }
+  }else{
+    _refreshGaps(st);      // keep the empty-box outlines current
+    if(st.pass && st.pass.restBeats && res.restViolation && st.pass.restNarr && !_saidRest){
+      _saidRest = true; _say(st.pass.restNarr, null, true);
+    }
+    if(_stepPhase === "ready"){
+      _stepPhase = "building";
+      _saidPress = false;
+      const pb = _playBtnEl();
+      if(pb) pb.classList.remove("lessonNudge");
+    }
+  }
+}
+
+// ---------- the step machine ----------
+function _setProgress(){
+  const notes = _overlayEl ? document.querySelectorAll("#lessonProgress .lessonProgNote") : [];
+  notes.forEach((n, i) => n.classList.toggle("done", i < _stepIdx));
+}
+function _runStep(){
+  _clearStepUx();
+  _setProgress();
+  _stepPhase = "idle";
+  const st = LESSON.steps[_stepIdx];
+  if(!st){ _lessonComplete(); return; }
+  // The task instruction goes up on the persistent bar immediately and stays.
+  _setInstruction(_instrTextOf(st));
+  _syncToolbar();
+  if(st.type === "listen") return _stepListen(st);
+  if(st.type === "freeze") return _stepFreeze(st);
+  if(st.type === "demo") return _stepDemo(st);
+  if(st.type === "which") return _stepWhich(st);
+  if(st.type === "build") return _stepBuild(st);
+  if(st.type === "reveal") return _stepReveal(st);
+  _advance();
+}
+function _advance(assisted){
+  if(assisted) _assistCount++;
+  _stepPhase = "idle";
+  _saveResume(_stepIdx + 1);
+  const notes = document.querySelectorAll("#lessonProgress .lessonProgNote");
+  const n = notes[_stepIdx];
+  if(n){ n.classList.add("done", "pop"); _lt(() => n.classList.remove("pop"), 900); }
+  _stepIdx++;
+  _lt(_runStep, 650);
+}
+
+function _stepListen(st){
+  _setupGrid({});
+  _say(st.narr, () => _internalPlay((st.bars || 1) * cols, () => _advance()), false);
+}
+function _stepFreeze(st){
+  _freezeRound = st.rounds || 2;
+  _setupGrid({});
+  const round = () => {
+    const bars = 1 + Math.floor(Math.random() * 2);
+    _internalPlay(bars * cols, () => {
+      if(_mascotEl){ _mascotEl.classList.add("freeze"); }
+      _say("a1_frozen", () => {
+        if(_mascotEl) _mascotEl.classList.remove("freeze");
+        _freezeRound--;
+        if(_freezeRound > 0) _lt(round, 900);
+        else _advance();
+      });
+    });
+  };
+  _say(st.narr, () => _lt(round, 400), false);
+}
+function _stepDemo(st){
+  _setupGrid({});
+  _stepPhase = "demo";
+  _say("g_watch", () => {
+    _handBuild(st.pattern).then(() => {
+      if(st.chant) _say(st.chant);
+      _internalPlay(cols, () => _lt(() => {
+        _clearNotes();
+        _say("g_turn", () => _advance());
+      }, 500));
+    });
+  });
+}
+// A mini picture of a pattern for the which-one cards: real note BLOCKS (a
+// quarter = one solid block spanning its beat with ♩; an eighth pair = a
+// segmented block with ♫) instead of raw filled squares — so a quarter never
+// reads as two eighth cells (owner feedback: a2 options both looked like 8ths).
+function _miniOfPattern(opt){
+  const mini = document.createElement("div");
+  mini.className = "lessonMini";
+  for(let r = 0; r < rows; r++){
+    const track = document.createElement("div");
+    track.className = "lessonMiniRow";
+    track.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+    for(let c = 0; c < cols; c++){
+      const bg = document.createElement("span");
+      bg.className = "miniBg";
+      track.appendChild(bg);
+    }
+    for(const n of opt.filter(x => x.row === r)){
+      const blk = document.createElement("div");
+      blk.className = "miniBlock";
+      blk.dataset.kind = n.kind || "quarter";
+      blk.style.gridColumn = `${n.start + 1} / span ${n.len}`;
+      blk.style.backgroundColor = rowColors[r];
+      const g = document.createElement("span");
+      g.className = "miniGlyph";
+      g.textContent = NOTE_GLYPHS[n.kind] || "♩";
+      blk.appendChild(g);
+      track.appendChild(blk);
+    }
+    mini.appendChild(track);
+  }
+  return mini;
+}
+// Which-one is INLINE (not a blocking modal), so the persistent instruction bar
+// and the ?/hear/help/nav toolbar stay usable while choosing. The grid + hearts
+// hide; the big cards sit centre-stage.
+function _stepWhich(st){
+  _stepPhase = "overlay";
+  _setupGrid({});
+  const answer = st.options[st.answer];
+  _curWhichAnswer = answer;
+  const shell = document.getElementById("sequencerShell");
+  if(shell) shell.classList.add("choosing");
+  _choiceEl.innerHTML = '<div class="lessonWhichCards"></div>';
+  const cardsHost = _choiceEl.querySelector(".lessonWhichCards");
+  st.options.forEach((opt, idx) => {
+    const card = document.createElement("button");
+    card.className = "lessonCard";
+    card.appendChild(_miniOfPattern(opt));
+    card.onclick = () => {
+      if(_stepPhase !== "overlay") return;
+      if(idx === st.answer){
+        card.classList.add("correct");
+        _stepPhase = "idle";
+        _say(_yayKey(), () => _advance(false), true);
+      }else{
+        card.classList.add("wrong");
+        _lt(() => card.classList.remove("wrong"), 900);
+        _say("g_listen", () => _playPatternOnce(answer), true);
+      }
+    };
+    cardsHost.appendChild(card);
+  });
+  _choiceEl.classList.add("show");
+  _say(st.narr, () => _playPatternOnce(answer), false);
+}
+function _stepBuild(st){
+  _setupGrid(st);
+  _stepPhase = "building";
+  _refreshGaps(st);                      // gap tasks: show empty boxes to fill
+  if(st.flashTool) _flashTool(st.flashTool);  // flash a new note-length tool
+  _say(st.narr, () => {
+    // Recreate tasks (target): MODEL the pattern every time — play it now and
+    // pulse the Hear button so the child learns that button replays it.
+    if(st.target){ _playPatternOnce(st.target, () => _pulseHear()); }
+    // TOUCH-style steps open on a playing pattern (never a blank canvas).
+    else if(st.preset && st.preset.length){ _internalPlay(cols); }
+  }, false);
+  _armIdle(st);
+}
+// Draw attention to the Hear button (owner feedback: make hearing-again clear).
+function _pulseHear(){
+  if(!_tbHear || _tbHear.classList.contains("tbDisabled")) return;
+  _tbHear.classList.remove("lessonNudge"); void _tbHear.offsetWidth; _tbHear.classList.add("lessonNudge");
+  _lt(() => _tbHear.classList.remove("lessonNudge"), 3000);
+}
+function _onUserPlayEnd(){
+  if(!_lessonRunning) return;
+  if(_stepPhase !== "building" && _stepPhase !== "ready") return; // auto-check may have advanced
+  const st = LESSON.steps[_stepIdx];
+  if(!st || st.type !== "build") return;
+  const res = _evalPass(st.pass, st.target);
+  if(res.ok){
+    _stepPhase = "idle";
+    _say(st.yayNarr || _yayKey(), () => _advance(false), true);
+    return;
+  }
+  // Miss ladder — kind hints, NO auto-completion (owner feedback). The child
+  // uses the Help button for a demo, or navigates. Never a forced finish.
+  _stepMisses++;
+  _stepPhase = "building";
+  if(res.shiftedBy !== 0){
+    _say("g_shift", () => { if(st.target) _playPatternOnce(st.target); }, true);
+  }else if(res.restViolation && st.pass.restNarr){
+    _say(st.pass.restNarr, null, true);
+  }else if(_stepMisses >= 2 && st.target){
+    _refreshGaps(st); _ghostHint(res.missing);
+    _say("g_ghost", null, true);
+  }else{
+    _say("g_try", () => { if(st.target) _playPatternOnce(st.target); }, true);
+  }
+}
+function _stepReveal(st){
+  _stepPhase = "idle";
+  // The reveal is a POPUP in front of everything, up high, with an X to close
+  // (owner feedback) — the child's created pattern rendered as real notation.
+  try{ renderStave(); }catch(e){}   // fills #stavePanel with the current pattern's SVG
+  const svg = document.querySelector("#stavePanel svg");
+  const pop = document.createElement("div");
+  pop.id = "lessonStavePopup";
+  pop.innerHTML =
+    '<div class="lessonStaveCard">'
+    + '<button class="lessonStaveClose" aria-label="Close">' + '<svg viewBox="0 0 24 24"><path d="M6 6 L18 18 M18 6 L6 18" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>' + '</button>'
+    + '<div class="lessonStaveTitle">You wrote real music! 🎼</div>'
+    + '<div class="lessonStaveHost"></div>'
+    + '</div>';
+  if(svg) pop.querySelector(".lessonStaveHost").appendChild(svg.cloneNode(true));
+  document.getElementById("page").appendChild(pop);
+  requestAnimationFrame(() => pop.classList.add("show"));
+  const close = () => { pop.remove(); _advance(); };
+  pop.querySelector(".lessonStaveClose").onclick = close;
+  _say(st.narr, null, false);       // wait for the X — no auto-advance
+}
+let _yayIdx = 0;
+function _yayKey(){ _yayIdx = (_yayIdx + 1) % 3; return ["g_yay1", "g_yay2", "g_yay3"][_yayIdx]; }
+
+// ---------- navigation (owner feedback: back/forth through tasks + sections) --
+// Within a lesson, ◀/▶ switch tasks instantly. Crossing a boundary reloads the
+// adjacent lesson (a fresh audio-unlock tap is unavoidable across a page load,
+// since each lesson's grid config is applied at load time).
+function _prevLesson(){
+  const order = (window.KidSeqLessons && window.KidSeqLessons.ORDER) || [];
+  const i = order.indexOf(LESSON_KEY);
+  return i > 0 ? order[i - 1] : null;
+}
+function _gotoLesson(id, step){
+  try{ sessionStorage.setItem("kidseq_lesson_goto", JSON.stringify({ lesson: id, step: step })); }catch(e){}
+  window.location.href = "?lesson=" + id;
+}
+function _goStep(delta){
+  if(!_lessonRunning) return;
+  try{ stop(); }catch(e){}
+  if(_narrT){ clearTimeout(_narrT); _narrT = null; }
+  try{ if(_narrAudio) _narrAudio.pause(); }catch(e){}
+  if(_mascotEl) _mascotEl.classList.remove("talk");
+  _helping = false;
+  const target = _stepIdx + delta;
+  if(target < 0){
+    const pv = _prevLesson();
+    if(pv) _gotoLesson(pv, -1);
+    return;
+  }
+  if(target >= LESSON.steps.length){
+    if(LESSON.next) _gotoLesson(LESSON.next, 0);
+    else _lessonComplete();
+    return;
+  }
+  _stepIdx = target;
+  _saveResume(_stepIdx);
+  _runStep();
+}
+
+// ---------- start / resume / complete ----------
+function _saveResume(stepOverride){
+  const p = _lessonProg();
+  const idx = (stepOverride != null) ? stepOverride : _stepIdx;
+  if(idx > 0 && idx < LESSON.steps.length) p.resume[LESSON_KEY] = { step: idx };
+  else delete p.resume[LESSON_KEY];
+  p.last = LESSON_KEY;
+  _lessonProgSave(p);
+}
+function _lessonComplete(){
+  _stepPhase = "idle";
+  const p = _lessonProg();
+  const stars = 3 - Math.min(2, _assistCount);
+  p.stars[LESSON_KEY] = Math.max(p.stars[LESSON_KEY] || 0, stars);
+  delete p.resume[LESSON_KEY];
+  p.last = LESSON_KEY;
+  _lessonProgSave(p);
+  _confetti();
+  const done = () => {
+    const next = LESSON.next;
+    _overlayEl.innerHTML = `
+      <div class="lessonDone">
+        <div class="lessonStars">${"★".repeat(stars)}${"☆".repeat(3 - stars)}</div>
+        <div class="lessonDoneTitle">${LESSON.title} ✓</div>
+        ${next
+          ? `<button class="lessonBigBtn" id="lessonNextBtn">▶ Next</button>`
+          : `<button class="lessonBigBtn" id="lessonNextBtn">🎵 Make music!</button>`}
+      </div>`;
+    _overlayEl.classList.add("show");
+    document.getElementById("lessonNextBtn").onclick = () => {
+      window.location.href = next ? `?lesson=${next}` : "./";
+    };
+  };
+  // The real reward: the child's own bar played back, two bars with the groove.
+  _say(LESSON.doneNarr || _yayKey(), () => {
+    if(_curNotes().length) _internalPlay(cols * 2, () => _lt(done, 300));
+    else _lt(done, 300);
+  });
+}
+function _confetti(){
+  const page = document.getElementById("page");
+  const host = document.createElement("div");
+  host.id = "lessonConfetti";
+  const colors = ["#FF0000", "#FFD34D", "#3DA9FF", "#00CC66", "#FF4FD8", "#7A5CFF"];
+  for(let i = 0; i < 36; i++){
+    const c = document.createElement("span");
+    c.style.left = (Math.random() * 100) + "%";
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = (Math.random() * 0.35) + "s";
+    c.style.transform = `rotate(${Math.random() * 360}deg)`;
+    host.appendChild(c);
+  }
+  page.appendChild(host);
+  setTimeout(() => host.remove(), 2200);
+}
+function _lessonStart(resumeStep){
+  _lessonRunning = true;
+  _overlayEl.classList.remove("show");
+  _overlayEl.innerHTML = "";
+  _stepIdx = resumeStep || 0;
+  if(_stepIdx === 0) _say("g_hi", () => _runStep());
+  else _runStep();
+}
+function _lessonInit(){
+  if(!LESSON) return;
+  document.title = "Kid Sequencer — " + LESSON.title;
+  _narrInit();
+  _buildHearts();
+  _buildChrome();
+  const p = _lessonProg();
+  // Resume step: a cross-lesson nav stash wins (step -1 = land on the last
+  // task); else the saved in-progress step; else the start.
+  let resume = p.resume[LESSON_KEY] ? p.resume[LESSON_KEY].step : 0;
+  try{
+    const g = JSON.parse(sessionStorage.getItem("kidseq_lesson_goto"));
+    if(g && g.lesson === LESSON_KEY){
+      resume = (g.step === -1) ? (LESSON.steps.length - 1) : (g.step || 0);
+      sessionStorage.removeItem("kidseq_lesson_goto");
+    }
+  }catch(e){}
+  _overlayEl.innerHTML = `
+    <div class="lessonStart">
+      <div class="lessonStartBand">Rhythm Trail</div>
+      <div class="lessonStartTitle">${LESSON.title}</div>
+      <button class="lessonBigBtn" id="lessonStartBtn">▶</button>
+    </div>`;
+  _overlayEl.classList.add("show");
+  document.getElementById("lessonStartBtn").onclick = async () => {
+    _narrUnlock();                       // <audio> unlock inside the tap gesture
+    try{ await ensureAudioReady(); }catch(e){}
+    _lessonStart(resume);
+  };
+  // Verification aid: ?lesson=<id>&auto=<step> skips the START gesture and jumps
+  // straight to a step (audio stays locked — for headless screenshots only).
+  try{
+    const auto = new URLSearchParams(location.search).get("auto");
+    if(auto !== null) requestAnimationFrame(() => requestAnimationFrame(() => _lessonStart(parseInt(auto, 10) || 0)));
+  }catch(e){}
+  // Dev/verification hooks (harmless in prod; used by the fairness bench).
+  window.KidSeqLessonDebug = {
+    evalPass: (pass, target) => _evalPass(pass, target),
+    sig: () => _gridSig(),
+    state: () => ({ step: _stepIdx, phase: _stepPhase, running: _lessonRunning, assists: _assistCount }),
+    start: (s) => _lessonStart(s || 0),
+    place: (n, locked) => _placePreset(n, !!locked),
+    clearNotes: () => _clearNotes(),
+  };
+}
+
 function init(){
   setInstrument(LEARN_LEVEL ? LEARN_LEVEL.instrument : "piano");
   if (LEARN_LEVEL) {
@@ -5274,6 +6310,8 @@ function init(){
   updateTempoBox();
   _updateKeyBtn();
   setPlayheadWobbleFromTempo(tempo);
+  // Rhythm Trail: build the lesson shell (hearts, mascot, START overlay).
+  if(LESSON) _lessonInit();
   // Layout is handled by the layout system (scheduleLayout/layoutPass).
   // Do NOT call fitToViewport() here — competing calls cause rightLift to flip-flop
   // between two values while the page is visible, causing a visible jump.
@@ -5295,9 +6333,23 @@ function init(){
    This is intentionally additive: UI + behaviour remain exactly the same.
 */
 
+// Mortar-board button on the main sequencer → Rhythm Trail lessons. Resumes an
+// in-progress lesson if there is one, else starts at the beginning (a1). (No
+// lesson-map UI yet — the MVP is a linear chain, so a1 is the entry point.)
+function goToLessons(){
+  let dest = "a1";
+  try{
+    const p = JSON.parse(localStorage.getItem("kidseq_lessons"));
+    const r = p && p.resume && Object.keys(p.resume)[0];
+    if(r) dest = r;
+  }catch(e){}
+  window.location.href = "?lesson=" + dest;
+}
+
 // Inline-handler globals (used by existing HTML attributes)
 window.play = play;
 window.stop = stop;
+window.goToLessons = goToLessons;
 window.clearGrid = clearGrid;
 window.undo = undo;
 window.openCameraModal = openCameraModal;
