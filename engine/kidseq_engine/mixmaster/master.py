@@ -142,7 +142,7 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 # space as the rest") — the shared return carries more of the space instead.
 # R34c: garage drum-room bus -21 -> -24 (owner: "too much reverb on
 # snare/drums in general" — the era kit is dry and close)
-_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -24.0,
+_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -28.0,
                  "reggaeton": -21.0}
 
 # drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
@@ -161,25 +161,34 @@ _PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
     # R34 garage crew-era DE-WASH (owner: "too washy, too much reverb
     # everywhere"; the era's club mixes are dry and punchy): every strain
     # trims the sends — no positive send delta anywhere in garage.
-    "crewdark": {"pads": -1.0, "drums": -3.0},   # R34c: drums drier still
-    "partybounce": {"pads": -1.5, "drums": -3.0},
-    "stabriddim": {"pads": -2.0, "riff": -1.0, "drums": -3.0},
-    "coldbass": {"pads": -2.0, "drums": -3.0},
-    "sincere": {"pads": -0.5, "drums": -3.0},
-    "boinkpop": {"pads": -1.0, "drums": -3.0},
+    "crewdark": {"pads": -1.0, "drums": -6.0},   # R34f: drums drier + up front
+    "partybounce": {"pads": -1.5, "drums": -6.0},
+    "stabriddim": {"pads": -2.0, "riff": -1.0, "drums": -6.0},
+    "coldbass": {"pads": -2.0, "drums": -6.0},
+    "sincere": {"pads": -0.5, "drums": -6.0},
+    "boinkpop": {"pads": -1.0, "drums": -6.0},
 }
 _PRODUCER_ROOM_SIZE: dict[str, float] = {
     "lofi": 0.46, "bassled": 0.36,
     # R34 garage: small rooms only; crewdark's cinematic cap is 0.40
-    "crewdark": 0.40, "partybounce": 0.32, "stabriddim": 0.30,
-    "coldbass": 0.32, "sincere": 0.38, "boinkpop": 0.34,
+    "crewdark": 0.36, "partybounce": 0.32, "stabriddim": 0.30,
+    "coldbass": 0.32, "sincere": 0.32, "boinkpop": 0.34,
 }
 _PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0,    # Guetta: denser drums
                                      "stabriddim": -6.0}  # More Fire: dense
 _PRODUCER_DRUM_CLIP_K: dict[str, float] = {
     "bigroom": 1.5, "lofi": 1.15,
     "stabriddim": 1.35, "partybounce": 1.25, "coldbass": 1.2,
-    "boinkpop": 1.2, "crewdark": 1.15, "sincere": 1.05,
+    "boinkpop": 1.2, "crewdark": 1.15, "sincere": 1.2,
+}
+# R34f: post-calibration layer pushes (dB) per producer — garage drums sit
+# REALLY up front in this style (owner). Applied after _calibrate_layer so
+# the LUFS target stays the reference and the push is an explicit offset.
+# Table miss = 0.0 (null contract for every other genre/producer).
+_PRODUCER_LAYER_DB: dict[str, dict[str, float]] = {
+    "crewdark": {"drums": 1.5}, "partybounce": {"drums": 1.5},
+    "stabriddim": {"drums": 1.5}, "coldbass": {"drums": 1.5},
+    "sincere": {"drums": 1.5}, "boinkpop": {"drums": 1.5},
 }
 
 
@@ -820,6 +829,9 @@ def master(layers: dict[str, np.ndarray], sr: int, *, genre: str | None,
             if percussive:
                 lufs_t -= _PERC_LUFS_DROP.get(name, 0.0)   # R23 anti-mud
             proc = _calibrate_layer(proc, sr, lufs_t)
+            push_db = _PRODUCER_LAYER_DB.get(producer, {}).get(name, 0.0)
+            if push_db:
+                proc = proc * np.float32(10.0 ** (push_db / 20.0))  # R34f
         if name in _MONO_LOCK:      # lock low-end sources dead-centre
             proc = hard_mono(proc)
 
