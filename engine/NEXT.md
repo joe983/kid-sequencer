@@ -9,14 +9,73 @@ cheap"); further per-genre producer distinctness is below the perceptibility
 threshold of a parent hearing a handful of tracks/month, while NONE of R1–R32
 has shipped (not modal-deployed, Stripe still TEST mode, Pro not discoverable).
 
-**In-flight garage pass:** R33–R34c lives on the UNMERGED branch
-`claude/sess-2cdd4fd2` (commit `ea9129d`; push-button machinery + 4 rejection
-rounds — history in CLAUDE.md #52 on that branch + the
-`project-producer-pass-pushbutton` memory). Its R34c listening set is in the
-main checkout `engine/out/showcase/PRODUCERS/garage/signatures/` — the owner
-may listen and sign off or park it, but no further garage iteration and no new
-genre (dnb/hiphop/drill/reggaeton) without the owner explicitly reopening the
-playbook.
+**In-flight garage pass:** the owner ENGAGED with the R34c listening set on
+2026-07-20 (element notes: boinkpop drums great / others not; lead layering +
+variations disjointed or off key; hats washed out AND too intense, worst in
+coldbass) → **R34d built + Modal-verified the same day** (see the R34d section
+below; garage branch now merged to main via `claude/sess-f9466434`). The R34d
+signatures set is in the main checkout
+`engine/out/showcase/PRODUCERS/garage/signatures/` (sig_*_v7059–8091) —
+WAITING ON OWNER EARS. The freeze on NEW genres (dnb/hiphop/drill/reggaeton)
+still stands until the owner explicitly reopens the playbook.
+
+## R34d: garage owner-notes pass (2026-07-20, Modal-verified, awaiting ears)
+
+All three R34c notes diagnosed with audio-level evidence, then fixed:
+
+- **Hats "washed out + too intense, esp. coldbass"** → measured: coldbass hatC
+  was `909 OPCL4` = an open→closed sample with **512 ms t90** ringing across
+  five 16th steps at 1.35 kit gain; coldbass+stabriddim hatO was an 857 ms
+  cymbal; sincere hatC 176 ms. boinkpop (the strain the owner liked) was the
+  ONLY strain crisp in both hat rows (43/156 ms). Fixes: 4 in-list pick swaps
+  (coldbass `LC_CNTRL_Hat_09` + `LCHZ_Triangle_01` icy ping, sincere
+  `LC_CNTRL_Hat_34` soft, stabriddim `LC_CNTRL_OpenHat_04`); manifest
+  `trims_ms` hatC 140 / hatO 320 for the five non-boinkpop strains (mechanical
+  guard — no future pick can wash); hatC kit gain 1.35→1.25 non-boinkpop;
+  coldbass `_PRODUCER_DRUMV` [0,1]→[4,1] (was the only strain never thinning
+  its hats; "icy minimal" now rides the skip-hat-pair row half its takes);
+  crewdark kick → `GS_Kick_08` (old pick was pure sub, centroid 76 Hz —
+  kicks PUNCH never boom). Verified in the pack: every strain t90 ≤ 100 ms;
+  boinkpop drums byte-identical. Delivered-audio check: coldbass 6–12 kHz
+  sustained floor (p50/p95 of band envelope) 0.51 → 0.13.
+- **"Lead variations off key"** → measured: 3 of 6 baked `root_hz` were wrong
+  (crewdark −4.0 st, sincere +4.4, coldbass −2.1; stabriddim's "stab" was an
+  ARP SLICE, root +17 st) — the old single-window detector mis-rooted sung
+  melisma; held notes then exposed the phrases' internal pitch slides. Fixes
+  in `tools/install_producer_kits.py`: `_frame_f0` frame-median root detector
+  with octave guard (global-max lag, halve while half-lag ≥ 0.90 — NOTE: a
+  "prefer longer lag" guard is a SUBHARMONIC MAGNET, first build rooted
+  crewdark at half pitch) + `_steady_head_ms` per-chop trim (cut at first
+  sustained >1 st departure from root, floor 350 ms — a held grid note now
+  decays instead of singing the melisma). Pick swaps: stabriddim →
+  `Synth_Chords_Fm_02` steady 130.5 Hz chord stab (parallel-chord riddim
+  idiom; the tempting `SynthBass_E` candidates are REAL E1 subs at 41 Hz —
+  never use as lead, the fold would bury the lead in sub range), coldbass →
+  `LCHZ_140_Vox_05`, sincere → `LC_CNTRL_Vox_Fx_01`. Verified in the pack:
+  all six chops hold their baked root (chord stab reads multi-pitch to a
+  single-f0 tracker — expected).
+- **"Lead layering disjointed"** → root cause: `fold_rate` folded the smp chop
+  into ±6 st of its root while clean co-layers traced the full written
+  contour — two melodic shapes at once. Fix in `_render_lead_stack`
+  (arrange/render.py): when a stack leads with an smp voice, ALL layers' notes
+  fold into the chop's octave band up front (octave-only moves; pitch classes
+  + clash fixes untouched). Plus `resolve_clashes(strict=)` (arrange/
+  __init__.py): garage-producer takes additionally snap sustained beat-start
+  non-chord tones to the nearest chord tone (develop_phrase's diatonic
+  call_response/vary_end shifts passed the semitone-only rule and read as
+  off-key variations). Null contract: strict only fires when
+  `drum_style=="garage" and producer_style is not None`; the fold only fires
+  for stacks with a resolvable smp root (garage strains only today) — other
+  genres byte-unchanged.
+
+Modal: all 11 suites green; garage gate matrix moved (closest pair now
+partybounce/sincere 2.44, gate 2.0) proving the volume audio changed
+(`populate_assets` re-run from the WORKTREE — running it from the main
+checkout silently validates the wrong engine); techhouse 3.58 unchanged.
+Levers if the owner still hears intensity: hatC kit gains (sample_kit.KITS),
+base hatC velocity row (drums.py garage), `_LAYER_LUFS["drums"]`
+K-weighting note — coldbass's deep kick under-reads LUFS so calibration
+lifts its hats hotter than boinkpop's at equal gains.
 
 Priority order is now: **deploy R1–R32 (or R1–R34c if the garage branch merges
 first) → Rhythm Trail merge → Stripe live → tier-flow discoverability → let
