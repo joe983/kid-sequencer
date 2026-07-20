@@ -1,5 +1,31 @@
 # Where we are / next session
 
+## ⛔ PRODUCER PASSES FROZEN (owner decision 2026-07-20) — do NOT start new genres
+
+The genre-by-genre producer passes (`docs/PRODUCER_PLAYBOOK.md` §7) are
+**deliberately paused**, not abandoned. Rationale: R1–R32 already clears the
+bar the real audience judges ("my kid's melody as a real song, doesn't sound
+cheap"); further per-genre producer distinctness is below the perceptibility
+threshold of a parent hearing a handful of tracks/month, while NONE of R1–R32
+has shipped (not modal-deployed, Stripe still TEST mode, Pro not discoverable).
+
+**In-flight garage pass:** R33–R34c lives on the UNMERGED branch
+`claude/sess-2cdd4fd2` (commit `ea9129d`; push-button machinery + 4 rejection
+rounds — history in CLAUDE.md #52 on that branch + the
+`project-producer-pass-pushbutton` memory). Its R34c listening set is in the
+main checkout `engine/out/showcase/PRODUCERS/garage/signatures/` — the owner
+may listen and sign off or park it, but no further garage iteration and no new
+genre (dnb/hiphop/drill/reggaeton) without the owner explicitly reopening the
+playbook.
+
+Priority order is now: **deploy R1–R32 (or R1–R34c if the garage branch merges
+first) → Rhythm Trail merge → Stripe live → tier-flow discoverability → let
+real-user feedback decide whether producer passes resume** (if users report
+sameness, resume per the playbook with the banked push-button machinery — one
+genre ≈ one session). Plan:
+`~/.claude/plans/have-i-lost-focus-vivid-quiche.md`. Do not auto-continue the
+playbook in a future session without the owner re-opening it.
+
 ## NEW — R32: producer SOUND pass, techhouse (2026-07-16, NOT deployed)
 Answers the owner's R31 rejection ("they all sound the same"). R31 varied
 per-press *decisions* but every producer shared one drum kit, one Surge synth
