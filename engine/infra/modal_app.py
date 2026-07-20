@@ -112,7 +112,11 @@ def populate_assets(force_vsco: bool = False) -> str:
     out += _run("scripts/fetch_drumkits.py")
     out += _run("scripts/fetch_appkit.py")  # app-approved samples (UK Garage) from the prod pack
     out += _run("scripts/fetch_extras.py")  # engine-only alt hits + breakbeat fills (R17)
-    out += _run("scripts/fetch_producer_kits.py")  # R32 per-producer techhouse sound sources
+    # R32/R33 per-producer sound sources. ALWAYS --force: pack contents change
+    # across producer rounds under the SAME voice filenames, so a skip-existing
+    # unpack would leave stale audio on the volume (the gate would then measure
+    # the previous round's samples — the owner's verify-by-content lesson).
+    out += _run("scripts/fetch_producer_kits.py", "--force")
     out += _run("scripts/fetch_vsco.py", *(["--force"] if force_vsco else []))
     volume.commit()
     listing = sorted(str(p.relative_to(ASSETS_MOUNT)) for p in Path(ASSETS_MOUNT).rglob("*") if p.is_file())
@@ -360,6 +364,7 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
 
     _sys.path.insert(0, str(ENGINE_LOCAL))
     from kidseq_engine.arrange.style import _PRODUCER_MENU, choose_style
+    from kidseq_engine.producer_manifest import load_manifest
     from kidseq_engine.sequence import parse_sequence
 
     payload = json.loads((ENGINE_LOCAL / riff_file).read_text(encoding="utf-8"))
@@ -368,6 +373,10 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
         print(f"genre {genre!r} has no producer menu yet "
               f"(have: {sorted(_PRODUCER_MENU)})")
         return
+    try:
+        legend = load_manifest(genre).legend or _PRODUCER_LEGEND
+    except Exception:  # noqa: BLE001
+        legend = _PRODUCER_LEGEND
     payload["drumStyle"] = genre
     payload["tempo"] = tempo
     riff = parse_sequence(payload)
@@ -378,7 +387,7 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
         hits.setdefault(choose_style(riff, v).producer_style, v)
         v += 1
     for k in keys:
-        tag = _PRODUCER_LEGEND.get(k, k)
+        tag = legend.get(k, k)
         print(f"  {k:<11} ({tag}): variation {hits.get(k, 'NOT FOUND')}")
     dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre
     dst_dir.mkdir(parents=True, exist_ok=True)
@@ -392,11 +401,12 @@ def producers(riff_file: str = "examples/a2_major.json", genre: str = "",
 
 
 @app.local_entrypoint()
-def battery2(base: int = 3000) -> None:
+def battery2(genre: str = "techhouse", base: int = 0) -> None:
     """Producer showcase on SIX DIFFERENT user inputs — one varied-note-length
     melody per producer, each rendered at a wildly different variation (greedy
-    song-shape diversity) so the six tracks show the engine's range across
-    distinct sequencer patterns. -> out/showcase/PRODUCERS/techhouse/battery2/.
+    song-shape diversity) so the tracks show the engine's range across distinct
+    sequencer patterns. Inputs, producer pairs and base variation come from the
+    genre manifest's 'battery' block. -> out/showcase/PRODUCERS/<genre>/battery2/.
     Each input carries its own instrument + tempo; the variation drives shape/
     progression/bass/pads/FX. Resumable (skips existing)."""
     import json
@@ -404,14 +414,14 @@ def battery2(base: int = 3000) -> None:
 
     _sys.path.insert(0, str(ENGINE_LOCAL))
     from kidseq_engine.arrange.style import choose_style
+    from kidseq_engine.producer_manifest import load_manifest
     from kidseq_engine.sequence import parse_sequence
 
-    pairs = [("examples/showcase_p1.json", "bassled"),
-             ("examples/showcase_p2.json", "discofunk"),
-             ("examples/showcase_p3.json", "latin"),
-             ("examples/showcase_p4.json", "pianohouse"),
-             ("examples/showcase_p5.json", "lofi"),
-             ("examples/showcase_p6.json", "bigroom")]
+    man = load_manifest(genre)
+    pairs = man.battery_pairs
+    if base <= 0:
+        base = man.battery_base
+    legend = man.legend
     plan, dests, used = [], [], {}
     for i, (rf, target) in enumerate(pairs):
         payload = json.loads((ENGINE_LOCAL / rf).read_text(encoding="utf-8"))
@@ -429,11 +439,12 @@ def battery2(base: int = 3000) -> None:
         hits.sort(key=lambda h: used.get(h[1], 0))   # least-used shape first
         v, shape = hits[0]
         used[shape] = used.get(shape, 0) + 1
-        print(f"  {target:<11} {Path(rf).name:<18} v={v} shape={shape} "
-              f"tempo={tempo} instr={payload.get('instrument')}")
-        plan.append((rf, "techhouse", tempo, v))
+        print(f"  {target:<11} {Path(rf).name:<20} v={v} shape={shape} "
+              f"tempo={tempo} instr={payload.get('instrument')} "
+              f"({legend.get(target, target)})")
+        plan.append((rf, genre, tempo, v))
         dests.append((target, v))
-    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / "techhouse" / "battery2"
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre / "battery2"
     dst_dir.mkdir(parents=True, exist_ok=True)
     pending = [(p, d) for p, d in zip(plan, dests)
                if not (dst_dir / f"b2_{d[0]}_v{d[1]}.mp3").exists()]
@@ -444,12 +455,80 @@ def battery2(base: int = 3000) -> None:
         print(f"saved {dst} ({len(mp3):,} bytes)")
 
 
-# Null-A/B fixtures (R31): non-techhouse genres at pinned variations. Rendered
-# once per engine revision; producer-axis rounds must leave these byte-identical
-# (cross-process compare — see NEXT.md determinism caveat).
+@app.local_entrypoint()
+def signatures(genre: str = "garage", base: int = 7000) -> None:
+    """SHOWCASE: each producer at its MOST characteristic — "how wildly
+    different can these six sound".
+
+    battery2 optimises song-SHAPE diversity, which routinely lands takes where
+    the producer's identity ISN'T speaking (lead_stack=None so the real chop
+    never plays, a secondary bass patch, or percussive mode — which ignores the
+    producer pad menu entirely and applies the skeletal doctrine). Those takes
+    converge no matter how distinct the sound sources are.
+
+    This scans, per producer, for a SIGNATURE take:
+      * its OWN user sequence (manifest battery pairs — a different melody,
+        instrument, key and tempo per producer),
+      * production_mode == melodic  (so the producer palette expresses),
+      * lead_stack == 0             (the signature stack, led by the producer's
+                                     REAL repitched one-shot),
+      * bass_patch == the producer's signature patch (first in _PRODUCER_BASS),
+    then picks the least-used song_shape among the hits so the six still differ
+    structurally. Real, reproducible variation numbers — no forced-style hook
+    in prod code. -> out/showcase/PRODUCERS/<genre>/signatures/. Resumable."""
+    import json
+    import sys as _sys
+
+    _sys.path.insert(0, str(ENGINE_LOCAL))
+    from kidseq_engine.arrange.style import _PRODUCER_BASS, choose_style
+    from kidseq_engine.producer_manifest import load_manifest
+    from kidseq_engine.sequence import parse_sequence
+
+    man = load_manifest(genre)
+    legend = man.legend
+    plan, dests, used = [], [], {}
+    for i, (rf, target) in enumerate(man.battery_pairs):
+        payload = json.loads((ENGINE_LOCAL / rf).read_text(encoding="utf-8"))
+        tempo = int(payload["tempo"])
+        riff = parse_sequence(payload)
+        sig_bass = _PRODUCER_BASS[target][0][0]
+        b, hits, v = base + i * 211, [], base + i * 211
+        while len(hits) < 12 and v < b + 4000:
+            st = choose_style(riff, v)
+            if (st.producer_style == target and st.production_mode == "melodic"
+                    and st.lead_stack == 0 and st.bass_patch == sig_bass):
+                hits.append((v, st.structure.song_shape))
+            v += 1
+        if not hits:
+            print(f"  {target}: NO SIGNATURE take found for {rf}")
+            continue
+        hits.sort(key=lambda h: used.get(h[1], 0))   # least-used shape first
+        v, shape = hits[0]
+        used[shape] = used.get(shape, 0) + 1
+        print(f"  {target:<9} {Path(rf).name:<26} v={v} shape={shape:<12} "
+              f"tempo={tempo} instr={payload.get('instrument'):<8} "
+              f"bass={sig_bass:<14} ({legend.get(target, target)})")
+        plan.append((rf, genre, tempo, v))
+        dests.append((target, v))
+    dst_dir = ENGINE_LOCAL / "out" / "showcase" / "PRODUCERS" / genre / "signatures"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    pending = [(p, d) for p, d in zip(plan, dests)
+               if not (dst_dir / f"sig_{d[0]}_v{d[1]}.mp3").exists()]
+    for (p, (target, v)), mp3 in zip(pending,
+                                     render_showcase_item.starmap([p for p, _ in pending])):
+        dst = dst_dir / f"sig_{target}_v{v}.mp3"
+        dst.write_bytes(mp3)
+        print(f"saved {dst} ({len(mp3):,} bytes)")
+
+
+# Null-A/B fixtures (R31): genres WITHOUT a producer menu, at pinned variations.
+# Rendered once per engine revision; producer-axis rounds must leave these
+# byte-identical (cross-process compare — see NEXT.md determinism caveat).
+# R33: garage LEFT this set when it became a producer genre (its renders now
+# legitimately change per round) — remaining null genres: dnb/reggaeton/
+# hiphop/drill. Remove each genre's row as its producer pass lands.
 _BASELINE_FIXTURES: list[tuple[str, str, int, int]] = [
     ("examples/a2_major.json", "dnb", 172, 11),
-    ("examples/a2_major.json", "garage", 132, 12),
     ("examples/a2_major.json", "reggaeton", 96, 13),
     ("examples/a2_major.json", "hiphop", 92, 14),
     ("examples/a2_major.json", "drill", 142, 15),

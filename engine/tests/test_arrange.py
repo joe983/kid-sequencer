@@ -546,6 +546,52 @@ def test_voice_post_applier_deterministic_bounded_and_felt_compat():
     assert np.array_equal(got, want), "felt_piano byte-compat broken"
 
 
+def test_r34_groove_clock():
+    # R34: ONE swing clock for the rhythm section (crew-era UKG bounce).
+    # bass/pad odd-16th starts ride the drums' shuffle; swing=None is
+    # byte-identical (the null contract that keeps every other genre safe).
+    from kidseq_engine.arrange import (_BASS_FEELS, bass_feel_for, bass_notes,
+                                       pad_notes, swung_beat)
+    from kidseq_engine.arrange.style import _SKELETON_MENU
+    from kidseq_engine.render.drums import DRUM_SKELETONS, SWING
+
+    # the clock: odd 16ths delayed by swing fractions of a step, evens fixed
+    assert swung_beat(1.75, 0.18) == 1.75 + 0.18 * 0.25
+    assert swung_beat(3.25, 0.18) == 3.25 + 0.045
+    assert swung_beat(0.5, 0.18) == 0.5 and swung_beat(2.0, 0.18) == 2.0
+    assert swung_beat(1.75, None) == 1.75 and swung_beat(1.75, 0.0) == 1.75
+
+    riff = _riff(drum_style="garage")
+    feel = bass_feel_for("garage", 2)
+    # null contract: swing=None output equals the legacy (no-arg) call
+    legacy = bass_notes(riff, [0, 3, 4, 3], 4, feel=feel, gate=0.6)
+    nulled = bass_notes(riff, [0, 3, 4, 3], 4, feel=feel, gate=0.6, swing=None)
+    assert legacy == nulled
+    # displacement exactness at 0.18: every odd-16th start moves by 0.045
+    swung = bass_notes(riff, [0, 3, 4, 3], 4, feel=feel, gate=0.6, swing=0.18)
+    for a, b in zip(legacy, swung):
+        rel = a.start_beats % 4.0
+        want = 0.045 if round(rel * 4) % 2 == 1 else 0.0
+        assert abs((b.start_beats - a.start_beats) - want) < 1e-9, (a, b)
+    ps = pad_notes(riff, [0, 3, 4, 3], 2, rhythm=[(0.5, 0.4), (2.75, 0.4)])
+    pw = pad_notes(riff, [0, 3, 4, 3], 2, rhythm=[(0.5, 0.4), (2.75, 0.4)],
+                   swing=0.18)
+    for a, b in zip(ps, pw):
+        rel = a.start_beats % 4.0
+        want = 0.045 if round(rel * 4) % 2 == 1 else 0.0
+        assert abs((b.start_beats - a.start_beats) - want) < 1e-9
+
+    # the bass LOCK rule: garage feels never land on beats 2/4 (the snare's)
+    for f in _BASS_FEELS["garage"]:
+        for hit in f:
+            assert hit[0] not in (1.0, 3.0), f
+    # crew-era band: garage swing centre >= 0.22 territory (0.26 default)
+    assert SWING["garage"] >= 0.22
+    # skeleton menu indices all resolvable (0 = base + N grids)
+    menu, _ = _SKELETON_MENU["garage"]
+    assert max(menu) <= len(DRUM_SKELETONS["garage"]), menu
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in sorted(globals().items()):

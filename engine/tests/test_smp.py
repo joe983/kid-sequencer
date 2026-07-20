@@ -28,12 +28,13 @@ def _hz(m):
 
 
 def test_smp_voices_registry_and_fallbacks():
-    # every smp voice names a techhouse relpath + a fallback that is a REAL
-    # Surge patch / SF role, and is wired into LEAD_VOICES as ("smp", name).
+    # every smp voice names a <genre>/<producer>/<name>.wav relpath + a fallback
+    # that is a REAL Surge patch / SF role, and is wired into LEAD_VOICES as
+    # ("smp", name).
     from kidseq_engine.arrange.style import LEAD_VOICES
     from kidseq_engine.render import vst_render
     for name, (rel, (fkind, fname)) in smp_render.SMP_VOICES.items():
-        assert rel.endswith(".wav") and rel.startswith("techhouse/"), (name, rel)
+        assert rel.endswith(".wav") and rel.count("/") == 2, (name, rel)
         assert fkind in ("vst", "sf"), (name, fkind)
         if fkind == "vst":
             assert fname in vst_render.PATCHES, (name, fname)

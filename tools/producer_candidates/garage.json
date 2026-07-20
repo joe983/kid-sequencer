@@ -1,0 +1,350 @@
+{
+ "_README": "Triage candidates for the garage producers. Paths relative to LIB (KIDSEQ_SAMPLE_LIB / owner's sample library). First entry per section = the triage top pick (de-duplicated so producers get DISTINCT slot-0 picks); the rest are a farthest-point diverse spread to swap. Regenerate: python tools/producer_triage.py --genre garage  (reconstructed ranker — owner corrects by ear at the audition step).",
+ "candidates": {
+  "crewdark": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_21.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_09.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_05.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_15.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
+   ],
+   "hatC": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_15.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_26.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_25.wav"
+   ],
+   "rim": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_21.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_12.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Percussion/GS_GSV3_Perc_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_12.wav"
+   ],
+   "chop": [
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_127_Vox_c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_140_Vox_05_c00.wav",
+    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_130_Vox_02_c00.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_140_Vox_02_c01.wav"
+   ],
+   "swell": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_07.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Atmos_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Siren.wav"
+   ]
+  },
+  "partybounce": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_13.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 090.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Soft Kicks/VEH1 Soft Kick - 054.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Kicks/VEH1 Hard Kicks/VEH1 Hard Kick - 105.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_15.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
+   ],
+   "hatC": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_12.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_26.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav"
+   ],
+   "shaker": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_47.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_09.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_07.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Foley Percussion/GS_GSV3_FoleyPerc_40.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_03.wav"
+   ],
+   "chop": [
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_133_Vox_c02.wav",
+    "Kid-Sequencer samples/ukg-chops/orchid/Cymatics_-_Rose_Colored_Glasses_Vocal_-_130_BPM__c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "Kid-Sequencer samples/ukg-chops/orchid/Cymatics_-_I_Don't_Need_You_Vocal_-_100_BPM_G_Mi_c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_135_Vox_c00.wav"
+   ],
+   "crowd": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Misc_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_07.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Siren.wav"
+   ],
+   "horn": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_04.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Glitch_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_05.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Misc_01.wav"
+   ]
+  },
+  "stabriddim": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_11.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_09.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_14.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_07.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav"
+   ],
+   "hatC": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_26.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav"
+   ],
+   "hatO": [
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Cymbal_02(1).wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_Reverse_01.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_06(1).wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_03.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_01(1).wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_01.wav"
+   ],
+   "stab": [
+    "Kid-Sequencer samples/ukg-chops/lc_synth/LC_CNTRL_134_D_Synth_Arp_c03.wav",
+    "Kid-Sequencer samples/ukg-chops/lc_synth/LC_CNTRL_135_Am_Synth_Pluck_c03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_E_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_F_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/LC_CNTRL_Synth_Chords_Fm_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Synth One Shots/LC_CNTRL_Synth_Chords_Fm_01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Bass One Shots/LC_CNTRL_SynthBass_D#_04.wav"
+   ],
+   "dub": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Siren.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Sweep_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_05.wav"
+   ]
+  },
+  "coldbass": {
+   "kick": [
+    "Roland TR-808/BD/BD0025.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/HHOD4.WAV",
+    "Roland-TR-909/Roland TR-909/STATAS3.WAV",
+    "Roland-TR-909/Roland TR-909/ST0T0SA.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_12.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "Roland-TR-909/Roland TR-909/STATAS3.WAV",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_snares/LCHZ_Snare_10.wav",
+    "Roland-TR-909/Roland TR-909/BT7A0DA.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/OPCL4.WAV",
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/RIM127.WAV",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_hats/LCHZ_OpenHat_03.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_hats/LCHZ_Hat_02(1).wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_31.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_09.wav"
+   ],
+   "hatO": [
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Cymbal_02.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_Reverse_01.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Crash_06(1).wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_03.wav",
+    "LCHZ_samples/LCHZ_one shots/LCHZ_cymbals/LCHZ_Triangle_01(1).wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_01.wav"
+   ],
+   "chop": [
+    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_Wait_For_Me_-_89_BPM_F_c05.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_140_Vox_05_c00.wav",
+    "Kid-Sequencer samples/ukg-chops/lchz_vox/LCHZ_130_Vox_02_c00.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_03.wav"
+   ],
+   "riser": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_07.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Siren.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Glitch_02.wav"
+   ]
+  },
+  "sincere": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_14.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/CLOP4.WAV",
+    "Roland-TR-909/Roland TR-909/STAT0S3.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "Roland-TR-909/Roland TR-909/OPCL1.WAV",
+    "Roland-TR-909/Roland TR-909/BT3A0D0.WAV",
+    "Roland-TR-909/Roland TR-909/RIDED0.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
+   ],
+   "hatC": [
+    "Roland-TR-909/Roland TR-909/OPCL3.WAV",
+    "Roland-TR-909/Roland TR-909/BTAA0DA.WAV",
+    "Roland-TR-909/Roland TR-909/RIM127.WAV",
+    "Roland-TR-909/Roland TR-909/CSHD0.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
+    "Roland-TR-909/Roland TR-909/HANDCLP2.WAV",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_09.wav"
+   ],
+   "rim": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_08.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_04.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 25.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 38.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Percussion/LC_CNTRL_Perc_10.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 21.wav",
+    "AA VENGEANCE ESSENTIAL HOUSE VOL.1/VEH1 Percussion/VEH1 House Rimshots/VEH1 House Rimshot - 46.wav"
+   ],
+   "chop": [
+    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_Wait_For_Me_-_89_BPM_F_c00.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
+    "Kid-Sequencer samples/ukg-chops/orchid/Cymatics_-_Rose_Colored_Glasses_Vocal_-_130_BPM__c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_03.wav",
+    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Reverse_Vocal_-_No_One_Else_-_140_BPM_c01.wav"
+   ],
+   "swell": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Atmos_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Sweep_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_05.wav"
+   ]
+  },
+  "boinkpop": {
+   "kick": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_19.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_02.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_17.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Kicks/GS_GSV3_Kick_12.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Kicks/LC_CNTRL_Kick_25.wav"
+   ],
+   "snare": [
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_12.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_16.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_02.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Snares/GS_GSV3_Snare_05.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Snares/LC_CNTRL_Snare_07.wav"
+   ],
+   "hatC": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_35.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_34.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_26.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Hats/LC_CNTRL_Hat_05.wav"
+   ],
+   "hatO": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_08.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_18.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_10.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_19.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_One Shots/GS_GSV3_Hats/GS_GSV3_Hat_06.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Drum One Shots/GS_CNTRL_Open Hats/LC_CNTRL_OpenHat_04.wav"
+   ],
+   "chop": [
+    "Kid-Sequencer samples/ukg-chops/infinity/Cymatics_-_Vocal_Phrase_-_I'll_Follow_-_98_BPM_A_c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_01.wav",
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_133_Vox_c02.wav",
+    "Kid-Sequencer samples/ukg-chops/orchid/Cymatics_-_Rose_Colored_Glasses_Vocal_-_130_BPM__c01.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_04.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Vox Fxs/LC_CNTRL_Vox_Fx_03.wav",
+    "Kid-Sequencer samples/ukg-chops/gs_vox/GS_GSV3_140_Vox_02_c01.wav"
+   ],
+   "rev": [
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Sweep_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_135_Fx.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_140_Fx_03.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_01.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_04.wav",
+    "GarageSessionsVol3_GHOSTSYNDICATE_WAV/GS_GSV3_Fxs/GS_GSV3_130_Fx_03.wav",
+    "UK Garage - Loop Cult - CONTROL - Sample Pack/LC_CNTRL_Fx One Shots/LC_CNTRL_Fx_Siren.wav"
+   ]
+  }
+ }
+}

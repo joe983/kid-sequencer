@@ -74,6 +74,14 @@ directed their curated one-shots be bundled into the committed engine packs.
   **GarageSessions Vol.3** (lofi foley top). Owner-provided; bundled as
   conditioned one-shots inside the committed pack (no full library shipped).
   Rebuild `tools/install_producer_kits.py`.
+- **producer_garage.pack** (R33/R33b, 2026-07-16) — six UK Garage producer
+  strains from the owner's packs: **GarageSessions Vol.3** (drum core + UKG fx),
+  **LCHZ** garage/bassline one-shots, **Roland TR-909/TR-808**, **AA Vengeance
+  Essential House Vol.1** (clap-snare + House Rimshots), **[VB] Hyperfunk**
+  (keys stab), **Cymatics Orchid/Infinity** sung-vocal loops + **GS/LCHZ vox
+  loops** (sliced into one-shot chops by `tools/extract_chops.py`).
+  Owner-provided; conditioned one-shots only, no full library shipped.
+  Rebuild `tools/install_producer_kits.py --genre garage`.
 
 **VSCO 2 CE (CC0, AI-use OK), verified 2026-07-09** — the premium orchestral path,
 live on the Modal/Linux build. Repo LICENSE = **CC0 1.0 Universal**

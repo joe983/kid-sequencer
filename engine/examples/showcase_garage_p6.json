@@ -1,0 +1,25 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 4,
+        "start": 0,
+        "len": 6
+      },
+      {
+        "row": 2,
+        "start": 6,
+        "len": 6
+      },
+      {
+        "row": 3,
+        "start": 12,
+        "len": 4
+      }
+    ]
+  },
+  "key": "D",
+  "tempo": 140,
+  "instrument": "strings",
+  "drumStyle": "garage"
+}

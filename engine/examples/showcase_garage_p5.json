@@ -1,0 +1,40 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 4,
+        "start": 0,
+        "len": 4
+      },
+      {
+        "row": 3,
+        "start": 4,
+        "len": 2
+      },
+      {
+        "row": 2,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 4,
+        "start": 8,
+        "len": 4
+      },
+      {
+        "row": 1,
+        "start": 12,
+        "len": 2
+      },
+      {
+        "row": 2,
+        "start": 14,
+        "len": 2
+      }
+    ]
+  },
+  "key": "F",
+  "tempo": 130,
+  "instrument": "piano",
+  "drumStyle": "garage"
+}

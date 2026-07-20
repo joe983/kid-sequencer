@@ -1,0 +1,50 @@
+{
+  "riff": {
+    "notes": [
+      {
+        "row": 7,
+        "start": 0,
+        "len": 2
+      },
+      {
+        "row": 7,
+        "start": 2,
+        "len": 2
+      },
+      {
+        "row": 6,
+        "start": 4,
+        "len": 2
+      },
+      {
+        "row": 7,
+        "start": 6,
+        "len": 2
+      },
+      {
+        "row": 7,
+        "start": 8,
+        "len": 2
+      },
+      {
+        "row": 7,
+        "start": 10,
+        "len": 2
+      },
+      {
+        "row": 5,
+        "start": 12,
+        "len": 2
+      },
+      {
+        "row": 6,
+        "start": 14,
+        "len": 2
+      }
+    ]
+  },
+  "key": "Em",
+  "tempo": 135,
+  "instrument": "bass",
+  "drumStyle": "garage"
+}

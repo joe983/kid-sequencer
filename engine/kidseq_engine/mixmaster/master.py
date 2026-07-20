@@ -124,9 +124,11 @@ _HAAS_DELAY_MS = 12.0
 # space from the melody ("boxey").
 _SEND_DB = {"riff": -14.0, "pads": -9.0, "drums": -20.0, "fx": -16.0}
 _RIFF_WET_DB = -7.0        # riff send inside wet spans (the "distant" intro)
-# garage/reggaeton 0.50 -> 0.44 (R17): the big room read as midrange box
+# garage/reggaeton 0.50 -> 0.44 (R17): the big room read as midrange box.
+# R34: garage 0.44 -> 0.36 (owner: "too washy, too much reverb everywhere";
+# the crew-era mixes are dry) — per-strain _PRODUCER_ROOM_SIZE rows override.
 _ROOM_SIZE = {"techhouse": 0.40, "dnb": 0.40, "drill": 0.35, "hiphop": 0.35,
-              "garage": 0.44, "reggaeton": 0.44}   # never exceed 0.55 (metallic)
+              "garage": 0.36, "reggaeton": 0.44}   # never exceed 0.55 (metallic)
 _PREDELAY_S = 0.020
 
 # parallel drum crush, summed under the dry kit (dB by genre)
@@ -138,7 +140,9 @@ _NY_GAIN_DB = {"hiphop": -6.0, "drill": -6.0, "techhouse": -8.0, "garage": -9.0,
 # 'drums just need to knock' (Metro Boomin's engineer). R17: pulled 4 dB and
 # the board de-boxed (owner: "reverb on the drums … boxey, not in the same
 # space as the rest") — the shared return carries more of the space instead.
-_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -21.0,
+# R34c: garage drum-room bus -21 -> -24 (owner: "too much reverb on
+# snare/drums in general" — the era kit is dry and close)
+_ROOM_GAIN_DB = {"dnb": -20.0, "techhouse": -20.0, "garage": -24.0,
                  "reggaeton": -21.0}
 
 # drum-bus clipper drive (Sub Focus: clip drums, don't limit them — shaves
@@ -154,10 +158,29 @@ _DRUM_CLIP_K = {"dnb": 1.3, "techhouse": 1.3, "garage": 1.15,
 _PRODUCER_SEND_DELTA: dict[str, dict[str, float]] = {
     "lofi": {"riff": 2.0, "pads": 2.0},   # Fred: washed — wetter riff + pads
     "bassled": {"pads": -2.0},            # Dom Dolla: dry, sparse — drier pads
+    # R34 garage crew-era DE-WASH (owner: "too washy, too much reverb
+    # everywhere"; the era's club mixes are dry and punchy): every strain
+    # trims the sends — no positive send delta anywhere in garage.
+    "crewdark": {"pads": -1.0, "drums": -3.0},   # R34c: drums drier still
+    "partybounce": {"pads": -1.5, "drums": -3.0},
+    "stabriddim": {"pads": -2.0, "riff": -1.0, "drums": -3.0},
+    "coldbass": {"pads": -2.0, "drums": -3.0},
+    "sincere": {"pads": -0.5, "drums": -3.0},
+    "boinkpop": {"pads": -1.0, "drums": -3.0},
 }
-_PRODUCER_ROOM_SIZE: dict[str, float] = {"lofi": 0.46, "bassled": 0.36}
-_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0}   # Guetta: denser drums
-_PRODUCER_DRUM_CLIP_K: dict[str, float] = {"bigroom": 1.5, "lofi": 1.15}
+_PRODUCER_ROOM_SIZE: dict[str, float] = {
+    "lofi": 0.46, "bassled": 0.36,
+    # R34 garage: small rooms only; crewdark's cinematic cap is 0.40
+    "crewdark": 0.40, "partybounce": 0.32, "stabriddim": 0.30,
+    "coldbass": 0.32, "sincere": 0.38, "boinkpop": 0.34,
+}
+_PRODUCER_NY_DB: dict[str, float] = {"bigroom": -6.0,    # Guetta: denser drums
+                                     "stabriddim": -6.0}  # More Fire: dense
+_PRODUCER_DRUM_CLIP_K: dict[str, float] = {
+    "bigroom": 1.5, "lofi": 1.15,
+    "stabriddim": 1.35, "partybounce": 1.25, "coldbass": 1.2,
+    "boinkpop": 1.2, "crewdark": 1.15, "sincere": 1.05,
+}
 
 
 def _producer_of(kit_key: str | None) -> str | None:

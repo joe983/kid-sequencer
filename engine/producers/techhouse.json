@@ -1,0 +1,57 @@
+{
+  "genre": "techhouse",
+  "tempo": 124,
+  "pack": "producer_techhouse.pack",
+  "candidates_file": "tools/producer_candidates.json",
+  "_note": "Techhouse candidates are LOCKED (owner signed off R32) — no recipe block; triage is never re-run for techhouse. Key order in build.* mirrors the original hardcoded DRUM_MAP/MELODIC_MAP/FX_MAP so the pack rebuilds byte-identically. Extracted from tools/install_producer_kits.py + test_producer_sound.py + modal_app.py, zero behaviour change.",
+  "producers": ["bassled", "discofunk", "latin", "pianohouse", "lofi", "bigroom"],
+  "legend": {
+    "bassled": "Dom Dolla",
+    "discofunk": "Purple Disco Machine",
+    "latin": "HUGEL",
+    "pianohouse": "MK",
+    "lofi": "Fred again..",
+    "bigroom": "David Guetta"
+  },
+  "build": {
+    "drum_map": {
+      "bassled":    {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"},
+      "discofunk":  {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO", "shaker": "shaker"},
+      "latin":      {"kick": "kick", "clap": "clap", "hatO": "hatO", "bongo": "bongo", "rim": "rim", "shaker": "shaker", "conga": "perc"},
+      "pianohouse": {"kick": "kick_909", "clap": "clap", "hatC": "hatC", "hatO": "hatO", "rim": "rim"},
+      "lofi":       {"kick": "kick", "clap": "clap", "hatC": "hatC", "shaker": "foley"},
+      "bigroom":    {"kick": "kick", "clap": "clap", "hatC": "hatC", "hatO": "hatO"}
+    },
+    "melodic_map": {
+      "bassled":    {"chop": "chop"},
+      "discofunk":  {"funk_stab": "funk_stab"},
+      "latin":      {"chant": "chant"},
+      "pianohouse": {"chop": "chop"},
+      "lofi":       {"chop": "chop"},
+      "bigroom":    {"rave_shot": "stab_madeon"}
+    },
+    "fx_map": {
+      "bassled":    {"smp_slide": "fx_sweep", "smp_rev": "fx_rev"},
+      "discofunk":  {"smp_tom_zap": "tom_zap"},
+      "latin":      {"smp_rev_perk": "fx_rev", "smp_crowd": "crowd", "smp_perk": "perk"},
+      "lofi":       {"smp_rev_swell": "fx_rev"},
+      "bigroom":    {"smp_riser": "riser", "smp_impact": "impact", "smp_slide": "slide"}
+    },
+    "trims_ms": {"lofi:shaker": 240},
+    "melodic_trim_ms": 1400,
+    "fx_peak_dbfs": -18.0,
+    "fx_trim_ms": 1600
+  },
+  "gate": {"tempo": 124, "t_drums": 2.0, "t_base": 1.5},
+  "battery": {
+    "base": 3000,
+    "pairs": [
+      {"input": "examples/showcase_p1.json", "producer": "bassled"},
+      {"input": "examples/showcase_p2.json", "producer": "discofunk"},
+      {"input": "examples/showcase_p3.json", "producer": "latin"},
+      {"input": "examples/showcase_p4.json", "producer": "pianohouse"},
+      {"input": "examples/showcase_p5.json", "producer": "lofi"},
+      {"input": "examples/showcase_p6.json", "producer": "bigroom"}
+    ]
+  }
+}
