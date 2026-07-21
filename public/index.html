@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=66">
+<link rel="stylesheet" href="css/styles.css?v=68">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -104,6 +104,7 @@
 <div id="toolsList"></div>
 </div>
 <div id="sequencerShell">
+<div id="beatHeader" aria-hidden="true"></div>
 <div id="sequencerWrapper">
 <div id="playhead" style="display:none;"><div class="playheadBody"></div></div>
 <div id="sequencer"></div>
@@ -520,6 +521,18 @@ const SHEET_GEOMETRY = {
 
 const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
 const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : 16;
+
+// Beat numbering, two different treatments (see buildBeatHeader):
+//  - Lesson mode keeps the faded in-cell `.beatNum`. Its stage is vertically
+//    tight (see the stage-overflow gotcha in CLAUDE.md) so it can't spare a
+//    header strip, and the numbers read fine on its sparse 1–3 row grids.
+//  - The full sequencer uses #beatHeader: numbered badges above the grid, one
+//    per beat, column-aligned with that beat's first cell.
+// Declared up here (not next to buildGrid) because fitToViewport reads them.
+const USE_BEAT_HEADER = !LEARN_LEVEL;
+// Height of that strip as a fraction of one cell. fitToViewport folds this into
+// the cell-size solve, so changing this number alone is enough.
+const BEAT_HDR_K = 0.58;
 // Tell the learning-mode CSS how many grid rows there are so the volume fader's
 // track height spans the whole grid (1, 2, or 3 rows) instead of a hard-coded 2.
 if (LEARN_LEVEL) document.documentElement.style.setProperty("--learnRows", String(rows));
@@ -1760,6 +1773,14 @@ function setPlayheadWobbleFromTempo(t){
   // Shorten the per-step move (snap+settle) as tempo rises so the bounce never lags the beat.
   // ~130ms at slow tempo -> ~70ms at fast tempo.
   document.documentElement.style.setProperty("--phMove", (130 - 60 * ratio).toFixed(0) + "ms");
+  // Beat-badge flash decays over ~55% of a beat, so the pulse reads as in-time at
+  // any tempo (a beat is 1500ms at 40bpm vs 300ms at 200bpm — a fixed duration
+  // would strobe at the top and leave dead air at the bottom). Clamped so it
+  // never becomes a slow fade or an imperceptible blink. Lives here because
+  // setPlayheadWobbleFromTempo is already called every frame of the tempo ramp.
+  const beatMs = 60000 / Math.max(1, t);
+  document.documentElement.style.setProperty(
+    "--beatFlash", Math.round(Math.max(150, Math.min(420, beatMs * 0.55))) + "ms");
 }
 
 /* -------------------- RESPONSIVE FIT -------------------- */
@@ -1830,8 +1851,13 @@ function fitToViewport(){
     (vw - toolW - rightW - outerPadding - gaps - (cols - 1) * GAP - gridExtra) / cols
   );
 
-  const availableH = vh - headerH - controlsH - vMargins - gridExtra;
-  const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / rows);
+  // The full sequencer reserves a beat-number strip above the grid (#beatHeader,
+  // BEAT_HDR_K × cell tall + one GAP below it). Its height scales with the cell,
+  // so fold it into the solve rather than subtracting a fixed pixel amount:
+  //   availableH = rows*cell + (rows-1)*GAP + hdrK*cell + GAP
+  const hdrK = USE_BEAT_HEADER ? BEAT_HDR_K : 0;
+  const availableH = vh - headerH - controlsH - vMargins - gridExtra - (hdrK ? GAP : 0);
+  const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / (rows + hdrK));
 
   let cell = Math.min(maxCellByWidth, maxCellByHeight);
   // Learning levels have far fewer/larger cells; let them grow past the default
@@ -1885,24 +1911,35 @@ function fitToViewport(){
   syncTopBarLoginPosition();
 }
 
-// Centres the login button equidistant between the Print button's right
-// edge and the Tempo-Up button's left edge.  Both elements may live in
-// different containers (topBar vs rightCol) so we use viewport coords and
-// translate back into topBar's coordinate space for the `left` offset.
+// Centres the login button equidistant between the right edge of the
+// transport-controls cluster and the Tempo-Up button's left edge.  Both
+// elements may live in different containers (topBar vs rightCol) so we use
+// viewport coords and translate back into topBar's coordinate space for the
+// `left` offset.
+//
+// The left anchor is the LAST visible button in #controls, not Print — Print
+// used to be last, but the Lessons (mortar-board) button was added after it,
+// and measuring from Print parked the login pill on top of Lessons on iPad.
+// Query it live so any future button added to the cluster keeps working.
 function syncTopBarLoginPosition(){
   if (LEARN_LEVEL) return; // learning levels hide login + print — nothing to centre
   const login = document.getElementById('loginCtaWrap');
-  const printBtn = document.getElementById('printBtn');
+  const controls = document.getElementById('controls');
   const tempoUp = document.getElementById('tempoUpBtn');
   const topBar = document.getElementById('topBar');
-  if(!login || !printBtn || !tempoUp || !topBar) return;
+  if(!login || !controls || !tempoUp || !topBar) return;
 
-  const printRect = printBtn.getBoundingClientRect();
+  const btns = Array.from(controls.querySelectorAll('button'))
+    .filter(b => b.offsetWidth > 0 || b.offsetHeight > 0);
+  const lastBtn = btns[btns.length - 1];
+  if(!lastBtn) return;
+
+  const printRect = lastBtn.getBoundingClientRect();
   const tempoRect = tempoUp.getBoundingClientRect();
   const bRect = topBar.getBoundingClientRect();
   const loginW = login.offsetWidth;
 
-  // Midpoint of the gap between print's right edge and tempo-up's left edge
+  // Midpoint of the gap between the cluster's right edge and tempo-up's left edge
   const center = (printRect.right + tempoRect.left) / 2;
   const desiredLeft = center - loginW / 2;
   const leftOffset = Math.round(desiredLeft - bRect.left);
@@ -3043,12 +3080,55 @@ function buildTools(){
 
 /* -------------------- GRID -------------------- */
 let noteLayerEls = [];
+let beatBadgeEls = [];   // .beatBadge pills, index = beat number - 1
 let nextId = 1;
 
 // Columns per beat: a beat (quarter) spans stepDiv grid columns in learning
-// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th). Beat numbers
-// 1..N label each beat's first cell (faded, behind notes — see .beatNum CSS).
+// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th).
 const COLS_PER_BEAT = (LEARN_LEVEL && LEARN_LEVEL.stepDiv) ? LEARN_LEVEL.stepDiv : 4;
+
+// Numbered badges above the grid, one per beat, column-aligned with that beat's
+// first cell (USE_BEAT_HEADER / BEAT_HDR_K are declared next to rows/cols).
+function buildBeatHeader(){
+  const hdr = document.getElementById("beatHeader");
+  if(!hdr) return;
+  if(!USE_BEAT_HEADER){ hdr.style.display = "none"; return; }
+  // Single source of truth for the strip height: JS owns BEAT_HDR_K (fitToViewport
+  // reserves the space from it), CSS reads it back through this var.
+  document.documentElement.style.setProperty("--beatHdrK", String(BEAT_HDR_K));
+  hdr.innerHTML = "";
+  hdr.style.width = `${cols * CELL + (cols-1) * GAP}px`;
+  hdr.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+  beatBadgeEls = [];
+  for(let c=0;c<cols;c++){
+    const slot = document.createElement("div");
+    slot.className = "beatHdrSlot";
+    if(c % COLS_PER_BEAT === 0){
+      const badge = document.createElement("span");
+      badge.className = "beatBadge";
+      badge.textContent = String(c / COLS_PER_BEAT + 1);
+      slot.appendChild(badge);
+      beatBadgeEls.push(badge);
+    }
+    hdr.appendChild(slot);
+  }
+}
+
+// Light the badge for the beat the playhead just landed on. Same retrigger
+// dance as .noteBlock.playing: drop the class, force a reflow, re-add — without
+// the reflow the browser coalesces the two mutations and the animation never
+// restarts, so a repeated beat would only flash the first time.
+function flashBeat(i){
+  const badge = beatBadgeEls[i];
+  if(!badge) return;
+  badge.classList.remove("beatOn");
+  void badge.offsetWidth;
+  badge.classList.add("beatOn");
+}
+
+function clearBeatFlashes(){
+  for(const b of beatBadgeEls) b.classList.remove("beatOn");
+}
 
 function buildGrid(){
   sequencerEl.innerHTML = "";
@@ -3071,9 +3151,10 @@ function buildGrid(){
       cell.className = "cell";
       cell.onmousedown = (e) => e.preventDefault();
       cell.onclick = () => onCellClick(r, c);
-      // Beat number in the top row's beat-start cells (faded grey, pointer-none,
-      // sits behind note blocks so it shows only on empty beats).
-      if(r === 0 && c % COLS_PER_BEAT === 0){
+      // Lesson mode only: beat number in the top row's beat-start cells (faded
+      // grey, pointer-none, sits behind note blocks so it shows only on empty
+      // beats). The full sequencer numbers its beats in #beatHeader instead.
+      if(!USE_BEAT_HEADER && r === 0 && c % COLS_PER_BEAT === 0){
         const bn = document.createElement("span");
         bn.className = "beatNum";
         bn.textContent = String(c / COLS_PER_BEAT + 1);
@@ -3089,6 +3170,7 @@ function buildGrid(){
     noteLayerEls.push(layer);
   }
 
+  buildBeatHeader();
   redrawAllNotes();
 }
 
@@ -3853,6 +3935,11 @@ function startSequencer(){
 
     movePlayheadToStep(step);
 
+    // Pulse the beat badge on every beat-start column (every 4th step in the
+    // full app). USE_BEAT_HEADER is false in lesson mode, where beatBadgeEls is
+    // empty anyway — the guard just skips the modulo work.
+    if(USE_BEAT_HEADER && step % COLS_PER_BEAT === 0) flashBeat(step / COLS_PER_BEAT);
+
     if(firstTick){
       setPlayheadPlaying(true);
       firstTick = false;
@@ -3980,6 +4067,7 @@ function stop(){
   }
   setPlayheadPlaying(false);
   setPlayheadVisible(false);
+  clearBeatFlashes();   // else the last beat's badge stays lit after stopping
   stopAllAudioNow();
   lastStopAt = performance.now();
 }

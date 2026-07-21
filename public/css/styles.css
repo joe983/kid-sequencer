@@ -119,8 +119,16 @@ html.tabletScaled #page{
       --contentLift: 0px;
       --toolsLift: 0px;
 
+      /* Inner padding of the sequencer card. A var, not a literal, because
+         #beatHeader has to cancel the top one to centre its badges against the
+         card's inner edge — two copies of "12px" would drift apart. */
+      --shellPad: 12px;
+
       --wiggleDeg: 1.2deg;
       --wiggleScale: 0.01;
+      /* Per-beat badge flash length. Set from tempo by setPlayheadWobbleFromTempo
+         so it tracks the tempo ramp instead of a stale target. */
+      --beatFlash: 260ms;
 
       /* Robot badge — now lives inline in #topBar at button height */
       --robotSizeLanding: 64px;
@@ -453,7 +461,7 @@ body.loggedIn #robotLogo{
       box-shadow: 0 6px 0 rgba(0,0,0,0.07);
     }
     .tool.selected{
-      background:#eaf2ff;
+      background:#d4e6ff;
       box-shadow: 0 10px 0 rgba(0,0,0,0.12);
     }
 
@@ -539,7 +547,7 @@ body.loggedIn #robotLogo{
       border: 4px solid #1d1d1d;
       border-radius: 18px;
       background: #ffffff;
-      padding: 12px;
+      padding: var(--shellPad, 12px);
       box-shadow: 0 8px 0 rgba(0,0,0,0.07);
       flex: 0 0 auto;
     }
@@ -669,7 +677,7 @@ body.loggedIn #robotLogo{
     }
 .drumStyleBtn:hover{ transform: translateY(-1px); }
     .drumStyleBtn:active{ transform: translateY(0); }
-    .drumStyleBtn.selected{ background:#eaf2ff; }
+    .drumStyleBtn.selected{ background:#d4e6ff; }
 
     /* Placeholder rhythm buttons — greyed out "?" slots for future rhythms */
     .drumStyleBtn.drumStylePlaceholder{
@@ -721,9 +729,89 @@ body.loggedIn #robotLogo{
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
+    /* Beat-number strip above the full sequencer's grid. Same column track as
+       the grid below it (repeat(cols, var(--cell)) + the same gap, both written
+       inline by buildBeatHeader) so each badge lands dead-centre over the first
+       cell of its beat. Height is BEAT_HDR_K x cell — fitToViewport reserves it
+       in the cell-size solve, so this strip never pushes the stage over.
+
+       The strip owns the WHOLE band the eye sees — from the card's inner top
+       edge down to the first row of cells — by cancelling the card's top padding
+       with a negative margin and adding it back to its own height. That is what
+       lets align-items:center actually centre the badge in that band; centring
+       inside the padded box alone would leave the 12px padding stranded above.
+       Net height above the grid is unchanged (-pad + pad + h + gap = h + gap),
+       so fitToViewport's hdrK reserve still holds. */
+    #beatHeader{
+      display: grid;
+      gap: var(--gap);
+      margin-top: calc(-1 * var(--shellPad, 12px));
+      height: calc(var(--shellPad, 12px) + var(--cell) * var(--beatHdrK, 0.58) + var(--gap));
+      margin-bottom: 0;
+      user-select: none;
+      pointer-events: none;
+    }
+    .beatHdrSlot{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
+    /* Rounded pill, sized off the cell so it tracks every viewport. Borrowed the
+       grid's own visual language (3px near-black border, white fill, chunky
+       offset shadow) so it reads as part of the instrument, not a label. */
+    .beatBadge{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-width: calc(var(--cell) * 0.52);
+      height: calc(var(--cell) * 0.52);
+      padding: 0 calc(var(--cell) * 0.06);
+      border: 3px solid #1d1d1d;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.08);
+      font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: calc(var(--cell) * 0.3);
+      line-height: 1;
+      color: #1f2a44;
+    }
+
+    /* Per-beat flash. Lights on the beat and decays away, so at any tempo the
+       pulse reads as "this is where the beat is". Duration comes from --beatFlash
+       (set from tempo in JS) rather than being fixed: at tempo 40 a beat is 1.5s,
+       so a fixed short flash would leave three-quarters of the beat dark.
+       Animated on background/box-shadow only — no transform, so it can't fight
+       the badge's layout or nudge the grid alignment. */
+    @keyframes beatFlash{
+      0%   { background:#ffe14d; box-shadow: 0 3px 0 rgba(0,0,0,0.10), 0 0 12px 2px rgba(255,205,60,0.70); }
+      55%  { background:#fff2b8; box-shadow: 0 3px 0 rgba(0,0,0,0.09), 0 0 7px 1px rgba(255,205,60,0.28); }
+      100% { background:#ffffff; box-shadow: 0 3px 0 rgba(0,0,0,0.08), 0 0 0 0 rgba(255,205,60,0); }
+    }
+    .beatBadge.beatOn{
+      animation: beatFlash var(--beatFlash, 260ms) ease-out;
+    }
+    /* Respect a reduced-motion preference: keep the beat legible (a flat tint
+       that blinks off, no pulsing glow or travelling brightness).
+       It must still be an ANIMATION, not a static background: .beatOn is only
+       removed on the next retrigger (or on stop), so `animation:none` + a plain
+       background would leave every badge permanently yellow after the first bar.
+       steps(1,end) holds the tint flat for the beat, then drops it. */
+    @keyframes beatFlashFlat{
+      0%   { background:#ffe9a3; }
+      100% { background:#ffffff; }
+    }
+    @media (prefers-reduced-motion: reduce){
+      .beatBadge.beatOn{
+        animation: beatFlashFlat var(--beatFlash, 260ms) steps(1, end);
+      }
+    }
+
     /* Faded beat number (1..N) centred in each beat's first cell. pointer-none
        and below the note layer, so it labels empty beats and vanishes under a
-       placed note. On both the lesson grid and the full sequencer. */
+       placed note. Lesson grid only — the full sequencer uses #beatHeader. */
     .beatNum{
       position: absolute;
       inset: 0;
@@ -1179,7 +1267,7 @@ body.loggedIn #robotLogo{
     }
     .instBtn:hover{ transform: translateY(-1px); }
 
-    .instBtn.selected{ background:#eaf2ff; opacity: 1; filter: none; }
+    .instBtn.selected{ background:#d4e6ff; opacity: 1; filter: none; }
     .instBtn.notSelected{ opacity: 0.80; filter: none; }
 
     .waveIcon{ width: 46px; height: 28px; display:block; }
@@ -2409,6 +2497,14 @@ html.js-loading #contentWrap{
     background: #ffffff !important;
     filter: none !important;
     opacity: 1 !important;
+  }
+
+  /* A beat badge caught mid-flash is transient state like the rest — print it
+     plain so a worksheet never comes out with one beat tinted yellow. */
+  .beatBadge.beatOn {
+    animation: none !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
   }
 }
 
