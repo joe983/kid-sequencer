@@ -721,9 +721,50 @@ body.loggedIn #robotLogo{
       touch-action: manipulation;
       -webkit-tap-highlight-color: transparent;
     }
+    /* Beat-number strip above the full sequencer's grid. Same column track as
+       the grid below it (repeat(cols, var(--cell)) + the same gap, both written
+       inline by buildBeatHeader) so each badge lands dead-centre over the first
+       cell of its beat. Height is BEAT_HDR_K x cell — fitToViewport reserves it
+       in the cell-size solve, so this strip never pushes the stage over. */
+    #beatHeader{
+      display: grid;
+      gap: var(--gap);
+      height: calc(var(--cell) * var(--beatHdrK, 0.58));
+      margin-bottom: var(--gap);
+      user-select: none;
+      pointer-events: none;
+    }
+    .beatHdrSlot{
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      min-width: 0;
+    }
+    /* Rounded pill, sized off the cell so it tracks every viewport. Borrowed the
+       grid's own visual language (3px near-black border, white fill, chunky
+       offset shadow) so it reads as part of the instrument, not a label. */
+    .beatBadge{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-width: calc(var(--cell) * 0.52);
+      height: calc(var(--cell) * 0.52);
+      padding: 0 calc(var(--cell) * 0.06);
+      border: 3px solid #1d1d1d;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 3px 0 rgba(0,0,0,0.08);
+      font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", Arial, sans-serif;
+      font-weight: 900;
+      font-size: calc(var(--cell) * 0.3);
+      line-height: 1;
+      color: #1f2a44;
+    }
+
     /* Faded beat number (1..N) centred in each beat's first cell. pointer-none
        and below the note layer, so it labels empty beats and vanishes under a
-       placed note. On both the lesson grid and the full sequencer. */
+       placed note. Lesson grid only — the full sequencer uses #beatHeader. */
     .beatNum{
       position: absolute;
       inset: 0;
