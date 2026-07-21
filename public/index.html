@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=67">
+<link rel="stylesheet" href="css/styles.css?v=68">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -1773,6 +1773,14 @@ function setPlayheadWobbleFromTempo(t){
   // Shorten the per-step move (snap+settle) as tempo rises so the bounce never lags the beat.
   // ~130ms at slow tempo -> ~70ms at fast tempo.
   document.documentElement.style.setProperty("--phMove", (130 - 60 * ratio).toFixed(0) + "ms");
+  // Beat-badge flash decays over ~55% of a beat, so the pulse reads as in-time at
+  // any tempo (a beat is 1500ms at 40bpm vs 300ms at 200bpm — a fixed duration
+  // would strobe at the top and leave dead air at the bottom). Clamped so it
+  // never becomes a slow fade or an imperceptible blink. Lives here because
+  // setPlayheadWobbleFromTempo is already called every frame of the tempo ramp.
+  const beatMs = 60000 / Math.max(1, t);
+  document.documentElement.style.setProperty(
+    "--beatFlash", Math.round(Math.max(150, Math.min(420, beatMs * 0.55))) + "ms");
 }
 
 /* -------------------- RESPONSIVE FIT -------------------- */
@@ -3072,6 +3080,7 @@ function buildTools(){
 
 /* -------------------- GRID -------------------- */
 let noteLayerEls = [];
+let beatBadgeEls = [];   // .beatBadge pills, index = beat number - 1
 let nextId = 1;
 
 // Columns per beat: a beat (quarter) spans stepDiv grid columns in learning
@@ -3090,6 +3099,7 @@ function buildBeatHeader(){
   hdr.innerHTML = "";
   hdr.style.width = `${cols * CELL + (cols-1) * GAP}px`;
   hdr.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+  beatBadgeEls = [];
   for(let c=0;c<cols;c++){
     const slot = document.createElement("div");
     slot.className = "beatHdrSlot";
@@ -3098,9 +3108,26 @@ function buildBeatHeader(){
       badge.className = "beatBadge";
       badge.textContent = String(c / COLS_PER_BEAT + 1);
       slot.appendChild(badge);
+      beatBadgeEls.push(badge);
     }
     hdr.appendChild(slot);
   }
+}
+
+// Light the badge for the beat the playhead just landed on. Same retrigger
+// dance as .noteBlock.playing: drop the class, force a reflow, re-add — without
+// the reflow the browser coalesces the two mutations and the animation never
+// restarts, so a repeated beat would only flash the first time.
+function flashBeat(i){
+  const badge = beatBadgeEls[i];
+  if(!badge) return;
+  badge.classList.remove("beatOn");
+  void badge.offsetWidth;
+  badge.classList.add("beatOn");
+}
+
+function clearBeatFlashes(){
+  for(const b of beatBadgeEls) b.classList.remove("beatOn");
 }
 
 function buildGrid(){
@@ -3908,6 +3935,11 @@ function startSequencer(){
 
     movePlayheadToStep(step);
 
+    // Pulse the beat badge on every beat-start column (every 4th step in the
+    // full app). USE_BEAT_HEADER is false in lesson mode, where beatBadgeEls is
+    // empty anyway — the guard just skips the modulo work.
+    if(USE_BEAT_HEADER && step % COLS_PER_BEAT === 0) flashBeat(step / COLS_PER_BEAT);
+
     if(firstTick){
       setPlayheadPlaying(true);
       firstTick = false;
@@ -4035,6 +4067,7 @@ function stop(){
   }
   setPlayheadPlaying(false);
   setPlayheadVisible(false);
+  clearBeatFlashes();   // else the last beat's badge stays lit after stopping
   stopAllAudioNow();
   lastStopAt = performance.now();
 }
