@@ -23,6 +23,60 @@ logged-in Pro user on the live site (needs an account; the engine side is
 proven).
 
 
+## 🆕 MINOR-KEY DETECTION (built 2026-07-23, on branch — NOT yet modal-deployed)
+
+Owner ask: "the engine should generate a minor-key song if the melody suits
+minor, not only if a minor key is selected in the UI." Before this, major/minor
+came *only* from the payload `key` string (`sequence._scale_steps`), so a
+minor-leaning tune on the default **C** grid was always harmonised C major.
+
+**Key realisation:** the kid's grid is scale-locked — a default-key melody can
+only contain C major's 7 pitches, which ARE A minor's 7 pitches (relative
+minor). So "suits minor" = *the melody orbits the relative-minor tonic*, and the
+fix re-harmonises around it **without changing a single note** — the riff MIDI is
+fixed at parse time. NB the key feeds `song_seed`, so a flip re-derives the WHOLE
+arrangement (progression/bass/pads AND structure/FX/lead) for the minor reading,
+not just the chords; the child's notes stay verbatim in every drop regardless.
+
+**Impl:** new pure module `arrange/tonal.py::detect_key(riff)`; hook at the top
+of `arrange/render.py::build_song` re-keys the riff (`dc_replace(riff, key=…)`)
+*before* `choose_style`/`choose_progression`, only when `detected != riff.key`
+(so the no-flip path is the untouched object → `song_seed` byte-identical → null
+contract). Deterministic (pure fn of the notes).
+
+**Method:** Krumhansl-Kessler key-profile correlation of the duration-weighted
+pitch-class histogram against the two candidates (major tonic vs relative-minor
+tonic — they share the identical 7-note pool), + a cadence adjustment (final &
+lowest note) + a minimum minor-fit floor. Deliberately **one-directional and
+conservative**:
+  * explicit **minor** key → returned unchanged (never second-guess a choice);
+  * major with no natural relative minor in the app's key set (A/E/B major →
+    F#m/C#m/G#m) → unchanged;
+  * only C/G/D/F major flip (→ Am/Em/Bm/Dm), and only on clear evidence.
+
+**Levers** (`arrange/tonal.py`, tune if it flips too eagerly / too rarely):
+  * `_FLIP_MARGIN` 0.06 — how far minor must win the cadence-adjusted K-S diff.
+  * `_MIN_FLOOR` 0.20 — minor correlation must clear this (kills discordant /
+    non-tonic noise: a2_child, c2_major stay major).
+  * `_CAD_FINAL` 0.10 / `_CAD_LOW` 0.06 — cadence weight toward the note the
+    melody rests on. This is what keeps a C-centred tune that merely *uses* A/E
+    (e.g. `showcase_p2` = "C C C C E A E C") on C major — the K-S histogram is
+    positionless and narrowly favoured minor there; the cadence vetoes it.
+
+**Verified:** `tests/test_tonal.py` (15 tests, registered in
+`infra/modal_app.py::run_tests`) — null contract, relative-minor-only, clear
+flips (C→Am, G→Em, F→Dm), regression guards (tonic-anchored stays major,
+ending-on-A-alone doesn't flip, noise stays), determinism, and end-to-end (a
+flip drives `_MINOR_BANK` + a genuine {A,C,E} tonic chord). Independent sweep of
+all committed `examples/*.json` → 0 minor→major violations; flips land only on
+genuinely minor-leaning inputs (`b_major`, `showcase_garage_p1/p3`,
+`showcase_p5`). Local: test_tonal/sequence/arrange/style all green.
+
+**NOT deployed** — reaching the live AI button needs `modal deploy` (owner-gated).
+This is a core-musicality fix, not a producer/genre pass, so it does NOT touch
+the frozen playbook below.
+
+
 ## ⛔ PRODUCER PASSES FROZEN (owner decision 2026-07-20) — do NOT start new genres
 
 The genre-by-genre producer passes (`docs/PRODUCER_PLAYBOOK.md` §7) are
