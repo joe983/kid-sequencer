@@ -24,6 +24,7 @@ from . import (Section, bass_feel_for, bass_notes, choose_progression,
                pad_rhythm_for, perc_bass_notes, plan_song, resolve_clashes,
                riff_variant, soften_clashes)
 from .style import LEAD_STACKS, LEAD_VOICES, PAD_ROLES, _sub_rng, choose_style
+from .tonal import detect_key
 
 # phrase-treatment draw weights: statements anchor (~1/3), the rest develop
 _TREATMENT_W = {"statement": 0.34, "vary_end": 0.26, "octave_up": 0.12,
@@ -577,6 +578,16 @@ def build_song(riff: Riff, sr: int = SR, plan: list[Section] | None = None,
       `variation` is the per-press nonce: progression colour, build:drop split
       and every FX seed vary with it — the riff itself NEVER does.
     """
+    # A kid's grid is scale-locked, so a melody that "suits minor" arrives in a
+    # MAJOR key made of the relative minor's exact pitches. Re-key to the
+    # relative minor when the notes clearly orbit it. The child's NOTES are
+    # untouched (their pitches were fixed at parse time); everything built around
+    # them — progression, bass, pads, and via song_seed(riff.key) the structure /
+    # FX / lead too — is re-derived for the minor reading. No-op (same object,
+    # byte-identical render) for every other case; see arrange/tonal.py.
+    detected = detect_key(riff)
+    if detected != riff.key:
+        riff = dc_replace(riff, key=detected)
     style = choose_style(riff, variation)
     pal = style.fx_palette
     plan = plan if plan is not None else plan_song(riff.tempo, variation,
