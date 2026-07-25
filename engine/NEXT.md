@@ -72,9 +72,15 @@ all committed `examples/*.json` → 0 minor→major violations; flips land only 
 genuinely minor-leaning inputs (`b_major`, `showcase_garage_p1/p3`,
 `showcase_p5`). Local: test_tonal/sequence/arrange/style all green.
 
-**NOT deployed** — reaching the live AI button needs `modal deploy` (owner-gated).
-This is a core-musicality fix, not a producer/genre pass, so it does NOT touch
-the frozen playbook below.
+**✅ DEPLOYED 2026-07-23** (`modal deploy` from the worktree, endpoint URL
+unchanged, no app/functions changes). **Verified by content:** the DEPLOYED
+image's `run_tests` return contains + passes `test_do_la_resting_on_tonic_stays_major`
+(a this-revision-only test) and reports 12 suites green (was 11 — the new
+`test_tonal.py` is in the deployed run). NB the `run_tests` RETURN value carries
+each subprocess's stdout (the PASS lines / "all X tests passed") but NOT the
+`$ python …` echo — that echo only reaches Modal's live logs, so match on test
+NAMES, not the command echo. Core-musicality fix, not a producer/genre pass —
+does NOT touch the frozen playbook below.
 
 
 ## ⛔ PRODUCER PASSES FROZEN (owner decision 2026-07-20) — do NOT start new genres
