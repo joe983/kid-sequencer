@@ -2506,7 +2506,28 @@ html.js-loading #contentWrap{
     background: #ffffff !important;
     box-shadow: none !important;
   }
+
+  /* Scanner registration marks. Built by _buildPrintMarks at beforeprint and
+     removed at afterprint, so they exist only while the print dialog is open —
+     but keep them print-media-gated too, belt and braces, so a mid-print screen
+     repaint can never flash 4 black squares over the app.
+     `left`/`top` are the mark CENTRE (the homography point); translate(-50%,-50%)
+     puts the square on it. The size comes from JS in the same units as the
+     positions. Backgrounds are stripped by browsers when printing unless
+     print-color-adjust forces them, and these MUST be solid black to be found. */
+  .wsMark {
+    display: block !important;
+    position: absolute;
+    z-index: 60;
+    transform: translate(-50%, -50%);
+    background: #000000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 }
+
+/* Off-screen by default — the marks belong to the printed sheet only. */
+.wsMark { display: none; }
 
 /* Portrait fallback — if the printout ends up on portrait paper (user
    overrode the dialog, or a printer that ignores @page size), rotate the

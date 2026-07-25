@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=68">
+<link rel="stylesheet" href="css/styles.css?v=69">
 <!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
@@ -510,10 +510,25 @@ const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
    the de-warped grid rectangle: each of `cols` slots is `cellFrac` square +
    `gapFrac` gap (cellFrac + gapFrac === 1). The inter-cell gap that the
    note-length rule measures is the `gapFrac` portion at the right of each slot.
-   The 4 corner markers are assumed to sit at the outer corners of the cell
-   grid's bounding box (contract — worksheet design is out of scope here). */
+   `grid` says where the cell grid sits INSIDE the marker quad, as fractions of
+   it (u = across, v = down; the quad's TL corner is 0,0). The 4 marks print at
+   the corners of the whole SHEET, not around the grid itself (see
+   _buildPrintMarks), so the homography's unit square covers the entire printed
+   layout and these insets are what narrow it back down to the notes. They're
+   constants because the printed layout is device-independent: the stage is a
+   fixed 1600×900 that scales as one unit and `--cell` is capped at 64, so the
+   sheet has identical proportions everywhere. Measured off the real print path;
+   re-derive with window.KidSequencer.Scan.printMarkInsets() if the top bar,
+   tools column, right column or drum panel ever change size.
+
+   A template WITHOUT `grid` is not scannable — the scanner skips it rather than
+   falling back to an assumption. The lvl* sheets are in that state: learning
+   mode hides #printBtn (.learning-mode #printBtn{display:none}), so there is no
+   way to print one yet. Give them measured insets if that changes. */
 const SHEET_GEOMETRY = {
-  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28 },
+  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
+                   grid: { u0: 0.07425, v0: 0.20202, u1: 0.95248, v1: 0.83115 },
+                   quadAspect: 1.438 },
   "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl2": { levelKey: "2", rows: 2, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl3": { levelKey: "3", rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 }
@@ -5005,12 +5020,73 @@ function _routeScannedNotes(geom, notes){
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
 }
 
+/* Which sheet template is in front of the camera. The printed sheet carries no
+   QR: at the scanner's 420px working width a code small enough to sit on the
+   sheet is well under jsQR's decode floor (25 modules over ~14mm is <1px per
+   module), so it would have been dead ink. The main grid is also the only sheet
+   that can be printed — learning mode hides the Print button — so the template
+   is simply "the one this page is". Returns null on pages with no printable
+   sheet, which disables sheet scanning there rather than guessing. */
+function _currentSheetId(){
+  if(LEARN_LEVEL) return null;             // lesson/level pages can't print a sheet
+  const geom = SHEET_GEOMETRY["kidseq:main"];
+  return (geom && geom.grid) ? "kidseq:main" : null;
+}
+
+/* The homography maps the unit square onto the 4 corner MARKS, which bound the
+   whole printed sheet. Compose the grid insets on top so callers can keep
+   addressing the note grid in plain 0..1 coordinates. */
+function _gridMapper(mapPoint, geom){
+  const g = geom && geom.grid;
+  if(!g) return null;                      // no insets ⇒ refuse rather than mis-sample
+  const du = g.u1 - g.u0, dv = g.v1 - g.v0;
+  if(!(du > 0 && dv > 0)) return null;
+  return (u, v) => mapPoint(g.u0 + u * du, g.v0 + v * dv);
+}
+
+/* Sanity-check a detected marker quad before trusting it.
+
+   The detector picks the 4 corner-most solid blobs. That's cheap and works, but
+   it will happily return a WRONG set: if a mark merges with nearby ink (at a
+   steep angle the gap under the AI button can close), that blob is dropped for
+   being non-square and the next-most-corner-most thing wins — a coloured-in
+   cell. The homography then still "succeeds" and the child gets a garbled tune
+   with no indication anything went wrong. Refusing is much better than that:
+   the live loop simply keeps looking, and the user tilts the sheet flatter.
+
+   The printed marks are a rectangle of known aspect, so a plausible photo of it
+   stays near that aspect and keeps opposite edges roughly equal. Measured over
+   a sweep of simulated angles: every correct lock came in at aspect 1.44–1.60
+   with edge skew ≤1.17, while a bad lock was 2.56 / 3.28. Thresholds sit well
+   clear of both. */
+function _quadLooksLikeSheet(quad, geom){
+  const nominal = geom && geom.quadAspect;
+  if(!nominal) return true;                 // nothing to check against
+  const len = (a, b) => Math.hypot(quad[a].x - quad[b].x, quad[a].y - quad[b].y);
+  const top = len(0,1), bottom = len(3,2), left = len(0,3), right = len(1,2);
+  if(!(top && bottom && left && right)) return false;
+  const skew = (a, b) => Math.max(a,b) / Math.min(a,b);
+  if(skew(top, bottom) > 3 || skew(left, right) > 3) return false;
+  const aspect = ((top + bottom) / 2) / ((left + right) / 2);
+  return aspect <= nominal * 1.6 && aspect >= nominal / 1.6;
+}
+
+/* Corner detection + that sanity check, so both the live loop and the manual
+   capture reject an implausible lock the same way. */
+function _sheetCornersFrom(imgData, geom){
+  const corners = _cornerMarkersFrom(imgData);
+  if(!corners) return null;
+  return _quadLooksLikeSheet(corners, geom) ? corners : null;
+}
+
 function _processScanFrame(imgData, sheetId, corners){
   const geom = SHEET_GEOMETRY[sheetId];
   if(!geom) return false;
   const mapPoint = _homographyUnitToQuad(corners);
   if(!mapPoint) return false;
-  _routeScannedNotes(geom, _scanNotesFromFrame(imgData, geom, mapPoint));
+  const gridPoint = _gridMapper(mapPoint, geom);
+  if(!gridPoint) return false;
+  _routeScannedNotes(geom, _scanNotesFromFrame(imgData, geom, gridPoint));
   return true;
 }
 
@@ -5053,14 +5129,12 @@ function _scanTick(ts){
   _scanRafId = requestAnimationFrame(_scanTick);
   if(ts - _scanLastTick < SCAN_TICK_MS) return;
   _scanLastTick = ts;
-  if(typeof jsQR !== "function") return;
+  const sheetId = _currentSheetId();
+  if(!sheetId) return;
   const imgData = _scanFrameImageData();
   if(!imgData) return;
 
-  let qr = null;
-  try{ qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
-  const sheetId = qr && qr.data;
-  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
+  const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId]);
 
   if(sheetId && corners){
     _scanLockCount++;
@@ -5114,16 +5188,13 @@ function camImport(){
   if(!camCapturedDataUrl) camCapture();
   if(!camCanvasEl.width) return;
   const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
-  let qr = null;
-  try{ if(typeof jsQR === "function") qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
-  const sheetId = qr && qr.data;
-  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
-  if(sheetId && corners){
+  const sheetId = _currentSheetId();
+  const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId]) : null;
+  if(sheetId && corners && _processScanFrame(imgData, sheetId, corners)){
     _stopSheetScan();
-    _processScanFrame(imgData, sheetId, corners);
   }else{
     try{ showSaveToast("error"); }catch(e){}
-    alert("Couldn't read the worksheet.\nMake sure the QR code and all four corner marks are inside the frame, then try again.");
+    alert("Couldn't read the worksheet.\nMake sure all four black corner squares are inside the frame, then try again.");
   }
 }
 
@@ -6461,6 +6532,144 @@ window.logout = logout;
 // arithmetic (px ÷ mm isn't valid), so it lives in beforeprint / afterprint.
 let _preprintPageTransform = null;
 let _preprintPageOrigin = null;
+
+/* ==================== SCANNABLE REGISTRATION MARKS (print only) ============
+   The printed sheet is still the app's own printout — nothing on it moves or
+   changes. We only ADD 4 solid black squares just outside the content, one per
+   corner: above the title box (TL), above the tempo controls (TR), below the AI
+   button (BR), below the note-length tools (BL). Those are the 4 points the
+   camera scanner fits its homography to (see SHEET_GEOMETRY.grid).
+
+   Geometry notes:
+   - The marks form a true RECTANGLE. That matters: the page→unit-square map is
+     then affine, so the note grid lands on a plain axis-aligned rect in unit
+     space and SHEET_GEOMETRY.grid can describe it with 4 fixed fractions. A
+     non-rectangular quad would make the grid a general quadrilateral there.
+   - The left pair sits on the tools column's centre line and the right pair on
+     the right column's centre line; both columns are fixed-width, so the two
+     x's are layout-invariant.
+   - The top/bottom edges come from the measured CONTENT box, not from the
+     anchor elements themselves. #keyBtn is Pro-only, so #aiBtn's own bottom
+     moves ~70px between a free Member and a Pro user — the content box does
+     not (the drum panel is always the lowest element). Using it keeps the
+     printed geometry identical for every account type, which is what lets the
+     scanner's insets be constants.
+   - `--cell` is capped at 64 and the stage is a fixed 1600×900 that gets scaled
+     as a unit, so this whole layout is the same on every device. That's the
+     reason fixed insets are safe at all. If that ever stops being true, the
+     insets must be re-measured (window.KidSequencer.Scan.printMarkInsets()).   */
+/* Size + clearance, in cells. Both are constrained from three directions:
+   - The mark must survive the scanner's 420px working width: 0.62 cells prints
+     ≈8mm, which is ~12px across in frame — comfortably past the detector's
+     0.0004-of-area floor.
+   - The CLEARANCE matters as much as the size. The blob detector wants a solid,
+     squarish component; if a mark touches other ink they merge into one blob,
+     that blob fails the solidity test, and BOTH are dropped — the detector then
+     picks whatever is next-most-corner-most (a coloured-in note, in testing).
+     The tightest neighbour is the AI button directly above the BR mark, so the
+     gap has to survive the downscale: 0.31 cells ≈ 6px in frame. 0.20 was not
+     enough — the two blurred together and corner detection went 59px wrong.
+   - Both are paid for out of the page's spare vertical space. The printed sheet
+     is width-limited, which leaves ~126 stage px of slack; the marks consume
+     2×(gap+size) = 119 of it, so the fit stays width-limited and the sheet
+     prints at exactly the same scale and position as before. Growing either
+     number past ~63 cells total would start shrinking the whole sheet.        */
+const PRINT_MARK_K = 0.56;     // black square side, in cells (≈7mm on A4 landscape)
+const PRINT_MARK_GAP_K = 0.37; // clear space between content edge and mark, in cells
+let _printMarkBox = null;      // outer extent of the 4 marks, stage coords
+
+function _clearPrintMarks(){
+  document.querySelectorAll('[data-wsmark]').forEach(el => el.remove());
+  _printMarkBox = null;
+}
+
+/* Build the 4 marks. `pr`/`content` come from _applyPrintScale, which has
+   already blanked the page transform — so every rect here is in true stage
+   coordinates. Returns the mark CENTRE rectangle (the homography quad). */
+function _buildPrintMarks(pr, content){
+  const page = document.getElementById('page');
+  if(!page || !content) return null;
+  _clearPrintMarks();
+
+  const box = (id) => {
+    const el = document.getElementById(id);
+    if(!el) return null;
+    const r = el.getBoundingClientRect();
+    if(r.width <= 0 || r.height <= 0) return null;   // hidden (e.g. #aiBtn for guests)
+    return { x: r.left - pr.left, r: r.right - pr.left };
+  };
+  // Centre line of each outer column. Fall back to the column container if a
+  // specific control is hidden, then to the content edge, so this can never
+  // produce a degenerate quad.
+  const centreOf = (ids, fallbackEdge) => {
+    let lo = Infinity, hi = -Infinity;
+    ids.forEach(id => { const b = box(id); if(!b) return;
+      lo = Math.min(lo, b.x); hi = Math.max(hi, b.r); });
+    return (lo < hi) ? (lo + hi) / 2 : fallbackEdge;
+  };
+
+  const cell = parseFloat(getComputedStyle(document.documentElement)
+                 .getPropertyValue('--cell')) || 64;
+  const size = PRINT_MARK_K * cell;
+  const gap  = PRINT_MARK_GAP_K * cell;
+
+  const leftX  = centreOf(['titleBox', 'toolsList', 'tools'], content.minX);
+  const rightX = centreOf(['tempoControls', 'aiBtn', 'rightCol'], content.maxX);
+  const topY   = content.minY - gap - size / 2;
+  const botY   = content.maxY + gap + size / 2;
+  if(!(rightX > leftX && botY > topY)) return null;
+
+  [['tl', leftX, topY], ['tr', rightX, topY],
+   ['br', rightX, botY], ['bl', leftX, botY]].forEach(([pos, x, y]) => {
+    const m = document.createElement('div');
+    m.className = 'wsMark ws-' + pos;
+    m.setAttribute('data-wsmark', '');
+    m.setAttribute('aria-hidden', 'true');
+    m.style.left = x + 'px';
+    m.style.top  = y + 'px';
+    m.style.width = size + 'px';
+    m.style.height = size + 'px';
+    page.appendChild(m);
+  });
+
+  // Outer extent, so the fit can reserve room for them (they're display:none
+  // until @media print, so they never show up in a measured rect).
+  _printMarkBox = { minX: leftX - size / 2, minY: topY - size / 2,
+                    maxX: rightX + size / 2, maxY: botY + size / 2 };
+  return { leftX, rightX, topY, botY };
+}
+
+/* Dev helper — re-derive SHEET_GEOMETRY["kidseq:main"].grid from the CURRENT
+   layout and return it ready to paste back. The insets are hard-coded because
+   the printed layout is device-independent, but they are only correct for the
+   layout that produced them: run this after any change to the top bar, tools
+   column, right column, drum panel or --cell, and update the table if it moves.
+     window.KidSequencer.Scan.printMarkInsets()                                */
+function _printMarkInsets(){
+  _applyPrintScale();                       // builds the marks + blanks the transform
+  const page = document.getElementById('page');
+  const grid = document.getElementById('sequencer');
+  const marks = Array.from(document.querySelectorAll('[data-wsmark]'));
+  let out = null;
+  if(page && grid && marks.length === 4){
+    const xs = marks.map(m => parseFloat(m.style.left));
+    const ys = marks.map(m => parseFloat(m.style.top));
+    const L = Math.min.apply(null, xs), R = Math.max.apply(null, xs);
+    const T = Math.min.apply(null, ys), B = Math.max.apply(null, ys);
+    const pr = page.getBoundingClientRect();
+    const g = grid.getBoundingClientRect();
+    const r5 = (n) => Math.round(n * 1e5) / 1e5;
+    if(R > L && B > T){
+      out = { u0: r5((g.left  - pr.left - L) / (R - L)),
+              v0: r5((g.top   - pr.top  - T) / (B - T)),
+              u1: r5((g.right - pr.left - L) / (R - L)),
+              v1: r5((g.bottom- pr.top  - T) / (B - T)) };
+    }
+  }
+  _restorePrintScale();
+  return out;
+}
+
 function _applyPrintScale(){
   const page = document.getElementById('page');
   if(!page) return;
@@ -6499,6 +6708,17 @@ function _applyPrintScale(){
   if(measured && maxX > minX && maxY > minY){
     cx = Math.max(0, minX - PAD); cy = Math.max(0, minY - PAD);
     cw = Math.min(w, maxX + PAD) - cx; ch = Math.min(h, maxY + PAD) - cy;
+    // Add the scanner's corner marks, then grow the fit box to include them.
+    // They sit OUTSIDE the app content (deliberately overhanging the 1600×900
+    // stage at the top), so this union must NOT reuse the 0/stage clamps above
+    // or the top pair would be cropped straight off the page.
+    _buildPrintMarks(pr, { minX, minY, maxX, maxY });
+    if(_printMarkBox){
+      const b = _printMarkBox;
+      const x0 = Math.min(cx, b.minX - PAD), y0 = Math.min(cy, b.minY - PAD);
+      const x1 = Math.max(cx + cw, b.maxX + PAD), y1 = Math.max(cy + ch, b.maxY + PAD);
+      cx = x0; cy = y0; cw = x1 - x0; ch = y1 - y0;
+    }
   } else {
     cx = 0; cy = 0; cw = w; ch = h;   // fallback: whole stage
   }
@@ -6530,6 +6750,7 @@ function _applyPrintScale(){
 function _restorePrintScale(){
   const page = document.getElementById('page');
   if(!page) return;
+  _clearPrintMarks();   // print-only overlay; never leave it in the live DOM
   page.style.transform = _preprintPageTransform || '';
   page.style.transformOrigin = _preprintPageOrigin || '';
   // Re-run the FULL layout pass (scheduleLayout → layoutPass), NOT fitToViewport
@@ -6604,6 +6825,11 @@ window.KidSequencer = {
     notesFromFrame: _scanNotesFromFrame,
     processFrame: _processScanFrame,
     applyPending: _applyPendingScanImport,
+    currentSheetId: _currentSheetId,
+    gridMapper: _gridMapper,
+    sheetCornersFrom: _sheetCornersFrom,
+    quadLooksLikeSheet: _quadLooksLikeSheet,
+    printMarkInsets: _printMarkInsets,
     get appliedFlag(){ return _scanImportApplied; }
   },
   Auth: { logout }
