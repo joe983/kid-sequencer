@@ -4858,6 +4858,12 @@ const SCAN_FILL_MIN     = 0.20;
    -1 for a sheet coloured edge to edge. 20 sits clear of both ends. */
 const SCAN_REG_MIN      = 20;
 const SCAN_GAP_JOIN     = 0.50; // fraction of the joining threshold a gap must hit
+/* A hand-drawn run tapers at its ends. Measured on a real four-cell scribble:
+   0.14 / 0.75 / 0.86 / 0.64 — the first cell fell under the bar and the note came
+   back a cell short of what the child drew. A cell TOUCHING a filled one is held
+   to this fraction of the bar instead. It can only ever extend an existing run,
+   never invent a note from nothing, so the downside is bounded. */
+const SCAN_FILL_EXTEND  = 0.50;
 
 /* Corner-mark detection thresholds. Every one of these was set from a measured
    scan log rather than guessed — see the two rounds recorded in NEXT-SCAN.md.
@@ -4908,6 +4914,9 @@ const SCAN_MARK_EDGE   = 2;
    good scan the log says so outright — it prints the measured aspect next to the
    band — so it can be re-opened against evidence rather than by feel. */
 const SCAN_QUAD_TOL    = 1.12;
+/* How big an outside blob has to be, relative to the marks themselves, before it
+   counts as evidence that we picked the wrong four. */
+const SCAN_OUTSIDE_MIN_REL = 0.4;
 
 let _scanRafId    = 0;
 let _scanLockCount= 0;
@@ -5127,13 +5136,14 @@ function _scanDebugLines(rec){
   if(gr){
     L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
            " p95 " + gr.p95 + "  notes " + gr.notes);
-    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt);
+    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt +
+           ", extends a run at " + gr.extendAt);
     for(const row of (gr.cellMap || [])){
-      // Relative to the decision, so near-misses are visible: '#' well over,
-      // 'H' just over, '+' just under (the ones a threshold tweak would flip).
+      // Relative to the decisions, so near-misses are visible: '#' well over,
+      // 'H' over the bar, '+' only good enough to extend a neighbouring run.
       L.push("  " + row.map(v => v >= gr.fillAt * 1.5 ? "#"
-                               : v >= gr.fillAt        ? "H"
-                               : v >= gr.fillAt * 0.6  ? "+" : ".").join(""));
+                               : v >= gr.fillAt       ? "H"
+                               : v >= gr.extendAt     ? "+" : ".").join(""));
     }
   }
   return L.join("\n");
@@ -5465,9 +5475,17 @@ function _cornerMarkersFrom(imgData, diag){
   const side = (a, b, px, py) => (b.cx - a.cx) * (py - a.cy) - (b.cy - a.cy) * (px - a.cx);
   const edges = [[tl,tr],[tr,br],[br,bl],[bl,tl]];
   const tol = Math.min(w, h) * 0.04;
+  // Only blobs of mark-like SIZE get a vote. A speck of dirt or a pen dot in the
+  // margin is not evidence we picked the wrong four, and letting one veto the
+  // scan makes the whole thing hostage to a crumb — observed on a real frame,
+  // where JPEG noise alone conjured a single outside blob and refused a lock the
+  // live pass had accepted.
+  const areas = [tl.area, tr.area, br.area, bl.area].sort((a, b) => a - b);
+  const markArea = (areas[1] + areas[2]) / 2;
   let outside = 0, worstOut = 0;
   for(const c of cand){
     if(c === tl || c === tr || c === br || c === bl) continue;
+    if(c.area < markArea * SCAN_OUTSIDE_MIN_REL) continue;
     for(const [a, b] of edges){
       const len = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1;
       const inSign = side(a, b, cxq, cyq) >= 0 ? 1 : -1;
@@ -5547,7 +5565,16 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const blank = sorted[Math.floor(sorted.length * SCAN_BLANK_PCT)] || 0;
   const fillAt = Math.max(SCAN_FILL_MIN, blank + SCAN_FILL_MARGIN);
 
-  const cellFilled = (r, c) => cellInk[r][c] >= fillAt;
+  // Primary decision, then one taper pass. Neighbours are tested against the
+  // ORIGINAL set, never the extended one, so a row of faint cells cannot cascade
+  // into a run that was never drawn.
+  const primary = cellInk.map(row => row.map(v => v >= fillAt));
+  const extendAt = fillAt * SCAN_FILL_EXTEND;
+  const filled = primary.map((row, r) => row.map((on, c) =>
+    on || (cellInk[r][c] >= extendAt &&
+           ((c > 0 && primary[r][c - 1]) || (c < C - 1 && primary[r][c + 1])))));
+
+  const cellFilled = (r, c) => filled[r][c];
   const gapJoined  = (r, c) => gapInk[r][c] >= fillAt * SCAN_GAP_JOIN;
 
   // Full dark-fraction maps for the log. Computed in their own pass (rather than
@@ -5561,8 +5588,9 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     }
     diag.grid.cellMap = cellInk.map(row => row.map(v => +v.toFixed(2)));
     diag.grid.gapMap  = gapInk.map(row => row.map(v => +v.toFixed(2)));
-    diag.grid.blank   = +blank.toFixed(2);
-    diag.grid.fillAt  = +fillAt.toFixed(2);
+    diag.grid.blank    = +blank.toFixed(2);
+    diag.grid.fillAt   = +fillAt.toFixed(2);
+    diag.grid.extendAt = +extendAt.toFixed(2);
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
   }
 
