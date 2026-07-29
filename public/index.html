@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=69">
+<link rel="stylesheet" href="css/styles.css?v=70">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -4917,6 +4917,34 @@ const SCAN_QUAD_TOL    = 1.12;
 /* How big an outside blob has to be, relative to the marks themselves, before it
    counts as evidence that we picked the wrong four. */
 const SCAN_OUTSIDE_MIN_REL = 0.4;
+/* Ring marks (see NEXT-SCAN.md). A printed RING is the one shape nothing else on
+   the sheet imitates, which is what finally separates a mark from a solid tool
+   icon when a mark is missing. But sheets already printed carry SOLID marks and
+   must keep working, so a hole can never be REQUIRED — it is a preference:
+   when four ringed candidates exist they win outright, otherwise the solid path
+   runs exactly as before.
+
+   Note a ring is not rejected by the solidity floor anyway: wall thickness ~30%
+   of the mark gives solidity ~0.84, comfortably over SCAN_MARK_SOL. The hole is
+   used to CHOOSE among candidates, not to admit them.
+
+   Blur and JPEG shrink a small hole fast, so the bar is deliberately low and
+   backed by an absolute pixel count — at the current PRINT_MARK_K the mark is
+   only ~6px across in the working frame, which is why flipping the printed shape
+   also needs a size bump. See NEXT-SCAN.md. */
+/* A ring's hole is a big, deliberate feature: at a 30% wall it is 16% of the
+   bounding box, at 22% it is 31%. Camera noise also punches holes, but tiny
+   ones — a real frame had a 7x7 blob with a THREE pixel hole qualify, take the
+   top-left corner from the actual mark 40px away, and misregister the grid.
+   These bars are set to clear a genuine ring by a wide margin while leaving
+   noise well below. */
+const SCAN_RING_HOLE_MIN = 0.12;   // enclosed hole, as a fraction of the bbox
+const SCAN_RING_HOLE_PX  = 6;      // …and at least this many pixels
+/* Solidity floor for a blob that HAS a hole. A ring's solidity is exactly
+   1 − holeFrac, so a 22% wall lands at 0.69 and the ordinary 0.70 floor would
+   throw the mark away before its hole was ever examined. A 15% wall reaches
+   0.51, so this admits every wall thickness worth printing. */
+const SCAN_RING_SOL_MIN  = 0.45;
 
 let _scanRafId    = 0;
 let _scanLockCount= 0;
@@ -5385,13 +5413,49 @@ function _cornerMarkersFrom(imgData, diag){
       if(qy > 0)   { const n = q-w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
       if(qy < h-1) { const n = q+w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
     }
-    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1, x0: minx, y0: miny });
+    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1,
+                 x0: minx, y0: miny, lab });
   }
 
   // Keep solid, squarish blobs of a plausible size (not noise, not the QR/border).
   // Written as a loop rather than .filter so the diagnostics can say WHICH test
   // threw a blob out and by how much — "the marks were seen at fa=0.00031, just
   // under the 0.0004 floor" is actionable, "fewer than 4 candidates" is not.
+  /* Does this blob enclose a hole? Flood its bounding box inward from the border
+     through everything that is NOT this component; any non-component pixel the
+     flood never reaches is walled in, so the blob is a ring rather than a solid.
+     Only ever run on blobs that already passed size and aspect, so it costs
+     nothing across a full frame of noise. */
+  const holeArea = (c) => {
+    const x0 = Math.max(0, c.x0 - 1), y0 = Math.max(0, c.y0 - 1);
+    const x1 = Math.min(w - 1, c.x0 + c.bw), y1 = Math.min(h - 1, c.y0 + c.bh);
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    if(bw < 3 || bh < 3) return 0;
+    const seen = new Uint8Array(bw * bh);
+    const stack = [];
+    const push = (bx, by) => {
+      const k = by * bw + bx;
+      if(seen[k]) return;
+      if(labels[(y0 + by) * w + (x0 + bx)] === c.lab) return;   // the ring wall
+      seen[k] = 1; stack.push(k);
+    };
+    for(let bx = 0; bx < bw; bx++){ push(bx, 0); push(bx, bh - 1); }
+    for(let by = 0; by < bh; by++){ push(0, by); push(bw - 1, by); }
+    while(stack.length){
+      const k = stack.pop(), bx = k % bw, by = (k / bw) | 0;
+      if(bx > 0)      push(bx - 1, by);
+      if(bx < bw - 1) push(bx + 1, by);
+      if(by > 0)      push(bx, by - 1);
+      if(by < bh - 1) push(bx, by + 1);
+    }
+    let hole = 0;
+    for(let by = 1; by < bh - 1; by++) for(let bx = 1; bx < bw - 1; bx++){
+      const k = by * bw + bx;
+      if(!seen[k] && labels[(y0 + by) * w + (x0 + bx)] !== c.lab) hole++;
+    }
+    return hole;
+  };
+
   const cand = [];
   const tally = diag ? { edge: 0, small: 0, big: 0, aspect: 0, solid: 0 } : null;
   const misses = diag ? [] : null;
@@ -5405,7 +5469,16 @@ function _cornerMarkersFrom(imgData, diag){
     else if(fa < SCAN_MARK_MIN || c.area < SCAN_MARK_MIN_PX) why = "small";
     else if(fa > SCAN_MARK_MAX)    why = "big";
     else if(ar < 0.45 || ar > 2.2) why = "aspect";
-    else if(solidity < SCAN_MARK_SOL) why = "solid";
+    if(!why && solidity < SCAN_MARK_SOL){
+      /* Hollow — but a RING is legitimately hollow, and its solidity is exactly
+         1 − holeFrac, so a 22% wall lands at 0.69 and would be thrown out by the
+         solidity floor before its hole was ever looked at. Check for the hole
+         first and let a real ring through on a lower floor. */
+      c.hole = holeArea(c);
+      c.holeFrac = c.hole / (c.bw * c.bh);
+      const isRing = c.holeFrac >= SCAN_RING_HOLE_MIN && c.hole >= SCAN_RING_HOLE_PX;
+      if(!(isRing && solidity >= SCAN_RING_SOL_MIN)) why = "solid";
+    }
     if(why){
       if(tally){ tally[why]++; misses.push({ why, fa, ar, solidity, cx: c.cx, cy: c.cy, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }); }
       continue;
@@ -5430,10 +5503,23 @@ function _cornerMarkersFrom(imgData, diag){
   }
   if(cand.length < 4){ if(diag) diag.verdict = SCAN_FAIL.FEW_BLOBS; return null; }
 
+  for(const c of cand){
+    if(c.hole === undefined){ c.hole = holeArea(c); c.holeFrac = c.hole / (c.bw * c.bh); }
+  }
+
+  /* A printed RING is the one shape nothing else on the sheet imitates. When
+     four of them are present this IS the mark set, and picking from only those
+     is what stops a solid tool icon standing in for a missing mark. Sheets
+     printed with solid marks have no ringed candidates at all and fall through
+     to the original path unchanged. */
+  const ringed = cand.filter(c => c.holeFrac >= SCAN_RING_HOLE_MIN && c.hole >= SCAN_RING_HOLE_PX);
+  const pool = ringed.length >= 4 ? ringed : cand;
+  if(diag){ diag.marks.ringed = ringed.length; diag.marks.pool = pool === ringed ? "ring" : "solid"; }
+
   // Pick the four corner-most centroids (extremes of x+y and x−y).
   let tl=null, tr=null, br=null, bl=null;
   let tlV=Infinity, brV=-Infinity, trV=-Infinity, blV=Infinity;
-  for(const c of cand){
+  for(const c of pool){
     const sum = c.cx + c.cy, dif = c.cx - c.cy;
     if(sum < tlV){ tlV = sum; tl = c; }
     if(sum > brV){ brV = sum; br = c; }
@@ -5485,7 +5571,9 @@ function _cornerMarkersFrom(imgData, diag){
   const areas = [tl.area, tr.area, br.area, bl.area].sort((a, b) => a - b);
   const markArea = (areas[1] + areas[2]) / 2;
   let outside = 0, worstOut = 0;
-  for(const c of cand){
+  // Judged against the same pool the corners came from: on a ring sheet a solid
+  // icon outside the quad is not evidence the wrong four were picked.
+  for(const c of pool){
     if(c === tl || c === tr || c === br || c === bl) continue;
     if(c.area < markArea * SCAN_OUTSIDE_MIN_REL) continue;
     for(const [a, b] of edges){
@@ -7355,6 +7443,15 @@ let _preprintPageOrigin = null;
      2×(gap+size) = 119 of it, so the fit stays width-limited and the sheet
      prints at exactly the same scale and position as before. Growing either
      number past ~63 cells total would start shrinking the whole sheet.        */
+/* Mark shape. "solid" is what every sheet in existence was printed with; "ring"
+   is the upgrade — the one shape nothing else on the sheet imitates, so a solid
+   tool icon can no longer stand in for a mark that got smudged or cut off (the
+   KNOWN GAP on _sheetCornersFrom). The SCANNER already accepts both and prefers
+   rings, so flipping this is safe for the scanner; what it needs is a reprint to
+   verify on paper, plus a PRINT_MARK_K bump — at 0.56 the mark lands ~6px across
+   in the working frame, and a hole that small does not survive blur. Read
+   NEXT-SCAN.md before changing it. */
+const PRINT_MARK_SHAPE = "solid";
 const PRINT_MARK_K = 0.56;     // black square side, in cells (≈7mm on A4 landscape)
 const PRINT_MARK_GAP_K = 0.37; // clear space between content edge and mark, in cells
 let _printMarkBox = null;      // outer extent of the 4 marks, stage coords
@@ -7403,13 +7500,16 @@ function _buildPrintMarks(pr, content){
   [['tl', leftX, topY], ['tr', rightX, topY],
    ['br', rightX, botY], ['bl', leftX, botY]].forEach(([pos, x, y]) => {
     const m = document.createElement('div');
-    m.className = 'wsMark ws-' + pos;
+    m.className = 'wsMark ws-' + pos + (PRINT_MARK_SHAPE === 'ring' ? ' wsMarkRing' : '');
     m.setAttribute('data-wsmark', '');
     m.setAttribute('aria-hidden', 'true');
     m.style.left = x + 'px';
     m.style.top  = y + 'px';
     m.style.width = size + 'px';
     m.style.height = size + 'px';
+    // Wall is 30% of the side — thick enough to survive a camera, thin enough to
+    // leave a hole worth detecting. Inline because the side is inline too.
+    if(PRINT_MARK_SHAPE === 'ring') m.style.borderWidth = (size * 0.3) + 'px';
     page.appendChild(m);
   });
 

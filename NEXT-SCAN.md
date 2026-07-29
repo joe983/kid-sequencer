@@ -14,7 +14,42 @@ Machine-readable results land in `window.__scanTests`. The page is hosting-ignor
 
 ### 1. Print the corner marks as a RING, not a solid square
 
-**This is the one real gap in the scanner, and it cannot be closed in software.**
+**Status: the SCANNER half is done and shipped. What remains is the print flip,
+which needs a reprint to verify — that is the only reason it is still open.**
+
+To do it, in one sitting with a printer to hand:
+
+1. `PRINT_MARK_SHAPE = "ring"` in index.html (the CSS and the wall thickness are
+   already written; the constant is the whole switch).
+2. **Bump `PRINT_MARK_K` from 0.56 to ~0.9.** At 0.56 the mark lands ~6px across
+   in the 420px working frame, giving a hole of ~2px that will not survive blur
+   or JPEG. ~0.9 gives a ~10px mark and a ~4px hole. Fixture `ringSmall` covers
+   the small end and passes by falling back to the solid path, but that is a
+   safety net, not the target.
+3. Print, scan, and check the log says `pool ring` rather than `pool solid`.
+4. Re-run `scan-tests.html`; `ringMissingBL` should keep refusing.
+5. Add the printed sheet's frame to `public/scan-fixtures/` as the first real
+   ring evidence — every fixture with a ring today is synthetic.
+
+The scanner already accepts BOTH shapes and **prefers rings**: when four ringed
+candidates exist they are the only ones considered, otherwise the solid path runs
+exactly as before. That back-compatibility is not optional — every sheet already
+printed carries solid marks.
+
+Two things learned building it, both worth keeping:
+
+- A ring's solidity is exactly `1 − holeFrac`, so a 22% wall lands at 0.69 and
+  the ordinary 0.70 floor threw the mark away *before* its hole was examined.
+  Holes are therefore computed before the solidity decision, with a lower floor
+  (`SCAN_RING_SOL_MIN`) for blobs that have one.
+- The first thresholds (hole ≥ 6% of bbox, ≥3px) were far too permissive on real
+  photographs: camera noise punched a **three pixel** hole in a 7×7 blob, which
+  then qualified as a ring, took the top-left corner from the real mark 40px
+  away, and misregistered the grid. Caught only because the real frames are in
+  the fixture suite. A genuine ring's hole is 16–31% of its box, so the bars are
+  now 12% and 6px.
+
+**The underlying problem this closes.**
 
 If a mark is smudged, cut off or obscured, the corner-most search promotes the
 next blob inwards. On three of the four corners that self-destructs — the quad

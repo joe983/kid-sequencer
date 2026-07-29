@@ -63,7 +63,8 @@ function makeSheet(S, G, o){
     furniture: true, // print the grid outlines, title block, tool icons
     bg: null,        // background beyond the paper (for sheet-overflows-frame)
     speck: 0,        // a stray pen dot OUTSIDE the mark quad
-    scribble: 0      // >0 draws sparse strokes instead of solid fill
+    scribble: 0,     // >0 draws sparse strokes instead of solid fill
+    ring: 0          // >0 draws marks as RINGS with this wall fraction (0.3 = 30%)
   }, o);
 
   const cv = document.createElement("canvas");
@@ -124,7 +125,17 @@ function makeSheet(S, G, o){
 
   g.fillStyle = "#000000";
   o.quad.forEach((p,i) => { if(i === o.drop) return;
-    g.fillRect(Math.round(p.x-o.markPx/2), Math.round(p.y-o.markPx/2), o.markPx, o.markPx); });
+    const x = Math.round(p.x-o.markPx/2), y = Math.round(p.y-o.markPx/2);
+    g.fillRect(x, y, o.markPx, o.markPx);
+    if(o.ring){
+      // punch the hole back out — a ring is the printed mark that no solid tool
+      // icon on the sheet can imitate
+      const t = Math.max(1, Math.round(o.markPx * o.ring));
+      g.clearRect(x+t, y+t, o.markPx-2*t, o.markPx-2*t);
+      g.fillStyle = "#ffffff"; g.fillRect(x+t, y+t, o.markPx-2*t, o.markPx-2*t);
+      g.fillStyle = "#000000";
+    }
+  });
 
   if(o.speck){ const p = q(-0.03,0.5); g.fillStyle="#111111"; g.fillRect(p.x-2,p.y-2,4,4); }
 
@@ -200,7 +211,25 @@ const CASES = [
   { name:"missingTR",      opt:{cells:CELLS, drop:1}, refuse:true, why:"as above" },
   { name:"missingBR",      opt:{cells:CELLS, drop:2}, refuse:true, why:"as above" },
   { name:"missingBL",      opt:{cells:CELLS, drop:3}, refuse:true,
-    why:"THE hard one: a tool icon stands in and the quad stays geometrically plausible (aspect 1.55 vs a genuine 1.497). Only the grid-registration check catches it. See NEXT-SCAN.md" }
+    why:"THE hard one: a tool icon stands in and the quad stays geometrically plausible (aspect 1.55 vs a genuine 1.497). Only the grid-registration check catches it. See NEXT-SCAN.md" },
+
+  /* RING marks — the planned printed shape (PRINT_MARK_SHAPE). The scanner must
+     accept them TODAY, because the print flip and the reprint happen later and
+     sheets already in the world carry solid marks. Marks are drawn larger here
+     than PRINT_MARK_K currently yields, which is the point: flipping the shape
+     needs a size bump too, or the hole is too small to survive a camera. */
+  { name:"ring",           opt:{cells:CELLS, markPx:14, ring:0.3}, want:WANT,
+    why:"ring marks must read exactly like solid ones" },
+  { name:"ringShadow",     opt:{cells:CELLS, markPx:14, ring:0.3, shadow:0.72, dim:0.85}, want:WANT,
+    why:"a hole is thinner than a solid mark, so it has to survive uneven light too" },
+  { name:"ringAskew",      opt:{cells:CELLS, markPx:14, ring:0.3, quad:ASKEW}, want:WANT,
+    why:"perspective squashes the hole; it must still be found" },
+  { name:"ringThinWall",   opt:{cells:CELLS, markPx:14, ring:0.22}, want:WANT,
+    why:"thinner wall, bigger hole — the easy end for detection, the fragile end for printing" },
+  { name:"ringMissingBL",  opt:{cells:CELLS, markPx:14, ring:0.3, drop:3}, refuse:true,
+    why:"THE POINT OF RINGS: with only three ringed marks, a solid tool icon can no longer stand in — this is the gap that rings close" },
+  { name:"ringSmall",      opt:{cells:CELLS, markPx:7, ring:0.3}, want:WANT,
+    why:"a mark near today's printed size: the hole is ~2px and may vanish, so this must fall back to the solid path rather than fail" }
 ];
 
 /* Note-length snapping: the app has 16th/8th/quarter/half/whole only, so every
