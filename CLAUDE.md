@@ -364,6 +364,35 @@ Shim `requestAnimationFrame`→`setTimeout` and call
 without a camera, draw the fixture straight into `#camCanvas` and set its width:
 `camCapture()` bails (no video) but leaves the canvas you prepared.
 
+### Fixtures — `public/scan-tests.html`
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 39 checks: synthetic
+sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
+4-10px, scribble densities), the full 1→16 note-length snapping table, and the
+owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.
+Results also land in `window.__scanTests` for headless checking. Both the page and
+the fixtures are hosting-ignored in `firebase.json` — committed, never deployed.
+
+The page drives the real pipeline through an iframe (`window.KidSequencer.Scan`)
+rather than copying any of it; duplicated CV code would drift and then lie.
+**Run it after any change to the scan pipeline.** It is not decoration: it caught
+a shipped bug (neighbour ink leaking across a sub-pixel misregistration) within
+minutes of being written, after five rounds of hand-testing missed it.
+
+Fixture gotchas, all learned the hard way and repeated in `NEXT-SCAN.md`: don't
+stack test runs at the same start column across rows (a solid vertical block of
+ink genuinely defeats local thresholding); alpha-blending is the wrong model for
+faint colouring (use `scribble` — real faintness is sparse full-strength ink); a
+run only merges into one note if the colouring crosses the inter-cell gaps.
+
+### ⚠️ Open scanner work — see [`NEXT-SCAN.md`](NEXT-SCAN.md)
+**After the sheet is next reprinted, print the corner marks as a RING rather than
+a solid square.** A missing bottom-left mark lets a printed tool icon stand in and
+the resulting quad stays geometrically plausible (aspect 1.55 against a genuine
+angled scan's 1.497 — 3.5% apart, so aspect cannot separate them). Only the
+grid-registration check catches it today. A ring makes solidity separate marks
+from every solid icon on the sheet in one test. `NEXT-SCAN.md` has the full
+round-by-round record of what each measured log said and every constant it set.
+
 ### Overlay + status badge
 - `.camOverlay` — the aim guide: corner brackets drawn with 8 `linear-gradient`
   backgrounds, colour driven by the `--aimCol` custom property. White idle →

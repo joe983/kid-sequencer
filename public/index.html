@@ -5577,6 +5577,12 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const cellU = (c, t) => (c + t * cellFrac) / C;            // t∈[0,1] across the cell
   const gapU  = (c, t) => (c + cellFrac + t * gapFrac) / C;  // t∈[0,1] across the gap
   const rowV  = (r, t) => (r + 0.15 + t * 0.70) / R;         // vertical band inside the row
+  // The middle half of the cell only. Used for the taper rule below: a coloured
+  // neighbour bleeding across a sub-pixel misregistration lands on the cell EDGE
+  // nearest it, while a genuinely (if faintly) coloured cell has ink through its
+  // middle. Sampling the core is what tells those two apart — they are
+  // indistinguishable by amount, both measuring ~0.15 of the full cell.
+  const coreU = (c, t) => (c + (0.25 + t * 0.5) * cellFrac) / C;
 
   const S = SCAN_CELL_SAMPLES, SS = S * S;
   const darkFraction = (uFn, r, c) => {
@@ -5589,15 +5595,16 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   };
 
   // Measure every cell first, then let the sheet's own blank cells set the bar.
-  const cellInk = [], gapInk = [], flat = [];
+  const cellInk = [], gapInk = [], coreInk = [], flat = [];
   for(let r=0; r<R; r++){
-    const cr = [], gr = [];
+    const cr = [], gr = [], kr = [];
     for(let c=0; c<C; c++){
       const v = darkFraction(cellU, r, c);
       cr.push(v); flat.push(v);
       gr.push(darkFraction(gapU, r, c));
+      kr.push(darkFraction(coreU, r, c));
     }
-    cellInk.push(cr); gapInk.push(gr);
+    cellInk.push(cr); gapInk.push(gr); coreInk.push(kr);
   }
   const sorted = flat.slice().sort((a, b) => a - b);
   const blank = sorted[Math.floor(sorted.length * SCAN_BLANK_PCT)] || 0;
@@ -5608,8 +5615,13 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   // into a run that was never drawn.
   const primary = cellInk.map(row => row.map(v => v >= fillAt));
   const extendAt = fillAt * SCAN_FILL_EXTEND;
+  // Judged on the CORE, not the whole cell. Half a pixel of registration error
+  // is enough for a filled cell to spill into its neighbour's window at ~0.17 —
+  // the same magnitude as the genuine tapered end this rule exists to catch, so
+  // no threshold separates them. Where the ink SITS does: leakage hugs the
+  // shared edge, a real stroke crosses the middle.
   const filled = primary.map((row, r) => row.map((on, c) =>
-    on || (cellInk[r][c] >= extendAt &&
+    on || (coreInk[r][c] >= extendAt &&
            ((c > 0 && primary[r][c - 1]) || (c < C - 1 && primary[r][c + 1])))));
 
   const cellFilled = (r, c) => filled[r][c];
