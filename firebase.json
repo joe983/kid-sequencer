@@ -6,7 +6,9 @@
       "**/.*",
       "**/node_modules/**",
       "samples/drums/**",
-      "samples/melodic/**"
+      "samples/melodic/**",
+      "scan-tests.html",
+      "scan-fixtures/**"
     ]
   },
   "firestore": {

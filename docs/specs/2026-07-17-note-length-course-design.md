@@ -3,6 +3,21 @@
 Produced by a 3-designer / 3-judge / synthesis workflow over a 6-dimension research sweep.
 The executable plan lives at ~/.claude/plans/using-the-3-scaffolding-melodic-scroll.md.
 
+> **[AMENDED 2026-07-25 — QR]** This spec was written when the printed worksheet carried a
+> QR code and the app bundled the jsQR decoder. **Both are gone.** The sheet is now
+> identified by four printed corner marks plus `_currentSheetId()` (which derives the
+> template from the page you're on), and the jsQR CDN script has been removed since
+> nothing called it.
+>
+> Statements of *current capability* are corrected inline below and marked
+> **[AMENDED 2026-07-25]**. The QR-based v3 ideas (progress cards, the C5 capstone
+> hand-off) are left standing as proposals — but **re-cost them before committing**: they
+> assumed a decoder already shipped and only an encoder was missing. The app now has
+> neither, so those items carry a QR encoder *and* a decoder, and re-adding a decoder
+> means re-adding a third-party dependency to the critical path that was deliberately
+> dropped. A non-QR hand-off (the corner-mark sheet already scans) may be the cheaper
+> route to the same goal.
+
 ---
 
 # Note-Length Course for Kid Sequencer — Final Design ("Rhythm Trail")
@@ -61,7 +76,7 @@ Full 5-line treble stave (Faber pre-staff → one line → five lines). Drag-to-
 | C2 | Three-Beat Notes | Dotted half = "a note lasting three beats" (Heart Chart token), never dot arithmetic; re-grid to 6 cols/3-4 (Song Maker re-gridding) |
 | C3 | Joined Notes | Ties only where the grid forces it: span crossing the barline = one grid block, two arced stave notes (tie rendering stave-only) |
 | C4 | Off-Beat Tricks | Syncopation + tam-ti. Optional tap-along vs woodblock (±15% beat window, early-biased, shift-detection first). **[FIX]** Strictly **formative and non-gating** — never blocks path progression; results logged to validate window widths before they ever count |
-| C5 | Capstone: Teach It | PYP Phase-4 verbatim: compose 2 bars, see real notation, print worksheet + QR for a younger child to scan and play (existing SHEET_GEOMETRY/print) |
+| C5 | Capstone: Teach It | PYP Phase-4 verbatim: compose 2 bars, see real notation, print worksheet for a younger child to scan and play (existing SHEET_GEOMETRY/print). **[AMENDED 2026-07-25]** was "worksheet + QR"; the sheet now scans by its corner marks, so the hand-off needs no QR |
 
 **Placement (kid-UX graft — replaces any adult-facing picker):** no test. The path map opens with three door-sized band entrances, spoken + iconic ("I'm new to music" / "I know ta and ti-ti" / "I read some music"). Repeated failure drops to the prior band's variant (Khan Kids adaptive drop-down); fast success skips ahead.
 
@@ -181,12 +196,12 @@ LESSONS['a2'] = {
 
 **Line budget [FIX honesty]:** **1,200–1,600 lines JS + ~300 CSS**, not 500–700. New len-4/len-8 note kinds touch `tick()`'s trigger scan (which has the eighth-pair special case), `createNoteBlock`, the `occ[]` span logic, and `renderStave` (half/whole noteheads and rests don't exist in the renderer today) — each a documented chokepoint, each budgeted.
 
-**URL scheme [FIX entry composition]:** `?level=1|2|3` untouched (printed QR worksheets + `SHEET_GEOMETRY` keep working, aliased to Band A sandbox entry — owner Q5). New `?lesson=<id>` derives `LEARN_LEVEL` from `lesson.level` then attaches the runner. **Verification task in MVP:** `enforceLevelEntitlement()` and `applyLockState()` must handle lesson ids without regressing the dormant `.level-locked` gate, and the `?lesson` parser must compose with — not race — the existing `?level` parser.
+**URL scheme [FIX entry composition]:** `?level=1|2|3` untouched (printed worksheets + `SHEET_GEOMETRY` keep working, aliased to Band A sandbox entry — owner Q5; **[AMENDED 2026-07-25]** those worksheets are no longer QR-bearing — the sheet is found by its corner marks and `_currentSheetId()`, and a plain `?level=N` link is unaffected either way). New `?lesson=<id>` derives `LEARN_LEVEL` from `lesson.level` then attaches the runner. **Verification task in MVP:** `enforceLevelEntitlement()` and `applyLockState()` must handle lesson ids without regressing the dormant `.level-locked` gate, and the `?lesson` parser must compose with — not race — the existing `?level` parser.
 
 **Persistence** (Safari ITP wipes script storage after 7 Safari-days — every school holiday):
 1. `localStorage['kidseq_lessons']` = `{v:1, stars:{...}, last:'a3'}` (~200 bytes) — account-free, COPPA/Children's-Code-clean; progress deliberately cheap to re-earn.
 2. Logged-in: mirror to `users/{uid}.lessonProgress` via existing auth plumbing, merging `max(stars)` — never advertised to the child (sign-up nudges at kids violate the Children's Code).
-3. v3: printable **QR progress card** (needs a QR generator — app only ships jsQR scanning) + add-to-home-screen prompt (exempts storage); solves shared classroom iPads (Clever-Badges pattern).
+3. v3: printable **QR progress card** (**[AMENDED 2026-07-25]** originally costed as "needs a QR generator — app only ships jsQR scanning"; the app now ships **no** QR capability at all, so this needs an encoder *and* a decoder) + add-to-home-screen prompt (exempts storage); solves shared classroom iPads (Clever-Badges pattern).
 
 **Assets:** mascot (4–6 SVG poses, MVP-minimal), narration sprites, path art (CSS-heavy). No new instrument samples (piano's 6 s trim covers a semibreve even at tempo 70). Added payload target <3 MB for MVP.
 
@@ -354,5 +369,5 @@ Judge feasibility: winner=leverage-first; scores=pedagogy-first:6, ux-first:7, l
 - **Dotted/meter**: the Heart Chart uses foam note pieces spanning 3 hearts — the 3-cell block IS the dotted-half lesson, never explained as arithmetic; 3/4 = re-grid to 6-cell bars (Song Maker precedent), skip circular views (conflict with left-to-right stave reading); ties render on the stave only.
 - **Narration**: recorded human voice beats TTS for children (comprehension/retention deficits, worst for struggling readers); one instruction per clip, ≤10 words, ~110–140wpm; package as a mono AAC audio sprite with JSON offset map — the same container pattern as drums.pack/melodic.pack. UK fork: crotchet/minim/semibreve mandated by the English Model Music Curriculum vs quarter/half/whole in IB material — defer naming via ta/ti-ti for the youngest, make terminology a toggle swapping narration clips.
 - **Audio unlock**: the iOS hardware silent switch mutes Web Audio but NOT `<audio>` elements — a lesson "Start" button should resume AudioContext + run the swevans/unmute silent-mp3 trick + play the first clip.
-- **Persistence**: Safari ITP wipes all script-writable storage after 7 Safari-use days without a visit (every school holiday = progress wipe). Three-layer defense: add-to-home-screen prompt after lesson 2 (exempt), printable QR progress cards (the app already has a scanner + print; matches Clever Badges practice; COPPA/ICO-clean because anonymous), Firestore mirroring for logged-in households.
+- **Persistence**: Safari ITP wipes all script-writable storage after 7 Safari-use days without a visit (every school holiday = progress wipe). Three-layer defense: add-to-home-screen prompt after lesson 2 (exempt), printable QR progress cards (**[AMENDED 2026-07-25]** the app has a scanner + print, but that scanner reads **corner marks, not QR** — it can't decode a progress card as-is; matches Clever Badges practice; COPPA/ICO-clean because anonymous), Firestore mirroring for logged-in households.
 - **Retention**: streak evidence is adult/industry-sourced; strongest causal child evidence is adult-loop-driven (weekly parent alerts reduced course failures 28%, Columbia). Build teacher/parent weekly cadence + a take-home artifact, not push/streaks. No published data exists on classroom-vs-home or muted-device usage for browser music tools — instrument lessons from day one (audio-unlocked?, installed?, session origin) and measure it yourself.

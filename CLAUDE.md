@@ -254,7 +254,7 @@ node serve.js   # → http://localhost:3000
 - **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'login'|'subscribe'`. Path determines which CTA is highlighted and where the post-register flow continues to. **As shipped in prod (`v=44`):** the modal always opens on the **marketing/tier view** EXCEPT `path === 'login'` (the top-bar account button, via `handleLoginBtn`), which opens the **login form directly**. On phones the modal is compacted/lightened via `@media (max-width:500px),(max-height:520px)` (smaller fonts/borders; inputs stay 16px so iOS doesn't auto-zoom).
 - **⚠️ OPEN UX CONCERN — tier-flow discoverability (raised 2026-06-28, unresolved):** with the account button going straight to login, the 3-tier comparison is only seen by accident (tapping a locked feature), logged-in free Members have no path to discover Pro, and every locked tap dumps the full pricing grid. A full redesign was built, approved, verified, and deployed to a preview channel (account button → tier comparison w/ header Log in; focused per-feature lock prompts w/ "See all plans"; persistent "Go Pro" pill in `#rightCol` for Members; marketing cards compacted to fit a phone) **but the user rolled it back** to stick with `v=44` for now. The full plan is saved at `~/.claude/plans/this-feels-disjointed-and-joyful-wadler.md` — revisit when the user wants to pick it up.
 - **Slide-up sheet:** `transform: translateY(100%)` → `translateY(0)` with `cubic-bezier(0.32,0.72,0,1)`
-- **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `qr`, `proactivated`. Auto-dismiss after 2.4s.
+- **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `proactivated`. Auto-dismiss after 2.4s. (A `qr` state's CSS survives in styles.css but nothing calls it — see the camera-modal dead-CSS note.)
 - **Undo stack:** `pushUndo()` before state changes; `undo()` to restore
 - **Spacebar:** plays/stops sequencer; skips if `document.activeElement` is INPUT or TEXTAREA
 - **Idle nudge affordance:** for controls kids might not realise are interactive, a periodic non-positional animation on the parent element, stopped permanently on first interaction by adding a body class (`body.potTouched`). Prefer motion over static decoration on small targets — multiple static-glyph attempts on the pots looked terrible at this size.
@@ -263,58 +263,153 @@ node serve.js   # → http://localhost:3000
 
 ## Camera modal — architecture
 
-### HTML structure
+**There is one mode: worksheet scanning.** The old Camera / QR / Sheet mode bar and the
+QR-based "invent a tune from a code" feature are both **gone** — `setCamMode`,
+`qrToSequence`, `_startQRScan`, `_detectedQRText`, `camMode`, `#camUseBtn`, `#camHint`
+and `_sizeCamStageForLandscape` no longer exist. **jsQR is no longer loaded** (the CDN
+`<script>` was dropped once nothing called it). Don't restore any of these from this
+doc's history — see the dead-CSS note below for what's still lying around.
+
+### HTML structure (`public/index.html` ~line 197)
 ```
 #camModal  (overlay, position:fixed inset:0)
-  .modalCard.camModalCard
-    .camModeBar          ← Camera / QR / Sheet icon buttons + mode label + × close
-    .camBody             ← flex row in landscape, flex col on desktop
-      .camStage          ← video + preview img + .camOverlay#camOverlay
-      .camActions        ← Capture button + Use button (#camUseBtn)
-    .modalHint#camHint   ← "Tip:" text, only visible in sheet mode
+  .modalCard              ← role=dialog, aria-label="Camera Scan"
+    .modalHeader          ← .modalTitle "Scan" + .modalClose ×
+    .camStage             ← #camVideo + #camPreview + #camCanvas (hidden) + .camOverlay
+    .modalBtns            ← Capture / Use / Close (.bigBtn)
+    .modalHint            ← "Tip:" text (always shown)
 ```
 
-### Mode switching
-`setCamMode(mode)` — exported to `window.setCamMode`. Toggles `.active` on mode buttons, updates label text, sets `camOverlay.className` to `'camOverlay'` + optionally `' mode-sheet'` or `' mode-qr'`. Uses plain class toggling (NOT data-attribute selectors — unreliable cross-browser). `camHint` shown only in sheet mode.
+### Which sheet is it? — `_currentSheetId()`, not a QR
+The printed sheet carries **no QR**. At the scanner's 420px working width a code small
+enough to fit would be under jsQR's decode floor (~25 modules over 14mm is <1px per
+module) — dead ink. Learning mode hides the Print button, so the main grid is the only
+printable sheet and the template is simply "the page you're on". `_currentSheetId()`
+returns `"kidseq:main"`, or **`null`** where nothing can be printed (disables scanning
+rather than guessing).
 
-**QR mode additionally:** disables `#camUseBtn`, clears `_detectedQRText`, starts `_startQRScan()` loop. Switching away from QR mode calls `_stopQRScan()` and re-enables Use.
+### Geometry — 4 printed corner marks
+Four solid black squares print just outside the content (above title box, above tempo,
+below AI button, below note-length tools), placed symmetrically about the content
+centre so `_applyPrintScale` yields a byte-identical transform.
 
-### Overlays (CSS class-based)
-- `.camOverlay` — hidden by default (camera mode = plain viewfinder)
-- `.camOverlay.mode-sheet` — dashed border + grid lines (16×8 repeating-linear-gradient)
-- `.camOverlay.mode-qr` — centred crosshair + corner brackets via `::before`/`::after`
+- `SHEET_GEOMETRY[id]` carries `grid` insets + `quadAspect`. The marks bound the **whole
+  sheet**, so the homography's unit square covers the full printed layout; `_gridMapper()`
+  composes the insets back on so callers address the note grid in plain 0..1 coords.
+  Constants because the printed layout is device-independent (fixed 1600×900 stage scaled
+  as a unit, `--cell` capped at 64). Re-derive with `KidSequencer.Scan.printMarkInsets()`.
+- `_cornerMarkersFrom()` picks the 4 corner-most solid blobs; `_quadLooksLikeSheet()`
+  rejects an implausible quad (aspect must stay within nominal ×/÷1.6, opposite-edge skew
+  ≤3). **This check matters:** if a mark merges with nearby ink it gets dropped for being
+  non-square and a coloured-in cell wins, which used to produce a garbled tune with no
+  sign anything was wrong. `_sheetCornersFrom()` wraps both so the live loop and manual
+  capture refuse identically.
 
-### QR live-scan loop
-- `_startQRScan()` / `_stopQRScan()` / `_qrRafId` — rAF loop running only in QR mode
-- `_detectedQRText` — stores the decoded string once found; `null` when no code seen yet
-- On detection: calls `showSaveToast('qr')`, enables + pulses `#camUseBtn` (`.cam-use-pulse`)
-- Loop stops itself after first detection; resets on `closeCameraModal()` and on mode switch
-- `camImport()` checks `camMode === 'qr'` and routes to `qrToSequence(_detectedQRText)`
+### Live scan loop
+`_startSheetScan()` / `_stopSheetScan()` / `_scanTick()` (rAF, throttled). Tunables:
+`SCAN_WORK_W` 420 (working width), `SCAN_LOCK_FRAMES` 3 (consecutive good frames before
+auto-capture), `SCAN_TICK_MS` 130, `SCAN_FILL_RATIO` 0.70 (inked if darker than 70% of
+paper white), `SCAN_GAP_JOIN` 0.50 (>50% of inter-cell gap coloured ⇒ notes joined).
+`_setScanStatus()` toggles `#camModal.scan-locking` / `.scan-locked`. `camImport()` is the
+manual Capture-then-Use path and runs the same detect → `_processScanFrame` pipeline.
 
-### qrToSequence algorithm
-- **Hash:** `bytes.reduce((acc, b) => (Math.imul(acc, 31) + b) >>> 0, 0)`
-- **LCG:** `s = (Math.imul(1664525, s) + 1013904223) >>> 0`
-- **Scale:** C major C4–C5 (`['C4','D4','E4','F4','G4','A4','B4','C5']`) — hardcoded const, not user-selectable
-- **Grid:** uses `cols` (16 slots); iterates in `selectedSteps` increments
-- **Rests:** `rand() % 5 === 0` (~20%)
-- **Melodic contour:** 60% chance step within ±2 degrees of previous; starts at index 3 (F4)
-- **Row mapping:** degree 0 (C4) → row 7 (lowest); degree 7 (C5) → row 0 (highest)
+**Known limit (pre-existing):** a 100%-coloured sheet reads as empty — the paper-white
+baseline is sampled inside the grid and finds no paper.
 
-### Landscape iPhone fix — CRITICAL
-**Problem:** `100vh` in Safari iOS = layout viewport height (bars collapsed), but `window.innerHeight` = visual viewport (below browser chrome). Using `100vh` for sizing makes the stage enormous; centering the card with `align-items:center` pushes the mode bar behind the browser chrome.
+### Scan diagnostics — `?scandebug=1`
+The pipeline refuses a frame at six different points and the user sees the same
+sentence for all of them, plus a seventh case that doesn't even fail (it locks
+on, reads every cell blank, and silently clears the grid). So every decision
+point records **why** plus the numbers it decided on, into a panel pinned to the
+bottom of the screen — the phone holding the camera is the machine that has to
+display it.
 
-**Solution (in `_sizeCamStageForLandscape()`):**
-1. Detect landscape phone: `innerWidth > innerHeight && innerHeight <= 500`
-2. Set `card.style.height = (window.innerHeight - 16) + 'px'` — uses visual viewport
-3. `stageH = cardH − modeBar.offsetHeight − 12` (body padding 6px×2)
-4. `stageW = stageH × 1.618` — golden ratio, capped by `card.clientWidth − 92` to avoid overflow
-5. Set stage `height` + `width` inline
+- **On/off:** `?scandebug=1` / `?scandebug=0`, sticky in `localStorage`
+  (`kidseq_scandebug`) because a successful scan navigates the page. The panel's
+  own `off` button clears it. **Off by default and behaviour-neutral** — no diag
+  object is allocated, every instrumented function skips its bookkeeping via
+  `if(diag)`, and the failure `alert` fires exactly as before (verified: with the
+  flag off a blank frame still alerts, log length 0, no panel in the DOM).
+- **Verdicts** (`SCAN_FAIL`): `no-sheet`, `no-frame`, `few-blobs`,
+  `corners-collapsed`, `quad-implausible`, `homography-singular`,
+  `no-grid-insets`, `read-empty`, `ok`, plus `locking` for a partial lock.
+  `read-empty` is log-only — it does not change what the scan does.
+- **What it reports:** frame size, `meanL`/`T`/dark-pixel fraction; component
+  and candidate counts with a per-reason rejection tally; the biggest *rejected*
+  blobs with `fa`/`ar`/`solidity` and position (this is the money line — "your
+  marks are being seen at `fa 0.00020` against the `0.0004` floor" is a fix,
+  "fewer than 4 candidates" is not); the picked quad + min separation; aspect and
+  skew against their bands; paper-white with its p05/p50/p95 spread (the tell for
+  the fully-coloured-sheet trap) and an ASCII map of every cell's dark fraction.
+- **Annotated frame:** red = blob rejected by the shape filters, amber =
+  survived as a candidate, green = the four actually chosen, cyan = grid sample
+  points. Boxes have a 7px floor so a mark failing *for being too small* is still
+  visible.
+- **`copy`** puts the whole session (all attempts, newest first, + UA/viewport)
+  on the clipboard to paste into a chat. The panel lives on `<body>`, NOT in
+  `#camModal`, so it survives the modal close a successful scan triggers.
+- **Log order:** `_processScanFrame` pushes its record **before** it routes,
+  because routing applies notes and can navigate — the caller may never resume.
+- **Headless/offline use:** `KidSequencer.Scan.diagnose(imgData[, sheetId])` runs
+  the instrumented pipeline read-only (no notes applied) and returns the record;
+  `Scan.format(rec)` renders the text block; `Scan.log` is the ring buffer. That
+  is what the synthetic-sheet harness drives — build a white canvas, four black
+  squares on a quad, coloured cells mapped through `homographyUnitToQuad`, and
+  assert the verdict. A trapezoid quad simulates photographing the sheet askew.
 
-**CSS overlay in landscape:** `#camModal` uses `align-items: flex-start` (not center!) so the card anchors to the **top** of the visible viewport. `100svh` (Safari 15.4+) / `100vh` fallback gives initial card height until JS corrects it in the first double-rAF.
+⚠️ Verifying in the Browser pane: the pane can freeze rAF, so `buildGrid()` never
+runs and any scan that *succeeds* dies in `redrawRowNotes` on an undefined row.
+Shim `requestAnimationFrame`→`setTimeout` and call
+`KidSequencer.Sequencer.buildGrid()` first. To exercise the real `camImport()`
+without a camera, draw the fixture straight into `#camCanvas` and set its width:
+`camCapture()` bails (no video) but leaves the canvas you prepared.
 
-**Wiring:**
-- `openCameraModal()` → `requestAnimationFrame(() => requestAnimationFrame(() => _sizeCamStageForLandscape()))` + `window.addEventListener('resize', _sizeCamStageForLandscape)`
-- `closeCameraModal()` → removes listener, clears `card.style.height`, `stage.style.height/width`
+### Fixtures — `public/scan-tests.html`
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 39 checks: synthetic
+sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
+4-10px, scribble densities), the full 1→16 note-length snapping table, and the
+owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.
+Results also land in `window.__scanTests` for headless checking. Both the page and
+the fixtures are hosting-ignored in `firebase.json` — committed, never deployed.
+
+The page drives the real pipeline through an iframe (`window.KidSequencer.Scan`)
+rather than copying any of it; duplicated CV code would drift and then lie.
+**Run it after any change to the scan pipeline.** It is not decoration: it caught
+a shipped bug (neighbour ink leaking across a sub-pixel misregistration) within
+minutes of being written, after five rounds of hand-testing missed it.
+
+Fixture gotchas, all learned the hard way and repeated in `NEXT-SCAN.md`: don't
+stack test runs at the same start column across rows (a solid vertical block of
+ink genuinely defeats local thresholding); alpha-blending is the wrong model for
+faint colouring (use `scribble` — real faintness is sparse full-strength ink); a
+run only merges into one note if the colouring crosses the inter-cell gaps.
+
+### ⚠️ Open scanner work — see [`NEXT-SCAN.md`](NEXT-SCAN.md)
+**After the sheet is next reprinted, print the corner marks as a RING rather than
+a solid square.** A missing bottom-left mark lets a printed tool icon stand in and
+the resulting quad stays geometrically plausible (aspect 1.55 against a genuine
+angled scan's 1.497 — 3.5% apart, so aspect cannot separate them). Only the
+grid-registration check catches it today. A ring makes solidity separate marks
+from every solid icon on the sheet in one test. `NEXT-SCAN.md` has the full
+round-by-round record of what each measured log said and every constant it set.
+
+### Overlay + status badge
+- `.camOverlay` — the aim guide: corner brackets drawn with 8 `linear-gradient`
+  backgrounds, colour driven by the `--aimCol` custom property. White idle →
+  `#ffd23d` on `#camModal.scan-locking` → `#2fd35e` on `.scan-locked`.
+- `.camStage::after` — status pill: "Point the camera at your worksheet" → "Hold steady…"
+  → "Got it!", hidden once a still is captured (`:has(#camPreview[style*="display: block"])`).
+
+### ⚠️ Dead CSS left in styles.css
+These target elements that no longer exist and are safe to delete, but **verify before
+touching `.camStage`** — the landscape-phone block also restyles it:
+`.camModeBar` / `.camModeBtn` / `.camModeLabel` / `.camModeSpacer` (~1562–1567, 1594–1597),
+`.camOverlay.mode-sheet` (~1641), `.camOverlay.mode-qr` (~1648–1665), `#saveToast.qr`
+(~1396 — `showSaveToast('qr')` is never called), and the landscape block ~1588–1606
+(`.camModalCard` / `.camBody` / `.camActions` / `.camActionBtn`; the card is now a plain
+`.modalCard`). That landscape block still sets `.camStage{flex:none; aspect-ratio:unset}`
+while the JS that used to set an explicit height is gone — **check the scan modal on a
+landscape phone before trusting it.**
 
 ### CSS cache busting
 The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=59` — check `public/index.html` for the live number; this doc note lags).
@@ -379,7 +474,7 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **Adding a melodic instrument** = `LEVEL` entry + bus in `makeInstrumentBuses` return object + IR in same function + `play*` function + dispatch in `playInstrument` (apply octave shift here if needed) + button in `.soundsBox` + element ref + entry in `setInstrument`'s `all` array and `map` object + click handler + `bindLockedNudge` if locked + **wire its bus input into `delaySend`**.
 - **`_triggeredNotes` Set** — tracks note IDs the playhead has actually played. Used for voice count gain reduction. Cleared on `stop()`. Notes placed on the grid don't affect gain until the playhead reaches them.
 - **`_compDense` is unused** — the old compressor density toggling was removed. The static compressor settings remain; dynamic level control is handled by `melodicMaster.gain` scaling.
-- **jsQR** is loaded from CDN (`https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js`) in the `<head>`.
+- **No third-party CDN scripts in the `<head>`** — jsQR used to be loaded there for the camera's QR mode and then for sheet routing. Both callers are gone (the sheet template comes from `_currentSheetId()`), so the `<script>` was removed. The only remaining `<head>` script is local (`js/lessons-data.js`). Don't re-add a CDN dependency to the critical path without a caller.
 - **CDN caching on `kid-sequencer.com`** — the custom domain has aggressive caching. Always bump `?v=N` in the CSS `<link>` when changing styles.css. HTML can also cache — verify on `kid-sequencer.web.app` or incognito after deploy.
 - **Always verify before deploying to production** — fetch origin, check for divergence, deploy to preview channel first, visually confirm, THEN deploy prod.
 - **Z-index stacking contexts:** `#topBar` has `z-index:3` (position:relative) and `#contentWrap` has `z-index:5` (position:relative). They're sibling stacking contexts on `<body>`. The lifted `#rightCol` (translateY by `--rightLift`) puts the tempo-up button into topBar's Y range — without contentWrap > topBar, topBar covers it and clicks don't land. Keep contentWrap's z-index above topBar's. Tempo-down was always clickable because it sits below the lifted overlap zone. (This is exactly why `tempoUp()` "didn't work" after the tier redesign.)
@@ -397,6 +492,7 @@ This gives the audio render thread one buffer-quantum of preparation time when m
 - **`redrawRowNotes()` is diff-based — do NOT revert to `layer.innerHTML = ""`** — wiping and rebuilding every note block on each redraw caused a visible flash on iOS when placing a note. The function now reuses persisting DOM blocks (keyed by `data-id`), removes stale ones, and only creates new blocks via `createNoteBlock()`. New blocks carry a `.placing` class for a touch-only entrance animation that's stripped on `animationend`. Keep note blocks `pointer-events:none` (no per-block click handlers) — deletion still goes through `.cell`/`onCellClick`.
 - **Global `*{ caret-color: transparent }` (styles.css ~line 146)** — kills stray focus-caret artifacts on buttons/divs but ALSO hides the text caret in real `<input>` fields. Any input that needs a visible caret must explicitly set `caret-color: <colour>`. `.authForm input` already does this (`caret-color: #1d1d1d`). New text inputs need the same override.
 - **Print = the running UI, cropped to content & centred (reworked 2026-06-28)** — no custom `#printSheet`/`buildPrintWorksheet()`. `@media print` desaturates, hides transient state, strips `.selected` highlights. The fit is geometry, not the old whole-stage scale: in `@media print`, `#viewport` becomes an **in-flow** box sized in mm to the A4 printable area (`width:calc(297mm - 20mm)` etc., `@page margin 10mm`, `overflow:hidden`) so it prints on exactly ONE page; `#page` is `position:absolute; top:0; left:0; transform-origin:0 0` and `_applyPrintScale` (beforeprint) computes a `translate(...) scale(...)` that maps the stage's **actual content bounding box** (measured union of `#topBar` + `#contentWrap`/clusters at beforeprint, NOT the raw 1600×900 — the app doesn't fill its stage) to the page centre. There's a `@media print and (orientation: portrait)` fallback that rotates the stage 90°. **GOTCHAS:** (1) `position:absolute` alone does NOT stop the 1600×900 layout box spilling to extra pages — the in-flow mm-sized `#viewport` + `overflow:hidden` is what guarantees one page. (2) **`_restorePrintScale` (afterprint) must call `window.scheduleLayout()`, NOT `fitToViewport()` directly** — the latter runs `syncTopBarLoginPosition()` while the page is still scale-transformed, so the login/logout button gets a ~0.7× offset and jumps left onto Clear; `scheduleLayout`→`layoutPass` measures inside the transform sandbox. (3) Headless `--print-to-pdf` forces the print `orientation` media to portrait regardless of `@page size`, so it can't verify the landscape path — test landscape by neutralising the portrait media query in a local copy.
+- **Worksheet scanner: corner marks WON, the QR design is abandoned (decided 2026-07-25)** — two sessions built incompatible scanners in parallel. The winner is the corner-mark design (`claude/printmarks`): four printed marks bound the sheet, `_currentSheetId()` picks the template, **no QR and no jsQR**. The loser is `claude/sess-3549e10e` (7 commits from the older `e328c34`), which kept the QR, **vendored jsQR to `public/js/jsQR.min.js`** and added a two-pass decode; it conflicts in `public/index.html` and its library is exactly what we removed. **Don't resurrect it, and don't "fix" the missing jsQR by re-adding the vendored copy.** Its four worksheet-layout commits are NOT cleanly salvageable either — they rewrite printing into a *dedicated* print page, which contradicts the "print = the running UI, cropped to content" approach above. The ideas worth stealing by hand (bigger printed grid, marks in the margin ring rather than over cells) would have to be rebuilt on the current print path.
 - **Concurrent worktrees share one Firebase preview channel** — `firebase hosting:channel:deploy preview` from any worktree overwrites the same `kid-sequencer--preview-<hash>.web.app`. If two sessions are working in parallel, whoever deploys last wins on preview. Symptom: you deploy your fix, the URL stays on someone else's older code (different `?v=N`, different DOM). `curl --ssl-no-revoke <preview-url>/index.html | grep styles.css\?v=` to confirm what's actually live. Re-deploy from your worktree to override.
 - **`.claude/worktrees/.active` can be OVERWRITTEN by a concurrent session's SessionStart hook** — with multiple Claude sessions open, `.active` (and even which `sess-*` dirs exist) churns mid-session. Observed 2026-07-23: `.active` flipped through three different `sess-*` ids, and at deploy time pointed at a *sibling* worktree sitting at plain `main` HEAD (without this session's commit). **Track YOUR worktree by its branch/commit, not `.active`:** find the `sess-*` whose `git log` shows your commit (`git -C <root> worktree list` shows each worktree's HEAD + branch) and run commits/`modal deploy` from THAT path. Deploying from the wrong (`.active`) worktree would have shipped the OLD engine. Also: PowerShell `cd`/`Set-Location` does not persist across tool calls and Git-Bash chokes on the absolute repo path (bash-guard) — always pass an absolute worktree path via `Set-Location` in the SAME PowerShell command, or `git -C <abs-worktree>`.
 - **`modal.Function.from_name("kidseq-engine","run_tests").remote()` RETURN value ≠ Modal live logs** — `_run()` (infra/modal_app.py) `print`s the `$ python <script>` echo but only *returns* each subprocess's stdout. So the returned string has the `PASS <test>` lines and `all X tests passed`, but NOT the `$ python …` echoes. When verifying a deploy BY CONTENT, match on **test NAMES** (a this-revision-only test) and the per-suite `tests passed` count, never the command echo.

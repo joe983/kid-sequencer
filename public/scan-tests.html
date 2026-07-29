@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Worksheet scanner — fixtures</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;background:#14171c;color:#e6e6e6;margin:0;padding:14px}
+  h1{font-size:15px;margin:0 0 2px}
+  .sub{color:#8b93a1;margin:0 0 14px}
+  #summary{padding:9px 11px;border-radius:6px;font-size:14px;font-weight:700;margin-bottom:12px}
+  .good{background:#123a1c;color:#5ce07a;border:1px solid #2c6b3d}
+  .bad {background:#3a1212;color:#ff7b7b;border:1px solid #6b2c2c}
+  table{border-collapse:collapse;width:100%;max-width:1100px}
+  td,th{border-bottom:1px solid #262b33;padding:4px 8px;text-align:left;vertical-align:top}
+  th{color:#8b93a1;font-weight:600}
+  .p{color:#5ce07a}.f{color:#ff7b7b;font-weight:700}
+  .want{color:#8b93a1}
+  iframe{position:absolute;left:-9999px;width:900px;height:600px;border:0}
+</style>
+</head>
+<body>
+<h1>Worksheet scanner — fixtures</h1>
+<p class="sub">Synthetic sheets plus real camera frames, run against the live pipeline in index.html.
+Open this page and read the table; every case states what it expects and why it exists.</p>
+<div id="summary">running…</div>
+<table id="out"><thead><tr><th>case</th><th>verdict</th><th>notes read</th><th>expected</th><th>why this case exists</th></tr></thead><tbody></tbody></table>
+<iframe id="app" src="index.html?scandebug=0"></iframe>
+
+<script>
+/* ============================================================================
+   Fixtures for the worksheet scanner.
+
+   Every case here is a bug that actually happened, or a property that broke
+   while fixing one. They are kept because tuning this pipeline by eye is how
+   the shadow bug, the tool-icon false lock and the grid-bleed sensitivity all
+   got through in the first place — each was found by a fixture, not by looking.
+
+   The scanner lives inside index.html's IIFE and is reachable only through
+   window.KidSequencer.Scan, so this page drives it through an iframe rather
+   than duplicating any of it. Duplicated CV code would drift and then lie.
+
+   Run: open /scan-tests.html on the local server (node serve.js). Machine
+   readable results land in window.__scanTests for headless checking.
+============================================================================ */
+
+const FRAME_W = 420, FRAME_H = 315;   // the scanner's working resolution
+
+/* A synthetic photo of the printed sheet.
+   `quad` is the four mark CENTRES, so passing a trapezoid simulates
+   photographing the sheet at an angle: marks AND cells go through the same
+   homography, exactly as a real camera would see them. */
+function makeSheet(S, G, o){
+  o = Object.assign({
+    quad: [{x:30,y:30},{x:390,y:30},{x:390,y:285},{x:30,y:285}],
+    markPx: 10,      // printed mark size in working pixels
+    drop: -1,        // index of a mark to omit (simulates smudged/cut off)
+    cells: [],       // [row,col] solidly coloured
+    gaps: [],        // [row,col] colour the gap AFTER that cell, so a run merges
+    runs: [],        // [row,startCol,len] one continuous bar, gaps included
+    shadow: 0,       // strength of a hard-edged diagonal shadow
+    dim: 1,          // overall exposure (1 = normal)
+    furniture: true, // print the grid outlines, title block, tool icons
+    bg: null,        // background beyond the paper (for sheet-overflows-frame)
+    speck: 0,        // a stray pen dot OUTSIDE the mark quad
+    scribble: 0      // >0 draws sparse strokes instead of solid fill
+  }, o);
+
+  const cv = document.createElement("canvas");
+  cv.width = FRAME_W; cv.height = FRAME_H;
+  const g = cv.getContext("2d", {willReadFrequently:true});
+  g.fillStyle = o.bg || "#ffffff"; g.fillRect(0,0,FRAME_W,FRAME_H);
+
+  const H  = S.homographyUnitToQuad(o.quad);
+  const q  = (u,v) => H(u,v);                       // sheet coords
+  const gq = (u,v) => H(G.grid.u0 + u*(G.grid.u1-G.grid.u0),
+                        G.grid.v0 + v*(G.grid.v1-G.grid.v0));   // note-grid coords
+  const R = G.rows, C = G.cols, cf = G.cellFrac;
+  const poly = (p, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(p[0].x,p[0].y);
+    for(let i=1;i<p.length;i++) g.lineTo(p[i].x,p[i].y); g.closePath(); g.fill(); };
+
+  // the paper, so a quad reaching past the canvas leaves real background showing
+  poly([q(-0.06,-0.10),q(1.06,-0.10),q(1.06,1.10),q(-0.06,1.10)], "#ffffff");
+
+  if(o.furniture){
+    /* A real worksheet is FULL of ink: 128 cell outlines, a title block, the
+       tool icons down the side. Bare fixtures reported dark 0.3% where real
+       frames report 11-22%, so they were passing a test the real input never
+       takes — that is how the tool-icon false lock survived. */
+    g.strokeStyle = "#3a3a3a"; g.lineWidth = 1;
+    for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+      const p = [gq(c/C,(r+0.06)/R), gq((c+cf)/C,(r+0.06)/R),
+                 gq((c+cf)/C,(r+0.94)/R), gq(c/C,(r+0.94)/R)];
+      g.beginPath(); g.moveTo(p[0].x,p[0].y);
+      for(let i=1;i<4;i++) g.lineTo(p[i].x,p[i].y); g.closePath(); g.stroke();
+    }
+    poly([q(0.06,0.05),q(0.40,0.05),q(0.40,0.13),q(0.06,0.13)], "#2b2b2b");   // title
+    for(let i=0;i<5;i++)                                                       // tool icons
+      poly([q(0.02,0.24+i*0.13),q(0.055,0.24+i*0.13),
+            q(0.055,0.31+i*0.13),q(0.02,0.31+i*0.13)], "#333333");
+    poly([q(0.86,0.05),q(0.99,0.05),q(0.99,0.12),q(0.86,0.12)], "#2f2f2f");   // tempo box
+  }
+
+  const fill = (u0,u1,r) => {
+    if(!o.scribble){
+      poly([gq(u0,(r+0.06)/R),gq(u1,(r+0.06)/R),gq(u1,(r+0.94)/R),gq(u0,(r+0.94)/R)], "#2244cc");
+    }else{
+      /* Faintness on paper is SPARSE full-strength ink, not uniformly pale ink.
+         An alpha-blended cell has no pixel dark enough to register at all, so
+         alpha is the wrong model for a lightly-coloured square. */
+      g.strokeStyle = "#2a44c8"; g.lineWidth = 1;
+      for(let i=0;i<=o.scribble;i++){
+        const t = i/o.scribble;
+        const a = gq(u0+(u1-u0)*t, (r+0.08)/R);
+        const b = gq(u0+(u1-u0)*Math.max(0,t-0.55), (r+0.92)/R);
+        g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke();
+      }
+    }
+  };
+  for(const [r,c] of o.cells) fill(c/C, (c+cf)/C, r);
+  for(const [r,c] of o.gaps)  fill((c+cf)/C, (c+1)/C, r);
+  // a continuous bar: cells AND the gaps between them, so it reads as ONE note
+  for(const [r,c0,n] of o.runs) fill(c0/C, (c0+n-1+cf)/C, r);
+
+  g.fillStyle = "#000000";
+  o.quad.forEach((p,i) => { if(i === o.drop) return;
+    g.fillRect(Math.round(p.x-o.markPx/2), Math.round(p.y-o.markPx/2), o.markPx, o.markPx); });
+
+  if(o.speck){ const p = q(-0.03,0.5); g.fillStyle="#111111"; g.fillRect(p.x-2,p.y-2,4,4); }
+
+  if(o.shadow){
+    const grd = g.createLinearGradient(0,0,FRAME_W*0.9,FRAME_H*0.9);
+    grd.addColorStop(0,   "rgba(0,0,0,"+o.shadow+")");
+    grd.addColorStop(0.55,"rgba(0,0,0,"+(o.shadow*0.75)+")");
+    grd.addColorStop(0.75,"rgba(0,0,0,0)");
+    g.fillStyle = grd; g.fillRect(0,0,FRAME_W,FRAME_H);
+  }
+  if(o.dim < 1){ g.fillStyle = "rgba(0,0,0,"+(1-o.dim)+")"; g.fillRect(0,0,FRAME_W,FRAME_H); }
+  return g.getImageData(0,0,FRAME_W,FRAME_H);
+}
+
+async function imageDataFromUrl(url){
+  const res = await fetch(url, {cache:"no-store"});
+  if(!res.ok) throw new Error(url + " -> " + res.status);
+  const bmp = await createImageBitmap(await res.blob());
+  const c = document.createElement("canvas");
+  c.width = bmp.width; c.height = bmp.height;
+  const g = c.getContext("2d", {willReadFrequently:true});
+  g.drawImage(bmp,0,0);
+  return g.getImageData(0,0,c.width,c.height);
+}
+
+const CELLS = [[0,0],[3,5],[7,12]];
+const WANT  = "0:0+1 3:5+1 7:12+1";
+const ASKEW  = [{x:52,y:44},{x:388,y:26},{x:396,y:272},{x:36,y:288}];
+const ASKEW2 = [{x:44,y:36},{x:396,y:52},{x:380,y:290},{x:28,y:268}];
+const OVER   = [{x:-38,y:-30},{x:452,y:-24},{x:462,y:342},{x:-30,y:352}];
+const LEGAL_LENGTHS = [1,2,4,8,16];
+
+/* want: exact note list · expect: exact verdict · refuse: anything but "ok" */
+const CASES = [
+  { name:"plain",          opt:{cells:CELLS}, want:WANT,
+    why:"baseline: a normal sheet, square on, evenly lit" },
+  { name:"shadow",         opt:{cells:CELLS, shadow:0.72, dim:0.85}, want:WANT,
+    why:"a shadow across one corner used to blow the ink mask from 1% to 25% and lock onto shadow edges" },
+  { name:"shadowSoft",     opt:{cells:CELLS, shadow:0.45}, want:WANT,
+    why:"partial shade, the common kitchen-table case" },
+  { name:"dim",            opt:{cells:CELLS, dim:0.35}, want:WANT,
+    why:"whole frame underexposed; a global threshold cannot survive this" },
+  { name:"askew",          opt:{cells:CELLS, quad:ASKEW}, want:WANT,
+    why:"photographed at an angle: the homography has to actually work" },
+  { name:"askew2",         opt:{cells:CELLS, quad:ASKEW2}, want:WANT,
+    why:"tilted the other way; measures aspect 1.497, the widest genuine reading seen" },
+  { name:"askewShadow",    opt:{cells:CELLS, quad:ASKEW, shadow:0.6, dim:0.8}, want:WANT,
+    why:"angle and shadow together, which is what a real hand-held scan looks like" },
+  { name:"marks6",         opt:{cells:CELLS, markPx:6}, want:WANT,
+    why:"marks near the size floor" },
+  { name:"marks5",         opt:{cells:CELLS, markPx:5}, want:WANT,
+    why:"real marks measured fa 0.00020-0.00042 against an old 0.0004 floor: the detector was discarding what it hunted for, 103 frames running" },
+  { name:"marks4",         opt:{cells:CELLS, markPx:4}, want:WANT,
+    why:"camera further back; smallest mark that must still work" },
+  { name:"joined",         opt:{cells:[[2,4],[2,5]], gaps:[[2,4]]}, want:"2:4+2",
+    why:"colouring across the inter-cell gap must merge into ONE longer note" },
+  { name:"speck",          opt:{cells:CELLS, speck:1}, want:WANT,
+    why:"a pen dot outside the marks must not veto the scan; one stray blob used to refuse everything" },
+  { name:"scribbleDense",  opt:{cells:CELLS, scribble:9}, want:WANT,
+    why:"cells scribbled rather than filled, which is how a child actually colours" },
+  { name:"scribbleMid",    opt:{cells:CELLS, scribble:7}, want:WANT,
+    why:"looser scribble; sparse ink is what faint colouring really looks like" },
+  { name:"scribbleShadow", opt:{cells:CELLS, scribble:7, shadow:0.6, dim:0.85}, want:WANT,
+    why:"the realistic worst case: sparse ink under uneven light" },
+  { name:"blank",          opt:{cells:[]}, expect:"read-empty",
+    why:"an uncoloured sheet must say so, not silently clear the grid" },
+  { name:"overflow",       opt:{cells:CELLS, quad:OVER, bg:"#2a2a2a"}, refuse:true,
+    why:"sheet larger than the frame: marks cut off. Used to pick frame-edge blobs and import noise" },
+  { name:"overflowShadow", opt:{cells:CELLS, quad:OVER, bg:"#2a2a2a", shadow:0.6, dim:0.8}, refuse:true,
+    why:"same, badly lit" },
+  { name:"missingTL",      opt:{cells:CELLS, drop:0}, refuse:true,
+    why:"a smudged mark must refuse, never guess a fourth corner" },
+  { name:"missingTR",      opt:{cells:CELLS, drop:1}, refuse:true, why:"as above" },
+  { name:"missingBR",      opt:{cells:CELLS, drop:2}, refuse:true, why:"as above" },
+  { name:"missingBL",      opt:{cells:CELLS, drop:3}, refuse:true,
+    why:"THE hard one: a tool icon stands in and the quad stays geometrically plausible (aspect 1.55 vs a genuine 1.497). Only the grid-registration check catches it. See NEXT-SCAN.md" }
+];
+
+/* Note-length snapping: the app has 16th/8th/quarter/half/whole only, so every
+   drawn run must land on 1/2/4/8/16 columns. Boundaries are geometric — the
+   quarter/half split sits at 5.66 columns, not 6. */
+const LENGTH_TABLE = [1,2,4,4,4,8,8,8,8,8,8,16,16,16,16,16];
+
+function fmtNotes(notes){
+  return (notes||[]).map(n => n.row+":"+n.start+"+"+n.len).join(" ");
+}
+
+function addRow(name, verdict, got, want, why, pass){
+  const tr = document.createElement("tr");
+  tr.innerHTML = "<td>"+name+"</td><td>"+verdict+"</td><td>"+(got||"")+
+    "</td><td class='want'>"+want+"</td><td class='want'>"+why+"</td>";
+  tr.firstChild.className = pass ? "p" : "f";
+  document.querySelector("#out tbody").appendChild(tr);
+}
+
+async function run(){
+  const app = document.getElementById("app");
+  const S = app.contentWindow.KidSequencer && app.contentWindow.KidSequencer.Scan;
+  if(!S){ document.getElementById("summary").textContent = "index.html did not expose KidSequencer.Scan";
+          document.getElementById("summary").className = "bad"; return; }
+  const G = S.SHEET_GEOMETRY["kidseq:main"];
+  const results = [], fails = [];
+
+  for(const t of CASES){
+    const d = S.diagnose(makeSheet(S, G, t.opt), "kidseq:main");
+    const got = fmtNotes(d.notes);
+    const pass = t.refuse ? d.verdict !== "ok"
+               : t.expect ? d.verdict === t.expect
+               : (d.verdict === "ok" && got === t.want);
+    const want = t.refuse ? "(refuse)" : t.expect ? t.expect : t.want;
+    addRow(t.name, d.verdict, got, want, t.why, pass);
+    results.push({name:t.name, pass, verdict:d.verdict, got});
+    if(!pass) fails.push(t.name);
+    // nothing in the suite may ever emit a length the app cannot place
+    for(const n of (d.notes||[])) if(!LEGAL_LENGTHS.includes(n.len)){
+      fails.push(t.name+" illegal length "+n.len);
+      addRow(t.name+" · legal lengths", "-", "len "+n.len, "1/2/4/8/16",
+             "the app has five note lengths; anything else is unplaceable", false);
+    }
+  }
+
+  // every drawn run length must collapse to exactly one legal note
+  for(let n=1; n<=16; n++){
+    const d = S.diagnose(makeSheet(S, G, {cells:[], runs:[[3,0,n]]}), "kidseq:main");
+    const want = LENGTH_TABLE[n-1];
+    const ok = d.verdict === "ok" && (d.notes||[]).length === 1 && d.notes[0].len === want;
+    addRow("length "+n, d.verdict, fmtNotes(d.notes), "one note, len "+want,
+           "a coloured block becomes the nearest real note length, never an invented one", ok);
+    results.push({name:"length"+n, pass:ok});
+    if(!ok) fails.push("length "+n);
+  }
+
+  // real camera frames — the authority. Synthetic sheets misled us twice.
+  const REAL = [
+    { file:"scan-fixtures/real-sheet-01.jpg", want:"0:14+2 1:2+1 2:5+1 5:5+1 6:6+1 7:8+4",
+      why:"owner's printed sheet, six coloured marks, photographed hand-held on a table" }
+  ];
+  for(const t of REAL){
+    let d = null, err = null;
+    try { d = S.diagnose(await imageDataFromUrl(t.file), "kidseq:main"); }
+    catch(e){ err = e.message; }
+    const got = d ? fmtNotes(d.notes) : ("LOAD FAILED: " + err);
+    const pass = !!d && d.verdict === "ok" && got === t.want;
+    addRow(t.file.split("/").pop(), d ? d.verdict : "-", got, t.want, t.why, pass);
+    results.push({name:t.file, pass});
+    if(!pass) fails.push(t.file);
+  }
+
+  const el = document.getElementById("summary");
+  el.textContent = fails.length ? (fails.length + " FAILED: " + fails.join(", "))
+                                : ("all " + results.length + " checks pass");
+  el.className = fails.length ? "bad" : "good";
+  window.__scanTests = { total: results.length, fails, results };
+}
+
+document.getElementById("app").addEventListener("load", () => {
+  run().catch(e => {
+    const el = document.getElementById("summary");
+    el.textContent = "harness error: " + e.message; el.className = "bad";
+    window.__scanTests = { total:0, fails:["harness error: "+e.message], results:[] };
+  });
+});
+</script>
+</body>
+</html>

@@ -11,6 +11,13 @@ service cloud.firestore {
       match /sequences/{seqId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Worksheet-scanner diagnostics (?scandebug=1 → the panel's Send button).
+      // Same auth scope as sequences — a user only ever touches their own — and
+      // kept OUT of sequences/ so debug logs never show up in the Load sheet.
+      match /scanlogs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }

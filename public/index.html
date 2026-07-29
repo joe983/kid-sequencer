@@ -12,9 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=68">
-<!-- QR decode for worksheet-scanner sheet routing (see camera scan pipeline) -->
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<link rel="stylesheet" href="css/styles.css?v=69">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -213,7 +211,7 @@
 <button class="bigBtn" onclick="camImport()">Use</button>
 <button class="bigBtn" onclick="closeCameraModal()">Close</button>
 </div>
-<div class="modalHint">Tip: fit the whole worksheet — QR code and all four corner marks — inside the frame. It scans by itself, or tap Capture then Use.</div>
+<div class="modalHint">Tip: fit the whole worksheet — all four corner marks — inside the frame. It scans by itself, or tap Capture then Use.</div>
 </div>
 </div>
 
@@ -510,10 +508,25 @@ const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
    the de-warped grid rectangle: each of `cols` slots is `cellFrac` square +
    `gapFrac` gap (cellFrac + gapFrac === 1). The inter-cell gap that the
    note-length rule measures is the `gapFrac` portion at the right of each slot.
-   The 4 corner markers are assumed to sit at the outer corners of the cell
-   grid's bounding box (contract — worksheet design is out of scope here). */
+   `grid` says where the cell grid sits INSIDE the marker quad, as fractions of
+   it (u = across, v = down; the quad's TL corner is 0,0). The 4 marks print at
+   the corners of the whole SHEET, not around the grid itself (see
+   _buildPrintMarks), so the homography's unit square covers the entire printed
+   layout and these insets are what narrow it back down to the notes. They're
+   constants because the printed layout is device-independent: the stage is a
+   fixed 1600×900 that scales as one unit and `--cell` is capped at 64, so the
+   sheet has identical proportions everywhere. Measured off the real print path;
+   re-derive with window.KidSequencer.Scan.printMarkInsets() if the top bar,
+   tools column, right column or drum panel ever change size.
+
+   A template WITHOUT `grid` is not scannable — the scanner skips it rather than
+   falling back to an assumption. The lvl* sheets are in that state: learning
+   mode hides #printBtn (.learning-mode #printBtn{display:none}), so there is no
+   way to print one yet. Give them measured insets if that changes. */
 const SHEET_GEOMETRY = {
-  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28 },
+  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
+                   grid: { u0: 0.07425, v0: 0.20202, u1: 0.95248, v1: 0.83115 },
+                   quadAspect: 1.438 },
   "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl2": { levelKey: "2", rows: 2, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl3": { levelKey: "3", rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 }
@@ -4802,13 +4815,431 @@ function closeCameraModal(){
 const SCAN_WORK_W      = 420;   // working resolution width for QR + marker detection
 const SCAN_LOCK_FRAMES = 3;     // consecutive good frames before auto-capture
 const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is heavy)
-const SCAN_FILL_RATIO  = 0.70;  // a cell is "inked" if darker than 70% of paper white
-const SCAN_GAP_JOIN    = 0.50;  // >50% of the inter-cell gap coloured ⇒ notes joined
+const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local paper
+
+/* How a cell is judged filled. A child does not flood a square with solid
+   colour — they SCRIBBLE it, and a biro hatch leaves most of the paper showing
+   between strokes. Sampling 9 points and demanding 5 be ink (the original rule)
+   therefore misses real answers: in the field logs, scribbled cells came back at
+   0.30-0.45 ink against a 0.5 cutoff, so a sheet with three coloured squares
+   imported two of them and, in the worst round, one.
+
+   So: sample far more densely, and calibrate against the sheet itself rather
+   than a fixed number. The blank cells on the page define what blank looks like
+   — including any printed border bleeding into the sample window — and a filled
+   cell has to clear that baseline by a margin. Self-calibrating survives biro vs
+   pencil vs crayon, and light vs heavy hands, which no constant does. */
+const SCAN_CELL_SAMPLES = 6;    // per axis, so 36 samples per cell
+const SCAN_BLANK_PCT    = 0.20; // this percentile of cells is taken as blank
+const SCAN_FILL_MARGIN  = 0.10; // ink fraction a filled cell must clear it by
+/* Absolute floor. Measured on a real scanned sheet: blank cells read 0.00 ink
+   (p50, p80, p90 and p95 all zero — the sample window sits inside the cell, away
+   from the printed border) while the four coloured ones read 0.39, 0.81, 0.94
+   and 0.94. With the blank population at literally zero there is no reason to
+   sit as high as the original 0.22.
+
+   The floor is not zero, though, because of what a fixture caught: a half-pixel
+   registration error is enough to graze the sample window along the printed cell
+   borders, and every cell then reads 0.17 — with only half the cells affected,
+   the 20th-percentile blank estimate stays at 0.00 and does not absorb it. 0.20
+   sits above that bleed while leaving 2x headroom under the lightest real
+   colouring measured (0.39). */
+const SCAN_FILL_MIN     = 0.20;
+
+/* Registration check. Every geometry test upstream asks "is this quad plausible";
+   none asks the question that actually matters — "did the grid land where we
+   think it did". It can be answered directly: the sheet HAS a printed grid, so on
+   a correct lock the predicted grid lines fall on ink and the cell interiors fall
+   on paper. On a lock that grabbed the wrong blob, both fall on the same stuff.
+
+   Medians, not means, so a heavily coloured sheet doesn't drag the interior
+   figure down into the borders. Measured: good fixtures 112-115, a real photo 45,
+   a half-coloured sheet still 115 — against 0 for the missing-mark impostor and
+   -1 for a sheet coloured edge to edge. 20 sits clear of both ends. */
+const SCAN_REG_MIN      = 20;
+const SCAN_GAP_JOIN     = 0.50; // fraction of the joining threshold a gap must hit
+/* A hand-drawn run tapers at its ends. Measured on a real four-cell scribble:
+   0.14 / 0.75 / 0.86 / 0.64 — the first cell fell under the bar and the note came
+   back a cell short of what the child drew. A cell TOUCHING a filled one is held
+   to this fraction of the bar instead. It can only ever extend an existing run,
+   never invent a note from nothing, so the downside is bounded. */
+const SCAN_FILL_EXTEND  = 0.50;
+
+/* Corner-mark detection thresholds. Every one of these was set from a measured
+   scan log rather than guessed — see the two rounds recorded in NEXT-SCAN.md.
+   SCAN_LOCAL_K: a pixel is ink if it's below this fraction of the average
+     brightness of its OWN neighbourhood (see the integral image below).
+   SCAN_MARK_MIN/MAX: mark area as a fraction of the frame. The old floor was
+     0.0004 and real marks measured 0.00020-0.00042 — i.e. the detector was
+     throwing away the very things it was looking for, 103 frames running.
+   SCAN_MARK_SOL: a printed square is SOLID. In the logs real marks came back at
+     solidity 0.93-1.00 while shadow edges and clutter sat at 0.13-0.60, so this
+     is the cleanest discriminator available and it carries the lower size floor.
+   SCAN_MARK_SPREAD: the four marks print at one size, so a candidate set whose
+     areas differ by more than this is not four marks. Measured on real photos:
+     genuine locks came in at 1.57, 1.51 and 1.9, while a lock that had grabbed a
+     dark object off the table instead of the top-left mark measured 4.67 (12px
+     against 56px). 3 keeps ~60% headroom over the real spread and still refuses
+     that, which matters because the impostor's quad was otherwise plausible —
+     aspect 1.444, dead on nominal — and it silently shifted the whole grid by a
+     column. */
+const SCAN_LOCAL_K     = 0.75;
+const SCAN_MARK_MIN    = 0.00008;
+const SCAN_MARK_MAX    = 0.04;
+const SCAN_MARK_MIN_PX = 9;
+const SCAN_MARK_SOL    = 0.70;
+const SCAN_MARK_SPREAD = 3;
+/* A printed mark always has paper all the way around it, so a blob clipped by
+   the edge of the picture cannot be a whole mark — it's the sheet's own edge,
+   the background beyond the paper, or vignetting. Round three of the logs is
+   entirely this failure: every false lock picked points hard against the border
+   (y=1..3, y=312..313 of a 315-tall frame, x=1, x=413) whereas the session that
+   genuinely worked picked 63,56 / 359,53 / 377,262 / 56,273 — all well inside. */
+const SCAN_MARK_EDGE   = 2;
+/* Quad aspect tolerance. Was x/÷1.6, which is far too loose to be a real check:
+   true locks measure 1.41-1.45 against a 1.438 nominal, while the false locks in
+   round three measured 0.707, 0.836, 0.903, 1.059, 1.758, 1.763, 1.765, and a
+   fixture where one mark is missing and a tool icon takes its place lands at
+   1.55-1.62. x/÷1.12 (1.284-1.611) rejects the round-three locks outright.
+
+   It does NOT separate one specific impostor: with the bottom-left mark missing
+   a tool icon takes its place and the quad measures 1.55, while a genuinely
+   angled scan measures up to 1.497 (fixture realAskew2). 3.5% apart — aspect is
+   simply the wrong instrument for that case, and squeezing the band until it
+   fits would start refusing good scans, which is the trade the wrong way round.
+   See the KNOWN GAP note on _sheetCornersFrom for what actually fixes it.
+
+   The bias elsewhere is deliberate: a refusal costs the child a retry, a false
+   lock silently replaces the tune they made with noise. If this ever rejects a
+   good scan the log says so outright — it prints the measured aspect next to the
+   band — so it can be re-opened against evidence rather than by feel. */
+const SCAN_QUAD_TOL    = 1.12;
+/* How big an outside blob has to be, relative to the marks themselves, before it
+   counts as evidence that we picked the wrong four. */
+const SCAN_OUTSIDE_MIN_REL = 0.4;
 
 let _scanRafId    = 0;
 let _scanLockCount= 0;
 let _scanLastTick = 0;
 let _scanWorkCanvas = null;
+
+/* ==================== SCAN DIAGNOSTICS ====================
+   The pipeline can refuse a frame at six different points and the user sees the
+   same one sentence for all of them ("couldn't read the worksheet"), plus a
+   seventh case that doesn't even fail: it locks on, reads every cell as blank,
+   and silently clears the grid. Tuning that by guesswork is hopeless, so every
+   decision point records WHY it decided plus the numbers it decided on, and a
+   panel inside the scan modal shows it live — the phone holding the camera IS
+   the machine that needs to display it, a desktop console is no use here.
+
+   Behaviour-neutral when off: no diag object is allocated, every instrumented
+   function skips its bookkeeping (the `if(diag)` guards), and the failure alert
+   fires exactly as before. The scan decisions themselves never read SCAN_DEBUG.
+
+   Turn on with ?scandebug=1, off with ?scandebug=0. The choice is STICKY
+   (localStorage) because a successful scan can navigate the page, which would
+   otherwise drop the flag mid-session. */
+let SCAN_DEBUG = false;
+try{
+  const _sd = new URLSearchParams(location.search).get("scandebug");
+  if(_sd !== null && _sd !== ""){
+    SCAN_DEBUG = _sd !== "0";
+    localStorage.setItem("kidseq_scandebug", SCAN_DEBUG ? "1" : "0");
+  }else{
+    SCAN_DEBUG = localStorage.getItem("kidseq_scandebug") === "1";
+  }
+}catch(e){}
+
+/* Short, stable codes so a pasted log can be grepped and compared run to run. */
+const SCAN_FAIL = {
+  NO_SHEET:  "no-sheet",           // this page has no printable template
+  NO_FRAME:  "no-frame",           // camera isn't delivering pixels yet
+  FEW_BLOBS: "few-blobs",          // <4 mark candidates survived the shape filters
+  COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
+  UNEVEN:    "marks-uneven",       // the four picked blobs aren't one printed size
+  NOT_OUTER: "marks-not-outermost",// mark-like ink sits OUTSIDE the quad we picked
+  MISREG:    "grid-misregistered", // the printed grid isn't where the lock predicts
+  BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
+  SINGULAR:  "homography-singular",
+  NO_INSETS: "no-grid-insets",     // template carries no measured grid rectangle
+  EMPTY:     "read-empty",         // locked on, but every cell read as blank
+  OK:        "ok"
+};
+
+const SCAN_LOG_MAX = 40;
+const _scanLog = [];        // oldest first; newest is what the panel headlines
+let _scanLastRec = null;
+
+function _newScanDiag(src){
+  return { src, t: Date.now(), verdict: null, marks: null, quad: null, grid: null };
+}
+
+function _scanLogPush(rec){
+  const prev = _scanLog[_scanLog.length - 1];
+  // The live loop ticks ~8×/s. Collapsing an unchanged verdict into one row with
+  // a repeat count keeps a 20-second hunt from burying the one manual attempt
+  // that actually matters, while still showing the freshest numbers for it.
+  if(prev && prev.src === "live" && rec.src === "live" && prev.verdict === rec.verdict){
+    rec.n = (prev.n || 1) + 1;
+    _scanLog[_scanLog.length - 1] = rec;
+  }else{
+    rec.n = 1;
+    _scanLog.push(rec);
+    if(_scanLog.length > SCAN_LOG_MAX) _scanLog.shift();
+  }
+  _scanLastRec = rec;
+  _scanDebugRender(rec);
+  // Keep a JPEG of the RAW frame (not the annotated one — that's derivable) so
+  // Send can carry it. With the actual pixels the whole instrumented pipeline
+  // can be re-run offline against the real photo, which beats any screenshot.
+  // Only on a fresh verdict or a manual attempt: at 8 fps a toDataURL per tick
+  // would cost more than the scan.
+  if(rec.img && (rec.n === 1 || rec.src === "use")){
+    try{
+      const c = document.createElement("canvas");
+      c.width = rec.img.width; c.height = rec.img.height;
+      c.getContext("2d").putImageData(rec.img, 0, 0);
+      rec.jpeg = c.toDataURL("image/jpeg", 0.6);
+    }catch(e){}
+  }
+  // Firestore caps a document at 1 MB — only the newest few frames travel.
+  for(let i = 0; i < _scanLog.length - 3; i++) _scanLog[i].jpeg = null;
+  // The ImageData is ~500 KB; the panel has drawn it and the JPEG is taken.
+  rec.img = null;
+}
+
+/* ---- the on-screen panel ----------------------------------------------------
+   Built in JS and styled inline on purpose: the whole feature is scaffolding, so
+   it deletes as one block with no orphaned rules in styles.css and no cache-bust
+   bump. It lives on <body>, NOT inside #camModal, because a successful scan
+   closes the modal — and "it locked on and then cleared my grid" is precisely a
+   case we need to still be able to read afterwards. */
+let _sdEls = null;
+
+function _scanDebugEnsure(){
+  if(_sdEls || !SCAN_DEBUG) return _sdEls;
+  const box = document.createElement("div");
+  box.id = "scanDebug";
+  box.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(12,14,18,.93);" +
+    "color:#e6e6e6;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border-top:2px solid #3a3f4a;" +
+    "max-height:52vh;display:flex;flex-direction:column;-webkit-user-select:text;user-select:text;";
+
+  const body = document.createElement("div");
+  body.style.cssText = "display:flex;gap:7px;padding:6px 7px;overflow:auto;align-items:flex-start;";
+  const cv = document.createElement("canvas");
+  cv.style.cssText = "flex:none;background:#000;border-radius:3px;image-rendering:pixelated;";
+  const pre = document.createElement("pre");
+  pre.style.cssText = "margin:0;flex:1;min-width:0;white-space:pre;overflow:auto;";
+  body.append(cv, pre);
+
+  const bar = document.createElement("div");
+  bar.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 7px;background:#1b1f27;flex:none;";
+  const chip = document.createElement("b");
+  chip.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;";
+  chip.textContent = "scan debug — waiting for a frame";
+  const mkBtn = (label, fn) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText = "font:11px/1 ui-monospace,monospace;padding:5px 7px;background:#39414f;color:#fff;" +
+      "border:0;border-radius:4px;flex:none;";
+    b.onclick = fn;
+    return b;
+  };
+  bar.append(chip,
+    mkBtn("send", _scanDebugSend),
+    mkBtn("copy", _scanDebugCopy),
+    mkBtn("clear", () => { _scanLog.length = 0; _scanLastRec = null; _scanDebugRender(null); }),
+    mkBtn("hide", () => { body.style.display = body.style.display === "none" ? "" : "none"; }),
+    mkBtn("off",  () => { try{ localStorage.setItem("kidseq_scandebug", "0"); }catch(e){} location.reload(); }));
+
+  box.append(bar, body);
+  document.body.appendChild(box);
+  _sdEls = { box, chip, pre, cv, body };
+  return _sdEls;
+}
+
+/* Annotated frame: red = blob rejected by the shape filters (with the reason),
+   amber = survived as a candidate, green = the four the detector actually chose,
+   cyan = where the grid reader sampled. Seeing WHICH squares turned red is worth
+   more than any number in the text dump. */
+function _scanDebugDraw(cv, rec){
+  const img = rec && rec.img;
+  const W = 240;
+  if(!img){ cv.width = 0; cv.height = 0; return; }
+  const s = W / img.width, H = Math.round(img.height * s);
+  const tmp = document.createElement("canvas");
+  tmp.width = img.width; tmp.height = img.height;
+  tmp.getContext("2d").putImageData(img, 0, 0);
+  cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  g.drawImage(tmp, 0, 0, W, H);
+  g.lineWidth = 1;
+  // A mark that's failing for being too small is only a couple of pixels here —
+  // the exact case we most need to SEE — so boxes get a floor size and are drawn
+  // around the blob's centre rather than tight to it.
+  const box = (b, col) => {
+    g.strokeStyle = col;
+    const w2 = Math.max(b.bw * s, 7), h2 = Math.max(b.bh * s, 7);
+    g.strokeRect((b.x0 + b.bw/2)*s - w2/2, (b.y0 + b.bh/2)*s - h2/2, w2, h2);
+  };
+  const m = rec.marks;
+  if(m){
+    for(const b of (m.misses || [])) box(b, "#ff4d4d");
+    for(const b of (m.cands  || [])) box(b, "#ffc93d");
+  }
+  if(rec.grid && rec.grid.pts){
+    g.fillStyle = "rgba(80,220,255,.9)";
+    for(const p of rec.grid.pts) g.fillRect(p.x*s - 1, p.y*s - 1, 2, 2);
+  }
+  const q = rec.corners;
+  if(q){
+    g.strokeStyle = "#3ee06a"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(q[0].x*s, q[0].y*s);
+    for(let i=1; i<4; i++) g.lineTo(q[i].x*s, q[i].y*s);
+    g.closePath(); g.stroke();
+    g.fillStyle = "#3ee06a"; g.font = "9px monospace";
+    ["TL","TR","BR","BL"].forEach((t, i) => g.fillText(t, q[i].x*s + 3, q[i].y*s - 3));
+  }
+}
+
+function _scanDebugLines(rec){
+  if(!rec) return "(no scans yet)";
+  const L = [];
+  const pad = n => String(n).padStart(2, "0");
+  const d = new Date(rec.t);
+  L.push(rec.src + (rec.n > 1 ? " ×" + rec.n : "") + "  " + rec.verdict +
+         "  " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) +
+         (rec.lock ? "  lock " + rec.lock : ""));
+  const m = rec.marks;
+  if(m){
+    L.push("frame " + m.w + "x" + m.h + "  meanL " + m.meanL + "  localK " + m.localK + "/r" + m.rad +
+           "  dark " + (m.maskFrac*100).toFixed(1) + "%");
+    L.push("blobs " + m.comps + " -> cand " + m.cand +
+           (m.tally ? "   rej edge " + m.tally.edge + " sm " + m.tally.small + " big " + m.tally.big +
+                      " asp " + m.tally.aspect + " sol " + m.tally.solid : ""));
+    for(const b of (m.misses || []).slice(0, 4)){
+      L.push("  rej " + b.why.padEnd(6) + " fa " + b.fa.toFixed(5) + " ar " + b.ar.toFixed(2) +
+             " sol " + b.solidity.toFixed(2) + " @" + Math.round(b.cx) + "," + Math.round(b.cy));
+    }
+    if(m.picked){
+      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy + "(" + p.area + "px)").join(" "));
+      L.push("  minSep " + m.minSepGot + " / need " + m.minSepReq +
+             "   size spread " + m.spread + " / max " + m.spreadMax +
+             (m.outside != null ? "   outside " + m.outside + " (by " + m.outsideBy + " / tol " + m.outsideTol + ")" : ""));
+    }
+  }
+  const q = rec.quad;
+  if(q) L.push("quad aspect " + q.aspect + " (need " + q.aspectLo + "-" + q.aspectHi +
+               ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)");
+  if(rec.reg != null) L.push("grid registration " + rec.reg + " / need " + SCAN_REG_MIN);
+  const gr = rec.grid;
+  if(gr){
+    L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
+           " p95 " + gr.p95 + "  notes " + gr.notes);
+    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt +
+           ", extends a run at " + gr.extendAt);
+    if(gr.legal) L.push("note lengths " + gr.legal +
+      (gr.snaps && gr.snaps.length ? "   snapped " + gr.snaps.join(" ") : "   snapped none"));
+    for(const row of (gr.cellMap || [])){
+      // Relative to the decisions, so near-misses are visible: '#' well over,
+      // 'H' over the bar, '+' only good enough to extend a neighbouring run.
+      L.push("  " + row.map(v => v >= gr.fillAt * 1.5 ? "#"
+                               : v >= gr.fillAt       ? "H"
+                               : v >= gr.extendAt     ? "+" : ".").join(""));
+    }
+  }
+  return L.join("\n");
+}
+
+function _scanDebugRender(rec){
+  const els = _scanDebugEnsure();
+  if(!els) return;
+  const cur = rec || _scanLastRec;
+  els.chip.textContent = cur ? ("scan: " + cur.verdict + (cur.n > 1 ? " ×" + cur.n : "")) : "scan debug — waiting for a frame";
+  els.chip.style.color = !cur ? "#e6e6e6"
+    : cur.verdict === SCAN_FAIL.OK ? "#5ce07a"
+    : cur.verdict === "locking"    ? "#ffc93d" : "#ff6b6b";
+  els.pre.textContent = _scanDebugLines(cur) + "\n\n--- history (newest first) ---\n" +
+    _scanLog.slice().reverse().slice(1, 12)
+      .map(r => r.src + (r.n > 1 ? " x" + r.n : "") + " " + r.verdict).join("\n");
+  _scanDebugDraw(els.cv, cur);
+}
+
+/* Run the instrumented pipeline over a still WITHOUT applying anything — the
+   read-only twin of camImport. Lets the corner/quad/grid decisions be exercised
+   against fixture images (see the headless harness) and lets a saved photo be
+   re-diagnosed later without a camera. */
+function _scanDiagnose(imgData, sheetId){
+  const diag = _newScanDiag("probe");
+  const id = sheetId || _currentSheetId();
+  if(!id){ diag.verdict = SCAN_FAIL.NO_SHEET; return diag; }
+  const geom = SHEET_GEOMETRY[id];
+  const corners = _sheetCornersFrom(imgData, geom, diag);
+  if(!corners) return diag;
+  diag.corners = corners;
+  const mapPoint = _homographyUnitToQuad(corners);
+  if(!mapPoint){ diag.verdict = SCAN_FAIL.SINGULAR; return diag; }
+  const gridPoint = _gridMapper(mapPoint, geom);
+  if(!gridPoint){ diag.verdict = SCAN_FAIL.NO_INSETS; return diag; }
+  // Same gates, same order as _processScanFrame — a probe that skipped one would
+  // report a pass the real path refuses, which is worse than no probe at all.
+  diag.reg = _gridRegistration(imgData, geom, gridPoint);
+  if(diag.reg < SCAN_REG_MIN){ diag.verdict = SCAN_FAIL.MISREG; return diag; }
+  const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
+  diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
+  diag.notes = notes;
+  return diag;
+}
+
+/* Ship the log somewhere it can be read from ANOTHER machine. The page runs on
+   the tablet doing the scanning; whoever reads the log isn't sitting at it, and
+   a Safari page can't write to a desktop's disk — so it goes to Firestore and is
+   pulled from there. Auth-scoped to the signed-in user (same rule shape as saved
+   sequences), so this needs no public write path; a guest just gets told to log
+   in. Kept out of sequences/ so it never appears in the Load sheet. */
+async function _scanDebugSend(){
+  const chip = t => { if(_sdEls) _sdEls.chip.textContent = t; };
+  chip("sending…");
+  try{
+    const user = await _getFirebaseUser();
+    if(!user){ chip("not signed in — log in, then tap send"); return; }
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, setDoc, serverTimestamp } =
+      await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const id = "scan-" + new Date().toISOString().replace(/[:.]/g, "-");
+    await setDoc(doc(db, "users", user.uid, "scanlogs", id), {
+      at: serverTimestamp(),
+      ua: navigator.userAgent,
+      viewport: window.innerWidth + "x" + window.innerHeight,
+      sheet: String(_currentSheetId()),
+      attempts: _scanLog.length,
+      // Newest first, and capped — a long hunt can accumulate 40 records and
+      // Firestore caps a document at 1 MB.
+      text: _scanLog.slice().reverse()
+        .map((r, i) => "=== " + (i + 1) + " ===\n" + _scanDebugLines(r)).join("\n\n").slice(0, 60000),
+      // The actual photo, so the pipeline can be re-run against it offline.
+      frames: _scanLog.slice().reverse().filter(r => r.jpeg).slice(0, 2)
+        .map(r => ({ verdict: String(r.verdict), jpeg: r.jpeg }))
+    });
+    chip("sent ✓  " + id);
+  }catch(e){
+    chip("send failed: " + ((e && e.message) || e));
+  }
+}
+
+/* One tap puts the whole session on the clipboard, because the useful artifact
+   is the SEQUENCE of attempts, not the last one. */
+function _scanDebugCopy(){
+  const head = "kid-sequencer scan log\nua: " + navigator.userAgent +
+    "\nviewport: " + window.innerWidth + "x" + window.innerHeight +
+    "\nsheet: " + _currentSheetId() + "\nattempts: " + _scanLog.length + "\n";
+  const txt = head + _scanLog.slice().reverse()
+    .map((r, i) => "\n=== " + (i + 1) + " ===\n" + _scanDebugLines(r)).join("");
+  const done = ok => { if(_sdEls) _sdEls.chip.textContent = ok ? "copied — paste it into the chat" : "copy failed; select the text instead"; };
+  try{
+    navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
+  }catch(e){ done(false); }
+}
 
 /* ---- linear algebra: solve A·x = b (n×n) by Gaussian elimination ---- */
 function _solveLinear(A, b){
@@ -4853,22 +5284,85 @@ function _homographyUnitToQuad(quad){
 /* ---- locate 4 corner markers: solid, achromatic (black) blobs near the image
    corners. Achromatic test is what separates the black marks from the kids'
    coloured cells; returns [TL,TR,BR,BL] in image coords, or null. ---- */
-function _cornerMarkersFrom(imgData){
+/* ---- shared local-brightness field ------------------------------------------
+   BOTH stages of the scan — finding the corner marks, and reading which cells
+   are coloured in — used to compare pixels against a single whole-frame
+   brightness. That cannot survive uneven light: a shadow over one corner drags
+   the frame statistic down, paper on the lit side stops separating from ink on
+   the dark side, and each stage fails in its own way (the marks stage locks onto
+   shadow edges — 18.8-28.5% of the frame masked as ink versus 0.4-1.4% on a good
+   frame, quads collapsing to minSep 0; the cell stage reads whole shadowed rows
+   as filled). Comparing a pixel against the light in ITS OWN neighbourhood makes
+   both tests exposure-independent — a shadow darkens both sides of the
+   comparison and cancels out.
+
+   Summed-area table, so a window average costs 4 lookups whatever the window
+   size. Memoised on the ImageData because the two stages want the same field
+   and the live loop hands out a fresh frame each tick. */
+function _lumField(imgData){
+  if(imgData.__lumField) return imgData.__lumField;
   const { data, width: w, height: h } = imgData;
   const N = w * h;
-  // Adaptive dark threshold from mean luminance.
-  let lumSum = 0;
-  for(let p=0; p<N; p++){ const i=p*4; lumSum += (Math.max(data[i],data[i+1],data[i+2]) + Math.min(data[i],data[i+1],data[i+2])) >> 1; }
-  const meanL = lumSum / N;
-  const T = Math.min(120, meanL * 0.55);
-
-  const mask = new Uint8Array(N);
+  const lumA  = new Uint8Array(N);
+  const achro = new Uint8Array(N);   // near-greyscale: what separates black marks
+  let lumSum = 0;                    // from the kid's coloured cells
   for(let p=0; p<N; p++){
     const i = p*4, R = data[i], G = data[i+1], B = data[i+2];
     const mx = Math.max(R,G,B), mn = Math.min(R,G,B);
     const lum = (mx + mn) >> 1;
-    const sat = mx === 0 ? 0 : (mx - mn) / mx;
-    if(lum < T && sat < 0.35) mask[p] = 1; // dark AND near-greyscale
+    lumA[p] = lum; lumSum += lum;
+    if((mx === 0 ? 0 : (mx - mn) / mx) < 0.35) achro[p] = 1;
+  }
+  const iw = w + 1;
+  const integ = new Float64Array(iw * (h + 1));
+  for(let y=0; y<h; y++){
+    let rowSum = 0;
+    for(let x=0; x<w; x++){
+      rowSum += lumA[y*w + x];
+      integ[(y+1)*iw + (x+1)] = integ[y*iw + (x+1)] + rowSum;
+    }
+  }
+  // The window must be comfortably bigger than the thing being detected, or that
+  // thing darkens its own reference patch and stops standing out from it. At
+  // 420px working width this is ~39px — several cells across, and five times a
+  // corner mark.
+  const rad = Math.max(8, Math.round(Math.min(w, h) / 8));
+  const localMean = (x, y) => {
+    const cx = x < 0 ? 0 : (x > w-1 ? w-1 : x|0), cy = y < 0 ? 0 : (y > h-1 ? h-1 : y|0);
+    const x0 = Math.max(0, cx - rad), x1 = Math.min(w - 1, cx + rad);
+    const y0 = Math.max(0, cy - rad), y1 = Math.min(h - 1, cy + rad);
+    const sum = integ[(y1+1)*iw + (x1+1)] - integ[y0*iw + (x1+1)]
+              - integ[(y1+1)*iw + x0]     + integ[y0*iw + x0];
+    return sum / ((x1 - x0 + 1) * (y1 - y0 + 1));
+  };
+  // integ/iw are exposed so the mask loop can inline the lookups: it runs over
+  // every pixel of every frame, and a closure call per pixel measured ~2x the
+  // cost of the whole rest of the detector.
+  const f = { w, h, N, lumA, achro, meanL: lumSum / N, rad, localMean, integ, iw };
+  try{ imgData.__lumField = f; }catch(e){}
+  return f;
+}
+
+function _cornerMarkersFrom(imgData, diag){
+  const { width: w, height: h } = imgData;
+  const N = w * h;
+  const F = _lumField(imgData);
+  const { lumA, achro, meanL, rad } = F;
+
+  const { integ, iw } = F;
+  const mask = new Uint8Array(N);
+  for(let y=0; y<h; y++){
+    // Row bounds are constant across the row — hoist them out of the inner loop.
+    const y0 = Math.max(0, y - rad), y1 = Math.min(h - 1, y + rad);
+    const rowH = y1 - y0 + 1;
+    const tRow = (y1+1)*iw, bRow = y0*iw;
+    for(let x=0; x<w; x++){
+      const p = y*w + x;
+      if(!achro[p]) continue;                  // coloured cells are never marks
+      const x0 = x - rad < 0 ? 0 : x - rad, x1 = x + rad > w - 1 ? w - 1 : x + rad;
+      const sum = integ[tRow + x1 + 1] - integ[bRow + x1 + 1] - integ[tRow + x0] + integ[bRow + x0];
+      if(lumA[p] * ((x1 - x0 + 1) * rowH) < sum * SCAN_LOCAL_K) mask[p] = 1;
+    }
   }
 
   // 4-connected components via explicit stack flood fill.
@@ -4891,18 +5385,50 @@ function _cornerMarkersFrom(imgData){
       if(qy > 0)   { const n = q-w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
       if(qy < h-1) { const n = q+w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
     }
-    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1 });
+    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1, x0: minx, y0: miny });
   }
 
   // Keep solid, squarish blobs of a plausible size (not noise, not the QR/border).
-  const cand = comps.filter(c => {
+  // Written as a loop rather than .filter so the diagnostics can say WHICH test
+  // threw a blob out and by how much — "the marks were seen at fa=0.00031, just
+  // under the 0.0004 floor" is actionable, "fewer than 4 candidates" is not.
+  const cand = [];
+  const tally = diag ? { edge: 0, small: 0, big: 0, aspect: 0, solid: 0 } : null;
+  const misses = diag ? [] : null;
+  for(const c of comps){
     const fa = c.area / N;
-    if(fa < 0.0004 || fa > 0.04) return false;
     const ar = c.bw / c.bh;
-    if(ar < 0.45 || ar > 2.2) return false;
-    return (c.area / (c.bw * c.bh)) >= 0.55; // solidly filled square
-  });
-  if(cand.length < 4) return null;
+    const solidity = c.area / (c.bw * c.bh);
+    let why = null;
+    if(c.x0 <= SCAN_MARK_EDGE || c.y0 <= SCAN_MARK_EDGE ||
+       c.x0 + c.bw >= w - SCAN_MARK_EDGE || c.y0 + c.bh >= h - SCAN_MARK_EDGE) why = "edge";
+    else if(fa < SCAN_MARK_MIN || c.area < SCAN_MARK_MIN_PX) why = "small";
+    else if(fa > SCAN_MARK_MAX)    why = "big";
+    else if(ar < 0.45 || ar > 2.2) why = "aspect";
+    else if(solidity < SCAN_MARK_SOL) why = "solid";
+    if(why){
+      if(tally){ tally[why]++; misses.push({ why, fa, ar, solidity, cx: c.cx, cy: c.cy, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }); }
+      continue;
+    }
+    c.fa = fa; c.ar = ar; c.solidity = solidity;
+    cand.push(c);
+  }
+  if(diag){
+    let maskPx = 0;
+    for(let p=0; p<N; p++) if(mask[p]) maskPx++;
+    // Near-misses are only interesting for the biggest blobs — a printed mark is
+    // never the 400th-largest thing in the frame.
+    misses.sort((a, b) => (b.fa - a.fa));
+    diag.marks = {
+      w, h, meanL: +meanL.toFixed(1), localK: SCAN_LOCAL_K, rad,
+      maskFrac: +(maskPx / N).toFixed(4),
+      comps: comps.length, cand: cand.length, tally,
+      misses: misses.slice(0, 6),
+      cands: cand.slice().sort((a, b) => b.area - a.area).slice(0, 8)
+        .map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), fa: c.fa, ar: c.ar, solidity: c.solidity, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }))
+    };
+  }
+  if(cand.length < 4){ if(diag) diag.verdict = SCAN_FAIL.FEW_BLOBS; return null; }
 
   // Pick the four corner-most centroids (extremes of x+y and x−y).
   let tl=null, tr=null, br=null, bl=null;
@@ -4917,10 +5443,97 @@ function _cornerMarkersFrom(imgData){
   const pts = [tl, tr, br, bl];
   // Reject if any two "corners" collapsed onto the same blob / are too close (not a real quad).
   const minSep = Math.min(w, h) * 0.12;
+  let worst = Infinity;
   for(let a=0; a<4; a++) for(let b2=a+1; b2<4; b2++){
-    if(Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy) < minSep) return null;
+    const d = Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy);
+    if(d < worst) worst = d;
   }
+  // The four marks are printed at ONE size, so a set whose areas differ wildly
+  // is not four marks — it's a shadow blob paired with specks. The failing log
+  // shows exactly that shape of false lock (a 15-28% blob among tiny debris).
+  let aMin = Infinity, aMax = 0;
+  for(const c of pts){ if(c.area < aMin) aMin = c.area; if(c.area > aMax) aMax = c.area; }
+  const spread = aMax / Math.max(1, aMin);
+  if(diag){
+    diag.marks.minSepReq = +minSep.toFixed(1);
+    diag.marks.minSepGot = +worst.toFixed(1);
+    diag.marks.spread    = +spread.toFixed(2);
+    diag.marks.spreadMax = SCAN_MARK_SPREAD;
+    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh, area: c.area }));
+  }
+  if(worst < minSep){ if(diag) diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
+  if(spread > SCAN_MARK_SPREAD){ if(diag) diag.verdict = SCAN_FAIL.UNEVEN; return null; }
+
+  /* The marks bound the WHOLE sheet, so every other mark-like blob — the tool
+     icons, the title block, anything printed — necessarily sits inside them. If
+     a candidate lies outside the quad we picked, we did not pick the marks.
+
+     This is the check that catches a missing/obscured mark, which is the nastiest
+     failure of the lot: the corner-most search happily promotes the next blob
+     inwards (a tool icon), every shape and aspect test still passes, and the
+     child gets a garbled tune with nothing reporting a problem. Refusing costs a
+     retry; a false lock silently overwrites what they made. */
+  const cxq = (tl.cx + tr.cx + br.cx + bl.cx) / 4, cyq = (tl.cy + tr.cy + br.cy + bl.cy) / 4;
+  const side = (a, b, px, py) => (b.cx - a.cx) * (py - a.cy) - (b.cy - a.cy) * (px - a.cx);
+  const edges = [[tl,tr],[tr,br],[br,bl],[bl,tl]];
+  const tol = Math.min(w, h) * 0.04;
+  // Only blobs of mark-like SIZE get a vote. A speck of dirt or a pen dot in the
+  // margin is not evidence we picked the wrong four, and letting one veto the
+  // scan makes the whole thing hostage to a crumb — observed on a real frame,
+  // where JPEG noise alone conjured a single outside blob and refused a lock the
+  // live pass had accepted.
+  const areas = [tl.area, tr.area, br.area, bl.area].sort((a, b) => a - b);
+  const markArea = (areas[1] + areas[2]) / 2;
+  let outside = 0, worstOut = 0;
+  for(const c of cand){
+    if(c === tl || c === tr || c === br || c === bl) continue;
+    if(c.area < markArea * SCAN_OUTSIDE_MIN_REL) continue;
+    for(const [a, b] of edges){
+      const len = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1;
+      const inSign = side(a, b, cxq, cyq) >= 0 ? 1 : -1;
+      const d = -inSign * side(a, b, c.cx, c.cy) / len;   // >0 ⇒ outside this edge
+      if(d > tol){ outside++; if(d > worstOut) worstOut = d; break; }
+    }
+  }
+  if(diag){ diag.marks.outside = outside; diag.marks.outsideBy = +worstOut.toFixed(1); diag.marks.outsideTol = +tol.toFixed(1); }
+  if(outside){ if(diag) diag.verdict = SCAN_FAIL.NOT_OUTER; return null; }
   return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
+}
+
+/* ---- legal note lengths, and snapping a coloured run onto one ---------------
+   A child can colour any number of cells in a row, but the app only has five
+   note lengths — the tool palette is 16th/8th/quarter/half/whole, which at
+   COLS_PER_BEAT=4 is 1/2/4/8/16 columns. A run of 3, 5, 6 or 7 is not a note
+   this app can make, so the scan has to land on one that is.
+
+   ROUND, don't split. Splitting a 3 into an 8th plus a 16th keeps the exact
+   duration but turns one coloured block into two separate attacks — the child
+   hears two notes where they drew one. The block-to-note correspondence is the
+   thing they can actually see and reason about, so it's the one to preserve; a
+   sixteenth of a bar's difference in length is the cheaper error. It also
+   degrades far better at the top end: a 15-cell run rounds to one whole note,
+   where splitting would produce 8+4+2+1 — four attacks nobody drew.
+
+   Nearest is measured on a LOG scale because note lengths are geometric, so
+   the boundary between "quarter" and "half" sits at 5.66 columns rather than 6.
+   Ties go up, matching the intuition that a block is at least as long as drawn. */
+function _legalNoteLens(){
+  const set = new Set();
+  for(const t of toolSteps) if(t && t.steps > 0) set.add(t.steps);
+  const arr = Array.from(set).sort((a, b) => a - b);
+  return arr.length ? arr : [1];
+}
+
+function _snapNoteLen(len, maxLen, legal){
+  const fits = legal.filter(L => L <= maxLen);
+  if(!fits.length) return 0;
+  let best = fits[0], bestD = Infinity;
+  const target = Math.log2(len);
+  for(const L of fits){
+    const d = Math.abs(Math.log2(L) - target);
+    if(d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && L > best)){ bestD = d; best = L; }
+  }
+  return best;
 }
 
 /* ---- luminance of a single source pixel (clamped) ---- */
@@ -4934,45 +5547,160 @@ function _lumAt(imgData, x, y){
 
 /* ---- read the de-warped grid into a flat note list (row/start/len, len in
    columns). Adjacent filled cells merge when the gap between them is >50% inked. */
-function _scanNotesFromFrame(imgData, geom, mapPoint){
+function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const { rows: R, cols: C, cellFrac, gapFrac } = geom;
 
-  // Paper-white baseline: 85th percentile luminance over random grid samples.
+  // A cell counts as inked when it is darker than the paper AROUND it, not
+  // darker than one number for the whole sheet — same reasoning as the mark
+  // detector, and the same failure without it: under a shadow the global
+  // baseline sits above the shadowed paper, so entire shadowed rows read as
+  // coloured in (reproduced in the fixtures as `0:0+13 1:0+12 …`).
+  const F = _lumField(imgData);
+  const isInk = (x, y) => _lumAt(imgData, x, y) < F.localMean(x, y) * SCAN_FILL_RATIO;
+
+  // Global paper stats are still worth reporting — the p05/p50/p95 spread is the
+  // tell for a sheet coloured edge to edge, where local reference degrades too.
   const whites = [];
   for(let s=0; s<200; s++){ const p = mapPoint(Math.random(), Math.random()); whites.push(_lumAt(imgData, p.x, p.y)); }
   whites.sort((a,b) => a - b);
   const white = whites[Math.floor(whites.length * 0.85)] || 200;
-  const inkThresh = white * SCAN_FILL_RATIO;
+  if(diag) diag.grid = {
+    rows: R, cols: C, white, fillRatio: SCAN_FILL_RATIO,
+    // The spread is the tell for the known "fully coloured sheet reads as
+    // empty" trap: paper white is sampled INSIDE the grid, so a dark p05 with a
+    // dark p85 means the baseline itself was measured off crayon, not paper.
+    p05: whites[Math.floor(whites.length * 0.05)], p50: whites[Math.floor(whites.length * 0.50)],
+    p95: whites[Math.floor(whites.length * 0.95)]
+  };
 
   // Slot c spans u∈[c/C,(c+1)/C]: first cellFrac is the square, the rest is the gap.
   const cellU = (c, t) => (c + t * cellFrac) / C;            // t∈[0,1] across the cell
   const gapU  = (c, t) => (c + cellFrac + t * gapFrac) / C;  // t∈[0,1] across the gap
   const rowV  = (r, t) => (r + 0.15 + t * 0.70) / R;         // vertical band inside the row
+  // The middle half of the cell only. Used for the taper rule below: a coloured
+  // neighbour bleeding across a sub-pixel misregistration lands on the cell EDGE
+  // nearest it, while a genuinely (if faintly) coloured cell has ink through its
+  // middle. Sampling the core is what tells those two apart — they are
+  // indistinguishable by amount, both measuring ~0.15 of the full cell.
+  const coreU = (c, t) => (c + (0.25 + t * 0.5) * cellFrac) / C;
 
+  const S = SCAN_CELL_SAMPLES, SS = S * S;
   const darkFraction = (uFn, r, c) => {
     let dark = 0;
-    for(let iy=0; iy<3; iy++) for(let ix=0; ix<3; ix++){
-      const p = mapPoint(uFn(c, (ix + 0.5) / 3), rowV(r, (iy + 0.5) / 3));
-      if(_lumAt(imgData, p.x, p.y) < inkThresh) dark++;
+    for(let iy=0; iy<S; iy++) for(let ix=0; ix<S; ix++){
+      const p = mapPoint(uFn(c, (ix + 0.5) / S), rowV(r, (iy + 0.5) / S));
+      if(isInk(p.x, p.y)) dark++;
     }
-    return dark / 9;
+    return dark / SS;
   };
-  const cellFilled = (r, c) => darkFraction(cellU, r, c) >= 0.5;
-  const gapJoined  = (r, c) => darkFraction(gapU, r, c) > SCAN_GAP_JOIN;
 
+  // Measure every cell first, then let the sheet's own blank cells set the bar.
+  const cellInk = [], gapInk = [], coreInk = [], flat = [];
+  for(let r=0; r<R; r++){
+    const cr = [], gr = [], kr = [];
+    for(let c=0; c<C; c++){
+      const v = darkFraction(cellU, r, c);
+      cr.push(v); flat.push(v);
+      gr.push(darkFraction(gapU, r, c));
+      kr.push(darkFraction(coreU, r, c));
+    }
+    cellInk.push(cr); gapInk.push(gr); coreInk.push(kr);
+  }
+  const sorted = flat.slice().sort((a, b) => a - b);
+  const blank = sorted[Math.floor(sorted.length * SCAN_BLANK_PCT)] || 0;
+  const fillAt = Math.max(SCAN_FILL_MIN, blank + SCAN_FILL_MARGIN);
+
+  // Primary decision, then one taper pass. Neighbours are tested against the
+  // ORIGINAL set, never the extended one, so a row of faint cells cannot cascade
+  // into a run that was never drawn.
+  const primary = cellInk.map(row => row.map(v => v >= fillAt));
+  const extendAt = fillAt * SCAN_FILL_EXTEND;
+  // Judged on the CORE, not the whole cell. Half a pixel of registration error
+  // is enough for a filled cell to spill into its neighbour's window at ~0.17 —
+  // the same magnitude as the genuine tapered end this rule exists to catch, so
+  // no threshold separates them. Where the ink SITS does: leakage hugs the
+  // shared edge, a real stroke crosses the middle.
+  const filled = primary.map((row, r) => row.map((on, c) =>
+    on || (coreInk[r][c] >= extendAt &&
+           ((c > 0 && primary[r][c - 1]) || (c < C - 1 && primary[r][c + 1])))));
+
+  const cellFilled = (r, c) => filled[r][c];
+  const gapJoined  = (r, c) => gapInk[r][c] >= fillAt * SCAN_GAP_JOIN;
+
+  // Full dark-fraction maps for the log. Computed in their own pass (rather than
+  // sniffed from the note loop, which short-circuits) so every cell is reported,
+  // including the marginal ones sitting either side of the 0.5 decision.
+  if(diag){
+    const pts = [];
+    for(let r=0; r<R; r++) for(let c=0; c<C; c++){
+      const p = mapPoint(cellU(c, 0.5), rowV(r, 0.5));
+      pts.push({ x: p.x, y: p.y });
+    }
+    diag.grid.cellMap = cellInk.map(row => row.map(v => +v.toFixed(2)));
+    diag.grid.gapMap  = gapInk.map(row => row.map(v => +v.toFixed(2)));
+    diag.grid.blank    = +blank.toFixed(2);
+    diag.grid.fillAt   = +fillAt.toFixed(2);
+    diag.grid.extendAt = +extendAt.toFixed(2);
+    diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
+  }
+
+  const legal = _legalNoteLens();
+  const snaps = [];
   const notes = [];
   for(let r=0; r<R; r++){
+    // Collect the row's runs first: snapping needs to know where the NEXT one
+    // starts, so a note can never be rounded up over its neighbour.
+    const runs = [];
     let c = 0;
     while(c < C){
       if(cellFilled(r, c)){
         const start = c; let len = 1;
         while(c + 1 < C && cellFilled(r, c + 1) && gapJoined(r, c)){ len++; c++; }
-        notes.push({ row: r, start, len });
+        runs.push({ start, len });
       }
       c++;
     }
+    runs.forEach((run, i) => {
+      // Room available before the next note, or the end of the bar.
+      const room = (i + 1 < runs.length ? runs[i + 1].start : C) - run.start;
+      const len = _snapNoteLen(run.len, room, legal);
+      if(!len) return;
+      if(len !== run.len) snaps.push(r + ":" + run.start + " " + run.len + "->" + len);
+      notes.push({ row: r, start: run.start, len });
+    });
+  }
+  if(diag){
+    diag.grid.notes  = notes.length;
+    diag.grid.legal  = legal.join("/");
+    diag.grid.snaps  = snaps;
   }
   return notes;
+}
+
+/* ---- did the grid actually land where we think it did? ----------------------
+   The printed grid lines are the answer key: sample where they are PREDICTED to
+   be and compare against the cell interiors. A correct lock puts ink under the
+   lines and paper inside the cells; a wrong one puts the same thing under both.
+   Returns that gap in luminance — bigger is better registered. See SCAN_REG_MIN
+   for the measured spread. */
+function _gridRegistration(imgData, geom, mapPoint){
+  const { rows: R, cols: C, cellFrac } = geom;
+  const border = [], interior = [];
+  const N = 40;
+  for(let c=0; c<=C; c++) for(let i=0; i<N; i++){
+    const p = mapPoint(Math.min(1, c / C), 0.02 + 0.96 * i / (N - 1));
+    border.push(_lumAt(imgData, p.x, p.y));
+  }
+  for(let r=0; r<=R; r++) for(let i=0; i<N; i++){
+    const p = mapPoint(0.02 + 0.96 * i / (N - 1), Math.min(1, r / R));
+    border.push(_lumAt(imgData, p.x, p.y));
+  }
+  for(let r=0; r<R; r++) for(let c=0; c<C; c++){
+    const p = mapPoint((c + cellFrac * 0.5) / C, (r + 0.5) / R);
+    interior.push(_lumAt(imgData, p.x, p.y));
+  }
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  return med(interior) - med(border);
 }
 
 /* ---- apply a scanned note list onto the CURRENT page's grid ---- */
@@ -5005,12 +5733,115 @@ function _routeScannedNotes(geom, notes){
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
 }
 
-function _processScanFrame(imgData, sheetId, corners){
+/* Which sheet template is in front of the camera. The printed sheet carries no
+   QR: at the scanner's 420px working width a code small enough to sit on the
+   sheet is well under jsQR's decode floor (25 modules over ~14mm is <1px per
+   module), so it would have been dead ink. The main grid is also the only sheet
+   that can be printed — learning mode hides the Print button — so the template
+   is simply "the one this page is". Returns null on pages with no printable
+   sheet, which disables sheet scanning there rather than guessing. */
+function _currentSheetId(){
+  if(LEARN_LEVEL) return null;             // lesson/level pages can't print a sheet
+  const geom = SHEET_GEOMETRY["kidseq:main"];
+  return (geom && geom.grid) ? "kidseq:main" : null;
+}
+
+/* The homography maps the unit square onto the 4 corner MARKS, which bound the
+   whole printed sheet. Compose the grid insets on top so callers can keep
+   addressing the note grid in plain 0..1 coordinates. */
+function _gridMapper(mapPoint, geom){
+  const g = geom && geom.grid;
+  if(!g) return null;                      // no insets ⇒ refuse rather than mis-sample
+  const du = g.u1 - g.u0, dv = g.v1 - g.v0;
+  if(!(du > 0 && dv > 0)) return null;
+  return (u, v) => mapPoint(g.u0 + u * du, g.v0 + v * dv);
+}
+
+/* Sanity-check a detected marker quad before trusting it.
+
+   The detector picks the 4 corner-most solid blobs. That's cheap and works, but
+   it will happily return a WRONG set: if a mark merges with nearby ink (at a
+   steep angle the gap under the AI button can close), that blob is dropped for
+   being non-square and the next-most-corner-most thing wins — a coloured-in
+   cell. The homography then still "succeeds" and the child gets a garbled tune
+   with no indication anything went wrong. Refusing is much better than that:
+   the live loop simply keeps looking, and the user tilts the sheet flatter.
+
+   The printed marks are a rectangle of known aspect, so a plausible photo of it
+   stays near that aspect and keeps opposite edges roughly equal. Measured over
+   a sweep of simulated angles: every correct lock came in at aspect 1.44–1.60
+   with edge skew ≤1.17, while a bad lock was 2.56 / 3.28. Thresholds sit well
+   clear of both. */
+function _quadLooksLikeSheet(quad, geom, diag){
+  const nominal = geom && geom.quadAspect;
+  if(!nominal) return true;                 // nothing to check against
+  const len = (a, b) => Math.hypot(quad[a].x - quad[b].x, quad[a].y - quad[b].y);
+  const top = len(0,1), bottom = len(3,2), left = len(0,3), right = len(1,2);
+  const skew = (a, b) => Math.max(a,b) / Math.min(a,b);
+  const aspect = ((top + bottom) / 2) / ((left + right) / 2);
+  if(diag) diag.quad = {
+    nominal, top: +top.toFixed(1), bottom: +bottom.toFixed(1),
+    left: +left.toFixed(1), right: +right.toFixed(1),
+    skewH: +skew(top, bottom).toFixed(2), skewV: +skew(left, right).toFixed(2),
+    aspect: +aspect.toFixed(3),
+    aspectLo: +(nominal / SCAN_QUAD_TOL).toFixed(3), aspectHi: +(nominal * SCAN_QUAD_TOL).toFixed(3)
+  };
+  if(!(top && bottom && left && right)) return false;
+  if(skew(top, bottom) > 3 || skew(left, right) > 3) return false;
+  return aspect <= nominal * SCAN_QUAD_TOL && aspect >= nominal / SCAN_QUAD_TOL;
+}
+
+/* Corner detection + that sanity check, so both the live loop and the manual
+   capture reject an implausible lock the same way.
+
+   ⚠️ KNOWN GAP — one mark missing (fixture `missingBL`). If a mark is smudged,
+   cut off or obscured, the corner-most search promotes the next blob inwards. On
+   three of the four corners that self-destructs (the quad collapses or the aspect
+   goes out of band), but losing the BOTTOM-LEFT lets a printed tool icon stand in
+   and everything downstream still passes: shape, size spread, the outside-the-quad
+   test (the icon is a legitimate corner-most candidate) and aspect at 1.55 against
+   a genuine angled scan's 1.497. The result is a garbled tune with nothing
+   reporting a problem.
+
+   Neither geometry test can close it, because the impostor quad IS geometrically
+   plausible. Two fixes that would:
+     1. Print the marks as a shape nothing else on the sheet imitates — a ring or
+        concentric square. Solidity then separates them from every solid icon in
+        one test. Costs a reprint, which is why it isn't done yet.
+     2. Verify registration after the fact: with the homography built, the printed
+        grid's own border lines must land where SHEET_GEOMETRY.grid predicts. On a
+        wrong quad they fall on blank paper. Needs no reprint and is the next thing
+        to try. */
+function _sheetCornersFrom(imgData, geom, diag){
+  const corners = _cornerMarkersFrom(imgData, diag);
+  if(!corners) return null;
+  if(_quadLooksLikeSheet(corners, geom, diag)) return corners;
+  if(diag){ diag.verdict = SCAN_FAIL.BAD_QUAD; diag.corners = corners; }
+  return null;
+}
+
+function _processScanFrame(imgData, sheetId, corners, diag){
   const geom = SHEET_GEOMETRY[sheetId];
   if(!geom) return false;
+  if(diag) diag.corners = corners;
   const mapPoint = _homographyUnitToQuad(corners);
-  if(!mapPoint) return false;
-  _routeScannedNotes(geom, _scanNotesFromFrame(imgData, geom, mapPoint));
+  if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return false; }
+  const gridPoint = _gridMapper(mapPoint, geom);
+  if(!gridPoint){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return false; }
+  // Last gate, and the only one that checks the thing we actually care about.
+  const reg = _gridRegistration(imgData, geom, gridPoint);
+  if(diag) diag.reg = reg;
+  if(reg < SCAN_REG_MIN){ if(diag){ diag.verdict = SCAN_FAIL.MISREG; diag.logged = true; _scanLogPush(diag); } return false; }
+  const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
+  if(diag){
+    diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
+    // Log BEFORE routing: a successful scan closes the modal, and for a
+    // cross-template sheet it navigates the page outright — either way the
+    // caller may never get to run its own push.
+    diag.logged = true;
+    _scanLogPush(diag);
+  }
+  _routeScannedNotes(geom, notes);
   return true;
 }
 
@@ -5053,30 +5884,45 @@ function _scanTick(ts){
   _scanRafId = requestAnimationFrame(_scanTick);
   if(ts - _scanLastTick < SCAN_TICK_MS) return;
   _scanLastTick = ts;
-  if(typeof jsQR !== "function") return;
+  const diag = SCAN_DEBUG ? _newScanDiag("live") : null;
+  const sheetId = _currentSheetId();
+  if(!sheetId){
+    if(diag){ diag.verdict = SCAN_FAIL.NO_SHEET; _scanLogPush(diag); }
+    return;
+  }
   const imgData = _scanFrameImageData();
-  if(!imgData) return;
+  if(!imgData){
+    if(diag){ diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag); }
+    return;
+  }
+  if(diag) diag.img = imgData;
 
-  let qr = null;
-  try{ qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
-  const sheetId = qr && qr.data;
-  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
+  const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag);
 
   if(sheetId && corners){
     _scanLockCount++;
+    if(diag){
+      diag.lock = _scanLockCount + "/" + SCAN_LOCK_FRAMES;
+      diag.verdict = "locking";   // overwritten by _processScanFrame on the lock frame
+    }
     _setScanStatus(_scanLockCount >= SCAN_LOCK_FRAMES ? "locked" : "locking");
     if(_scanLockCount >= SCAN_LOCK_FRAMES){
       _stopSheetScan();
-      _processScanFrame(imgData, sheetId, corners);
+      _processScanFrame(imgData, sheetId, corners, diag);
     }
   } else {
     _scanLockCount = 0;
     _setScanStatus(null);
   }
+  // _processScanFrame logs its own record before it routes (which can navigate).
+  if(diag && !diag.logged) _scanLogPush(diag);
 }
 
 function _startSheetScan(){
   _scanLockCount = 0; _scanLastTick = 0;
+  // Show the panel as soon as scanning starts, so the flag visibly took effect
+  // before the first frame rather than after a confusing silent failure.
+  if(SCAN_DEBUG) _scanDebugRender(null);
   if(_scanRafId) cancelAnimationFrame(_scanRafId);
   _scanRafId = requestAnimationFrame(_scanTick);
 }
@@ -5113,17 +5959,23 @@ function camCapture(){
 function camImport(){
   if(!camCapturedDataUrl) camCapture();
   if(!camCanvasEl.width) return;
+  const diag = SCAN_DEBUG ? _newScanDiag("use") : null;
   const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
-  let qr = null;
-  try{ if(typeof jsQR === "function") qr = jsQR(imgData.data, imgData.width, imgData.height); }catch(e){}
-  const sheetId = qr && qr.data;
-  const corners = (sheetId && SHEET_GEOMETRY[sheetId]) ? _cornerMarkersFrom(imgData) : null;
-  if(sheetId && corners){
+  if(diag) diag.img = imgData;
+  const sheetId = _currentSheetId();
+  if(!sheetId && diag) diag.verdict = SCAN_FAIL.NO_SHEET;
+  const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag) : null;
+  const ok = sheetId && corners && _processScanFrame(imgData, sheetId, corners, diag);
+  if(diag && !diag.logged) _scanLogPush(diag);
+  if(ok){
     _stopSheetScan();
-    _processScanFrame(imgData, sheetId, corners);
   }else{
     try{ showSaveToast("error"); }catch(e){}
-    alert("Couldn't read the worksheet.\nMake sure the QR code and all four corner marks are inside the frame, then try again.");
+    // In debug mode the panel already says exactly which check refused and with
+    // what numbers; a modal alert on top of it just costs a tap per attempt.
+    if(!SCAN_DEBUG){
+      alert("Couldn't read the worksheet.\nMake sure all four black corner squares are inside the frame, then try again.");
+    }
   }
 }
 
@@ -6461,6 +7313,144 @@ window.logout = logout;
 // arithmetic (px ÷ mm isn't valid), so it lives in beforeprint / afterprint.
 let _preprintPageTransform = null;
 let _preprintPageOrigin = null;
+
+/* ==================== SCANNABLE REGISTRATION MARKS (print only) ============
+   The printed sheet is still the app's own printout — nothing on it moves or
+   changes. We only ADD 4 solid black squares just outside the content, one per
+   corner: above the title box (TL), above the tempo controls (TR), below the AI
+   button (BR), below the note-length tools (BL). Those are the 4 points the
+   camera scanner fits its homography to (see SHEET_GEOMETRY.grid).
+
+   Geometry notes:
+   - The marks form a true RECTANGLE. That matters: the page→unit-square map is
+     then affine, so the note grid lands on a plain axis-aligned rect in unit
+     space and SHEET_GEOMETRY.grid can describe it with 4 fixed fractions. A
+     non-rectangular quad would make the grid a general quadrilateral there.
+   - The left pair sits on the tools column's centre line and the right pair on
+     the right column's centre line; both columns are fixed-width, so the two
+     x's are layout-invariant.
+   - The top/bottom edges come from the measured CONTENT box, not from the
+     anchor elements themselves. #keyBtn is Pro-only, so #aiBtn's own bottom
+     moves ~70px between a free Member and a Pro user — the content box does
+     not (the drum panel is always the lowest element). Using it keeps the
+     printed geometry identical for every account type, which is what lets the
+     scanner's insets be constants.
+   - `--cell` is capped at 64 and the stage is a fixed 1600×900 that gets scaled
+     as a unit, so this whole layout is the same on every device. That's the
+     reason fixed insets are safe at all. If that ever stops being true, the
+     insets must be re-measured (window.KidSequencer.Scan.printMarkInsets()).   */
+/* Size + clearance, in cells. Both are constrained from three directions:
+   - The mark must survive the scanner's 420px working width: 0.62 cells prints
+     ≈8mm, which is ~12px across in frame — comfortably past the detector's
+     0.0004-of-area floor.
+   - The CLEARANCE matters as much as the size. The blob detector wants a solid,
+     squarish component; if a mark touches other ink they merge into one blob,
+     that blob fails the solidity test, and BOTH are dropped — the detector then
+     picks whatever is next-most-corner-most (a coloured-in note, in testing).
+     The tightest neighbour is the AI button directly above the BR mark, so the
+     gap has to survive the downscale: 0.31 cells ≈ 6px in frame. 0.20 was not
+     enough — the two blurred together and corner detection went 59px wrong.
+   - Both are paid for out of the page's spare vertical space. The printed sheet
+     is width-limited, which leaves ~126 stage px of slack; the marks consume
+     2×(gap+size) = 119 of it, so the fit stays width-limited and the sheet
+     prints at exactly the same scale and position as before. Growing either
+     number past ~63 cells total would start shrinking the whole sheet.        */
+const PRINT_MARK_K = 0.56;     // black square side, in cells (≈7mm on A4 landscape)
+const PRINT_MARK_GAP_K = 0.37; // clear space between content edge and mark, in cells
+let _printMarkBox = null;      // outer extent of the 4 marks, stage coords
+
+function _clearPrintMarks(){
+  document.querySelectorAll('[data-wsmark]').forEach(el => el.remove());
+  _printMarkBox = null;
+}
+
+/* Build the 4 marks. `pr`/`content` come from _applyPrintScale, which has
+   already blanked the page transform — so every rect here is in true stage
+   coordinates. Returns the mark CENTRE rectangle (the homography quad). */
+function _buildPrintMarks(pr, content){
+  const page = document.getElementById('page');
+  if(!page || !content) return null;
+  _clearPrintMarks();
+
+  const box = (id) => {
+    const el = document.getElementById(id);
+    if(!el) return null;
+    const r = el.getBoundingClientRect();
+    if(r.width <= 0 || r.height <= 0) return null;   // hidden (e.g. #aiBtn for guests)
+    return { x: r.left - pr.left, r: r.right - pr.left };
+  };
+  // Centre line of each outer column. Fall back to the column container if a
+  // specific control is hidden, then to the content edge, so this can never
+  // produce a degenerate quad.
+  const centreOf = (ids, fallbackEdge) => {
+    let lo = Infinity, hi = -Infinity;
+    ids.forEach(id => { const b = box(id); if(!b) return;
+      lo = Math.min(lo, b.x); hi = Math.max(hi, b.r); });
+    return (lo < hi) ? (lo + hi) / 2 : fallbackEdge;
+  };
+
+  const cell = parseFloat(getComputedStyle(document.documentElement)
+                 .getPropertyValue('--cell')) || 64;
+  const size = PRINT_MARK_K * cell;
+  const gap  = PRINT_MARK_GAP_K * cell;
+
+  const leftX  = centreOf(['titleBox', 'toolsList', 'tools'], content.minX);
+  const rightX = centreOf(['tempoControls', 'aiBtn', 'rightCol'], content.maxX);
+  const topY   = content.minY - gap - size / 2;
+  const botY   = content.maxY + gap + size / 2;
+  if(!(rightX > leftX && botY > topY)) return null;
+
+  [['tl', leftX, topY], ['tr', rightX, topY],
+   ['br', rightX, botY], ['bl', leftX, botY]].forEach(([pos, x, y]) => {
+    const m = document.createElement('div');
+    m.className = 'wsMark ws-' + pos;
+    m.setAttribute('data-wsmark', '');
+    m.setAttribute('aria-hidden', 'true');
+    m.style.left = x + 'px';
+    m.style.top  = y + 'px';
+    m.style.width = size + 'px';
+    m.style.height = size + 'px';
+    page.appendChild(m);
+  });
+
+  // Outer extent, so the fit can reserve room for them (they're display:none
+  // until @media print, so they never show up in a measured rect).
+  _printMarkBox = { minX: leftX - size / 2, minY: topY - size / 2,
+                    maxX: rightX + size / 2, maxY: botY + size / 2 };
+  return { leftX, rightX, topY, botY };
+}
+
+/* Dev helper — re-derive SHEET_GEOMETRY["kidseq:main"].grid from the CURRENT
+   layout and return it ready to paste back. The insets are hard-coded because
+   the printed layout is device-independent, but they are only correct for the
+   layout that produced them: run this after any change to the top bar, tools
+   column, right column, drum panel or --cell, and update the table if it moves.
+     window.KidSequencer.Scan.printMarkInsets()                                */
+function _printMarkInsets(){
+  _applyPrintScale();                       // builds the marks + blanks the transform
+  const page = document.getElementById('page');
+  const grid = document.getElementById('sequencer');
+  const marks = Array.from(document.querySelectorAll('[data-wsmark]'));
+  let out = null;
+  if(page && grid && marks.length === 4){
+    const xs = marks.map(m => parseFloat(m.style.left));
+    const ys = marks.map(m => parseFloat(m.style.top));
+    const L = Math.min.apply(null, xs), R = Math.max.apply(null, xs);
+    const T = Math.min.apply(null, ys), B = Math.max.apply(null, ys);
+    const pr = page.getBoundingClientRect();
+    const g = grid.getBoundingClientRect();
+    const r5 = (n) => Math.round(n * 1e5) / 1e5;
+    if(R > L && B > T){
+      out = { u0: r5((g.left  - pr.left - L) / (R - L)),
+              v0: r5((g.top   - pr.top  - T) / (B - T)),
+              u1: r5((g.right - pr.left - L) / (R - L)),
+              v1: r5((g.bottom- pr.top  - T) / (B - T)) };
+    }
+  }
+  _restorePrintScale();
+  return out;
+}
+
 function _applyPrintScale(){
   const page = document.getElementById('page');
   if(!page) return;
@@ -6499,6 +7489,17 @@ function _applyPrintScale(){
   if(measured && maxX > minX && maxY > minY){
     cx = Math.max(0, minX - PAD); cy = Math.max(0, minY - PAD);
     cw = Math.min(w, maxX + PAD) - cx; ch = Math.min(h, maxY + PAD) - cy;
+    // Add the scanner's corner marks, then grow the fit box to include them.
+    // They sit OUTSIDE the app content (deliberately overhanging the 1600×900
+    // stage at the top), so this union must NOT reuse the 0/stage clamps above
+    // or the top pair would be cropped straight off the page.
+    _buildPrintMarks(pr, { minX, minY, maxX, maxY });
+    if(_printMarkBox){
+      const b = _printMarkBox;
+      const x0 = Math.min(cx, b.minX - PAD), y0 = Math.min(cy, b.minY - PAD);
+      const x1 = Math.max(cx + cw, b.maxX + PAD), y1 = Math.max(cy + ch, b.maxY + PAD);
+      cx = x0; cy = y0; cw = x1 - x0; ch = y1 - y0;
+    }
   } else {
     cx = 0; cy = 0; cw = w; ch = h;   // fallback: whole stage
   }
@@ -6530,6 +7531,7 @@ function _applyPrintScale(){
 function _restorePrintScale(){
   const page = document.getElementById('page');
   if(!page) return;
+  _clearPrintMarks();   // print-only overlay; never leave it in the live DOM
   page.style.transform = _preprintPageTransform || '';
   page.style.transformOrigin = _preprintPageOrigin || '';
   // Re-run the FULL layout pass (scheduleLayout → layoutPass), NOT fitToViewport
@@ -6604,7 +7606,20 @@ window.KidSequencer = {
     notesFromFrame: _scanNotesFromFrame,
     processFrame: _processScanFrame,
     applyPending: _applyPendingScanImport,
-    get appliedFlag(){ return _scanImportApplied; }
+    currentSheetId: _currentSheetId,
+    gridMapper: _gridMapper,
+    sheetCornersFrom: _sheetCornersFrom,
+    quadLooksLikeSheet: _quadLooksLikeSheet,
+    printMarkInsets: _printMarkInsets,
+    get appliedFlag(){ return _scanImportApplied; },
+    // Diagnostics (see SCAN DIAGNOSTICS). `diagnose` is the read-only pipeline;
+    // `log`/`format` are what the on-screen panel and its copy button read.
+    FAIL: SCAN_FAIL,
+    diagnose: _scanDiagnose,
+    format: _scanDebugLines,
+    get debug(){ return SCAN_DEBUG; },
+    set debug(v){ SCAN_DEBUG = !!v; },
+    get log(){ return _scanLog; }
   },
   Auth: { logout }
 };
