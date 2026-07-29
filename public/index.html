@@ -4836,6 +4836,31 @@ const SCAN_MARK_MAX    = 0.04;
 const SCAN_MARK_MIN_PX = 9;
 const SCAN_MARK_SOL    = 0.70;
 const SCAN_MARK_SPREAD = 6;
+/* A printed mark always has paper all the way around it, so a blob clipped by
+   the edge of the picture cannot be a whole mark — it's the sheet's own edge,
+   the background beyond the paper, or vignetting. Round three of the logs is
+   entirely this failure: every false lock picked points hard against the border
+   (y=1..3, y=312..313 of a 315-tall frame, x=1, x=413) whereas the session that
+   genuinely worked picked 63,56 / 359,53 / 377,262 / 56,273 — all well inside. */
+const SCAN_MARK_EDGE   = 2;
+/* Quad aspect tolerance. Was x/÷1.6, which is far too loose to be a real check:
+   true locks measure 1.41-1.45 against a 1.438 nominal, while the false locks in
+   round three measured 0.707, 0.836, 0.903, 1.059, 1.758, 1.763, 1.765, and a
+   fixture where one mark is missing and a tool icon takes its place lands at
+   1.55-1.62. x/÷1.12 (1.284-1.611) rejects the round-three locks outright.
+
+   It does NOT separate one specific impostor: with the bottom-left mark missing
+   a tool icon takes its place and the quad measures 1.55, while a genuinely
+   angled scan measures up to 1.497 (fixture realAskew2). 3.5% apart — aspect is
+   simply the wrong instrument for that case, and squeezing the band until it
+   fits would start refusing good scans, which is the trade the wrong way round.
+   See the KNOWN GAP note on _sheetCornersFrom for what actually fixes it.
+
+   The bias elsewhere is deliberate: a refusal costs the child a retry, a false
+   lock silently replaces the tune they made with noise. If this ever rejects a
+   good scan the log says so outright — it prints the measured aspect next to the
+   band — so it can be re-opened against evidence rather than by feel. */
+const SCAN_QUAD_TOL    = 1.12;
 
 let _scanRafId    = 0;
 let _scanLockCount= 0;
@@ -4876,6 +4901,7 @@ const SCAN_FAIL = {
   FEW_BLOBS: "few-blobs",          // <4 mark candidates survived the shape filters
   COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
   UNEVEN:    "marks-uneven",       // the four picked blobs aren't one printed size
+  NOT_OUTER: "marks-not-outermost",// mark-like ink sits OUTSIDE the quad we picked
   BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
   SINGULAR:  "homography-singular",
   NO_INSETS: "no-grid-insets",     // template carries no measured grid rectangle
@@ -5032,7 +5058,8 @@ function _scanDebugLines(rec){
     L.push("frame " + m.w + "x" + m.h + "  meanL " + m.meanL + "  localK " + m.localK + "/r" + m.rad +
            "  dark " + (m.maskFrac*100).toFixed(1) + "%");
     L.push("blobs " + m.comps + " -> cand " + m.cand +
-           (m.tally ? "   rej sm " + m.tally.small + " big " + m.tally.big + " asp " + m.tally.aspect + " sol " + m.tally.solid : ""));
+           (m.tally ? "   rej edge " + m.tally.edge + " sm " + m.tally.small + " big " + m.tally.big +
+                      " asp " + m.tally.aspect + " sol " + m.tally.solid : ""));
     for(const b of (m.misses || []).slice(0, 4)){
       L.push("  rej " + b.why.padEnd(6) + " fa " + b.fa.toFixed(5) + " ar " + b.ar.toFixed(2) +
              " sol " + b.solidity.toFixed(2) + " @" + Math.round(b.cx) + "," + Math.round(b.cy));
@@ -5040,7 +5067,8 @@ function _scanDebugLines(rec){
     if(m.picked){
       L.push("picked " + m.picked.map(p => p.cx + "," + p.cy + "(" + p.area + "px)").join(" "));
       L.push("  minSep " + m.minSepGot + " / need " + m.minSepReq +
-             "   size spread " + m.spread + " / max " + m.spreadMax);
+             "   size spread " + m.spread + " / max " + m.spreadMax +
+             (m.outside != null ? "   outside " + m.outside + " (by " + m.outsideBy + " / tol " + m.outsideTol + ")" : ""));
     }
   }
   const q = rec.quad;
@@ -5296,14 +5324,16 @@ function _cornerMarkersFrom(imgData, diag){
   // threw a blob out and by how much — "the marks were seen at fa=0.00031, just
   // under the 0.0004 floor" is actionable, "fewer than 4 candidates" is not.
   const cand = [];
-  const tally = diag ? { small: 0, big: 0, aspect: 0, solid: 0 } : null;
+  const tally = diag ? { edge: 0, small: 0, big: 0, aspect: 0, solid: 0 } : null;
   const misses = diag ? [] : null;
   for(const c of comps){
     const fa = c.area / N;
     const ar = c.bw / c.bh;
     const solidity = c.area / (c.bw * c.bh);
     let why = null;
-    if(fa < SCAN_MARK_MIN || c.area < SCAN_MARK_MIN_PX) why = "small";
+    if(c.x0 <= SCAN_MARK_EDGE || c.y0 <= SCAN_MARK_EDGE ||
+       c.x0 + c.bw >= w - SCAN_MARK_EDGE || c.y0 + c.bh >= h - SCAN_MARK_EDGE) why = "edge";
+    else if(fa < SCAN_MARK_MIN || c.area < SCAN_MARK_MIN_PX) why = "small";
     else if(fa > SCAN_MARK_MAX)    why = "big";
     else if(ar < 0.45 || ar > 2.2) why = "aspect";
     else if(solidity < SCAN_MARK_SOL) why = "solid";
@@ -5364,6 +5394,32 @@ function _cornerMarkersFrom(imgData, diag){
   }
   if(worst < minSep){ if(diag) diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
   if(spread > SCAN_MARK_SPREAD){ if(diag) diag.verdict = SCAN_FAIL.UNEVEN; return null; }
+
+  /* The marks bound the WHOLE sheet, so every other mark-like blob — the tool
+     icons, the title block, anything printed — necessarily sits inside them. If
+     a candidate lies outside the quad we picked, we did not pick the marks.
+
+     This is the check that catches a missing/obscured mark, which is the nastiest
+     failure of the lot: the corner-most search happily promotes the next blob
+     inwards (a tool icon), every shape and aspect test still passes, and the
+     child gets a garbled tune with nothing reporting a problem. Refusing costs a
+     retry; a false lock silently overwrites what they made. */
+  const cxq = (tl.cx + tr.cx + br.cx + bl.cx) / 4, cyq = (tl.cy + tr.cy + br.cy + bl.cy) / 4;
+  const side = (a, b, px, py) => (b.cx - a.cx) * (py - a.cy) - (b.cy - a.cy) * (px - a.cx);
+  const edges = [[tl,tr],[tr,br],[br,bl],[bl,tl]];
+  const tol = Math.min(w, h) * 0.04;
+  let outside = 0, worstOut = 0;
+  for(const c of cand){
+    if(c === tl || c === tr || c === br || c === bl) continue;
+    for(const [a, b] of edges){
+      const len = Math.hypot(b.cx - a.cx, b.cy - a.cy) || 1;
+      const inSign = side(a, b, cxq, cyq) >= 0 ? 1 : -1;
+      const d = -inSign * side(a, b, c.cx, c.cy) / len;   // >0 ⇒ outside this edge
+      if(d > tol){ outside++; if(d > worstOut) worstOut = d; break; }
+    }
+  }
+  if(diag){ diag.marks.outside = outside; diag.marks.outsideBy = +worstOut.toFixed(1); diag.marks.outsideTol = +tol.toFixed(1); }
+  if(outside){ if(diag) diag.verdict = SCAN_FAIL.NOT_OUTER; return null; }
   return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
 }
 
@@ -5536,15 +5592,35 @@ function _quadLooksLikeSheet(quad, geom, diag){
     nominal, top: +top.toFixed(1), bottom: +bottom.toFixed(1),
     left: +left.toFixed(1), right: +right.toFixed(1),
     skewH: +skew(top, bottom).toFixed(2), skewV: +skew(left, right).toFixed(2),
-    aspect: +aspect.toFixed(3), aspectLo: +(nominal / 1.6).toFixed(3), aspectHi: +(nominal * 1.6).toFixed(3)
+    aspect: +aspect.toFixed(3),
+    aspectLo: +(nominal / SCAN_QUAD_TOL).toFixed(3), aspectHi: +(nominal * SCAN_QUAD_TOL).toFixed(3)
   };
   if(!(top && bottom && left && right)) return false;
   if(skew(top, bottom) > 3 || skew(left, right) > 3) return false;
-  return aspect <= nominal * 1.6 && aspect >= nominal / 1.6;
+  return aspect <= nominal * SCAN_QUAD_TOL && aspect >= nominal / SCAN_QUAD_TOL;
 }
 
 /* Corner detection + that sanity check, so both the live loop and the manual
-   capture reject an implausible lock the same way. */
+   capture reject an implausible lock the same way.
+
+   ⚠️ KNOWN GAP — one mark missing (fixture `missingBL`). If a mark is smudged,
+   cut off or obscured, the corner-most search promotes the next blob inwards. On
+   three of the four corners that self-destructs (the quad collapses or the aspect
+   goes out of band), but losing the BOTTOM-LEFT lets a printed tool icon stand in
+   and everything downstream still passes: shape, size spread, the outside-the-quad
+   test (the icon is a legitimate corner-most candidate) and aspect at 1.55 against
+   a genuine angled scan's 1.497. The result is a garbled tune with nothing
+   reporting a problem.
+
+   Neither geometry test can close it, because the impostor quad IS geometrically
+   plausible. Two fixes that would:
+     1. Print the marks as a shape nothing else on the sheet imitates — a ring or
+        concentric square. Solidity then separates them from every solid icon in
+        one test. Costs a reprint, which is why it isn't done yet.
+     2. Verify registration after the fact: with the homography built, the printed
+        grid's own border lines must land where SHEET_GEOMETRY.grid predicts. On a
+        wrong quad they fall on blank paper. Needs no reprint and is the next thing
+        to try. */
 function _sheetCornersFrom(imgData, geom, diag){
   const corners = _cornerMarkersFrom(imgData, diag);
   if(!corners) return null;
