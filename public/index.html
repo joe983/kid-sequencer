@@ -4823,6 +4823,253 @@ let _scanLockCount= 0;
 let _scanLastTick = 0;
 let _scanWorkCanvas = null;
 
+/* ==================== SCAN DIAGNOSTICS ====================
+   The pipeline can refuse a frame at six different points and the user sees the
+   same one sentence for all of them ("couldn't read the worksheet"), plus a
+   seventh case that doesn't even fail: it locks on, reads every cell as blank,
+   and silently clears the grid. Tuning that by guesswork is hopeless, so every
+   decision point records WHY it decided plus the numbers it decided on, and a
+   panel inside the scan modal shows it live — the phone holding the camera IS
+   the machine that needs to display it, a desktop console is no use here.
+
+   Behaviour-neutral when off: no diag object is allocated, every instrumented
+   function skips its bookkeeping (the `if(diag)` guards), and the failure alert
+   fires exactly as before. The scan decisions themselves never read SCAN_DEBUG.
+
+   Turn on with ?scandebug=1, off with ?scandebug=0. The choice is STICKY
+   (localStorage) because a successful scan can navigate the page, which would
+   otherwise drop the flag mid-session. */
+let SCAN_DEBUG = false;
+try{
+  const _sd = new URLSearchParams(location.search).get("scandebug");
+  if(_sd !== null && _sd !== ""){
+    SCAN_DEBUG = _sd !== "0";
+    localStorage.setItem("kidseq_scandebug", SCAN_DEBUG ? "1" : "0");
+  }else{
+    SCAN_DEBUG = localStorage.getItem("kidseq_scandebug") === "1";
+  }
+}catch(e){}
+
+/* Short, stable codes so a pasted log can be grepped and compared run to run. */
+const SCAN_FAIL = {
+  NO_SHEET:  "no-sheet",           // this page has no printable template
+  NO_FRAME:  "no-frame",           // camera isn't delivering pixels yet
+  FEW_BLOBS: "few-blobs",          // <4 mark candidates survived the shape filters
+  COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
+  BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
+  SINGULAR:  "homography-singular",
+  NO_INSETS: "no-grid-insets",     // template carries no measured grid rectangle
+  EMPTY:     "read-empty",         // locked on, but every cell read as blank
+  OK:        "ok"
+};
+
+const SCAN_LOG_MAX = 40;
+const _scanLog = [];        // oldest first; newest is what the panel headlines
+let _scanLastRec = null;
+
+function _newScanDiag(src){
+  return { src, t: Date.now(), verdict: null, marks: null, quad: null, grid: null };
+}
+
+function _scanLogPush(rec){
+  const prev = _scanLog[_scanLog.length - 1];
+  // The live loop ticks ~8×/s. Collapsing an unchanged verdict into one row with
+  // a repeat count keeps a 20-second hunt from burying the one manual attempt
+  // that actually matters, while still showing the freshest numbers for it.
+  if(prev && prev.src === "live" && rec.src === "live" && prev.verdict === rec.verdict){
+    rec.n = (prev.n || 1) + 1;
+    _scanLog[_scanLog.length - 1] = rec;
+  }else{
+    rec.n = 1;
+    _scanLog.push(rec);
+    if(_scanLog.length > SCAN_LOG_MAX) _scanLog.shift();
+  }
+  _scanLastRec = rec;
+  _scanDebugRender(rec);
+  // The frame is ~500 KB; the panel has already drawn it, so don't retain it.
+  rec.img = null;
+}
+
+/* ---- the on-screen panel ----------------------------------------------------
+   Built in JS and styled inline on purpose: the whole feature is scaffolding, so
+   it deletes as one block with no orphaned rules in styles.css and no cache-bust
+   bump. It lives on <body>, NOT inside #camModal, because a successful scan
+   closes the modal — and "it locked on and then cleared my grid" is precisely a
+   case we need to still be able to read afterwards. */
+let _sdEls = null;
+
+function _scanDebugEnsure(){
+  if(_sdEls || !SCAN_DEBUG) return _sdEls;
+  const box = document.createElement("div");
+  box.id = "scanDebug";
+  box.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(12,14,18,.93);" +
+    "color:#e6e6e6;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border-top:2px solid #3a3f4a;" +
+    "max-height:52vh;display:flex;flex-direction:column;-webkit-user-select:text;user-select:text;";
+
+  const body = document.createElement("div");
+  body.style.cssText = "display:flex;gap:7px;padding:6px 7px;overflow:auto;align-items:flex-start;";
+  const cv = document.createElement("canvas");
+  cv.style.cssText = "flex:none;background:#000;border-radius:3px;image-rendering:pixelated;";
+  const pre = document.createElement("pre");
+  pre.style.cssText = "margin:0;flex:1;min-width:0;white-space:pre;overflow:auto;";
+  body.append(cv, pre);
+
+  const bar = document.createElement("div");
+  bar.style.cssText = "display:flex;align-items:center;gap:6px;padding:5px 7px;background:#1b1f27;flex:none;";
+  const chip = document.createElement("b");
+  chip.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;";
+  chip.textContent = "scan debug — waiting for a frame";
+  const mkBtn = (label, fn) => {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.style.cssText = "font:11px/1 ui-monospace,monospace;padding:5px 7px;background:#39414f;color:#fff;" +
+      "border:0;border-radius:4px;flex:none;";
+    b.onclick = fn;
+    return b;
+  };
+  bar.append(chip,
+    mkBtn("copy", _scanDebugCopy),
+    mkBtn("clear", () => { _scanLog.length = 0; _scanLastRec = null; _scanDebugRender(null); }),
+    mkBtn("hide", () => { body.style.display = body.style.display === "none" ? "" : "none"; }),
+    mkBtn("off",  () => { try{ localStorage.setItem("kidseq_scandebug", "0"); }catch(e){} location.reload(); }));
+
+  box.append(bar, body);
+  document.body.appendChild(box);
+  _sdEls = { box, chip, pre, cv, body };
+  return _sdEls;
+}
+
+/* Annotated frame: red = blob rejected by the shape filters (with the reason),
+   amber = survived as a candidate, green = the four the detector actually chose,
+   cyan = where the grid reader sampled. Seeing WHICH squares turned red is worth
+   more than any number in the text dump. */
+function _scanDebugDraw(cv, rec){
+  const img = rec && rec.img;
+  const W = 240;
+  if(!img){ cv.width = 0; cv.height = 0; return; }
+  const s = W / img.width, H = Math.round(img.height * s);
+  const tmp = document.createElement("canvas");
+  tmp.width = img.width; tmp.height = img.height;
+  tmp.getContext("2d").putImageData(img, 0, 0);
+  cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  g.drawImage(tmp, 0, 0, W, H);
+  g.lineWidth = 1;
+  // A mark that's failing for being too small is only a couple of pixels here —
+  // the exact case we most need to SEE — so boxes get a floor size and are drawn
+  // around the blob's centre rather than tight to it.
+  const box = (b, col) => {
+    g.strokeStyle = col;
+    const w2 = Math.max(b.bw * s, 7), h2 = Math.max(b.bh * s, 7);
+    g.strokeRect((b.x0 + b.bw/2)*s - w2/2, (b.y0 + b.bh/2)*s - h2/2, w2, h2);
+  };
+  const m = rec.marks;
+  if(m){
+    for(const b of (m.misses || [])) box(b, "#ff4d4d");
+    for(const b of (m.cands  || [])) box(b, "#ffc93d");
+  }
+  if(rec.grid && rec.grid.pts){
+    g.fillStyle = "rgba(80,220,255,.9)";
+    for(const p of rec.grid.pts) g.fillRect(p.x*s - 1, p.y*s - 1, 2, 2);
+  }
+  const q = rec.corners;
+  if(q){
+    g.strokeStyle = "#3ee06a"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(q[0].x*s, q[0].y*s);
+    for(let i=1; i<4; i++) g.lineTo(q[i].x*s, q[i].y*s);
+    g.closePath(); g.stroke();
+    g.fillStyle = "#3ee06a"; g.font = "9px monospace";
+    ["TL","TR","BR","BL"].forEach((t, i) => g.fillText(t, q[i].x*s + 3, q[i].y*s - 3));
+  }
+}
+
+function _scanDebugLines(rec){
+  if(!rec) return "(no scans yet)";
+  const L = [];
+  const pad = n => String(n).padStart(2, "0");
+  const d = new Date(rec.t);
+  L.push(rec.src + (rec.n > 1 ? " ×" + rec.n : "") + "  " + rec.verdict +
+         "  " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()) +
+         (rec.lock ? "  lock " + rec.lock : ""));
+  const m = rec.marks;
+  if(m){
+    L.push("frame " + m.w + "x" + m.h + "  meanL " + m.meanL + "  T " + m.T + "  dark " + (m.maskFrac*100).toFixed(1) + "%");
+    L.push("blobs " + m.comps + " -> cand " + m.cand +
+           (m.tally ? "   rej sm " + m.tally.small + " big " + m.tally.big + " asp " + m.tally.aspect + " sol " + m.tally.solid : ""));
+    for(const b of (m.misses || []).slice(0, 4)){
+      L.push("  rej " + b.why.padEnd(6) + " fa " + b.fa.toFixed(5) + " ar " + b.ar.toFixed(2) +
+             " sol " + b.solidity.toFixed(2) + " @" + Math.round(b.cx) + "," + Math.round(b.cy));
+    }
+    if(m.picked){
+      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy).join(" ") +
+             "   minSep " + m.minSepGot + (m.minSepReq != null ? " / need " + m.minSepReq : ""));
+    }
+  }
+  const q = rec.quad;
+  if(q) L.push("quad aspect " + q.aspect + " (need " + q.aspectLo + "-" + q.aspectHi +
+               ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)");
+  const gr = rec.grid;
+  if(gr){
+    L.push("white " + gr.white + " ink<" + gr.inkThresh + "  lum p05 " + gr.p05 + " p50 " + gr.p50 + " p95 " + gr.p95 +
+           "  notes " + gr.notes);
+    for(const row of (gr.cellMap || [])){
+      // '#' inked, '+' marginal (either side of the 0.5 decision), '.' blank.
+      L.push("  " + row.map(v => v >= 0.7 ? "#" : (v >= 0.5 ? "H" : (v >= 0.3 ? "+" : "."))).join(""));
+    }
+  }
+  return L.join("\n");
+}
+
+function _scanDebugRender(rec){
+  const els = _scanDebugEnsure();
+  if(!els) return;
+  const cur = rec || _scanLastRec;
+  els.chip.textContent = cur ? ("scan: " + cur.verdict + (cur.n > 1 ? " ×" + cur.n : "")) : "scan debug — waiting for a frame";
+  els.chip.style.color = !cur ? "#e6e6e6"
+    : cur.verdict === SCAN_FAIL.OK ? "#5ce07a"
+    : cur.verdict === "locking"    ? "#ffc93d" : "#ff6b6b";
+  els.pre.textContent = _scanDebugLines(cur) + "\n\n--- history (newest first) ---\n" +
+    _scanLog.slice().reverse().slice(1, 12)
+      .map(r => r.src + (r.n > 1 ? " x" + r.n : "") + " " + r.verdict).join("\n");
+  _scanDebugDraw(els.cv, cur);
+}
+
+/* Run the instrumented pipeline over a still WITHOUT applying anything — the
+   read-only twin of camImport. Lets the corner/quad/grid decisions be exercised
+   against fixture images (see the headless harness) and lets a saved photo be
+   re-diagnosed later without a camera. */
+function _scanDiagnose(imgData, sheetId){
+  const diag = _newScanDiag("probe");
+  const id = sheetId || _currentSheetId();
+  if(!id){ diag.verdict = SCAN_FAIL.NO_SHEET; return diag; }
+  const geom = SHEET_GEOMETRY[id];
+  const corners = _sheetCornersFrom(imgData, geom, diag);
+  if(!corners) return diag;
+  diag.corners = corners;
+  const mapPoint = _homographyUnitToQuad(corners);
+  if(!mapPoint){ diag.verdict = SCAN_FAIL.SINGULAR; return diag; }
+  const gridPoint = _gridMapper(mapPoint, geom);
+  if(!gridPoint){ diag.verdict = SCAN_FAIL.NO_INSETS; return diag; }
+  const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
+  diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
+  diag.notes = notes;
+  return diag;
+}
+
+/* One tap puts the whole session on the clipboard, because the useful artifact
+   is the SEQUENCE of attempts, not the last one. */
+function _scanDebugCopy(){
+  const head = "kid-sequencer scan log\nua: " + navigator.userAgent +
+    "\nviewport: " + window.innerWidth + "x" + window.innerHeight +
+    "\nsheet: " + _currentSheetId() + "\nattempts: " + _scanLog.length + "\n";
+  const txt = head + _scanLog.slice().reverse()
+    .map((r, i) => "\n=== " + (i + 1) + " ===\n" + _scanDebugLines(r)).join("");
+  const done = ok => { if(_sdEls) _sdEls.chip.textContent = ok ? "copied — paste it into the chat" : "copy failed; select the text instead"; };
+  try{
+    navigator.clipboard.writeText(txt).then(() => done(true), () => done(false));
+  }catch(e){ done(false); }
+}
+
 /* ---- linear algebra: solve A·x = b (n×n) by Gaussian elimination ---- */
 function _solveLinear(A, b){
   const n = b.length;
@@ -4866,7 +5113,7 @@ function _homographyUnitToQuad(quad){
 /* ---- locate 4 corner markers: solid, achromatic (black) blobs near the image
    corners. Achromatic test is what separates the black marks from the kids'
    coloured cells; returns [TL,TR,BR,BL] in image coords, or null. ---- */
-function _cornerMarkersFrom(imgData){
+function _cornerMarkersFrom(imgData, diag){
   const { data, width: w, height: h } = imgData;
   const N = w * h;
   // Adaptive dark threshold from mean luminance.
@@ -4904,18 +5151,48 @@ function _cornerMarkersFrom(imgData){
       if(qy > 0)   { const n = q-w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
       if(qy < h-1) { const n = q+w; if(mask[n] && !labels[n]){ labels[n]=lab; stack[sp++]=n; } }
     }
-    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1 });
+    comps.push({ area, cx: sx/area, cy: sy/area, bw: maxx-minx+1, bh: maxy-miny+1, x0: minx, y0: miny });
   }
 
   // Keep solid, squarish blobs of a plausible size (not noise, not the QR/border).
-  const cand = comps.filter(c => {
+  // Written as a loop rather than .filter so the diagnostics can say WHICH test
+  // threw a blob out and by how much — "the marks were seen at fa=0.00031, just
+  // under the 0.0004 floor" is actionable, "fewer than 4 candidates" is not.
+  const cand = [];
+  const tally = diag ? { small: 0, big: 0, aspect: 0, solid: 0 } : null;
+  const misses = diag ? [] : null;
+  for(const c of comps){
     const fa = c.area / N;
-    if(fa < 0.0004 || fa > 0.04) return false;
     const ar = c.bw / c.bh;
-    if(ar < 0.45 || ar > 2.2) return false;
-    return (c.area / (c.bw * c.bh)) >= 0.55; // solidly filled square
-  });
-  if(cand.length < 4) return null;
+    const solidity = c.area / (c.bw * c.bh);
+    let why = null;
+    if(fa < 0.0004)      why = "small";
+    else if(fa > 0.04)   why = "big";
+    else if(ar < 0.45 || ar > 2.2) why = "aspect";
+    else if(solidity < 0.55)       why = "solid";
+    if(why){
+      if(tally){ tally[why]++; misses.push({ why, fa, ar, solidity, cx: c.cx, cy: c.cy, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }); }
+      continue;
+    }
+    c.fa = fa; c.ar = ar; c.solidity = solidity;
+    cand.push(c);
+  }
+  if(diag){
+    let maskPx = 0;
+    for(let p=0; p<N; p++) if(mask[p]) maskPx++;
+    // Near-misses are only interesting for the biggest blobs — a printed mark is
+    // never the 400th-largest thing in the frame.
+    misses.sort((a, b) => (b.fa - a.fa));
+    diag.marks = {
+      w, h, meanL: +meanL.toFixed(1), T: +T.toFixed(1),
+      maskFrac: +(maskPx / N).toFixed(4),
+      comps: comps.length, cand: cand.length, tally,
+      misses: misses.slice(0, 6),
+      cands: cand.slice().sort((a, b) => b.area - a.area).slice(0, 8)
+        .map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), fa: c.fa, ar: c.ar, solidity: c.solidity, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }))
+    };
+  }
+  if(cand.length < 4){ if(diag) diag.verdict = SCAN_FAIL.FEW_BLOBS; return null; }
 
   // Pick the four corner-most centroids (extremes of x+y and x−y).
   let tl=null, tr=null, br=null, bl=null;
@@ -4930,8 +5207,17 @@ function _cornerMarkersFrom(imgData){
   const pts = [tl, tr, br, bl];
   // Reject if any two "corners" collapsed onto the same blob / are too close (not a real quad).
   const minSep = Math.min(w, h) * 0.12;
+  let worst = Infinity;
   for(let a=0; a<4; a++) for(let b2=a+1; b2<4; b2++){
-    if(Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy) < minSep) return null;
+    const d = Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy);
+    if(d < worst) worst = d;
+    if(d < minSep && !diag) return null;
+  }
+  if(diag){
+    diag.marks.minSepReq = +minSep.toFixed(1);
+    diag.marks.minSepGot = +worst.toFixed(1);
+    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh }));
+    if(worst < minSep){ diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
   }
   return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
 }
@@ -4947,7 +5233,7 @@ function _lumAt(imgData, x, y){
 
 /* ---- read the de-warped grid into a flat note list (row/start/len, len in
    columns). Adjacent filled cells merge when the gap between them is >50% inked. */
-function _scanNotesFromFrame(imgData, geom, mapPoint){
+function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const { rows: R, cols: C, cellFrac, gapFrac } = geom;
 
   // Paper-white baseline: 85th percentile luminance over random grid samples.
@@ -4956,6 +5242,14 @@ function _scanNotesFromFrame(imgData, geom, mapPoint){
   whites.sort((a,b) => a - b);
   const white = whites[Math.floor(whites.length * 0.85)] || 200;
   const inkThresh = white * SCAN_FILL_RATIO;
+  if(diag) diag.grid = {
+    rows: R, cols: C, white, inkThresh: +inkThresh.toFixed(1),
+    // The spread is the tell for the known "fully coloured sheet reads as
+    // empty" trap: paper white is sampled INSIDE the grid, so a dark p05 with a
+    // dark p85 means the baseline itself was measured off crayon, not paper.
+    p05: whites[Math.floor(whites.length * 0.05)], p50: whites[Math.floor(whites.length * 0.50)],
+    p95: whites[Math.floor(whites.length * 0.95)]
+  };
 
   // Slot c spans u∈[c/C,(c+1)/C]: first cellFrac is the square, the rest is the gap.
   const cellU = (c, t) => (c + t * cellFrac) / C;            // t∈[0,1] across the cell
@@ -4973,6 +5267,26 @@ function _scanNotesFromFrame(imgData, geom, mapPoint){
   const cellFilled = (r, c) => darkFraction(cellU, r, c) >= 0.5;
   const gapJoined  = (r, c) => darkFraction(gapU, r, c) > SCAN_GAP_JOIN;
 
+  // Full dark-fraction maps for the log. Computed in their own pass (rather than
+  // sniffed from the note loop, which short-circuits) so every cell is reported,
+  // including the marginal ones sitting either side of the 0.5 decision.
+  if(diag){
+    const cellMap = [], gapMap = [], pts = [];
+    for(let r=0; r<R; r++){
+      const cr = [], gr = [];
+      for(let c=0; c<C; c++){
+        cr.push(+darkFraction(cellU, r, c).toFixed(2));
+        gr.push(+darkFraction(gapU, r, c).toFixed(2));
+        const p = mapPoint(cellU(c, 0.5), rowV(r, 0.5));
+        pts.push({ x: p.x, y: p.y });
+      }
+      cellMap.push(cr); gapMap.push(gr);
+    }
+    diag.grid.cellMap = cellMap;
+    diag.grid.gapMap  = gapMap;
+    diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
+  }
+
   const notes = [];
   for(let r=0; r<R; r++){
     let c = 0;
@@ -4985,6 +5299,7 @@ function _scanNotesFromFrame(imgData, geom, mapPoint){
       c++;
     }
   }
+  if(diag) diag.grid.notes = notes.length;
   return notes;
 }
 
@@ -5057,34 +5372,52 @@ function _gridMapper(mapPoint, geom){
    a sweep of simulated angles: every correct lock came in at aspect 1.44–1.60
    with edge skew ≤1.17, while a bad lock was 2.56 / 3.28. Thresholds sit well
    clear of both. */
-function _quadLooksLikeSheet(quad, geom){
+function _quadLooksLikeSheet(quad, geom, diag){
   const nominal = geom && geom.quadAspect;
   if(!nominal) return true;                 // nothing to check against
   const len = (a, b) => Math.hypot(quad[a].x - quad[b].x, quad[a].y - quad[b].y);
   const top = len(0,1), bottom = len(3,2), left = len(0,3), right = len(1,2);
-  if(!(top && bottom && left && right)) return false;
   const skew = (a, b) => Math.max(a,b) / Math.min(a,b);
-  if(skew(top, bottom) > 3 || skew(left, right) > 3) return false;
   const aspect = ((top + bottom) / 2) / ((left + right) / 2);
+  if(diag) diag.quad = {
+    nominal, top: +top.toFixed(1), bottom: +bottom.toFixed(1),
+    left: +left.toFixed(1), right: +right.toFixed(1),
+    skewH: +skew(top, bottom).toFixed(2), skewV: +skew(left, right).toFixed(2),
+    aspect: +aspect.toFixed(3), aspectLo: +(nominal / 1.6).toFixed(3), aspectHi: +(nominal * 1.6).toFixed(3)
+  };
+  if(!(top && bottom && left && right)) return false;
+  if(skew(top, bottom) > 3 || skew(left, right) > 3) return false;
   return aspect <= nominal * 1.6 && aspect >= nominal / 1.6;
 }
 
 /* Corner detection + that sanity check, so both the live loop and the manual
    capture reject an implausible lock the same way. */
-function _sheetCornersFrom(imgData, geom){
-  const corners = _cornerMarkersFrom(imgData);
+function _sheetCornersFrom(imgData, geom, diag){
+  const corners = _cornerMarkersFrom(imgData, diag);
   if(!corners) return null;
-  return _quadLooksLikeSheet(corners, geom) ? corners : null;
+  if(_quadLooksLikeSheet(corners, geom, diag)) return corners;
+  if(diag){ diag.verdict = SCAN_FAIL.BAD_QUAD; diag.corners = corners; }
+  return null;
 }
 
-function _processScanFrame(imgData, sheetId, corners){
+function _processScanFrame(imgData, sheetId, corners, diag){
   const geom = SHEET_GEOMETRY[sheetId];
   if(!geom) return false;
+  if(diag) diag.corners = corners;
   const mapPoint = _homographyUnitToQuad(corners);
-  if(!mapPoint) return false;
+  if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return false; }
   const gridPoint = _gridMapper(mapPoint, geom);
-  if(!gridPoint) return false;
-  _routeScannedNotes(geom, _scanNotesFromFrame(imgData, geom, gridPoint));
+  if(!gridPoint){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return false; }
+  const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
+  if(diag){
+    diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
+    // Log BEFORE routing: a successful scan closes the modal, and for a
+    // cross-template sheet it navigates the page outright — either way the
+    // caller may never get to run its own push.
+    diag.logged = true;
+    _scanLogPush(diag);
+  }
+  _routeScannedNotes(geom, notes);
   return true;
 }
 
@@ -5127,28 +5460,45 @@ function _scanTick(ts){
   _scanRafId = requestAnimationFrame(_scanTick);
   if(ts - _scanLastTick < SCAN_TICK_MS) return;
   _scanLastTick = ts;
+  const diag = SCAN_DEBUG ? _newScanDiag("live") : null;
   const sheetId = _currentSheetId();
-  if(!sheetId) return;
+  if(!sheetId){
+    if(diag){ diag.verdict = SCAN_FAIL.NO_SHEET; _scanLogPush(diag); }
+    return;
+  }
   const imgData = _scanFrameImageData();
-  if(!imgData) return;
+  if(!imgData){
+    if(diag){ diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag); }
+    return;
+  }
+  if(diag) diag.img = imgData;
 
-  const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId]);
+  const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag);
 
   if(sheetId && corners){
     _scanLockCount++;
+    if(diag){
+      diag.lock = _scanLockCount + "/" + SCAN_LOCK_FRAMES;
+      diag.verdict = "locking";   // overwritten by _processScanFrame on the lock frame
+    }
     _setScanStatus(_scanLockCount >= SCAN_LOCK_FRAMES ? "locked" : "locking");
     if(_scanLockCount >= SCAN_LOCK_FRAMES){
       _stopSheetScan();
-      _processScanFrame(imgData, sheetId, corners);
+      _processScanFrame(imgData, sheetId, corners, diag);
     }
   } else {
     _scanLockCount = 0;
     _setScanStatus(null);
   }
+  // _processScanFrame logs its own record before it routes (which can navigate).
+  if(diag && !diag.logged) _scanLogPush(diag);
 }
 
 function _startSheetScan(){
   _scanLockCount = 0; _scanLastTick = 0;
+  // Show the panel as soon as scanning starts, so the flag visibly took effect
+  // before the first frame rather than after a confusing silent failure.
+  if(SCAN_DEBUG) _scanDebugRender(null);
   if(_scanRafId) cancelAnimationFrame(_scanRafId);
   _scanRafId = requestAnimationFrame(_scanTick);
 }
@@ -5185,14 +5535,23 @@ function camCapture(){
 function camImport(){
   if(!camCapturedDataUrl) camCapture();
   if(!camCanvasEl.width) return;
+  const diag = SCAN_DEBUG ? _newScanDiag("use") : null;
   const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
+  if(diag) diag.img = imgData;
   const sheetId = _currentSheetId();
-  const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId]) : null;
-  if(sheetId && corners && _processScanFrame(imgData, sheetId, corners)){
+  if(!sheetId && diag) diag.verdict = SCAN_FAIL.NO_SHEET;
+  const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag) : null;
+  const ok = sheetId && corners && _processScanFrame(imgData, sheetId, corners, diag);
+  if(diag && !diag.logged) _scanLogPush(diag);
+  if(ok){
     _stopSheetScan();
   }else{
     try{ showSaveToast("error"); }catch(e){}
-    alert("Couldn't read the worksheet.\nMake sure all four black corner squares are inside the frame, then try again.");
+    // In debug mode the panel already says exactly which check refused and with
+    // what numbers; a modal alert on top of it just costs a tap per attempt.
+    if(!SCAN_DEBUG){
+      alert("Couldn't read the worksheet.\nMake sure all four black corner squares are inside the frame, then try again.");
+    }
   }
 }
 
@@ -6828,7 +7187,15 @@ window.KidSequencer = {
     sheetCornersFrom: _sheetCornersFrom,
     quadLooksLikeSheet: _quadLooksLikeSheet,
     printMarkInsets: _printMarkInsets,
-    get appliedFlag(){ return _scanImportApplied; }
+    get appliedFlag(){ return _scanImportApplied; },
+    // Diagnostics (see SCAN DIAGNOSTICS). `diagnose` is the read-only pipeline;
+    // `log`/`format` are what the on-screen panel and its copy button read.
+    FAIL: SCAN_FAIL,
+    diagnose: _scanDiagnose,
+    format: _scanDebugLines,
+    get debug(){ return SCAN_DEBUG; },
+    set debug(v){ SCAN_DEBUG = !!v; },
+    get log(){ return _scanLog; }
   },
   Auth: { logout }
 };

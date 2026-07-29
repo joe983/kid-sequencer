@@ -316,6 +316,54 @@ manual Capture-then-Use path and runs the same detect → `_processScanFrame` pi
 **Known limit (pre-existing):** a 100%-coloured sheet reads as empty — the paper-white
 baseline is sampled inside the grid and finds no paper.
 
+### Scan diagnostics — `?scandebug=1`
+The pipeline refuses a frame at six different points and the user sees the same
+sentence for all of them, plus a seventh case that doesn't even fail (it locks
+on, reads every cell blank, and silently clears the grid). So every decision
+point records **why** plus the numbers it decided on, into a panel pinned to the
+bottom of the screen — the phone holding the camera is the machine that has to
+display it.
+
+- **On/off:** `?scandebug=1` / `?scandebug=0`, sticky in `localStorage`
+  (`kidseq_scandebug`) because a successful scan navigates the page. The panel's
+  own `off` button clears it. **Off by default and behaviour-neutral** — no diag
+  object is allocated, every instrumented function skips its bookkeeping via
+  `if(diag)`, and the failure `alert` fires exactly as before (verified: with the
+  flag off a blank frame still alerts, log length 0, no panel in the DOM).
+- **Verdicts** (`SCAN_FAIL`): `no-sheet`, `no-frame`, `few-blobs`,
+  `corners-collapsed`, `quad-implausible`, `homography-singular`,
+  `no-grid-insets`, `read-empty`, `ok`, plus `locking` for a partial lock.
+  `read-empty` is log-only — it does not change what the scan does.
+- **What it reports:** frame size, `meanL`/`T`/dark-pixel fraction; component
+  and candidate counts with a per-reason rejection tally; the biggest *rejected*
+  blobs with `fa`/`ar`/`solidity` and position (this is the money line — "your
+  marks are being seen at `fa 0.00020` against the `0.0004` floor" is a fix,
+  "fewer than 4 candidates" is not); the picked quad + min separation; aspect and
+  skew against their bands; paper-white with its p05/p50/p95 spread (the tell for
+  the fully-coloured-sheet trap) and an ASCII map of every cell's dark fraction.
+- **Annotated frame:** red = blob rejected by the shape filters, amber =
+  survived as a candidate, green = the four actually chosen, cyan = grid sample
+  points. Boxes have a 7px floor so a mark failing *for being too small* is still
+  visible.
+- **`copy`** puts the whole session (all attempts, newest first, + UA/viewport)
+  on the clipboard to paste into a chat. The panel lives on `<body>`, NOT in
+  `#camModal`, so it survives the modal close a successful scan triggers.
+- **Log order:** `_processScanFrame` pushes its record **before** it routes,
+  because routing applies notes and can navigate — the caller may never resume.
+- **Headless/offline use:** `KidSequencer.Scan.diagnose(imgData[, sheetId])` runs
+  the instrumented pipeline read-only (no notes applied) and returns the record;
+  `Scan.format(rec)` renders the text block; `Scan.log` is the ring buffer. That
+  is what the synthetic-sheet harness drives — build a white canvas, four black
+  squares on a quad, coloured cells mapped through `homographyUnitToQuad`, and
+  assert the verdict. A trapezoid quad simulates photographing the sheet askew.
+
+⚠️ Verifying in the Browser pane: the pane can freeze rAF, so `buildGrid()` never
+runs and any scan that *succeeds* dies in `redrawRowNotes` on an undefined row.
+Shim `requestAnimationFrame`→`setTimeout` and call
+`KidSequencer.Sequencer.buildGrid()` first. To exercise the real `camImport()`
+without a camera, draw the fixture straight into `#camCanvas` and set its width:
+`camCapture()` bails (no video) but leaves the canvas you prepared.
+
 ### Overlay + status badge
 - `.camOverlay` — the aim guide: corner brackets drawn with 8 `linear-gradient`
   backgrounds, colour driven by the `--aimCol` custom property. White idle →
