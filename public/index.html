@@ -4815,8 +4815,49 @@ function closeCameraModal(){
 const SCAN_WORK_W      = 420;   // working resolution width for QR + marker detection
 const SCAN_LOCK_FRAMES = 3;     // consecutive good frames before auto-capture
 const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is heavy)
-const SCAN_FILL_RATIO  = 0.70;  // a cell is "inked" if darker than 70% of paper white
-const SCAN_GAP_JOIN    = 0.50;  // >50% of the inter-cell gap coloured ⇒ notes joined
+const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local paper
+
+/* How a cell is judged filled. A child does not flood a square with solid
+   colour — they SCRIBBLE it, and a biro hatch leaves most of the paper showing
+   between strokes. Sampling 9 points and demanding 5 be ink (the original rule)
+   therefore misses real answers: in the field logs, scribbled cells came back at
+   0.30-0.45 ink against a 0.5 cutoff, so a sheet with three coloured squares
+   imported two of them and, in the worst round, one.
+
+   So: sample far more densely, and calibrate against the sheet itself rather
+   than a fixed number. The blank cells on the page define what blank looks like
+   — including any printed border bleeding into the sample window — and a filled
+   cell has to clear that baseline by a margin. Self-calibrating survives biro vs
+   pencil vs crayon, and light vs heavy hands, which no constant does. */
+const SCAN_CELL_SAMPLES = 6;    // per axis, so 36 samples per cell
+const SCAN_BLANK_PCT    = 0.20; // this percentile of cells is taken as blank
+const SCAN_FILL_MARGIN  = 0.10; // ink fraction a filled cell must clear it by
+/* Absolute floor. Measured on a real scanned sheet: blank cells read 0.00 ink
+   (p50, p80, p90 and p95 all zero — the sample window sits inside the cell, away
+   from the printed border) while the four coloured ones read 0.39, 0.81, 0.94
+   and 0.94. With the blank population at literally zero there is no reason to
+   sit as high as the original 0.22.
+
+   The floor is not zero, though, because of what a fixture caught: a half-pixel
+   registration error is enough to graze the sample window along the printed cell
+   borders, and every cell then reads 0.17 — with only half the cells affected,
+   the 20th-percentile blank estimate stays at 0.00 and does not absorb it. 0.20
+   sits above that bleed while leaving 2x headroom under the lightest real
+   colouring measured (0.39). */
+const SCAN_FILL_MIN     = 0.20;
+
+/* Registration check. Every geometry test upstream asks "is this quad plausible";
+   none asks the question that actually matters — "did the grid land where we
+   think it did". It can be answered directly: the sheet HAS a printed grid, so on
+   a correct lock the predicted grid lines fall on ink and the cell interiors fall
+   on paper. On a lock that grabbed the wrong blob, both fall on the same stuff.
+
+   Medians, not means, so a heavily coloured sheet doesn't drag the interior
+   figure down into the borders. Measured: good fixtures 112-115, a real photo 45,
+   a half-coloured sheet still 115 — against 0 for the missing-mark impostor and
+   -1 for a sheet coloured edge to edge. 20 sits clear of both ends. */
+const SCAN_REG_MIN      = 20;
+const SCAN_GAP_JOIN     = 0.50; // fraction of the joining threshold a gap must hit
 
 /* Corner-mark detection thresholds. Every one of these was set from a measured
    scan log rather than guessed — see the two rounds recorded in NEXT-SCAN.md.
@@ -4829,13 +4870,19 @@ const SCAN_GAP_JOIN    = 0.50;  // >50% of the inter-cell gap coloured ⇒ notes
      solidity 0.93-1.00 while shadow edges and clutter sat at 0.13-0.60, so this
      is the cleanest discriminator available and it carries the lower size floor.
    SCAN_MARK_SPREAD: the four marks print at one size, so a candidate set whose
-     areas differ by more than this is not four marks. */
+     areas differ by more than this is not four marks. Measured on real photos:
+     genuine locks came in at 1.57, 1.51 and 1.9, while a lock that had grabbed a
+     dark object off the table instead of the top-left mark measured 4.67 (12px
+     against 56px). 3 keeps ~60% headroom over the real spread and still refuses
+     that, which matters because the impostor's quad was otherwise plausible —
+     aspect 1.444, dead on nominal — and it silently shifted the whole grid by a
+     column. */
 const SCAN_LOCAL_K     = 0.75;
 const SCAN_MARK_MIN    = 0.00008;
 const SCAN_MARK_MAX    = 0.04;
 const SCAN_MARK_MIN_PX = 9;
 const SCAN_MARK_SOL    = 0.70;
-const SCAN_MARK_SPREAD = 6;
+const SCAN_MARK_SPREAD = 3;
 /* A printed mark always has paper all the way around it, so a blob clipped by
    the edge of the picture cannot be a whole mark — it's the sheet's own edge,
    the background beyond the paper, or vignetting. Round three of the logs is
@@ -4902,6 +4949,7 @@ const SCAN_FAIL = {
   COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
   UNEVEN:    "marks-uneven",       // the four picked blobs aren't one printed size
   NOT_OUTER: "marks-not-outermost",// mark-like ink sits OUTSIDE the quad we picked
+  MISREG:    "grid-misregistered", // the printed grid isn't where the lock predicts
   BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
   SINGULAR:  "homography-singular",
   NO_INSETS: "no-grid-insets",     // template carries no measured grid rectangle
@@ -5074,13 +5122,18 @@ function _scanDebugLines(rec){
   const q = rec.quad;
   if(q) L.push("quad aspect " + q.aspect + " (need " + q.aspectLo + "-" + q.aspectHi +
                ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)");
+  if(rec.reg != null) L.push("grid registration " + rec.reg + " / need " + SCAN_REG_MIN);
   const gr = rec.grid;
   if(gr){
     L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
            " p95 " + gr.p95 + "  notes " + gr.notes);
+    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt);
     for(const row of (gr.cellMap || [])){
-      // '#' inked, '+' marginal (either side of the 0.5 decision), '.' blank.
-      L.push("  " + row.map(v => v >= 0.7 ? "#" : (v >= 0.5 ? "H" : (v >= 0.3 ? "+" : "."))).join(""));
+      // Relative to the decision, so near-misses are visible: '#' well over,
+      // 'H' just over, '+' just under (the ones a threshold tweak would flip).
+      L.push("  " + row.map(v => v >= gr.fillAt * 1.5 ? "#"
+                               : v >= gr.fillAt        ? "H"
+                               : v >= gr.fillAt * 0.6  ? "+" : ".").join(""));
     }
   }
   return L.join("\n");
@@ -5116,6 +5169,10 @@ function _scanDiagnose(imgData, sheetId){
   if(!mapPoint){ diag.verdict = SCAN_FAIL.SINGULAR; return diag; }
   const gridPoint = _gridMapper(mapPoint, geom);
   if(!gridPoint){ diag.verdict = SCAN_FAIL.NO_INSETS; return diag; }
+  // Same gates, same order as _processScanFrame — a probe that skipped one would
+  // report a pass the real path refuses, which is worse than no probe at all.
+  diag.reg = _gridRegistration(imgData, geom, gridPoint);
+  if(diag.reg < SCAN_REG_MIN){ diag.verdict = SCAN_FAIL.MISREG; return diag; }
   const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
   diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
   diag.notes = notes;
@@ -5465,34 +5522,47 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const gapU  = (c, t) => (c + cellFrac + t * gapFrac) / C;  // t∈[0,1] across the gap
   const rowV  = (r, t) => (r + 0.15 + t * 0.70) / R;         // vertical band inside the row
 
+  const S = SCAN_CELL_SAMPLES, SS = S * S;
   const darkFraction = (uFn, r, c) => {
     let dark = 0;
-    for(let iy=0; iy<3; iy++) for(let ix=0; ix<3; ix++){
-      const p = mapPoint(uFn(c, (ix + 0.5) / 3), rowV(r, (iy + 0.5) / 3));
+    for(let iy=0; iy<S; iy++) for(let ix=0; ix<S; ix++){
+      const p = mapPoint(uFn(c, (ix + 0.5) / S), rowV(r, (iy + 0.5) / S));
       if(isInk(p.x, p.y)) dark++;
     }
-    return dark / 9;
+    return dark / SS;
   };
-  const cellFilled = (r, c) => darkFraction(cellU, r, c) >= 0.5;
-  const gapJoined  = (r, c) => darkFraction(gapU, r, c) > SCAN_GAP_JOIN;
+
+  // Measure every cell first, then let the sheet's own blank cells set the bar.
+  const cellInk = [], gapInk = [], flat = [];
+  for(let r=0; r<R; r++){
+    const cr = [], gr = [];
+    for(let c=0; c<C; c++){
+      const v = darkFraction(cellU, r, c);
+      cr.push(v); flat.push(v);
+      gr.push(darkFraction(gapU, r, c));
+    }
+    cellInk.push(cr); gapInk.push(gr);
+  }
+  const sorted = flat.slice().sort((a, b) => a - b);
+  const blank = sorted[Math.floor(sorted.length * SCAN_BLANK_PCT)] || 0;
+  const fillAt = Math.max(SCAN_FILL_MIN, blank + SCAN_FILL_MARGIN);
+
+  const cellFilled = (r, c) => cellInk[r][c] >= fillAt;
+  const gapJoined  = (r, c) => gapInk[r][c] >= fillAt * SCAN_GAP_JOIN;
 
   // Full dark-fraction maps for the log. Computed in their own pass (rather than
   // sniffed from the note loop, which short-circuits) so every cell is reported,
   // including the marginal ones sitting either side of the 0.5 decision.
   if(diag){
-    const cellMap = [], gapMap = [], pts = [];
-    for(let r=0; r<R; r++){
-      const cr = [], gr = [];
-      for(let c=0; c<C; c++){
-        cr.push(+darkFraction(cellU, r, c).toFixed(2));
-        gr.push(+darkFraction(gapU, r, c).toFixed(2));
-        const p = mapPoint(cellU(c, 0.5), rowV(r, 0.5));
-        pts.push({ x: p.x, y: p.y });
-      }
-      cellMap.push(cr); gapMap.push(gr);
+    const pts = [];
+    for(let r=0; r<R; r++) for(let c=0; c<C; c++){
+      const p = mapPoint(cellU(c, 0.5), rowV(r, 0.5));
+      pts.push({ x: p.x, y: p.y });
     }
-    diag.grid.cellMap = cellMap;
-    diag.grid.gapMap  = gapMap;
+    diag.grid.cellMap = cellInk.map(row => row.map(v => +v.toFixed(2)));
+    diag.grid.gapMap  = gapInk.map(row => row.map(v => +v.toFixed(2)));
+    diag.grid.blank   = +blank.toFixed(2);
+    diag.grid.fillAt  = +fillAt.toFixed(2);
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
   }
 
@@ -5510,6 +5580,32 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   }
   if(diag) diag.grid.notes = notes.length;
   return notes;
+}
+
+/* ---- did the grid actually land where we think it did? ----------------------
+   The printed grid lines are the answer key: sample where they are PREDICTED to
+   be and compare against the cell interiors. A correct lock puts ink under the
+   lines and paper inside the cells; a wrong one puts the same thing under both.
+   Returns that gap in luminance — bigger is better registered. See SCAN_REG_MIN
+   for the measured spread. */
+function _gridRegistration(imgData, geom, mapPoint){
+  const { rows: R, cols: C, cellFrac } = geom;
+  const border = [], interior = [];
+  const N = 40;
+  for(let c=0; c<=C; c++) for(let i=0; i<N; i++){
+    const p = mapPoint(Math.min(1, c / C), 0.02 + 0.96 * i / (N - 1));
+    border.push(_lumAt(imgData, p.x, p.y));
+  }
+  for(let r=0; r<=R; r++) for(let i=0; i<N; i++){
+    const p = mapPoint(0.02 + 0.96 * i / (N - 1), Math.min(1, r / R));
+    border.push(_lumAt(imgData, p.x, p.y));
+  }
+  for(let r=0; r<R; r++) for(let c=0; c<C; c++){
+    const p = mapPoint((c + cellFrac * 0.5) / C, (r + 0.5) / R);
+    interior.push(_lumAt(imgData, p.x, p.y));
+  }
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  return med(interior) - med(border);
 }
 
 /* ---- apply a scanned note list onto the CURRENT page's grid ---- */
@@ -5637,6 +5733,10 @@ function _processScanFrame(imgData, sheetId, corners, diag){
   if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return false; }
   const gridPoint = _gridMapper(mapPoint, geom);
   if(!gridPoint){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return false; }
+  // Last gate, and the only one that checks the thing we actually care about.
+  const reg = _gridRegistration(imgData, geom, gridPoint);
+  if(diag) diag.reg = reg;
+  if(reg < SCAN_REG_MIN){ if(diag){ diag.verdict = SCAN_FAIL.MISREG; diag.logged = true; _scanLogPush(diag); } return false; }
   const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
   if(diag){
     diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
