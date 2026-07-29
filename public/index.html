@@ -5138,6 +5138,8 @@ function _scanDebugLines(rec){
            " p95 " + gr.p95 + "  notes " + gr.notes);
     L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt +
            ", extends a run at " + gr.extendAt);
+    if(gr.legal) L.push("note lengths " + gr.legal +
+      (gr.snaps && gr.snaps.length ? "   snapped " + gr.snaps.join(" ") : "   snapped none"));
     for(const row of (gr.cellMap || [])){
       // Relative to the decisions, so near-misses are visible: '#' well over,
       // 'H' over the bar, '+' only good enough to extend a neighbouring run.
@@ -5498,6 +5500,42 @@ function _cornerMarkersFrom(imgData, diag){
   return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
 }
 
+/* ---- legal note lengths, and snapping a coloured run onto one ---------------
+   A child can colour any number of cells in a row, but the app only has five
+   note lengths — the tool palette is 16th/8th/quarter/half/whole, which at
+   COLS_PER_BEAT=4 is 1/2/4/8/16 columns. A run of 3, 5, 6 or 7 is not a note
+   this app can make, so the scan has to land on one that is.
+
+   ROUND, don't split. Splitting a 3 into an 8th plus a 16th keeps the exact
+   duration but turns one coloured block into two separate attacks — the child
+   hears two notes where they drew one. The block-to-note correspondence is the
+   thing they can actually see and reason about, so it's the one to preserve; a
+   sixteenth of a bar's difference in length is the cheaper error. It also
+   degrades far better at the top end: a 15-cell run rounds to one whole note,
+   where splitting would produce 8+4+2+1 — four attacks nobody drew.
+
+   Nearest is measured on a LOG scale because note lengths are geometric, so
+   the boundary between "quarter" and "half" sits at 5.66 columns rather than 6.
+   Ties go up, matching the intuition that a block is at least as long as drawn. */
+function _legalNoteLens(){
+  const set = new Set();
+  for(const t of toolSteps) if(t && t.steps > 0) set.add(t.steps);
+  const arr = Array.from(set).sort((a, b) => a - b);
+  return arr.length ? arr : [1];
+}
+
+function _snapNoteLen(len, maxLen, legal){
+  const fits = legal.filter(L => L <= maxLen);
+  if(!fits.length) return 0;
+  let best = fits[0], bestD = Infinity;
+  const target = Math.log2(len);
+  for(const L of fits){
+    const d = Math.abs(Math.log2(L) - target);
+    if(d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && L > best)){ bestD = d; best = L; }
+  }
+  return best;
+}
+
 /* ---- luminance of a single source pixel (clamped) ---- */
 function _lumAt(imgData, x, y){
   const w = imgData.width, h = imgData.height, d = imgData.data;
@@ -5594,19 +5632,36 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
   }
 
+  const legal = _legalNoteLens();
+  const snaps = [];
   const notes = [];
   for(let r=0; r<R; r++){
+    // Collect the row's runs first: snapping needs to know where the NEXT one
+    // starts, so a note can never be rounded up over its neighbour.
+    const runs = [];
     let c = 0;
     while(c < C){
       if(cellFilled(r, c)){
         const start = c; let len = 1;
         while(c + 1 < C && cellFilled(r, c + 1) && gapJoined(r, c)){ len++; c++; }
-        notes.push({ row: r, start, len });
+        runs.push({ start, len });
       }
       c++;
     }
+    runs.forEach((run, i) => {
+      // Room available before the next note, or the end of the bar.
+      const room = (i + 1 < runs.length ? runs[i + 1].start : C) - run.start;
+      const len = _snapNoteLen(run.len, room, legal);
+      if(!len) return;
+      if(len !== run.len) snaps.push(r + ":" + run.start + " " + run.len + "->" + len);
+      notes.push({ row: r, start: run.start, len });
+    });
   }
-  if(diag) diag.grid.notes = notes.length;
+  if(diag){
+    diag.grid.notes  = notes.length;
+    diag.grid.legal  = legal.join("/");
+    diag.grid.snaps  = snaps;
+  }
   return notes;
 }
 
