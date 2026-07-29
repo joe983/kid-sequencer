@@ -4818,6 +4818,25 @@ const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is h
 const SCAN_FILL_RATIO  = 0.70;  // a cell is "inked" if darker than 70% of paper white
 const SCAN_GAP_JOIN    = 0.50;  // >50% of the inter-cell gap coloured ⇒ notes joined
 
+/* Corner-mark detection thresholds. Every one of these was set from a measured
+   scan log rather than guessed — see the two rounds recorded in NEXT-SCAN.md.
+   SCAN_LOCAL_K: a pixel is ink if it's below this fraction of the average
+     brightness of its OWN neighbourhood (see the integral image below).
+   SCAN_MARK_MIN/MAX: mark area as a fraction of the frame. The old floor was
+     0.0004 and real marks measured 0.00020-0.00042 — i.e. the detector was
+     throwing away the very things it was looking for, 103 frames running.
+   SCAN_MARK_SOL: a printed square is SOLID. In the logs real marks came back at
+     solidity 0.93-1.00 while shadow edges and clutter sat at 0.13-0.60, so this
+     is the cleanest discriminator available and it carries the lower size floor.
+   SCAN_MARK_SPREAD: the four marks print at one size, so a candidate set whose
+     areas differ by more than this is not four marks. */
+const SCAN_LOCAL_K     = 0.75;
+const SCAN_MARK_MIN    = 0.00008;
+const SCAN_MARK_MAX    = 0.04;
+const SCAN_MARK_MIN_PX = 9;
+const SCAN_MARK_SOL    = 0.70;
+const SCAN_MARK_SPREAD = 6;
+
 let _scanRafId    = 0;
 let _scanLockCount= 0;
 let _scanLastTick = 0;
@@ -4856,6 +4875,7 @@ const SCAN_FAIL = {
   NO_FRAME:  "no-frame",           // camera isn't delivering pixels yet
   FEW_BLOBS: "few-blobs",          // <4 mark candidates survived the shape filters
   COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
+  UNEVEN:    "marks-uneven",       // the four picked blobs aren't one printed size
   BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
   SINGULAR:  "homography-singular",
   NO_INSETS: "no-grid-insets",     // template carries no measured grid rectangle
@@ -4886,7 +4906,22 @@ function _scanLogPush(rec){
   }
   _scanLastRec = rec;
   _scanDebugRender(rec);
-  // The frame is ~500 KB; the panel has already drawn it, so don't retain it.
+  // Keep a JPEG of the RAW frame (not the annotated one — that's derivable) so
+  // Send can carry it. With the actual pixels the whole instrumented pipeline
+  // can be re-run offline against the real photo, which beats any screenshot.
+  // Only on a fresh verdict or a manual attempt: at 8 fps a toDataURL per tick
+  // would cost more than the scan.
+  if(rec.img && (rec.n === 1 || rec.src === "use")){
+    try{
+      const c = document.createElement("canvas");
+      c.width = rec.img.width; c.height = rec.img.height;
+      c.getContext("2d").putImageData(rec.img, 0, 0);
+      rec.jpeg = c.toDataURL("image/jpeg", 0.6);
+    }catch(e){}
+  }
+  // Firestore caps a document at 1 MB — only the newest few frames travel.
+  for(let i = 0; i < _scanLog.length - 3; i++) _scanLog[i].jpeg = null;
+  // The ImageData is ~500 KB; the panel has drawn it and the JPEG is taken.
   rec.img = null;
 }
 
@@ -4928,6 +4963,7 @@ function _scanDebugEnsure(){
     return b;
   };
   bar.append(chip,
+    mkBtn("send", _scanDebugSend),
     mkBtn("copy", _scanDebugCopy),
     mkBtn("clear", () => { _scanLog.length = 0; _scanLastRec = null; _scanDebugRender(null); }),
     mkBtn("hide", () => { body.style.display = body.style.display === "none" ? "" : "none"; }),
@@ -4993,7 +5029,8 @@ function _scanDebugLines(rec){
          (rec.lock ? "  lock " + rec.lock : ""));
   const m = rec.marks;
   if(m){
-    L.push("frame " + m.w + "x" + m.h + "  meanL " + m.meanL + "  T " + m.T + "  dark " + (m.maskFrac*100).toFixed(1) + "%");
+    L.push("frame " + m.w + "x" + m.h + "  meanL " + m.meanL + "  localK " + m.localK + "/r" + m.rad +
+           "  dark " + (m.maskFrac*100).toFixed(1) + "%");
     L.push("blobs " + m.comps + " -> cand " + m.cand +
            (m.tally ? "   rej sm " + m.tally.small + " big " + m.tally.big + " asp " + m.tally.aspect + " sol " + m.tally.solid : ""));
     for(const b of (m.misses || []).slice(0, 4)){
@@ -5001,8 +5038,9 @@ function _scanDebugLines(rec){
              " sol " + b.solidity.toFixed(2) + " @" + Math.round(b.cx) + "," + Math.round(b.cy));
     }
     if(m.picked){
-      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy).join(" ") +
-             "   minSep " + m.minSepGot + (m.minSepReq != null ? " / need " + m.minSepReq : ""));
+      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy + "(" + p.area + "px)").join(" "));
+      L.push("  minSep " + m.minSepGot + " / need " + m.minSepReq +
+             "   size spread " + m.spread + " / max " + m.spreadMax);
     }
   }
   const q = rec.quad;
@@ -5010,8 +5048,8 @@ function _scanDebugLines(rec){
                ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)");
   const gr = rec.grid;
   if(gr){
-    L.push("white " + gr.white + " ink<" + gr.inkThresh + "  lum p05 " + gr.p05 + " p50 " + gr.p50 + " p95 " + gr.p95 +
-           "  notes " + gr.notes);
+    L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
+           " p95 " + gr.p95 + "  notes " + gr.notes);
     for(const row of (gr.cellMap || [])){
       // '#' inked, '+' marginal (either side of the 0.5 decision), '.' blank.
       L.push("  " + row.map(v => v >= 0.7 ? "#" : (v >= 0.5 ? "H" : (v >= 0.3 ? "+" : "."))).join(""));
@@ -5054,6 +5092,42 @@ function _scanDiagnose(imgData, sheetId){
   diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
   diag.notes = notes;
   return diag;
+}
+
+/* Ship the log somewhere it can be read from ANOTHER machine. The page runs on
+   the tablet doing the scanning; whoever reads the log isn't sitting at it, and
+   a Safari page can't write to a desktop's disk — so it goes to Firestore and is
+   pulled from there. Auth-scoped to the signed-in user (same rule shape as saved
+   sequences), so this needs no public write path; a guest just gets told to log
+   in. Kept out of sequences/ so it never appears in the Load sheet. */
+async function _scanDebugSend(){
+  const chip = t => { if(_sdEls) _sdEls.chip.textContent = t; };
+  chip("sending…");
+  try{
+    const user = await _getFirebaseUser();
+    if(!user){ chip("not signed in — log in, then tap send"); return; }
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, setDoc, serverTimestamp } =
+      await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    const id = "scan-" + new Date().toISOString().replace(/[:.]/g, "-");
+    await setDoc(doc(db, "users", user.uid, "scanlogs", id), {
+      at: serverTimestamp(),
+      ua: navigator.userAgent,
+      viewport: window.innerWidth + "x" + window.innerHeight,
+      sheet: String(_currentSheetId()),
+      attempts: _scanLog.length,
+      // Newest first, and capped — a long hunt can accumulate 40 records and
+      // Firestore caps a document at 1 MB.
+      text: _scanLog.slice().reverse()
+        .map((r, i) => "=== " + (i + 1) + " ===\n" + _scanDebugLines(r)).join("\n\n").slice(0, 60000),
+      // The actual photo, so the pipeline can be re-run against it offline.
+      frames: _scanLog.slice().reverse().filter(r => r.jpeg).slice(0, 2)
+        .map(r => ({ verdict: String(r.verdict), jpeg: r.jpeg }))
+    });
+    chip("sent ✓  " + id);
+  }catch(e){
+    chip("send failed: " + ((e && e.message) || e));
+  }
 }
 
 /* One tap puts the whole session on the clipboard, because the useful artifact
@@ -5113,22 +5187,85 @@ function _homographyUnitToQuad(quad){
 /* ---- locate 4 corner markers: solid, achromatic (black) blobs near the image
    corners. Achromatic test is what separates the black marks from the kids'
    coloured cells; returns [TL,TR,BR,BL] in image coords, or null. ---- */
-function _cornerMarkersFrom(imgData, diag){
+/* ---- shared local-brightness field ------------------------------------------
+   BOTH stages of the scan — finding the corner marks, and reading which cells
+   are coloured in — used to compare pixels against a single whole-frame
+   brightness. That cannot survive uneven light: a shadow over one corner drags
+   the frame statistic down, paper on the lit side stops separating from ink on
+   the dark side, and each stage fails in its own way (the marks stage locks onto
+   shadow edges — 18.8-28.5% of the frame masked as ink versus 0.4-1.4% on a good
+   frame, quads collapsing to minSep 0; the cell stage reads whole shadowed rows
+   as filled). Comparing a pixel against the light in ITS OWN neighbourhood makes
+   both tests exposure-independent — a shadow darkens both sides of the
+   comparison and cancels out.
+
+   Summed-area table, so a window average costs 4 lookups whatever the window
+   size. Memoised on the ImageData because the two stages want the same field
+   and the live loop hands out a fresh frame each tick. */
+function _lumField(imgData){
+  if(imgData.__lumField) return imgData.__lumField;
   const { data, width: w, height: h } = imgData;
   const N = w * h;
-  // Adaptive dark threshold from mean luminance.
-  let lumSum = 0;
-  for(let p=0; p<N; p++){ const i=p*4; lumSum += (Math.max(data[i],data[i+1],data[i+2]) + Math.min(data[i],data[i+1],data[i+2])) >> 1; }
-  const meanL = lumSum / N;
-  const T = Math.min(120, meanL * 0.55);
-
-  const mask = new Uint8Array(N);
+  const lumA  = new Uint8Array(N);
+  const achro = new Uint8Array(N);   // near-greyscale: what separates black marks
+  let lumSum = 0;                    // from the kid's coloured cells
   for(let p=0; p<N; p++){
     const i = p*4, R = data[i], G = data[i+1], B = data[i+2];
     const mx = Math.max(R,G,B), mn = Math.min(R,G,B);
     const lum = (mx + mn) >> 1;
-    const sat = mx === 0 ? 0 : (mx - mn) / mx;
-    if(lum < T && sat < 0.35) mask[p] = 1; // dark AND near-greyscale
+    lumA[p] = lum; lumSum += lum;
+    if((mx === 0 ? 0 : (mx - mn) / mx) < 0.35) achro[p] = 1;
+  }
+  const iw = w + 1;
+  const integ = new Float64Array(iw * (h + 1));
+  for(let y=0; y<h; y++){
+    let rowSum = 0;
+    for(let x=0; x<w; x++){
+      rowSum += lumA[y*w + x];
+      integ[(y+1)*iw + (x+1)] = integ[y*iw + (x+1)] + rowSum;
+    }
+  }
+  // The window must be comfortably bigger than the thing being detected, or that
+  // thing darkens its own reference patch and stops standing out from it. At
+  // 420px working width this is ~39px — several cells across, and five times a
+  // corner mark.
+  const rad = Math.max(8, Math.round(Math.min(w, h) / 8));
+  const localMean = (x, y) => {
+    const cx = x < 0 ? 0 : (x > w-1 ? w-1 : x|0), cy = y < 0 ? 0 : (y > h-1 ? h-1 : y|0);
+    const x0 = Math.max(0, cx - rad), x1 = Math.min(w - 1, cx + rad);
+    const y0 = Math.max(0, cy - rad), y1 = Math.min(h - 1, cy + rad);
+    const sum = integ[(y1+1)*iw + (x1+1)] - integ[y0*iw + (x1+1)]
+              - integ[(y1+1)*iw + x0]     + integ[y0*iw + x0];
+    return sum / ((x1 - x0 + 1) * (y1 - y0 + 1));
+  };
+  // integ/iw are exposed so the mask loop can inline the lookups: it runs over
+  // every pixel of every frame, and a closure call per pixel measured ~2x the
+  // cost of the whole rest of the detector.
+  const f = { w, h, N, lumA, achro, meanL: lumSum / N, rad, localMean, integ, iw };
+  try{ imgData.__lumField = f; }catch(e){}
+  return f;
+}
+
+function _cornerMarkersFrom(imgData, diag){
+  const { width: w, height: h } = imgData;
+  const N = w * h;
+  const F = _lumField(imgData);
+  const { lumA, achro, meanL, rad } = F;
+
+  const { integ, iw } = F;
+  const mask = new Uint8Array(N);
+  for(let y=0; y<h; y++){
+    // Row bounds are constant across the row — hoist them out of the inner loop.
+    const y0 = Math.max(0, y - rad), y1 = Math.min(h - 1, y + rad);
+    const rowH = y1 - y0 + 1;
+    const tRow = (y1+1)*iw, bRow = y0*iw;
+    for(let x=0; x<w; x++){
+      const p = y*w + x;
+      if(!achro[p]) continue;                  // coloured cells are never marks
+      const x0 = x - rad < 0 ? 0 : x - rad, x1 = x + rad > w - 1 ? w - 1 : x + rad;
+      const sum = integ[tRow + x1 + 1] - integ[bRow + x1 + 1] - integ[tRow + x0] + integ[bRow + x0];
+      if(lumA[p] * ((x1 - x0 + 1) * rowH) < sum * SCAN_LOCAL_K) mask[p] = 1;
+    }
   }
 
   // 4-connected components via explicit stack flood fill.
@@ -5166,10 +5303,10 @@ function _cornerMarkersFrom(imgData, diag){
     const ar = c.bw / c.bh;
     const solidity = c.area / (c.bw * c.bh);
     let why = null;
-    if(fa < 0.0004)      why = "small";
-    else if(fa > 0.04)   why = "big";
+    if(fa < SCAN_MARK_MIN || c.area < SCAN_MARK_MIN_PX) why = "small";
+    else if(fa > SCAN_MARK_MAX)    why = "big";
     else if(ar < 0.45 || ar > 2.2) why = "aspect";
-    else if(solidity < 0.55)       why = "solid";
+    else if(solidity < SCAN_MARK_SOL) why = "solid";
     if(why){
       if(tally){ tally[why]++; misses.push({ why, fa, ar, solidity, cx: c.cx, cy: c.cy, x0: c.x0, y0: c.y0, bw: c.bw, bh: c.bh }); }
       continue;
@@ -5184,7 +5321,7 @@ function _cornerMarkersFrom(imgData, diag){
     // never the 400th-largest thing in the frame.
     misses.sort((a, b) => (b.fa - a.fa));
     diag.marks = {
-      w, h, meanL: +meanL.toFixed(1), T: +T.toFixed(1),
+      w, h, meanL: +meanL.toFixed(1), localK: SCAN_LOCAL_K, rad,
       maskFrac: +(maskPx / N).toFixed(4),
       comps: comps.length, cand: cand.length, tally,
       misses: misses.slice(0, 6),
@@ -5211,14 +5348,22 @@ function _cornerMarkersFrom(imgData, diag){
   for(let a=0; a<4; a++) for(let b2=a+1; b2<4; b2++){
     const d = Math.hypot(pts[a].cx - pts[b2].cx, pts[a].cy - pts[b2].cy);
     if(d < worst) worst = d;
-    if(d < minSep && !diag) return null;
   }
+  // The four marks are printed at ONE size, so a set whose areas differ wildly
+  // is not four marks — it's a shadow blob paired with specks. The failing log
+  // shows exactly that shape of false lock (a 15-28% blob among tiny debris).
+  let aMin = Infinity, aMax = 0;
+  for(const c of pts){ if(c.area < aMin) aMin = c.area; if(c.area > aMax) aMax = c.area; }
+  const spread = aMax / Math.max(1, aMin);
   if(diag){
     diag.marks.minSepReq = +minSep.toFixed(1);
     diag.marks.minSepGot = +worst.toFixed(1);
-    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh }));
-    if(worst < minSep){ diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
+    diag.marks.spread    = +spread.toFixed(2);
+    diag.marks.spreadMax = SCAN_MARK_SPREAD;
+    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh, area: c.area }));
   }
+  if(worst < minSep){ if(diag) diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
+  if(spread > SCAN_MARK_SPREAD){ if(diag) diag.verdict = SCAN_FAIL.UNEVEN; return null; }
   return [{x:tl.cx,y:tl.cy},{x:tr.cx,y:tr.cy},{x:br.cx,y:br.cy},{x:bl.cx,y:bl.cy}];
 }
 
@@ -5236,14 +5381,22 @@ function _lumAt(imgData, x, y){
 function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   const { rows: R, cols: C, cellFrac, gapFrac } = geom;
 
-  // Paper-white baseline: 85th percentile luminance over random grid samples.
+  // A cell counts as inked when it is darker than the paper AROUND it, not
+  // darker than one number for the whole sheet — same reasoning as the mark
+  // detector, and the same failure without it: under a shadow the global
+  // baseline sits above the shadowed paper, so entire shadowed rows read as
+  // coloured in (reproduced in the fixtures as `0:0+13 1:0+12 …`).
+  const F = _lumField(imgData);
+  const isInk = (x, y) => _lumAt(imgData, x, y) < F.localMean(x, y) * SCAN_FILL_RATIO;
+
+  // Global paper stats are still worth reporting — the p05/p50/p95 spread is the
+  // tell for a sheet coloured edge to edge, where local reference degrades too.
   const whites = [];
   for(let s=0; s<200; s++){ const p = mapPoint(Math.random(), Math.random()); whites.push(_lumAt(imgData, p.x, p.y)); }
   whites.sort((a,b) => a - b);
   const white = whites[Math.floor(whites.length * 0.85)] || 200;
-  const inkThresh = white * SCAN_FILL_RATIO;
   if(diag) diag.grid = {
-    rows: R, cols: C, white, inkThresh: +inkThresh.toFixed(1),
+    rows: R, cols: C, white, fillRatio: SCAN_FILL_RATIO,
     // The spread is the tell for the known "fully coloured sheet reads as
     // empty" trap: paper white is sampled INSIDE the grid, so a dark p05 with a
     // dark p85 means the baseline itself was measured off crayon, not paper.
@@ -5260,7 +5413,7 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     let dark = 0;
     for(let iy=0; iy<3; iy++) for(let ix=0; ix<3; ix++){
       const p = mapPoint(uFn(c, (ix + 0.5) / 3), rowV(r, (iy + 0.5) / 3));
-      if(_lumAt(imgData, p.x, p.y) < inkThresh) dark++;
+      if(isInk(p.x, p.y)) dark++;
     }
     return dark / 9;
   };
