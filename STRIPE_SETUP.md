@@ -100,11 +100,33 @@ one of them is still the test-mode value leaves every function healthy, every
 page loading, and the only symptom is a paying customer hitting "Couldn't start
 checkout". Nothing in the deploy output mentions it. Step 4 is the guard.
 
-1. **Managed Payments, live mode.** Stripe Dashboard (Live) → activate Managed
-   Payments for the account, and turn on Adaptive Pricing
-   (Settings → Payments → Checkout). This is the step most likely to block
-   go-live — it is a preview product and may need Stripe's sign-off. Do it
-   first; the rest is wasted if it is refused.
+1. **Managed Payments, live mode.** Activate at
+   <https://dashboard.stripe.com/settings/managed-payments> — in **Live** mode
+   (the test-mode page you already accepted has `/test/` in the path).
+   Activation *is* accepting the Managed Payments terms of service on that page;
+   there is no separate application in the documented flow. Then turn on
+   Adaptive Pricing (Settings → Payments → Checkout).
+
+   Eligibility, checked against this account (2026-07-30):
+   - seller country **UK (GB)** — supported ✓
+   - **digital products only** (software / digital media / online courses) — a
+     browser music app subscription + digital top-ups qualifies ✓; physical
+     goods, professional services, live events and anything with human
+     intervention are excluded, none of which apply
+   - **restricted types** are Connect platforms, Express accounts and
+     platform-controlled accounts — this is a plain standalone account ✓
+   - tax code **`txcd_10103100`** ("SaaS – electronic download – personal use")
+     is on the eligible list, and is already what `setup-stripe-products.js`
+     stamps on every product ✓
+
+   Do this first: it is a preview product, and everything after it is wasted if
+   the account turns out to be ineligible. Step 4's `--probe` is what confirms
+   the activation actually took — the flag is not readable through the API.
+
+   **Unverified:** whether Adaptive Pricing overrides a Price's manually pinned
+   `currency_options`. `setup-stripe-products.js` assumes pinned wins and
+   Adaptive only fills the unlisted currencies. If a USD checkout shows anything
+   other than $5.99 at step 8, that assumption is wrong.
 
 2. **Create the live products/prices.** From `functions/`, with the **live** key:
    ```powershell
