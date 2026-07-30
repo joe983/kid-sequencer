@@ -206,12 +206,12 @@
 <canvas id="camCanvas" style="display:none;"></canvas>
 <div class="camOverlay"></div>
 </div>
+<!-- Scanning is automatic (see _startSheetScan): the live loop locks on and imports
+     by itself, so the only control a child needs is a way out. camCapture()/camImport()
+     survive on window.KidSequencer for headless verification — they have no UI. -->
 <div class="modalBtns">
-<button class="bigBtn" onclick="camCapture()">Capture</button>
-<button class="bigBtn" onclick="camImport()">Use</button>
 <button class="bigBtn" onclick="closeCameraModal()">Close</button>
 </div>
-<div class="modalHint">Tip: fit the whole worksheet — all four corner marks — inside the frame. It scans by itself, or tap Capture then Use.</div>
 </div>
 </div>
 
@@ -4772,8 +4772,8 @@ async function openCameraModal(){
 
     camVideoEl.srcObject = camStream;
     await camVideoEl.play().catch(()=>{});
-    // Start the live auto-detect loop: read QR (which sheet) + corner markers
-    // each frame and auto-import once locked. Capture/Use remain as a fallback.
+    // Start the live auto-detect loop: find the corner markers each frame and
+    // auto-import once locked. This is the only import path with a UI.
     _startSheetScan();
   }catch(e){
     console.error("Camera open failed:", e);
