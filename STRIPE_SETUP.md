@@ -6,7 +6,9 @@ handles tax/VAT). Checkout Sessions are created server-side in
 and the preview API version `2026-02-25.preview`. Fulfilment is the
 `stripeWebhook` function listening for `checkout.session.completed`.
 
-Do everything in **Test mode** first, then repeat with live keys.
+Do everything in **Test mode** first, then repeat with live keys — the ordered
+switch is **[Going live](#going-live)** at the bottom. Test mode is done and is
+what production runs on today.
 
 ## 1. Create products + prices (with tax codes)
 From the `functions/` directory, with your test secret key in the environment:
@@ -37,17 +39,20 @@ The 6 price IDs are committed as defaults in [functions/index.js](functions/inde
 (the `defineString` block). **Nothing to do for test mode** — they travel with the
 code and survive merges.
 
-For **live mode**, re-run the script in step 1 with a live key, then either update
-those defaults or drop the live IDs into `functions/.env` (env overrides win; see
-`.env.example`).
+The same IDs are also in [`functions/.env.kid-sequencer`](functions/.env.kid-sequencer),
+which **overrides** the defaults at deploy time — so that file, not `index.js`, is
+what actually ships. For **live mode** see [Going live](#going-live).
 
 ## 3. Secrets (real keys only)
 ```bash
 firebase functions:secrets:set STRIPE_SECRET_KEY       # sk_… (use live for prod)
 firebase functions:secrets:set STRIPE_WEBHOOK_SECRET   # whsec_… (from step 4)
-firebase functions:secrets:set STABILITY_API_KEY       # Stability AI key
 ```
-(No `STRIPE_PRICE_ID` secret — price IDs are config, not secrets.)
+(No `STRIPE_PRICE_ID` secret — price IDs are config, not secrets. `ENGINE_TOKEN`
+is the third secret in use, shared with the Modal engine; it is unrelated to
+Stripe and does not change between modes. `STABILITY_API_KEY` still exists in
+Secret Manager but nothing reads it any more — Stable Audio was replaced by the
+`engine/` renderer.)
 
 ## 4. Webhook
 Stripe Dashboard → Developers → Webhooks → Add endpoint:
@@ -80,6 +85,80 @@ The account popup's **Manage subscription** button calls the
   callable-function gotcha) or every call fails with "Empty Authorization header".
 - The portal acts on the customer stored in `users/{uid}.stripeCustomerId`
   (written by the subscription webhook), so only users who subscribed have it.
+
+---
+
+# Going live
+
+Production currently runs on the **test** secret key, so nobody can actually
+pay. Everything below happens in the Stripe dashboard's **Live** mode and needs
+the live secret key, which never leaves your machine — run these yourself.
+
+**Why it needs care:** price IDs, webhook endpoints, the portal configuration
+and the Managed Payments flag are all *per-mode*. Deploying a live key while any
+one of them is still the test-mode value leaves every function healthy, every
+page loading, and the only symptom is a paying customer hitting "Couldn't start
+checkout". Nothing in the deploy output mentions it. Step 4 is the guard.
+
+1. **Managed Payments, live mode.** Stripe Dashboard (Live) → activate Managed
+   Payments for the account, and turn on Adaptive Pricing
+   (Settings → Payments → Checkout). This is the step most likely to block
+   go-live — it is a preview product and may need Stripe's sign-off. Do it
+   first; the rest is wasted if it is refused.
+
+2. **Create the live products/prices.** From `functions/`, with the **live** key:
+   ```powershell
+   $env:STRIPE_SECRET_KEY="sk_live_xxx"; npm run setup:stripe
+   ```
+   It prints six live `price_…` IDs.
+
+3. **Paste those six IDs over the existing lines in
+   [`functions/.env.kid-sequencer`](functions/.env.kid-sequencer).** That file
+   wins over the `defineString` defaults in `index.js`, so it is the only place
+   that has to change. Price IDs are config, not secrets — committing them is
+   fine and intended.
+
+4. **Pre-flight, with the live key still in the environment:**
+   ```powershell
+   npm run check:stripe
+   ```
+   It resolves each price ID exactly the way the deployed functions will
+   (env → `.env.kid-sequencer` → `index.js` default), looks it up with your key,
+   and fails loudly on a test/live mismatch, a wrong amount, a non-inclusive tax
+   behaviour, a missing tax code, an archived price, a missing or mis-evented
+   webhook endpoint, or an unconfigured customer portal. Read-only.
+
+   Add `--probe` to also create one real Checkout Session and immediately expire
+   it. No money moves, but it is the only way to prove step 1 actually took —
+   the account flag is not readable through the API, so the checkout call *is*
+   the test.
+
+5. **Live webhook.** Dashboard (Live) → Developers → Webhooks → add
+   `https://europe-west1-kid-sequencer.cloudfunctions.net/stripeWebhook` with
+   `checkout.session.completed` + `customer.subscription.deleted`. Copy its
+   signing secret — it is per-endpoint, so the test-mode one will not verify:
+   ```bash
+   firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+   firebase functions:secrets:set STRIPE_SECRET_KEY     # the live sk_live_…
+   ```
+
+6. **Live customer portal.** Settings → Billing → Customer portal → configure +
+   activate (it is per-mode; the test-mode configuration does not carry over).
+   Without it the account popup's **Manage subscription** button throws.
+
+7. **Deploy and re-check.**
+   ```bash
+   cd functions && npm install && cd ..
+   firebase deploy --only functions
+   ```
+   Then run `npm run check:stripe` once more — it now reads the same config the
+   deployed functions hold.
+
+8. **Buy your own subscription with a real card**, confirm Firestore
+   `users/{uid}.tier` flips to `paid`, then cancel it from the portal and
+   confirm it flips back to `free`. The webhook is the only thing that grants
+   access; a successful payment that never reaches it looks exactly like a
+   refund request.
 
 ## Notes
 - No subscriber migration: Stripe was never live before, so the £1.99→£4.99

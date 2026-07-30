@@ -20,16 +20,9 @@
  * Get keys from the Stripe Dashboard → Developers → API keys.
  */
 
-const API_VERSION = "2026-02-25.preview";
-
-// Eligible digital tax code (from the blueprint). Adjust to the most accurate
-// category for your product if needed — see Stripe's tax code list.
-const TAX_CODE = "txcd_10103100";
-const CURRENCY = "gbp";                       // base currency
-
-// All prices are tax-INCLUSIVE: the listed amount is exactly what the customer
-// pays; Stripe (merchant of record) carves the VAT out by buyer location.
-const TAX_BEHAVIOR = "inclusive";
+// Catalogue + tax/API constants are shared with check-stripe-config.js so the
+// pre-flight check cannot drift from what this script created.
+const { API_VERSION, TAX_CODE, CURRENCY, TAX_BEHAVIOR, CCY_VERSION, CATALOG } = require("./catalog");
 
 // Approximate GBP→currency FX rates (STATIC — pricing doesn't track live FX; edit
 // freely). Each listed currency gets a CHARM-rounded local price pinned via
@@ -50,8 +43,6 @@ const SAME_DIGIT = new Set(["usd", "eur"]);
 const OVERRIDES = {
   pro: { usd: 5.99 },
 };
-// Bump when the currency set / charm rule changes, to force fresh prices on re-run.
-const CCY_VERSION = "fx1";
 
 // Round a converted amount UP to a "nice" charm price (e.g. 229→299, 6.34→6.99).
 function charm(x) {                                   // x in major currency units
@@ -73,16 +64,6 @@ function buildCurrencyOptions(gbpMajor, sku) {
   }
   return opts;
 }
-
-// SKU → product + price definition. amount is in the smallest currency unit (pence).
-const CATALOG = [
-  { sku: "pro",      lookupKey: "kidseq_pro_monthly",  name: "Kid Sequencer Pro",  description: "Pro subscription: all instruments & rhythms, 10 AI songs/month, 20 save slots.", amount: 499,  recurring: { interval: "month" } },
-  { sku: "ai10",     lookupKey: "kidseq_ai10",         name: "10 AI songs",        description: "Top-up: 10 extra AI songs.",  amount: 399 },
-  { sku: "ai25",     lookupKey: "kidseq_ai25",         name: "25 AI songs",        description: "Top-up: 25 extra AI songs.",  amount: 799 },
-  { sku: "ai50",     lookupKey: "kidseq_ai50",         name: "50 AI songs",        description: "Top-up: 50 extra AI songs.",  amount: 1299 },
-  { sku: "slots20",  lookupKey: "kidseq_slots20",      name: "+20 save slots",     description: "Top-up: 20 extra save slots.", amount: 199 },
-  { sku: "slots50",  lookupKey: "kidseq_slots50",      name: "+50 save slots",     description: "Top-up: 50 extra save slots.", amount: 399 },
-];
 
 const key = process.env.STRIPE_SECRET_KEY;
 if (!key) {
@@ -136,15 +117,20 @@ async function getOrCreatePrice(item, productId) {
     console.log(`✓ ${item.sku.padEnd(8)} ${product.id}  ${price.id}  (${(item.amount / 100).toFixed(2)} ${CURRENCY.toUpperCase()})`);
   }
 
-  console.log("\n--- Price IDs (committed as defaults in index.js) ---\n");
-  console.log("These are config, not secrets. To use them, update the defineString");
-  console.log("defaults in functions/index.js (or override in functions/.env):\n");
+  const mode = key.includes("_live_") ? "LIVE" : "TEST";
+  console.log(`\n--- ${mode}-mode price IDs ---\n`);
+  console.log("These are config, not secrets. Paste them over the existing lines in");
+  console.log("functions/.env.kid-sequencer (that file wins over the index.js defaults):\n");
   console.log(`STRIPE_PRICE_ID=${result.pro}        # Pro £4.99/mo`);
   console.log(`TOPUP_AI10_PRICE=${result.ai10}`);
   console.log(`TOPUP_AI25_PRICE=${result.ai25}`);
   console.log(`TOPUP_AI50_PRICE=${result.ai50}`);
   console.log(`TOPUP_SLOTS20_PRICE=${result.slots20}`);
   console.log(`TOPUP_SLOTS50_PRICE=${result.slots50}`);
-  console.log("\nSecrets to set separately (real keys only):");
-  console.log("  firebase functions:secrets:set STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET STABILITY_API_KEY");
+  console.log("\nThen, with the SAME key still in the environment, confirm the");
+  console.log("functions' configured IDs resolve in this mode BEFORE deploying:\n");
+  console.log("  npm run check:stripe\n");
+  console.log("Secrets to set separately (real keys only):");
+  console.log("  firebase functions:secrets:set STRIPE_SECRET_KEY");
+  console.log("  firebase functions:secrets:set STRIPE_WEBHOOK_SECRET");
 })().catch((e) => { console.error(e); process.exit(1); });

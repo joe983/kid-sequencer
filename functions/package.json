@@ -4,7 +4,8 @@
   "scripts": {
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "setup:stripe": "node scripts/setup-stripe-products.js"
+    "setup:stripe": "node scripts/setup-stripe-products.js",
+    "check:stripe": "node scripts/check-stripe-config.js"
   },
   "engines": { "node": "20" },
   "main": "index.js",
