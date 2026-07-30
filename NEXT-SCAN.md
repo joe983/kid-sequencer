@@ -213,6 +213,52 @@ rounds of hand-testing, found within minutes of the fixtures being written down.
 
 ---
 
+## Feeding the REAL print output to the scanner
+
+Every fixture in `scan-tests.html` draws an *approximation* of the sheet from the
+geometry constants. The actual print path had never been fed through the scanner,
+which leaves an obvious hole: the fixtures cannot disagree with the constants
+they are built from.
+
+The real sheet can be produced with no printer:
+
+```bash
+# 1. serve the app:  node serve.js
+# 2. TEMPORARILY neutralise the portrait fallback in styles.css, or headless
+#    Chrome evaluates print `orientation` as portrait, rotates the stage, and
+#    clips the page (confirmed — it is not a theoretical warning):
+#       @media print and (orientation: portrait) and (min-width: 99999px) {
+# 3. print (a --user-data-dir is required or nothing is written):
+chrome --headless=new --disable-gpu --no-sandbox --no-pdf-header-footer \
+  --virtual-time-budget=10000 --user-data-dir=<tmp> \
+  --print-to-pdf=<tmp>/sheet.pdf http://localhost:3000/
+# 4. rasterise (PyMuPDF):  fitz.open(pdf)[0].get_pixmap(dpi=200).save(png)
+# 5. RESTORE styles.css
+```
+
+Result: A4 landscape, one page, all four marks present.
+
+**What it proved.** Fed through the scanner, the mark quad measures aspect
+**1.435 against the stored `quadAspect` of 1.438** — 0.2% apart, from the real
+print path rather than a hand-drawn approximation. The print geometry and the
+scanner's expectation genuinely agree.
+
+**What it could not yet prove, and why.** The registration check scores 5 against
+a floor of 20 on this render, while real photographs of a printed sheet score
+41–115 on the same code. That is a fidelity problem in the render, not evidence
+of misregistration: the printed cell outlines are hairlines at 2339px, and
+scaling the page down to a 420px working frame with `drawImage` averages them to
+near-paper grey, so the registration sampler finds nothing to measure. A real
+camera blurs but preserves contrast. Making this a usable fixture needs the page
+rendered closer to the working resolution (or sharpened on the way down) so the
+grid lines survive — do that before trusting any registration number from it.
+
+Also beware: measuring "where the grid is" by projecting dark pixels between the
+marks does NOT measure the note grid. It measures the bounding box of every
+printed thing — top bar, tools column, bottom instrument row — and reports a
+drift of ~1.9 cells that is entirely the furniture. Isolating the note grid needs
+the 16x8 periodicity, not the ink extent.
+
 ## Tuning levers
 
 | constant | value | set by |
