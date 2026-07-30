@@ -14,7 +14,42 @@ Machine-readable results land in `window.__scanTests`. The page is hosting-ignor
 
 ### 1. Print the corner marks as a RING, not a solid square
 
-**This is the one real gap in the scanner, and it cannot be closed in software.**
+**Status: the SCANNER half is done and shipped. What remains is the print flip,
+which needs a reprint to verify — that is the only reason it is still open.**
+
+To do it, in one sitting with a printer to hand:
+
+1. `PRINT_MARK_SHAPE = "ring"` in index.html (the CSS and the wall thickness are
+   already written; the constant is the whole switch).
+2. **Bump `PRINT_MARK_K` from 0.56 to ~0.9.** At 0.56 the mark lands ~6px across
+   in the 420px working frame, giving a hole of ~2px that will not survive blur
+   or JPEG. ~0.9 gives a ~10px mark and a ~4px hole. Fixture `ringSmall` covers
+   the small end and passes by falling back to the solid path, but that is a
+   safety net, not the target.
+3. Print, scan, and check the log says `pool ring` rather than `pool solid`.
+4. Re-run `scan-tests.html`; `ringMissingBL` should keep refusing.
+5. Add the printed sheet's frame to `public/scan-fixtures/` as the first real
+   ring evidence — every fixture with a ring today is synthetic.
+
+The scanner already accepts BOTH shapes and **prefers rings**: when four ringed
+candidates exist they are the only ones considered, otherwise the solid path runs
+exactly as before. That back-compatibility is not optional — every sheet already
+printed carries solid marks.
+
+Two things learned building it, both worth keeping:
+
+- A ring's solidity is exactly `1 − holeFrac`, so a 22% wall lands at 0.69 and
+  the ordinary 0.70 floor threw the mark away *before* its hole was examined.
+  Holes are therefore computed before the solidity decision, with a lower floor
+  (`SCAN_RING_SOL_MIN`) for blobs that have one.
+- The first thresholds (hole ≥ 6% of bbox, ≥3px) were far too permissive on real
+  photographs: camera noise punched a **three pixel** hole in a 7×7 blob, which
+  then qualified as a ring, took the top-left corner from the real mark 40px
+  away, and misregistered the grid. Caught only because the real frames are in
+  the fixture suite. A genuine ring's hole is 16–31% of its box, so the bars are
+  now 12% and 6px.
+
+**The underlying problem this closes.**
 
 If a mark is smudged, cut off or obscured, the corner-most search promotes the
 next blob inwards. On three of the four corners that self-destructs — the quad
@@ -177,6 +212,52 @@ Worth stating plainly: this was a real bug shipped in round 4, invisible to five
 rounds of hand-testing, found within minutes of the fixtures being written down.
 
 ---
+
+## Feeding the REAL print output to the scanner
+
+Every fixture in `scan-tests.html` draws an *approximation* of the sheet from the
+geometry constants. The actual print path had never been fed through the scanner,
+which leaves an obvious hole: the fixtures cannot disagree with the constants
+they are built from.
+
+The real sheet can be produced with no printer:
+
+```bash
+# 1. serve the app:  node serve.js
+# 2. TEMPORARILY neutralise the portrait fallback in styles.css, or headless
+#    Chrome evaluates print `orientation` as portrait, rotates the stage, and
+#    clips the page (confirmed — it is not a theoretical warning):
+#       @media print and (orientation: portrait) and (min-width: 99999px) {
+# 3. print (a --user-data-dir is required or nothing is written):
+chrome --headless=new --disable-gpu --no-sandbox --no-pdf-header-footer \
+  --virtual-time-budget=10000 --user-data-dir=<tmp> \
+  --print-to-pdf=<tmp>/sheet.pdf http://localhost:3000/
+# 4. rasterise (PyMuPDF):  fitz.open(pdf)[0].get_pixmap(dpi=200).save(png)
+# 5. RESTORE styles.css
+```
+
+Result: A4 landscape, one page, all four marks present.
+
+**What it proved.** Fed through the scanner, the mark quad measures aspect
+**1.435 against the stored `quadAspect` of 1.438** — 0.2% apart, from the real
+print path rather than a hand-drawn approximation. The print geometry and the
+scanner's expectation genuinely agree.
+
+**What it could not yet prove, and why.** The registration check scores 5 against
+a floor of 20 on this render, while real photographs of a printed sheet score
+41–115 on the same code. That is a fidelity problem in the render, not evidence
+of misregistration: the printed cell outlines are hairlines at 2339px, and
+scaling the page down to a 420px working frame with `drawImage` averages them to
+near-paper grey, so the registration sampler finds nothing to measure. A real
+camera blurs but preserves contrast. Making this a usable fixture needs the page
+rendered closer to the working resolution (or sharpened on the way down) so the
+grid lines survive — do that before trusting any registration number from it.
+
+Also beware: measuring "where the grid is" by projecting dark pixels between the
+marks does NOT measure the note grid. It measures the bounding box of every
+printed thing — top bar, tools column, bottom instrument row — and reports a
+drift of ~1.9 cells that is entirely the furniture. Isolating the note grid needs
+the 16x8 periodicity, not the ink extent.
 
 ## Tuning levers
 

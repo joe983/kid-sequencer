@@ -2524,6 +2524,17 @@ html.js-loading #contentWrap{
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+  /* Ring variant, enabled by PRINT_MARK_SHAPE = "ring" in index.html. A hole is
+     the one feature no tool icon on the sheet has, so the scanner can pick marks
+     without guessing. Wall is 30% of the side: thick enough to survive a camera,
+     thin enough to leave a hole worth detecting. See NEXT-SCAN.md — flipping
+     this also wants a PRINT_MARK_K bump so the hole is big enough to see. */
+  .wsMark.wsMarkRing {
+    background: transparent !important;
+    border-style: solid;
+    border-color: #000000;
+    box-sizing: border-box;   /* wall thickness is set inline, in px */
+  }
 }
 
 /* Off-screen by default — the marks belong to the printed sheet only. */
