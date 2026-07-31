@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Unlisted extras — reachable by URL, but kept out of search results.
+Disallow: /school-music-run/

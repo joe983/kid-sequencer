@@ -1,0 +1,3121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#0B3D6B" />
+  <!-- Unlisted: nothing on the sequencer links here, and we keep it out of search.
+       This makes it unlisted, NOT private — anyone with the URL can play. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Run to School — DLTS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --brand-primary:      #0B3D6B;
+      --brand-primary-dark: #072A4A;
+      --brand-accent:       #FFFFFF;
+      --brand-ground:       #7A5A3A;
+      --brand-sky:          #9CC8E8;
+      --brand-danger:       #C8362F;
+      --brand-sweet:        #F4B942;
+      --brand-text:         #0B1320;
+      --brand-cream:        #FBF6EC;
+      --display: 'Bungee', 'Arial Black', sans-serif;
+      --body:    'Outfit', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: var(--brand-primary-dark);
+      font-family: var(--body);
+      color: var(--brand-text);
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      display: grid; place-items: center; min-height: 100vh;
+      padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+      background:
+        radial-gradient(circle at 50% 0%, var(--brand-primary) 0%, var(--brand-primary-dark) 70%);
+    }
+
+    /* Subtle paper-grain noise overlay across the whole page */
+    body::after {
+      content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99;
+      opacity: 0.06; mix-blend-mode: multiply;
+      background-image:
+        url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.6'/></svg>");
+    }
+
+    .stage {
+      position: relative;
+      width: 800px; max-width: 100%;
+      aspect-ratio: 800 / 448;
+      max-height: 100dvh;
+      box-shadow:
+        0 0 0 4px var(--brand-primary-dark),
+        0 24px 60px -12px rgba(0,0,0,0.6),
+        0 0 0 12px rgba(255,255,255,0.04);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    #game {
+      display: block; width: 100%; height: 100%;
+      background: var(--brand-sky);
+      touch-action: none;
+    }
+
+    /* HUD overlay */
+    #hud {
+      position: absolute; inset: 0;
+      padding: 12px 12px; pointer-events: none;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+      font-family: var(--body); font-weight: 800;
+      color: var(--brand-cream);
+      text-shadow:
+        -1px -1px 0 var(--brand-primary-dark),
+         1px -1px 0 var(--brand-primary-dark),
+        -1px  1px 0 var(--brand-primary-dark),
+         1px  1px 0 var(--brand-primary-dark),
+         0 2px 4px rgba(0,0,0,0.3);
+      font-size: 16px; letter-spacing: 0.5px;
+    }
+    .hud-pill {
+      background: rgba(11,61,107,0.55);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      padding: 6px 12px; border-radius: 999px;
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 2px solid rgba(255,255,255,0.25);
+    }
+    #hud-hearts span { display: inline-block; transition: transform 200ms; }
+    #hud-hearts.hit span { animation: shake 220ms ease; }
+    @keyframes shake {
+      0%, 100% { transform: translate(0,0) rotate(0); }
+      25%      { transform: translate(-2px,1px) rotate(-6deg); }
+      75%      { transform: translate(2px,-1px) rotate(6deg); }
+    }
+    #hud-timer.warn { color: var(--brand-danger); animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.06); }
+    }
+
+    /* Title screen */
+    #title-card {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.10), transparent 60%),
+        linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+      color: var(--brand-cream);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 10px 16px; text-align: center;
+      overflow: auto;
+      z-index: 20;
+    }
+    #title-card.hidden { display: none; }
+    /* Header: logo + title side by side */
+    #title-head { display: flex; align-items: center; gap: 12px; }
+    #title-logo {
+      width: clamp(44px, 8vw, 64px); height: auto;
+      border-radius: 8px;
+      box-shadow: 0 12px 32px -8px rgba(0,0,0,0.5);
+      animation: drop 600ms cubic-bezier(.2,.9,.3,1.2) both;
+    }
+    #title-text {
+      font-family: var(--display); font-weight: 400;
+      font-size: clamp(20px, 4vw, 34px);
+      letter-spacing: 1px; margin: 0;
+      line-height: 1; text-transform: uppercase;
+      color: var(--brand-cream);
+      text-shadow:
+        3px 3px 0 var(--brand-danger),
+        6px 6px 0 var(--brand-primary-dark);
+      animation: drop 600ms cubic-bezier(.2,.9,.3,1.2) 120ms both;
+    }
+    /* Main row: Play (left) · character select (centre) · leaderboard (right) */
+    #title-main {
+      display: flex; align-items: center; justify-content: center;
+      gap: 12px; flex-wrap: wrap; width: 100%;
+    }
+    #title-left { display: flex; align-items: center; }
+    /* Character select */
+    #char-select {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 14px; padding: 8px 10px;
+      animation: drop 600ms ease 180ms both;
+    }
+    #char-preview {
+      background: linear-gradient(180deg, var(--brand-sky) 0%, #E9F1F7 70%, var(--brand-cream) 100%);
+      border-radius: 10px; flex: none;
+    }
+    #cs-controls { display: flex; flex-direction: column; gap: 7px; }
+    .cs-row { display: flex; align-items: center; gap: 8px; }
+    .cs-arrow {
+      width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px; cursor: pointer;
+      background: var(--brand-cream); color: var(--brand-primary);
+      font-size: 14px; font-weight: 900; line-height: 1;
+    }
+    .cs-arrow:active { transform: translateY(1px); }
+    .cs-field {
+      width: 116px; display: flex; flex-direction: column; line-height: 1.1;
+      background: rgba(0,0,0,0.18); border-radius: 8px; padding: 4px 8px;
+    }
+    .cs-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; opacity: 0.6; }
+    .cs-value { font-family: var(--display); font-size: 12px; }
+    #play-btn {
+      padding: 14px 20px;
+      font-family: var(--display); font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase;
+      border: 0; border-radius: 12px; cursor: pointer;
+      background: var(--brand-cream); color: var(--brand-primary);
+      box-shadow: 0 6px 0 0 var(--brand-primary-dark);
+      animation: drop 600ms ease 300ms both;
+    }
+    #play-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 0 var(--brand-primary-dark); }
+    #title-tag {
+      max-width: 480px; margin: 4px 0 0;
+      font-size: clamp(13px, 1.6vw, 16px); opacity: 0.85;
+      animation: drop 600ms ease 240ms both;
+    }
+    #title-hint {
+      margin-top: 18px; padding: 8px 16px;
+      border: 2px solid var(--brand-cream); border-radius: 999px;
+      font-weight: 800; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+      animation: pulse 1.6s infinite, drop 600ms ease 360ms both;
+    }
+    #title-credit {
+      margin-top: 2px;
+      font-family: var(--body);
+      font-weight: 600;
+      font-size: clamp(13px, 1.7vw, 16px);
+      letter-spacing: 0.5px;
+      color: var(--brand-cream);
+      opacity: 0.9;
+      animation: drop 600ms ease 480ms both;
+    }
+    #title-leaderboard {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      font-family: var(--body);
+      color: var(--brand-cream);
+      background: rgba(0,0,0,0.16);
+      border-radius: 12px; padding: 8px 10px;
+      animation: drop 600ms ease 360ms both;
+    }
+    .title-lb-head {
+      font-family: var(--display); font-size: 12px; letter-spacing: 3px;
+      opacity: 0.7;
+    }
+    #title-lb-list {
+      list-style: none; margin: 0; padding: 0;
+      font-size: 12px; min-width: 166px;
+    }
+    #title-lb-list li {
+      display: grid;
+      grid-template-columns: 18px 1fr auto auto;
+      gap: 10px;
+      padding: 2px 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    #title-lb-list li.empty {
+      text-align: center; opacity: 0.55; font-style: italic; display: block;
+    }
+    @keyframes drop {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Level-complete overlay (brief auto-advance flash) */
+    #level-complete {
+      position: absolute; inset: 0;
+      background: rgba(11,61,107,0.78);
+      color: var(--brand-cream);
+      display: none;
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; text-align: center;
+      z-index: 19;
+      animation: rise 250ms cubic-bezier(.2,.9,.3,1.1);
+    }
+    #level-complete.show { display: flex; }
+    #level-complete h2 {
+      font-family: var(--display); font-weight: 400;
+      font-size: clamp(28px, 6vw, 56px);
+      letter-spacing: 1px; text-transform: uppercase;
+      margin: 0; line-height: 1;
+      text-shadow: 4px 4px 0 var(--brand-primary-dark);
+    }
+    #level-complete p {
+      margin: 0; font-size: clamp(14px, 2vw, 18px); font-weight: 600;
+      opacity: 0.95;
+    }
+
+    /* End-of-level card */
+    #end-card {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.1), transparent 60%),
+        linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+      color: var(--brand-cream);
+      display: none;
+      align-items: center; justify-content: center;
+      gap: 22px; text-align: center; padding: 12px 16px;
+      overflow: auto;
+      z-index: 20;
+    }
+    /* Landscape two-column layout: result + Play Again on the left, top-10 board on the right */
+    #end-card.show { display: flex; flex-direction: row; flex-wrap: wrap; animation: rise 400ms cubic-bezier(.2,.9,.3,1.1); }
+    #end-left  { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+    #end-right {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      background: rgba(0,0,0,0.18); border-radius: 12px; padding: 10px 14px;
+    }
+    .end-board-head { font-family: var(--display); font-size: 14px; letter-spacing: 2px; opacity: 0.8; }
+    @keyframes rise {
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+    #end-card h1 {
+      font-family: var(--display); font-weight: 400;
+      font-size: clamp(24px, 4.6vw, 40px); margin: 0;
+      letter-spacing: 1px; text-transform: uppercase; line-height: 1.05; max-width: 320px;
+      text-shadow: 4px 4px 0 var(--brand-primary-dark);
+    }
+    #end-card.win h1  { color: var(--brand-cream); }
+    #end-card.late h1 { color: var(--brand-danger); }
+    #end-card.over h1 { color: var(--brand-danger); }
+    #end-card .stats {
+      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+      font-weight: 600; font-size: 17px; opacity: 0.95;
+    }
+    #end-card .stat { background: rgba(255,255,255,0.08); padding: 8px 14px; border-radius: 12px; }
+    #end-card button {
+      margin-top: 2px; padding: 12px 28px;
+      font-family: var(--display); font-size: 15px; letter-spacing: 2px;
+      border: 0; border-radius: 8px; cursor: pointer;
+      background: var(--brand-cream); color: var(--brand-primary);
+      box-shadow: 0 6px 0 0 var(--brand-primary-dark);
+      transition: transform 80ms, box-shadow 80ms;
+      text-transform: uppercase;
+    }
+    #end-card button:active { transform: translateY(4px); box-shadow: 0 2px 0 0 var(--brand-primary-dark); }
+
+    #end-name-row {
+      display: flex; flex-direction: column; align-items: center; gap: 7px;
+      background: rgba(255,255,255,0.06);
+      border: 2px solid var(--brand-cream);
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+    .end-prompt {
+      margin: 0; font-weight: 700; font-size: 13px; letter-spacing: 1px;
+      text-transform: uppercase; opacity: 0.9; max-width: 240px;
+    }
+    .end-name-form {
+      display: flex; gap: 8px;
+    }
+    #end-name-input {
+      font-family: var(--display); font-size: 16px; letter-spacing: 2px;
+      padding: 8px 12px; border-radius: 6px; border: 0;
+      background: var(--brand-cream); color: var(--brand-primary);
+      text-transform: uppercase;
+      width: 150px; text-align: center;
+    }
+    #end-name-submit {
+      margin-top: 0; padding: 8px 16px; font-family: var(--display); font-size: 13px;
+      border: 0; border-radius: 6px; cursor: pointer;
+      background: var(--brand-danger); color: var(--brand-cream);
+      letter-spacing: 1.5px; text-transform: uppercase; box-shadow: none;
+    }
+
+    #end-board {
+      border-collapse: collapse;
+      font-family: var(--body); font-size: 13px;
+      color: var(--brand-cream);
+      width: 280px;
+    }
+    #end-board th, #end-board td {
+      padding: 3px 8px; text-align: left;
+    }
+    #end-board th {
+      font-family: var(--display); font-size: 12px; letter-spacing: 1.5px;
+      color: var(--brand-cream); opacity: 0.7;
+      border-bottom: 1px solid rgba(255,255,255,0.3);
+    }
+    #end-board td:nth-child(1), #end-board td:nth-child(3), #end-board td:nth-child(4) {
+      font-variant-numeric: tabular-nums;
+    }
+    #end-board tr.empty td {
+      text-align: center; opacity: 0.6; font-style: italic;
+    }
+    #end-board tr.me {
+      background: rgba(244,185,66,0.18);
+      outline: 1px solid var(--brand-sweet);
+    }
+
+    /* Touch controls */
+    #touch {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 0 18px 18px; pointer-events: none;
+      display: none; justify-content: space-between; align-items: flex-end;
+      z-index: 15;
+    }
+    #touch .pad { display: flex; gap: 16px; }
+    #touch button {
+      width: 72px; height: 72px; border-radius: 50%;
+      border: 3px solid rgba(11,61,107,0.45);
+      background: rgba(255,255,255,0.55);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      color: var(--brand-primary); font-size: 30px; font-weight: 900;
+      pointer-events: auto; touch-action: none;
+      box-shadow: 0 4px 0 0 rgba(0,0,0,0.25);
+      cursor: pointer;
+      transition: background 100ms, transform 60ms, box-shadow 60ms;
+    }
+    #touch button:active {
+      transform: translateY(2px);
+      background: rgba(255,255,255,0.85);
+      box-shadow: 0 2px 0 0 rgba(0,0,0,0.25);
+    }
+    @media (pointer: coarse), (hover: none) { #touch { display: flex; } }
+
+    /* Fullscreen button — small icon button, only on touch devices */
+    #fullscreen-btn {
+      position: fixed;
+      top: max(10px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      width: 40px; height: 40px;
+      border: 0; border-radius: 10px;
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+      color: white; font-size: 18px; cursor: pointer;
+      z-index: 50; display: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    }
+    #fullscreen-btn:active { background: rgba(255,255,255,0.35); }
+    @media (pointer: coarse), (hover: none) { #fullscreen-btn { display: block; } }
+
+    /* "Rotate your phone" overlay — only shown on touch devices in portrait */
+    #rotate-prompt {
+      display: none;
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse at 50% 30%, rgba(255,255,255,0.10), transparent 60%),
+        linear-gradient(180deg, var(--brand-primary) 0%, var(--brand-primary-dark) 100%);
+      color: var(--brand-cream);
+      z-index: 200;
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px; text-align: center; padding: 32px;
+    }
+    #rotate-prompt .rotate-icon {
+      font-size: 64px; line-height: 1;
+      animation: rotate-anim 1.8s cubic-bezier(.6,0,.4,1) infinite;
+      transform-origin: 50% 60%;
+    }
+    #rotate-prompt h2 {
+      font-family: var(--display); font-weight: 400;
+      font-size: clamp(22px, 6vw, 36px);
+      letter-spacing: 1px; text-transform: uppercase; margin: 0; line-height: 1;
+      text-shadow: 3px 3px 0 var(--brand-primary-dark);
+    }
+    #rotate-prompt p { margin: 0; font-size: 14px; opacity: 0.85; max-width: 320px; }
+    @keyframes rotate-anim {
+      0%, 30% { transform: rotate(0); }
+      60%, 100% { transform: rotate(-90deg); }
+    }
+    @media (orientation: portrait) and (max-width: 900px) {
+      #rotate-prompt { display: flex; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <canvas id="game" width="800" height="448" aria-label="Game canvas"></canvas>
+
+    <div id="hud" aria-hidden="true">
+      <div id="hud-hearts" class="hud-pill"><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span></div>
+      <div id="hud-level"  class="hud-pill">LVL 1</div>
+      <div id="hud-timer"  class="hud-pill">🔔 0:60</div>
+      <div id="hud-score"  class="hud-pill">🎵 0</div>
+    </div>
+
+    <div id="title-card">
+      <div id="title-head">
+        <img id="title-logo" alt="" />
+        <h1 id="title-text">Run to School!</h1>
+      </div>
+      <div id="title-main">
+        <div id="title-left">
+          <button id="play-btn">▶ Play</button>
+        </div>
+        <div id="char-select">
+          <canvas id="char-preview" width="120" height="140"></canvas>
+          <div id="cs-controls">
+            <div class="cs-row" data-attr="hair">
+              <button class="cs-arrow" data-attr="hair" data-dir="-1" aria-label="Previous hair">◀</button>
+              <div class="cs-field"><span class="cs-label">Hair</span><span class="cs-value" id="cs-hair">Crop</span></div>
+              <button class="cs-arrow" data-attr="hair" data-dir="1" aria-label="Next hair">▶</button>
+            </div>
+            <div class="cs-row" data-attr="colour">
+              <button class="cs-arrow" data-attr="colour" data-dir="-1" aria-label="Previous colour">◀</button>
+              <div class="cs-field"><span class="cs-label">Colour</span><span class="cs-value" id="cs-colour">Brown</span></div>
+              <button class="cs-arrow" data-attr="colour" data-dir="1" aria-label="Next colour">▶</button>
+            </div>
+            <div class="cs-row" data-attr="skin">
+              <button class="cs-arrow" data-attr="skin" data-dir="-1" aria-label="Previous skin">◀</button>
+              <div class="cs-field"><span class="cs-label">Skin</span><span class="cs-value" id="cs-skin">Light</span></div>
+              <button class="cs-arrow" data-attr="skin" data-dir="1" aria-label="Next skin">▶</button>
+            </div>
+            <div class="cs-row" data-attr="instrument">
+              <button class="cs-arrow" data-attr="instrument" data-dir="-1" aria-label="Previous instrument">◀</button>
+              <div class="cs-field"><span class="cs-label">Instrument</span><span class="cs-value" id="cs-instrument">Piano / Keyboard</span></div>
+              <button class="cs-arrow" data-attr="instrument" data-dir="1" aria-label="Next instrument">▶</button>
+            </div>
+          </div>
+        </div>
+        <div id="title-leaderboard" aria-hidden="true">
+          <div class="title-lb-head">TOP 3</div>
+          <ol id="title-lb-list"></ol>
+        </div>
+      </div>
+      <div id="title-credit">Made by Mr. C</div>
+    </div>
+
+    <div id="level-complete" aria-hidden="true">
+      <h2 id="lc-title">LEVEL 2</h2>
+      <p id="lc-sub">+0 points · Total: 0</p>
+    </div>
+
+    <div id="end-card" role="dialog" aria-modal="true">
+      <div id="end-left">
+        <h1 id="end-title"></h1>
+        <div class="stats">
+          <div class="stat">LEVEL <span id="end-level">1</span></div>
+          <div class="stat">🎵 <span id="end-score">0</span></div>
+        </div>
+
+        <div id="end-name-row" hidden>
+          <p class="end-prompt">You made the top 10! Enter your name:</p>
+          <div class="end-name-form">
+            <input id="end-name-input" type="text" maxlength="10"
+                   autocomplete="off" autocapitalize="characters"
+                   pattern="[A-Za-z0-9 ]+" placeholder="PLAYER" />
+            <button id="end-name-submit">Submit</button>
+          </div>
+        </div>
+
+        <button id="end-button">Play Again</button>
+      </div>
+
+      <div id="end-right">
+        <div class="end-board-head">TOP 10</div>
+        <table id="end-board">
+          <thead>
+            <tr><th>#</th><th>NAME</th><th>LVL</th><th>SCORE</th></tr>
+          </thead>
+          <tbody id="end-board-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="touch" aria-hidden="true">
+      <div class="pad">
+        <button id="btn-left"  aria-label="Move left">◀</button>
+        <button id="btn-right" aria-label="Move right">▶</button>
+      </div>
+      <div class="pad">
+        <button id="btn-jump"  aria-label="Jump">▲</button>
+      </div>
+    </div>
+  </div>
+
+
+  <button id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
+
+  <div id="rotate-prompt" role="dialog" aria-live="polite">
+    <div class="rotate-icon">📱</div>
+    <h2>Rotate your phone</h2>
+    <p>This game is best played in landscape.</p>
+  </div>
+
+  <script>
+  // =============================================================
+  // BRANDING — single source of truth for school identity.
+  // To re-brand for another school: edit the values below and
+  // drop a square logo image into the assets/ folder.
+  // =============================================================
+  const BRANDING = {
+    schoolName:      "DLTS International School",
+    schoolShortName: "DLTS",
+    // To swap logos: drop a new image into assets/ and update this path.
+    logoSrc: "assets/dlts-logo.svg",
+    colors: {
+      primary:     "#0B3D6B",
+      primaryDark: "#072A4A",
+      accent:      "#FFFFFF",
+      ground:      "#7A5A3A",
+      sky:         "#9CC8E8",
+      danger:      "#C8362F",
+      sweet:       "#F4B942",
+      text:        "#0B1320",
+    },
+    copy: {
+      title:        "Run to School!",
+      tagline:      "Don't be late for the bell at {schoolShortName}.",
+      onTime:       "On time! Welcome to {schoolShortName}.",
+      late:         "Late! The bell already rang.",
+      gameOver:     "Out of energy! Try again?",
+      pressToStart: "Press Space or Tap",
+    },
+  };
+
+  // Apply BRANDING colors to CSS custom properties.
+  (function applyBranding() {
+    const r = document.documentElement.style;
+    for (const [k, v] of Object.entries(BRANDING.colors)) {
+      const css = '--brand-' + k.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
+      r.setProperty(css, v);
+    }
+    document.title = BRANDING.copy.title + ' — ' + BRANDING.schoolShortName;
+    const t = (s) => s.replace('{schoolShortName}', BRANDING.schoolShortName);
+    document.getElementById('title-text').textContent = t(BRANDING.copy.title);
+    const logo = document.getElementById('title-logo');
+    logo.src = BRANDING.logoSrc;
+    logo.onerror = () => { logo.style.display = 'none'; };
+  })();
+
+  // =============================================================
+  // BLOCK_LIBRARY — reusable encounter pieces. Each block is a 14-row
+  // grid of `width` columns. Dog spawn = 'D' on row 10 only; sweets =
+  // 'S' on row 9; ground/hazards on row 11; platforms on rows 7-8.
+  // All gaps inside a block are clearable from a standing start at
+  // the block's left edge with current physics + double-jump.
+  // Blocks are concatenated horizontally by the level builder.
+  // =============================================================
+  const BLOCK_LIBRARY = {
+    'open-street': { difficulty: 0, width: 8, grid: [
+      "........","........","........","........","........","........","........",
+      "........","........","........","........","########","........","........",
+    ]},
+    'school-end': { difficulty: 0, width: 14, grid: [
+      "..............","..............","..............","..............","..............",
+      "..............","..............","..............","..............","..............",
+      "....G.........","##############","..............","..............",
+    ]},
+    'lone-dog': { difficulty: 1, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",".......",
+      "...S...","...D...","#######",".......",".......",
+    ]},
+    'lone-rat': { difficulty: 1, minLevel: 2, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",".......",
+      "...S...","...R...","#######",".......",".......",
+    ]},
+    'rat-with-sweet': { difficulty: 2, minLevel: 2, width: 6, grid: [
+      "......","......","......","......","......","......","......",
+      "..S...","..==..","......","..R...","######","......","......",
+    ]},
+    'rat-puddle-pair': { difficulty: 4, minLevel: 2, width: 8, grid: [
+      "........","........","........","........","........","........","........","........","........",
+      ".S....S.","...R....","#P####P#","........","........",
+    ]},
+    'rat-pit-rat': { difficulty: 7, minLevel: 2, width: 10, grid: [
+      "..........","..........","..........","..........","..........","..........","..........","..........","..........",
+      "..S....S..","..R....R..","##MMM#####","..........","..........",
+    ]},
+    'low-step': { difficulty: 1, width: 6, grid: [
+      "......","......","......","......","......","......","......","......","......",
+      "...S..","...##.","######","......","......",
+    ]},
+    'plateau': { difficulty: 1, width: 8, grid: [
+      "........","........","........","........","........","........","........","........",
+      "...S....","..####..","..####..","########","........","........",
+    ]},
+    'twin-steps': { difficulty: 1, width: 9, grid: [
+      ".........",".........",".........",".........",".........",".........",".........",".........",".........",
+      "..S..S...","..##.##..","#########",".........",".........",
+    ]},
+    'low-overhang': { difficulty: 1, width: 6, grid: [
+      "......","......","......","......","......","......","......","......",
+      ".####.","..S...","......","######","......","......",
+    ]},
+    'step-puddle': { difficulty: 1, width: 8, grid: [
+      "........","........","........","........","........","........","........","........","........",
+      "..S.....","..##....","####P###","........","........",
+    ]},
+    'pillar': { difficulty: 1, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",
+      "..S....","...#...","...#...","#######",".......",".......",
+    ]},
+    'step-and-dog': { difficulty: 2, width: 8, grid: [
+      "........","........","........","........","........","........","........","........","........",
+      "..S.....","..##.D..","########","........","........",
+    ]},
+    'plateau-dog': { difficulty: 2, width: 8, grid: [
+      "........","........","........","........","........","........","........","........",
+      "...D....","..####..","..####..","########","........","........",
+    ]},
+    'plateau-rat': { difficulty: 2, minLevel: 2, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",
+      "...R...","..###..","..###..","#######",".......",".......",
+    ]},
+    'tall-wall': { difficulty: 2, width: 8, grid: [
+      "........","........","........","........","........","........",
+      "....S...","...###..","...###..","...###..","...###..","########",
+      "........","........",
+    ]},
+    'stairway': { difficulty: 2, width: 9, grid: [
+      ".........",".........",".........",".........",".........",".........",".........",
+      "......S..","......##.","....####.","..######.","#########",".........",".........",
+    ]},
+    'two-tier-platform': { difficulty: 2, width: 7, grid: [
+      ".......",".......",".......",".......",
+      "...S...","..===..",".......",".......","..===..",".......",".......","#######",
+      ".......",".......",
+    ]},
+    'high-platform-leap': { difficulty: 3, width: 10, grid: [
+      "..........","..........","..........","..........","..........","..........","..........",
+      "..S.....S.",".===...===","..........","..........","##########","..........","..........",
+    ]},
+    'tall-pillar': { difficulty: 3, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",
+      ".....S.","...#...","...#...","...#...","...#...","#######",
+      ".......",".......",
+    ]},
+    'single-puddle': { difficulty: 1, width: 5, grid: [
+      ".....",".....",".....",".....",".....",".....",".....",".....",".....",
+      "..S..",".....","##P##",".....",".....",
+    ]},
+    'puddle-pair': { difficulty: 2, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",".......",
+      ".S...S.",".......","#P###P#",".......",".......",
+    ]},
+    'low-platform': { difficulty: 1, width: 6, grid: [
+      "......","......","......","......","......","......","......",
+      "..S...",".===..","......","......","######","......","......",
+    ]},
+    'dog-between-puddles': { difficulty: 3, width: 8, grid: [
+      "........","........","........","........","........","........","........","........","........",
+      "...S....","...D....","#P####P#","........","........",
+    ]},
+    'single-manhole': { difficulty: 3, width: 5, grid: [
+      ".....",".....",".....",".....",".....",".....",".....",".....",".....",
+      ".....",".....","#MM##",".....",".....",
+    ]},
+    'manhole-with-sweet': { difficulty: 4, width: 6, grid: [
+      "......","......","......","......","......","......","......","......","......",
+      "..S...","......","##MM##","......","......",
+    ]},
+    'dog-under-platform': { difficulty: 4, width: 8, grid: [
+      "........","........","........","........","........","........","........",
+      "...S....","..===...","........","...D....","########","........","........",
+    ]},
+    'wide-manhole': { difficulty: 5, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",".......",".......",
+      "...S...",".......","##MMM##",".......",".......",
+    ]},
+    'manhole-then-dog': { difficulty: 5, width: 9, grid: [
+      ".........",".........",".........",".........",".........",".........",".........",".........",".........",
+      ".....S...",".....D...","##MM#####",".........",".........",
+    ]},
+    'puddle-string': { difficulty: 6, width: 8, grid: [
+      "........","........","........","........","........","........","........","........","........",
+      "..S..S..","........","#P##P#P#","........","........",
+    ]},
+    'platform-over-manhole': { difficulty: 6, width: 7, grid: [
+      ".......",".......",".......",".......",".......",".......",".......",
+      "..S....","..===..",".......",".......","##MM###",".......",".......",
+    ]},
+    'manhole-stairs': { difficulty: 8, width: 10, grid: [
+      "..........","..........","..........","..........","..........","..........","..........","..........","..........",
+      "..........","..........","#MM##MMM##","..........","..........",
+    ]},
+    'dog-pit-dog': { difficulty: 9, width: 10, grid: [
+      "..........","..........","..........","..........","..........","..........","..........","..........","..........",
+      "..S....S..","..D....D..","##MMM#####","..........","..........",
+    ]},
+    'nightmare-stack': { difficulty: 10, width: 12, grid: [
+      "............","............","............","............","............","............","............","............","............",
+      "..........S.","....D.......","#MMM###MMM##","............","............",
+    ]},
+  };
+
+  // Returns the parameters for a given level number.
+  // Levels 1-89: linear ramp. Levels 90-100: brutal spike.
+  function levelConfig(level) {
+    let blockCount, maxBlockDiff, dogSpeed;
+    if (level <= 89) {
+      blockCount   = Math.round(5 + (level - 1) * 0.25);
+      maxBlockDiff = Math.min(6, 1 + (level - 1) * 5 / 88);
+      dogSpeed     = 0.45 + (level - 1) * 0.012;
+    } else {
+      blockCount   = Math.round(27 + (level - 89) * 0.7);
+      maxBlockDiff = 6 + (level - 89) * 0.4;
+      dogSpeed     = 1.5 + (level - 89) * 0.09;
+    }
+    const ratSpeed            = level >= 2 ? 0.70 + (level - 2) * 0.012 : 0;
+    const waspIntervalFrames  = level >= 5 ? Math.max(140, 360 - (level - 5) * 8)  : Infinity;
+    const waspClusterSize     = level >= 5 ? (level >= 15 ? 3 : 2) : 0;
+    const bullyIntervalFrames = level >= 7 ? Math.max(360, 840 - (level - 7) * 12) : Infinity;
+    return {
+      blockCount,
+      maxBlockDiff,
+      dogSpeed,
+      ratSpeed,
+      waspIntervalFrames,
+      waspClusterSize,
+      bullyIntervalFrames,
+      timerSeconds: 60 + (blockCount - 5) * 2,
+    };
+  }
+
+  // Pick a random element from `arr`, weighted by weight(item).
+  // weight(item) must return a non-negative number.
+  function weightedRandom(arr, weight) {
+    const total = arr.reduce((s, it) => s + weight(it), 0);
+    let r = Math.random() * total;
+    for (const it of arr) {
+      r -= weight(it);
+      if (r <= 0) return it;
+    }
+    return arr[arr.length - 1];
+  }
+
+  // Pick a non-terminal block whose difficulty is within [maxDiff-2, maxDiff].
+  // Bias toward harder eligible blocks: weight = (b.difficulty - lo + 1).
+  function pickBlock(maxDiff, level) {
+    const lo = Math.max(1, maxDiff - 2);
+    const eligible = Object.entries(BLOCK_LIBRARY)
+      .filter(([, b]) => b.difficulty >= lo
+                      && b.difficulty <= maxDiff
+                      && (b.minLevel || 1) <= level);
+    const [name] = weightedRandom(eligible, ([, b]) => b.difficulty - lo + 1);
+    return name;
+  }
+
+  // Build a flat ground strip `width` tiles wide (ground on GROUND_ROW only).
+  // Inserted as a randomized breather between encounter blocks so obstacles
+  // don't line up at the same columns level after level.
+  function flatStrip(width) {
+    const rows = [];
+    for (let r = 0; r < 14; r++) {
+      rows.push((r === GROUND_ROW ? '#' : '.').repeat(width));
+    }
+    return rows;
+  }
+
+  // Concatenate a list of 14-row grids horizontally, row by row.
+  function concatGrids(grids) {
+    const rows = Array(14).fill('');
+    for (const g of grids) {
+      for (let r = 0; r < 14; r++) rows[r] += g[r];
+    }
+    return rows;
+  }
+
+  // Build a level: open-street + N-2 random middle blocks + school-end, with
+  // randomized flat breathers between every segment. The varied spacing means
+  // the same block lands at a different absolute column each level, so the
+  // first (and every) obstacle no longer appears at the same spot every time.
+  function buildLevel(level) {
+    const cfg = levelConfig(level);
+    const names = ['open-street'];
+    const grids = [BLOCK_LIBRARY['open-street'].grid];
+    // Randomized lead-in run before the first encounter (3–9 tiles).
+    grids.push(flatStrip(3 + Math.floor(Math.random() * 7)));
+    for (let i = 0; i < cfg.blockCount - 2; i++) {
+      const name = pickBlock(cfg.maxBlockDiff, level);
+      names.push(name);
+      grids.push(BLOCK_LIBRARY[name].grid);
+      // Breather between encounters (1–4 tiles).
+      grids.push(flatStrip(1 + Math.floor(Math.random() * 4)));
+    }
+    names.push('school-end');
+    grids.push(BLOCK_LIBRARY['school-end'].grid);
+    return {
+      grid: concatGrids(grids),
+      dogSpeed: cfg.dogSpeed,
+      ratSpeed: cfg.ratSpeed,
+      waspIntervalFrames: cfg.waspIntervalFrames,
+      waspClusterSize: cfg.waspClusterSize,
+      bullyIntervalFrames: cfg.bullyIntervalFrames,
+      timerSeconds: cfg.timerSeconds,
+      blockNames: names,
+    };
+  }
+
+  // =============================================================
+  // Leaderboard — top 10 entries persisted to localStorage.
+  // =============================================================
+  const LB_KEY = 'dlts-runner-leaderboard-v1';
+  const LAST_NAME_KEY = 'dlts-runner-last-name-v1';
+  const LB_MAX = 10;
+
+  function loadBoard() {
+    try {
+      const raw = localStorage.getItem(LB_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(isEntryShape) : [];
+    } catch (e) { return []; }
+  }
+
+  function saveBoard(entries) {
+    try { localStorage.setItem(LB_KEY, JSON.stringify(entries.slice(0, LB_MAX))); }
+    catch (e) { /* ignore — private mode etc */ }
+  }
+
+  function isEntryShape(e) {
+    return e && typeof e.name === 'string'
+             && Number.isFinite(e.level)
+             && Number.isFinite(e.score)
+             && Number.isFinite(e.ts);
+  }
+
+  // Sort: level desc, score desc, ts asc (older = wins ties).
+  function boardCompare(a, b) {
+    if (b.level !== a.level) return b.level - a.level;
+    if (b.score !== a.score) return b.score - a.score;
+    return a.ts - b.ts;
+  }
+
+  // Does this run beat the 10th-place entry?
+  function qualifies(entry, board) {
+    if (board.length < LB_MAX) return true;
+    const tenth = board[LB_MAX - 1];
+    if (entry.level !== tenth.level) return entry.level > tenth.level;
+    return entry.score > tenth.score;
+  }
+
+  // Trim to A-Z, 0-9, and space; uppercase; max 10 chars.
+  function sanitizeName(s) {
+    return String(s || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9 ]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 10) || 'PLAYER';
+  }
+
+  // Single writer for scores. Today: localStorage. Tomorrow: server POST.
+  function submitScore({ name, level, score }) {
+    const entry = { name: sanitizeName(name), level, score, ts: Date.now() };
+    const board = loadBoard();
+    board.push(entry);
+    board.sort(boardCompare);
+    const top = board.slice(0, LB_MAX);
+    saveBoard(top);
+    try { localStorage.setItem(LAST_NAME_KEY, entry.name); } catch (e) {}
+    return { board: top, entry };
+  }
+
+  // =============================================================
+  // Canvas + helpers
+  // =============================================================
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const TILE = 32;
+
+  // High-DPI rendering: backing-store size = logical size × devicePixelRatio.
+  // Keeps canvas-drawn text and images sharp on retina/4K screens.
+  (function upgradeCanvasDpi() {
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    canvas.style.maxWidth = '100%';
+    canvas.style.maxHeight = '100%';
+    canvas.style.aspectRatio = W + ' / ' + H;
+    ctx.scale(dpr, dpr);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+  })();
+
+  const cssCache = {};
+  function css(name) {
+    if (!(name in cssCache)) {
+      cssCache[name] = getComputedStyle(document.documentElement)
+        .getPropertyValue(name).trim();
+    }
+    return cssCache[name];
+  }
+
+  // =============================================================
+  // Character customization system (ported from instrument-mockups.html).
+  // Coordinates are in "mockup units": head r9 centred at (x,y); the full
+  // character is 36 wide x 60 tall. The game draws it at 2x via a transform.
+  // =============================================================
+  const PAL = {navy:'#0B3D6B',navyD:'#072A4A',cream:'#FBF6EC',sky:'#9CC8E8',danger:'#C8362F',sweet:'#F4B942',
+    text:'#0B1320',brass:'#D9A521',brassD:'#A8780F',wood:'#8B5A2B',woodD:'#5C3A1F',woodLt:'#C8924E',
+    silver:'#C8CCD0',silverD:'#8A9099',hairDark:'#3A2415'};
+  const SKINS = {light:'#FFE0BD',lightMed:'#F1C27D',med:'#E0AC69',tan:'#C68642',dark:'#8D5524',deep:'#5C3A21'};
+  function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+  const INSTRUMENTS=[
+    {key:'keyboard',name:'Piano / Keyboard',
+      icon(ctx){
+        ctx.fillStyle='#181818'; rr(ctx,-26,-11,52,22,4); ctx.fill();
+        ctx.fillStyle=PAL.danger; ctx.fillRect(-26,-11,52,3);
+        const wk=9,kw=5.4;
+        ctx.fillStyle=PAL.cream; for(let i=0;i<wk;i++) ctx.fillRect(-25+i*kw,-5,kw-0.8,14);
+        ctx.fillStyle='#000'; const bk=[0,1,3,4,5];
+        for(const i of bk) ctx.fillRect(-25+(i+1)*kw-1.6,-5,3.2,8);
+      },
+      bagT:{a:-1.70,s:0.5,ax:0,ay:-6,dx:-5}},
+    {key:'guitar',name:'Guitar',
+      icon(ctx){
+        // Neck only — the body is inside the bag and never seen.
+        ctx.fillStyle=PAL.woodD; rr(ctx,-2.6,-28,5.2,36,1.8); ctx.fill();      // fretboard
+        ctx.fillStyle=PAL.wood;  rr(ctx,-1.9,-27.2,3.8,34.4,1.4); ctx.fill();  // lighter face
+        ctx.fillStyle='rgba(0,0,0,.30)';                                       // frets
+        for(let i=0;i<6;i++) ctx.fillRect(-1.9,-22+i*5,3.8,0.8);
+        ctx.fillStyle=PAL.woodD; rr(ctx,-4.4,-34.6,8.8,7.2,2.2); ctx.fill();   // headstock
+        ctx.fillStyle=PAL.cream; ctx.fillRect(-2.6,-28.2,5.2,1.5);             // nut
+        ctx.fillStyle=PAL.silver;                                              // 3 pegs a side
+        for(let i=0;i<3;i++) for(const dx of [-1,1]){ctx.beginPath();ctx.arc(dx*3.1,-33+i*2.3,1,0,7);ctx.fill();}
+        ctx.strokeStyle='rgba(255,255,255,.45)'; ctx.lineWidth=.5;
+        for(const dx of [-1.2,-0.4,0.4,1.2]){ctx.beginPath();ctx.moveTo(dx,-27);ctx.lineTo(dx,7);ctx.stroke();}
+      },
+      bagT:{a:-0.34,s:0.62,ax:0,ay:8,dx:-6}},
+    {key:'bass',name:'Bass Guitar',
+      icon(ctx){
+        // Electric bass — longer neck than the guitar, body hidden in the bag.
+        ctx.fillStyle='#241609'; rr(ctx,-3,-36,6,44,2); ctx.fill();            // fretboard
+        ctx.fillStyle=PAL.woodD; rr(ctx,-2.2,-35.2,4.4,42.4,1.6); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.16)';                                 // frets
+        for(let i=0;i<7;i++) ctx.fillRect(-2.2,-29+i*5.4,4.4,0.8);
+        ctx.fillStyle=PAL.cream;                                               // dot inlays
+        for(const yy of [-24,-13,-2]){ctx.beginPath();ctx.arc(0,yy,0.8,0,7);ctx.fill();}
+        ctx.fillStyle='#241609'; rr(ctx,-3,-46,9,11,2.5); ctx.fill();          // headstock
+        ctx.fillStyle=PAL.cream; ctx.fillRect(-3,-36.4,6,1.6);                 // nut
+        ctx.fillStyle=PAL.cream;                                               // 4 pegs, all one side
+        for(let i=0;i<4;i++){ctx.beginPath();ctx.arc(3.5,-44+i*2.4,1.45,0,7);ctx.fill();}
+        ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=.7;
+        for(const dx of [-1.35,-0.45,0.45,1.35]){ctx.beginPath();ctx.moveTo(dx,-35);ctx.lineTo(dx,6);ctx.stroke();}
+      },
+      bagT:{a:-0.34,s:0.62,ax:0,ay:12,dx:-6}},
+    {key:'drums',name:'Drums',
+      icon(ctx){
+        // Just a pair of sticks — the kit is in the bag. Slim shafts that taper
+        // into the neck, tip end up so the bead is what shows.
+        const stick=(sx,ang)=>{
+          ctx.save(); ctx.translate(sx,0); ctx.rotate(ang);
+          ctx.fillStyle=PAL.woodLt;
+          ctx.beginPath();
+          ctx.moveTo(-1.7,24); ctx.lineTo(1.7,24);            // butt end, buried in the bag
+          ctx.lineTo(1.35,-22); ctx.lineTo(1.0,-28.5);        // taper into the neck
+          ctx.lineTo(-1.0,-28.5); ctx.lineTo(-1.35,-22);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle=PAL.cream;                            // bead / tip
+          ctx.beginPath(); ctx.ellipse(0,-30.2,2,2.3,0,0,7); ctx.fill();
+          ctx.restore();
+        };
+        stick(-4.5,-0.10); stick(4.5,0.10);
+      },
+      bagT:{a:-0.34,s:0.62,ax:0,ay:10,dx:-5}},
+    {key:'flute',name:'Flute / Recorder',
+      icon(ctx){
+        ctx.fillStyle=PAL.silver; rr(ctx,-26,-3.5,52,7,3.5); ctx.fill();
+        ctx.fillStyle=PAL.silverD; ctx.fillRect(-26,1.5,52,2);
+        ctx.fillStyle='#444'; ctx.beginPath(); ctx.ellipse(-19,-1,2.2,1.4,0,0,7); ctx.fill();
+        ctx.fillStyle=PAL.silverD; for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(-6+i*6,-1,2,0,7);ctx.fill();}
+        ctx.fillStyle=PAL.silver; ctx.beginPath(); ctx.moveTo(26,-4); ctx.lineTo(30,-2); ctx.lineTo(30,2); ctx.lineTo(26,4); ctx.closePath(); ctx.fill();
+      },
+      bagT:{a:-1.74,s:0.58,ax:0,ay:0,dx:-6}},
+    {key:'trumpet',name:'Trumpet',
+      icon(ctx){
+        ctx.strokeStyle=PAL.brass; ctx.lineWidth=4; ctx.lineCap='round';
+        ctx.beginPath(); ctx.moveTo(-22,0); ctx.lineTo(12,0); ctx.stroke();
+        ctx.fillStyle=PAL.brassD; ctx.beginPath(); ctx.arc(-23,0,3,0,7); ctx.fill();
+        ctx.fillStyle=PAL.brass; ctx.beginPath();
+        ctx.moveTo(12,-5); ctx.lineTo(26,-11); ctx.lineTo(26,11); ctx.lineTo(12,5); ctx.closePath(); ctx.fill();
+        ctx.fillStyle=PAL.brassD; for(const x of [-6,-1,4]) ctx.fillRect(x,-8,2.4,8);
+      },
+      bagT:{a:-1.85,s:0.58,ax:8,ay:0,dx:-5}},
+    {key:'mic',name:'Microphone',
+      icon(ctx){
+        // song sheet behind, tilted
+        ctx.save(); ctx.translate(-5,4); ctx.rotate(-0.13);
+        ctx.fillStyle=PAL.cream; rr(ctx,-11,-14,20,27,2); ctx.fill();
+        ctx.strokeStyle='rgba(11,32,74,.55)'; ctx.lineWidth=1; rr(ctx,-11,-14,20,27,2); ctx.stroke();
+        ctx.strokeStyle='rgba(11,32,74,.3)'; ctx.lineWidth=0.7;
+        for(let i=0;i<4;i++){ctx.beginPath();ctx.moveTo(-8,-1+i*4);ctx.lineTo(6,-1+i*4);ctx.stroke();}
+        // three small quavers across the top
+        for(const n of [[-6,-6.5],[-1,-7.8],[4,-6.5]]){
+          ctx.fillStyle=PAL.navy;
+          ctx.beginPath(); ctx.ellipse(n[0],n[1],1.7,1.25,-0.3,0,7); ctx.fill();
+          ctx.strokeStyle=PAL.navy; ctx.lineWidth=0.9;
+          ctx.beginPath(); ctx.moveTo(n[0]+1.6,n[1]-0.4); ctx.lineTo(n[0]+1.6,n[1]-5.2); ctx.stroke();
+          ctx.lineWidth=1.2;
+          ctx.beginPath(); ctx.moveTo(n[0]+1.6,n[1]-5.2); ctx.quadraticCurveTo(n[0]+3.6,n[1]-4.6,n[0]+3.2,n[1]-2.6); ctx.stroke();
+        }
+        ctx.restore();
+        // microphone, clear to the right of the sheet. Long handle on purpose: it
+        // lifts the ball above the widest hairstyles while the base stays in the bag.
+        ctx.save(); ctx.translate(11,5);
+        ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(0,-18,7,0,7); ctx.fill();     // ball
+        ctx.strokeStyle='#666'; ctx.lineWidth=0.8;
+        for(let i=-1;i<=1;i++){ctx.beginPath();ctx.moveTo(-6,-18+i*3.6);ctx.lineTo(6,-18+i*3.6);ctx.stroke();}
+        ctx.fillStyle=PAL.silver; rr(ctx,-2,-12.5,4,3,1); ctx.fill();                 // band
+        ctx.fillStyle='#222'; rr(ctx,-2.5,-9.5,5,25,2); ctx.fill();                   // handle
+        ctx.fillStyle='#444'; ctx.fillRect(-2.5,12,5,2.4);
+        ctx.restore();
+      },
+      bagT:{a:-0.34,s:0.40,ax:-2,ay:-3,dx:-7,dy:-4}},
+  ];
+  const INST_BY_KEY = Object.fromEntries(INSTRUMENTS.map(i => [i.key, i]));
+
+  // The head is a r=9 circle with a 2.4px dark outline, so its outer edge is
+  // r=10.2. Every style is therefore built on a shell of radius HR=10.6 — that
+  // is what stops the dark scalp ring peeking out above the hair. The shell
+  // also wraps HT past the widest point so it tucks in at the temples instead
+  // of ending in a square tab.
+  //
+  // Hair is flat colour with no outline of its own: at the crown the hair edge
+  // IS the silhouette, and the head outline carries on round the face below it.
+  // Any shape a style adds must therefore stay inside the shell, or spring
+  // from it (spikes, fins, buns), or it shows as a notch.
+  const HR=10.6, HT=0.17;
+  const HRC=HR*Math.cos(HT), HRS=HR*Math.sin(HT);   // where the shell ends at the temples
+
+  // hairline = how far above the eye line the front hairline sits. Eyes are r2.6
+  // centred on y, so anything >= 3.2 leaves both eyes clear.
+  function scalpCap(ctx,x,y,c,hairline){
+    if (hairline == null) hairline = 4.5;
+    ctx.fillStyle=c;
+    ctx.beginPath();
+    ctx.arc(x,y,HR,Math.PI-HT,2*Math.PI+HT,false);
+    ctx.quadraticCurveTo(x,y-2*hairline-HRS,x-HRC,y+HRS);
+    ctx.closePath();ctx.fill();
+  }
+  // One side curtain of long hair. It starts ON the shell (top) so the outer edge
+  // grows out of the head instead of stepping off it as a square shoulder.
+  function curtain(ctx,x,y,s,len,out,inn,bow,top){
+    out=out||10.6; inn=inn||6.0; bow=bow||1.0; top=(top==null)?-4.5:top;
+    const sx=Math.sqrt(Math.max(HR*HR-top*top,0));
+    ctx.beginPath();
+    ctx.moveTo(x+s*sx,y+top);
+    ctx.quadraticCurveTo(x+s*(out+bow),y+len*0.45,x+s*(out-0.6),y+len);
+    ctx.quadraticCurveTo(x+s*(out-2.6),y+len+2.4,x+s*inn,y+len-2);
+    ctx.quadraticCurveTo(x+s*(inn+0.9),y+len*0.4,x+s*inn,y+top);
+    ctx.closePath();ctx.fill();
+  }
+  const HAIR={
+    crop:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,5);},
+    bob:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.2);ctx.fillStyle=c;
+      for(const s of [-1,1]) curtain(ctx,x,y,s,11,10.8,6.2,1.4);              // chin-length side curtains
+      // soft, slightly scalloped fringe — sits clear of the eyes so the face reads
+      ctx.beginPath();
+      ctx.moveTo(x-8.2,y-6.5);ctx.lineTo(x+8.2,y-6.5);ctx.lineTo(x+9.8,y-3.2);
+      ctx.quadraticCurveTo(x+6.2,y-4.7,x+3.2,y-3.4);
+      ctx.quadraticCurveTo(x,y-4.9,x-3.2,y-3.4);
+      ctx.quadraticCurveTo(x-6.2,y-4.7,x-9.8,y-3.2);ctx.closePath();ctx.fill();},
+    bun:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,5);
+      ctx.fillStyle=c;ctx.beginPath();ctx.ellipse(x,y-12.6,4.4,4,0,0,7);ctx.fill();},
+    spiky:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,5);ctx.fillStyle=c;
+      // spikes radiate from points ON the shell — bases follow the head curve, not one line
+      const R=HR-1,hw=2.2;
+      for(let k=-3;k<=3;k++){const a=k*0.42;const ox=Math.sin(a),oy=-Math.cos(a),px=Math.cos(a),py=Math.sin(a);
+        const len=9-Math.abs(k)*0.8,bx=x+R*ox,by=y+R*oy,tx=bx+len*ox,ty=by+len*oy;
+        ctx.beginPath();ctx.moveTo(bx-hw*px,by-hw*py);ctx.lineTo(tx,ty);ctx.lineTo(bx+hw*px,by+hw*py);ctx.closePath();ctx.fill();}},
+    mohawk:(x,y,c,ctx)=>{ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(x-3,y-4);ctx.lineTo(x,y-15);ctx.lineTo(x+3,y-4);ctx.closePath();ctx.fill();ctx.fillRect(x-3,y-9,6,6);},
+    afro:(x,y,c,ctx)=>{ctx.fillStyle=c;
+      // poofy cloud: high across the forehead (bottom-centre above the eyes),
+      // puffing down the sides to frame the face like real hair
+      const blobs=[[0,-12.4,9.2],[0,-15.4,7.2],[-7.4,-9,7.2],[7.4,-9,7.2],[-11.4,-2.4,6.2],[11.4,-2.4,6.2],[-9.6,-12,5.2],[9.6,-12,5.2]];
+      for(const b of blobs){ctx.beginPath();ctx.arc(x+b[0],y+b[1],b[2],0,7);ctx.fill();}
+      ctx.fillStyle='rgba(0,0,0,.09)';   // subtle curl texture (works on any colour)
+      for(const b of [[-5,-11,2],[4.5,-13,1.9],[-9.5,-5,1.9],[8.5,-6,1.9],[0,-8,2]]){ctx.beginPath();ctx.arc(x+b[0],y+b[1],b[2],0,7);ctx.fill();}},
+    longflow:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(x+s*10.4,y-2.4);
+        ctx.quadraticCurveTo(x+s*13.6,y+13,x+s*8,y+22.5);
+        ctx.quadraticCurveTo(x+s*6.4,y+24,x+s*4.6,y+21.5);
+        ctx.quadraticCurveTo(x+s*7.6,y+9,x+s*5.6,y-2.4);ctx.closePath();ctx.fill();}},
+    curly:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(let i=-2;i<=2;i++){ctx.beginPath();ctx.arc(x+i*4.6,y-9.4+Math.abs(i)*1.4,3.4,0,7);ctx.fill();}
+      for(const s of [-1,1]){ctx.beginPath();ctx.arc(x+s*10.4,y-3.6,3.1,0,7);ctx.fill();}},
+    longStraight:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(const s of [-1,1]) curtain(ctx,x,y,s,24,10.6,6.0,1.0);},
+    longFringe:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.2);ctx.fillStyle=c;
+      for(const s of [-1,1]) curtain(ctx,x,y,s,24,10.6,6.0,1.0);
+      // swept fringe across the brow — corners kept inside the shell, clear of the eyes
+      ctx.beginPath();ctx.moveTo(x-7.2,y-7.6);ctx.lineTo(x+7.2,y-7.6);ctx.lineTo(x+9.6,y-3.4);
+      ctx.quadraticCurveTo(x+2,y-5.8,x-9.6,y-3.4);ctx.closePath();ctx.fill();},
+    longWavy:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(x+s*10.4,y-2.4);
+        ctx.quadraticCurveTo(x+s*15.6,y+6,x+s*8.6,y+13);ctx.quadraticCurveTo(x+s*2.6,y+19,x+s*9.6,y+25.5);
+        ctx.lineTo(x+s*5.2,y+25.5);ctx.quadraticCurveTo(x+s*0.4,y+18.4,x+s*5,y+12.2);
+        ctx.quadraticCurveTo(x+s*10.4,y+6,x+s*5.4,y-2.4);ctx.closePath();ctx.fill();}},
+    pigtails:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(x+s*10.8,y+6.5,4.8,8.6,s*0.16,0,7);ctx.fill();}
+      ctx.fillStyle=PAL.sweet;
+      for(const s of [-1,1]){ctx.beginPath();ctx.arc(x+s*8.8,y-3.4,1.8,0,7);ctx.fill();}},
+    braids:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,4.6);ctx.fillStyle=c;
+      for(const s of [-1,1]) for(let i=0;i<5;i++){ctx.beginPath();ctx.ellipse(x+s*(9.8-i*0.25),y+1.5+i*4.6,3.5,3.2,0,0,7);ctx.fill();}},
+    highPony:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,5);ctx.fillStyle=c;
+      ctx.beginPath();ctx.moveTo(x+1.6,y-10.2);ctx.quadraticCurveTo(x+15,y-16.5,x+13,y-1.5);
+      ctx.quadraticCurveTo(x+11.6,y+11,x+7.4,y+17);
+      ctx.lineTo(x+3.8,y+14.6);ctx.quadraticCurveTo(x+8.4,y+6,x+7.4,y-3.2);
+      ctx.quadraticCurveTo(x+6.4,y-9.4,x+1.6,y-10.2);ctx.closePath();ctx.fill();
+      ctx.fillStyle=PAL.sweet;ctx.beginPath();ctx.arc(x+3.4,y-8.8,2,0,7);ctx.fill();},
+    liberty:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,5);ctx.fillStyle=c;
+      // tall liberty spikes radiating from the shell — taller in the middle
+      const R=HR-1,hw=1.9;
+      for(let k=-3;k<=3;k++){const a=k*0.4;const ox=Math.sin(a),oy=-Math.cos(a),px=Math.cos(a),py=Math.sin(a);
+        const len=16-Math.abs(k)*1.8,bx=x+R*ox,by=y+R*oy,tx=bx+len*ox,ty=by+len*oy;
+        ctx.beginPath();ctx.moveTo(bx-hw*px,by-hw*py);ctx.lineTo(tx,ty);ctx.lineTo(bx+hw*px,by+hw*py);ctx.closePath();ctx.fill();}},
+    bigMohawk:(x,y,c,ctx)=>{ctx.fillStyle=c;ctx.fillRect(x-2.5,y-7,5,5);
+      ctx.beginPath();ctx.moveTo(x-5,y-2);ctx.lineTo(x-3,y-18);ctx.lineTo(x,y-6);ctx.lineTo(x+3,y-18);ctx.lineTo(x+5,y-2);ctx.closePath();ctx.fill();},
+    emoFringe:(x,y,c,ctx)=>{scalpCap(ctx,x,y,c,3.4);ctx.fillStyle=c;
+      for(const s of [-1,1]) curtain(ctx,x,y,s,15,10.5,6.4,0.8);
+      // long sweep down over the RIGHT eye; left eye and the mouth stay clear
+      ctx.beginPath();ctx.moveTo(x-10.3,y-5.5);
+      ctx.quadraticCurveTo(x-1,y-10.5,x+9.6,y-5.6);
+      ctx.quadraticCurveTo(x+10.4,y+1.2,x+6.4,y+3.4);
+      ctx.quadraticCurveTo(x+2,y+1.6,x-2.4,y-3.4);
+      ctx.quadraticCurveTo(x-6,y-4.6,x-10.3,y-3.2);ctx.closePath();ctx.fill();},
+  };
+  const HAIR_LIST=[
+    {k:'crop',n:'Crop'},
+    {k:'bob',n:'Bob'},{k:'bun',n:'Bun'},{k:'curly',n:'Curly'},
+    {k:'longStraight',n:'Long straight'},{k:'longFringe',n:'Long + fringe'},
+    {k:'longWavy',n:'Long wavy'},{k:'pigtails',n:'Pigtails'},
+    {k:'braids',n:'Braids'},{k:'highPony',n:'High ponytail'},{k:'longflow',n:'Long flowing'},
+    {k:'spiky',n:'Spiky'},{k:'mohawk',n:'Mohawk'},{k:'bigMohawk',n:'Big mohawk'},
+    {k:'liberty',n:'Liberty spikes'},{k:'emoFringe',n:'Emo fringe'},{k:'afro',n:'Afro'},
+  ];
+  const COLOURS=[
+    {n:'Brown',c:'#3A2415'},{n:'Black',c:'#15110d'},{n:'Chestnut',c:'#6B3A1A'},{n:'Light brown',c:'#8B5A2B'},
+    {n:'Auburn',c:'#A23E1C'},{n:'Ginger',c:'#C75A2A'},{n:'Blonde',c:'#E0B04A'},{n:'Platinum',c:'#ECE6D6'},
+    {n:'Grey',c:'#9AA0A6'},{n:'Silver',c:'#C8CCD0'},
+    {n:'Pink',c:'#E86AA6'},{n:'Magenta',c:'#E0218A'},{n:'Purple',c:'#8E44E0'},{n:'Violet',c:'#B86BE8'},
+    {n:'Electric blue',c:'#2E8BE6'},{n:'Icy blue',c:'#8FD3FF'},{n:'Teal',c:'#2BB6A8'},{n:'Green',c:'#39C24A'},
+    {n:'Lime',c:'#9BE04A'},{n:'Red',c:'#E23B3B'},{n:'Orange',c:'#F08A24'},{n:'Yellow',c:'#F4D03F'},
+  ];
+  const SKIN_LIST=[
+    {n:'Light',c:SKINS.light},{n:'Light-med',c:SKINS.lightMed},{n:'Medium',c:SKINS.med},
+    {n:'Tan',c:SKINS.tan},{n:'Dark',c:SKINS.dark},{n:'Deep',c:SKINS.deep},
+  ];
+  const HAIR_COVER={ emoFringe:'left' };
+  // The mohawk fins were lifted 3 and read as floating; 2.5 drops them just far
+  // enough that the outline under the fin is covered.
+  const HAIR_LIFT={ mohawk:2.5, bigMohawk:2.5 };
+
+  function baseFace(ctx,x,y,o){o=o||{};const cover=o.cover||'both';
+    const L=(cover==='both'||cover==='left'), R=(cover==='both'||cover==='right');
+    if(L){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x-5,y,2.6,0,7);ctx.fill();ctx.fillStyle=PAL.text;ctx.beginPath();ctx.arc(x-4.5,y,1.4,0,7);ctx.fill();}
+    if(R){ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x+5,y,2.6,0,7);ctx.fill();ctx.fillStyle=PAL.text;ctx.beginPath();ctx.arc(x+5.5,y,1.4,0,7);ctx.fill();}
+    ctx.strokeStyle=PAL.text;ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(x,y+4,3,0.1*Math.PI,0.9*Math.PI);ctx.stroke();}
+  function drawHead(ctx,x,y,o){o=o||{};
+    ctx.strokeStyle=PAL.text;ctx.lineWidth=2.4;ctx.fillStyle=o.skin||SKINS.light;
+    ctx.beginPath();ctx.arc(x,y,9,0,7);ctx.fill();ctx.stroke();
+    if(o.hair&&HAIR[o.hair])HAIR[o.hair](x,y-(HAIR_LIFT[o.hair]||0),o.hairColor||PAL.hairDark,ctx);
+    const cover=o.cover||HAIR_COVER[o.hair]||'both';
+    baseFace(ctx,x,y,Object.assign({},o,{cover}));}
+  // Bag uses brand CSS variables so re-skinning the school recolours it.
+  function drawCharBag(ctx){const x=-2,y=26,w=15,h=22;
+    ctx.fillStyle=css('--brand-primary');rr(ctx,x,y,w,h,4);ctx.fill();
+    ctx.strokeStyle=css('--brand-primary-dark');ctx.lineWidth=1.5;rr(ctx,x,y,w,h,4);ctx.stroke();
+    ctx.fillStyle=css('--brand-primary-dark');rr(ctx,x,y-3,w,8,3);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.10)';ctx.fillRect(x+1.5,y-3,w-3,1.2);
+    ctx.fillStyle=css('--brand-accent');ctx.font='900 6px Bungee, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(BRANDING.schoolShortName,x+w/2,y+17);ctx.textAlign='start';ctx.textBaseline='alphabetic';
+    ctx.strokeStyle=css('--brand-primary-dark');ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x+w-2,y+2);ctx.lineTo(22,30);ctx.stroke();}
+  // bagT: a = tilt (negative leans the top LEFT), s = scale in the bag,
+  // dx/dy = nudge in CHARACTER space (before the tilt), ax/ay = slide along the
+  // instrument's own axes (after the tilt). Everything leans left and sits left
+  // of the bag mouth so the bigger hairstyles don't hide it.
+  function drawInstrumentInBag(ctx,inst){if(!inst)return;const t=inst.bagT||{a:0,s:0.6};
+    ctx.save();
+    ctx.translate(5+(t.dx||0),24+(t.dy||0));
+    ctx.rotate(t.a); ctx.scale(t.s,t.s);
+    if(t.ax||t.ay) ctx.translate(t.ax||0,t.ay||0);
+    inst.icon(ctx);
+    ctx.restore();}
+  // Full static character — used by the character-select preview.
+  function drawCharacter(ctx,o){o=o||{};const cx=18;
+    if(o.inst)drawInstrumentInBag(ctx,o.inst);
+    drawCharBag(ctx);
+    ctx.strokeStyle=PAL.text;ctx.lineWidth=3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(cx,40);ctx.lineTo(cx-7,58);ctx.moveTo(cx,40);ctx.lineTo(cx+6,57);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,20);ctx.lineTo(cx,40);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(cx,27);ctx.lineTo(cx-7,33);ctx.moveTo(cx,27);ctx.lineTo(cx+8,24);ctx.stroke();
+    drawHead(ctx,cx,11,o);}
+
+  // The player's chosen look — held in memory until the page is refreshed.
+  const CHOICE = { hair:'crop', hairColor:'#3A2415', skin:SKINS.light, instrument:'keyboard' };
+
+  // =============================================================
+  // Logo image (drawn on the bag and the gate)
+  // =============================================================
+  const logoImg = new Image();
+  logoImg._ok = false;
+  logoImg.onload  = () => { logoImg._ok = true; };
+  logoImg.onerror = () => { logoImg._ok = false; };
+  logoImg.src = BRANDING.logoSrc;
+
+  // =============================================================
+  // Input — keyboard + touch buttons feed the same state object
+  // =============================================================
+  const input = { left: false, right: false, jumpHeld: false, jumpPressed: false };
+
+  addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') input.left = true;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = true;
+    if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      input.jumpHeld = true; input.jumpPressed = true;
+      // Used by the title screen too
+      if (gameState === 'title') startGame();
+      e.preventDefault();
+    }
+    if (e.key === 'r' || e.key === 'R') resetGame();
+  });
+  addEventListener('keyup', (e) => {
+    if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') input.left = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = false;
+    if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      input.jumpHeld = false;
+    }
+  });
+
+  function vibrate(ms) {
+    // Tactile feedback on supported devices (Android, etc).
+    // iOS Safari ignores it — silently fine.
+    try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {}
+  }
+
+  function bindTouch(id, set, isJump) {
+    const el = document.getElementById(id);
+    const down = (e) => {
+      e.preventDefault();
+      set(true);
+      if (isJump) input.jumpPressed = true;
+      if (gameState === 'title') startGame();
+      vibrate(isJump ? 14 : 8);
+    };
+    const up = (e) => { e.preventDefault(); set(false); };
+    el.addEventListener('pointerdown',   down);
+    el.addEventListener('pointerup',     up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerleave',  up);
+  }
+  bindTouch('btn-left',  v => input.left = v,     false);
+  bindTouch('btn-right', v => input.right = v,    false);
+  bindTouch('btn-jump',  v => input.jumpHeld = v, true);
+
+  // Fullscreen toggle (touch devices)
+  (function setupFullscreen() {
+    const btn = document.getElementById('fullscreen-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      try {
+        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+        if (fsEl) {
+          await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        } else {
+          const el = document.documentElement;
+          await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+        }
+        vibrate(10);
+      } catch (e) { /* iOS Safari + some Android browsers — ignore */ }
+    });
+  })();
+
+  // =============================================================
+  // Character select — cycle hair / colour / skin / instrument, live preview.
+  // Choices live in CHOICE and persist until the page is refreshed.
+  // =============================================================
+  const csPreview = document.getElementById('char-preview');
+  const csPctx = csPreview.getContext('2d');
+  const csIndex = { hair: 0, colour: 0, skin: 0, instrument: 0 };
+
+  function renderCharPreview() {
+    csPctx.clearRect(0, 0, csPreview.width, csPreview.height);
+    csPctx.save();
+    csPctx.translate(26, 29);          // fit the 36x60 character + tall hair/instrument
+    csPctx.scale(1.9, 1.9);
+    csPctx.lineJoin = 'round';
+    drawCharacter(csPctx, {
+      hair: CHOICE.hair, hairColor: CHOICE.hairColor, skin: CHOICE.skin,
+      inst: INST_BY_KEY[CHOICE.instrument],
+    });
+    csPctx.restore();
+  }
+
+  function applyChoice() {
+    CHOICE.hair       = HAIR_LIST[csIndex.hair].k;
+    CHOICE.hairColor  = COLOURS[csIndex.colour].c;
+    CHOICE.skin       = SKIN_LIST[csIndex.skin].c;
+    CHOICE.instrument = INSTRUMENTS[csIndex.instrument].key;
+    document.getElementById('cs-hair').textContent       = HAIR_LIST[csIndex.hair].n;
+    document.getElementById('cs-colour').textContent     = COLOURS[csIndex.colour].n;
+    document.getElementById('cs-skin').textContent       = SKIN_LIST[csIndex.skin].n;
+    document.getElementById('cs-instrument').textContent = INSTRUMENTS[csIndex.instrument].name;
+    renderCharPreview();
+  }
+
+  const CS_LEN = { hair: HAIR_LIST.length, colour: COLOURS.length, skin: SKIN_LIST.length, instrument: INSTRUMENTS.length };
+  function cycleChoice(attr, dir) {
+    const n = CS_LEN[attr];
+    csIndex[attr] = (csIndex[attr] + dir + n) % n;
+    applyChoice();
+    vibrate(6);
+  }
+  for (const btn of document.querySelectorAll('.cs-arrow')) {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cycleChoice(btn.dataset.attr, parseInt(btn.dataset.dir, 10));
+    });
+  }
+  // Defaults: keyboard instrument (index 0), crop hair, brown, light skin.
+  csIndex.instrument = 0; csIndex.hair = 0; csIndex.colour = 0; csIndex.skin = 0;
+  applyChoice();
+
+  // PLAY button starts the game (tapping the selectors must NOT start it).
+  document.getElementById('play-btn').addEventListener('click', () => {
+    if (gameState === 'title') startGame();
+  });
+
+  // =============================================================
+  // Level data — '.' empty, '#' solid, '=' platform, 'P' puddle, 'M' manhole,
+  //              'D' dog spawn, 'R' rat spawn, 'S' sweet spawn, 'G' school gate.
+  // Rows 12–13 deliberately empty so manholes are bottomless pits.
+  // Mutable level state — populated by loadLevel(N).
+  // =============================================================
+  let LEVEL = ['','','','','','','','','','','','','',''];   // 14 empty rows; loadLevel fills them
+  let LEVEL_W = 0;
+  let LEVEL_H = 14 * 32;
+  let currentLevel = 1;
+  let currentDogSpeed = 0.45;
+  let currentRatSpeed = 0;
+  let currentWaspIntervalFrames = Infinity;
+  let currentWaspClusterSize = 0;
+  let currentBullyIntervalFrames = Infinity;
+  let currentTimerSeconds = 60;
+  const GROUND_ROW = 11;
+  const GROUND_Y = GROUND_ROW * TILE;
+
+  function tileAt(px, py) {
+    const c = Math.floor(px / TILE), r = Math.floor(py / TILE);
+    if (r < 0 || r >= LEVEL.length || c < 0 || c >= LEVEL[0].length) return '.';
+    return LEVEL[r][c];
+  }
+  const isSolid    = (ch) => ch === '#';
+  const isOneWay   = (ch) => ch === '=';   // jump-up-onto platform — solid only when landing
+
+  // =============================================================
+  // Player + physics
+  // =============================================================
+  const RUN_ACCEL = 0.6, AIR_ACCEL = 0.4, MAX_RUN = 3.4, FRICTION = 0.82;
+  const GRAV_RISE = 0.5, GRAV_FALL = 0.9, JUMP_VEL = -10.5, JUMP_CUT = -4;
+  const COYOTE = 8, BUFFER = 8, IFRAMES = 60;
+  const MAX_JUMPS = 2; // tap jump twice mid-air = double jump
+
+  const PLAYER_W = 72, PLAYER_H = 120;
+  const FOOT_HALF = 10; // narrower-than-body feet so 1-tile gaps still drop the player
+  const SPAWN = { x: 2 * TILE, y: GROUND_Y - PLAYER_H };
+  const P = {
+    x: SPAWN.x, y: SPAWN.y, vx: 0, vy: 0,
+    w: PLAYER_W, h: PLAYER_H, onGround: false, facing: 1,
+    coyote: 0, buffer: 0,
+    jumpsLeft: MAX_JUMPS,
+  };
+
+  function collideTiles() {
+    const cx = () => P.x + P.w / 2;
+    // X axis — use body sides
+    let bx = P.x + P.vx;
+    if (P.vx > 0) {
+      const right = bx + P.w;
+      if (isSolid(tileAt(right, P.y + 8)) || isSolid(tileAt(right, P.y + P.h - 4))) {
+        bx = Math.floor(right / TILE) * TILE - P.w; P.vx = 0;
+      }
+    } else if (P.vx < 0) {
+      if (isSolid(tileAt(bx, P.y + 8)) || isSolid(tileAt(bx, P.y + P.h - 4))) {
+        bx = Math.floor(bx / TILE) * TILE + TILE; P.vx = 0;
+      }
+    }
+    P.x = Math.max(0, Math.min(LEVEL_W - P.w, bx));
+
+    // Y axis — use NARROW foot zone (centred), so 1-tile gaps drop the player.
+    let by = P.y + P.vy;
+    P.onGround = false;
+    if (P.vy > 0) {
+      const bot = by + P.h;
+      const fl = P.x + P.w / 2 - FOOT_HALF;
+      const fr = P.x + P.w / 2 + FOOT_HALF;
+      const tlc = tileAt(fl, bot), trc = tileAt(fr, bot);
+      let landed = isSolid(tlc) || isSolid(trc);
+      // One-way platform: only solid if the player's previous bottom was at or
+      // above the platform's top. That way you can jump UP through it from below.
+      if (!landed && (isOneWay(tlc) || isOneWay(trc))) {
+        const platTop = Math.floor(bot / TILE) * TILE;
+        if (P.y + P.h <= platTop) landed = true;
+      }
+      if (landed) {
+        by = Math.floor(bot / TILE) * TILE - P.h; P.vy = 0; P.onGround = true;
+      }
+    } else if (P.vy < 0) {
+      // Going up — only '#' is a ceiling. '=' lets you pass through.
+      if (isSolid(tileAt(P.x + 6, by)) || isSolid(tileAt(P.x + P.w - 6, by))) {
+        by = Math.floor(by / TILE) * TILE + TILE; P.vy = 0;
+      }
+    }
+    P.y = by;
+  }
+
+  function updatePlayer() {
+    const accel = P.onGround ? RUN_ACCEL : AIR_ACCEL;
+    if (input.left)  { P.vx -= accel; P.facing = -1; }
+    if (input.right) { P.vx += accel; P.facing =  1; }
+    if (!input.left && !input.right && P.onGround) P.vx *= FRICTION;
+    P.vx = Math.max(-MAX_RUN, Math.min(MAX_RUN, P.vx));
+
+    // Refill jumps when grounded
+    if (P.onGround) P.jumpsLeft = MAX_JUMPS;
+
+    // Coyote + jump buffer
+    P.coyote = P.onGround ? COYOTE : Math.max(0, P.coyote - 1);
+    P.buffer = input.jumpPressed ? BUFFER : Math.max(0, P.buffer - 1);
+
+    if (P.buffer > 0) {
+      if (P.coyote > 0) {
+        // First jump (from ground or coyote-grace) — full power
+        P.vy = JUMP_VEL;
+        P.coyote = 0; P.buffer = 0;
+        P.onGround = false;
+        P.jumpsLeft = MAX_JUMPS - 1;
+        playJump(true);
+      } else if (P.jumpsLeft > 0) {
+        // Air jump — slightly weaker. Reset vy first so the second jump
+        // always feels the same regardless of fall speed.
+        P.vy = JUMP_VEL * 0.92;
+        P.buffer = 0;
+        P.jumpsLeft--;
+        playJump(false);
+        // Little flourish — small "puff" popup at the player's feet
+        popups.push({ x: P.x + P.w / 2, y: P.y + P.h - 8, vy: 0.4, life: 24, text: '✦' });
+      }
+    }
+    // Variable jump height (jump-cut)
+    if (!input.jumpHeld && P.vy < JUMP_CUT) P.vy = JUMP_CUT;
+
+    P.vy += (P.vy < 0 ? GRAV_RISE : GRAV_FALL);
+    P.vy = Math.min(P.vy, 14); // terminal velocity
+
+    collideTiles();
+
+    input.jumpPressed = false;
+
+    // Subtle run-cycle clock for the legs
+    P._t = (P._t || 0) + Math.abs(P.vx) * 0.35;
+  }
+
+  function drawPlayer() {
+    if (iframes > 0 && (Math.floor(iframes / 4) % 2 === 0)) return; // flash
+    const x = Math.round(P.x - cam.x);
+    const y = Math.round(P.y);
+    const cx = x + P.w / 2;          // body centre line
+
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // ----- Backpack + chosen instrument (behind the body) -----
+    // Drawn via the mockup character transform: mockup units -> 2x game units.
+    ctx.save();
+    if (P.facing === 1) { ctx.translate(x, y); ctx.scale(2, 2); }
+    else { ctx.translate(x + P.w, y); ctx.scale(-2, 2); }
+    drawInstrumentInBag(ctx, INST_BY_KEY[CHOICE.instrument]);
+    drawCharBag(ctx);
+    ctx.restore();
+
+    // ----- Torso -----
+    ctx.strokeStyle = css('--brand-text'); ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(cx, y + 40);
+    ctx.lineTo(cx, y + 80);
+    ctx.stroke();
+
+    // ----- Arms (swing with run) -----
+    const swing = P.onGround ? Math.sin(P._t) * 12 : -8;
+    ctx.beginPath();
+    ctx.moveTo(cx - 22, y + 56 + swing);
+    ctx.lineTo(cx + 22, y + 56 - swing);
+    ctx.stroke();
+
+    // ----- Legs -----
+    if (!P.onGround) {
+      // Tucked while airborne
+      ctx.beginPath();
+      ctx.moveTo(cx, y + 80);
+      ctx.lineTo(cx - 14, y + 108);
+      ctx.moveTo(cx, y + 80);
+      ctx.lineTo(cx + 14, y + 108);
+      ctx.stroke();
+    } else {
+      const stride = Math.sin(P._t) * 18;
+      ctx.beginPath();
+      ctx.moveTo(cx, y + 80);
+      ctx.lineTo(cx - stride, y + 116);
+      ctx.moveTo(cx, y + 80);
+      ctx.lineTo(cx + stride, y + 116);
+      ctx.stroke();
+    }
+
+    // ----- Head + hair + face (chosen look) -----
+    ctx.save();
+    if (P.facing === 1) { ctx.translate(x, y); ctx.scale(2, 2); }
+    else { ctx.translate(x + P.w, y); ctx.scale(-2, 2); }
+    drawHead(ctx, 18, 11, { hair: CHOICE.hair, hairColor: CHOICE.hairColor, skin: CHOICE.skin });
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+
+  // =============================================================
+  // Camera
+  // =============================================================
+  const cam = { x: 0 };
+  function updateCamera() {
+    const target = P.x - W / 2 + P.w / 2;
+    cam.x += (target - cam.x) * 0.18;
+    cam.x = Math.max(0, Math.min(LEVEL_W - W, cam.x));
+  }
+
+  // =============================================================
+  // Background — sky gradient + parallax buildings
+  // =============================================================
+  function drawBackground() {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0,    css('--brand-sky'));
+    g.addColorStop(0.7,  '#E9F1F7');
+    g.addColorStop(1,    css('--brand-cream'));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // Distant clouds
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    const co = -cam.x * 0.15;
+    for (let i = 0; i < 6; i++) {
+      const x = ((i * 280) + co) % (W + 280) - 140;
+      const y = 40 + (i % 3) * 24;
+      ctx.beginPath();
+      ctx.arc(x,      y,     16, 0, Math.PI * 2);
+      ctx.arc(x + 18, y - 6, 14, 0, Math.PI * 2);
+      ctx.arc(x + 36, y,     16, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Parallax buildings (anchored to the ground line) — 2x scale
+    const SPACING = 320;
+    const BLD_W   = 240;
+    ctx.fillStyle = css('--brand-primary');
+    const offset = -cam.x * 0.4;
+    for (let i = 0; i < 10; i++) {
+      const baseX = (i * SPACING);
+      const x = baseX + (offset % SPACING) - SPACING;
+      const h = 200 + ((i * 73) % 120);
+      const top = GROUND_Y - h;
+      // Body
+      ctx.fillStyle = css('--brand-primary');
+      ctx.fillRect(x, top, BLD_W, h);
+      // Top trim
+      ctx.fillStyle = css('--brand-primary-dark');
+      ctx.fillRect(x, top, BLD_W, 8);
+      ctx.fillRect(x, top + 8, BLD_W, 4);
+      // Subtle vertical seam every 60 px for depth
+      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      for (let s = 60; s < BLD_W; s += 60) ctx.fillRect(x + s, top, 1, h);
+      // Windows (2x sized)
+      ctx.fillStyle = css('--brand-sweet');
+      const cols = 4, rows = Math.max(2, Math.floor((h - 24) / 56));
+      for (let wy = 0; wy < rows; wy++) for (let wx = 0; wx < cols; wx++) {
+        if (((i * 7 + wx * 3 + wy * 5) % 5) === 0) continue;
+        ctx.fillRect(x + 22 + wx * 52, top + 28 + wy * 56, 28, 28);
+        // Window glare
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(x + 22 + wx * 52, top + 28 + wy * 56, 6, 28);
+        ctx.fillStyle = css('--brand-sweet');
+      }
+    }
+  }
+
+  // =============================================================
+  // Tile renderer — underground strip + surface + hazards
+  // =============================================================
+  function drawTiles() {
+    const groundRow = LEVEL[GROUND_ROW];
+
+    // Underground strip — only under solid columns (so it doesn't paint
+    // a "shelf" across the bottom of manholes/puddles, which read as a lid)
+    ctx.fillStyle = css('--brand-ground');
+    for (let c = 0; c < groundRow.length; c++) {
+      if (groundRow[c] === '#' || groundRow[c] === 'P') {
+        ctx.fillRect(c * TILE - cam.x, GROUND_Y, TILE, LEVEL_H - GROUND_Y);
+      }
+    }
+    // Darker top edge along the surface — only over solid ground columns
+    ctx.fillStyle = '#5C4128';
+    for (let c = 0; c < groundRow.length; c++) {
+      if (groundRow[c] === '#') {
+        ctx.fillRect(c * TILE - cam.x, GROUND_Y - 2, TILE, 2);
+      }
+    }
+    // Pavement texture: light dashes — only over solid ground columns
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    for (let c = 0; c < groundRow.length; c++) {
+      if (groundRow[c] !== '#') continue;
+      const baseX = c * TILE - cam.x;
+      ctx.fillRect(baseX + 4,  GROUND_Y + 12, 8, 2);
+      ctx.fillRect(baseX + 20, GROUND_Y + 12, 8, 2);
+    }
+    // Surface ground tiles (#)
+    ctx.fillStyle = css('--brand-ground');
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === '#') {
+          ctx.fillRect(c * TILE - cam.x, r * TILE, TILE, TILE);
+        }
+      }
+    }
+  }
+
+  function drawPlatforms() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== '=') continue;
+        const px = c * TILE - cam.x, py = r * TILE;
+        // Wooden plank body
+        ctx.fillStyle = '#A87850';
+        ctx.fillRect(px, py, TILE, 8);
+        // Bottom shadow line
+        ctx.fillStyle = '#5C4128';
+        ctx.fillRect(px, py + 6, TILE, 2);
+        // Top highlight
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillRect(px, py, TILE, 1);
+        // Wood-grain dashes
+        ctx.fillStyle = 'rgba(60,30,10,0.25)';
+        ctx.fillRect(px + 6,  py + 3, 6, 1);
+        ctx.fillRect(px + 18, py + 3, 8, 1);
+      }
+    }
+  }
+
+  function drawHazards() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        const ch = row[c];
+        const x = c * TILE - cam.x, y = r * TILE;
+        if (ch === 'P') {
+          // Open water pit — water surface flush with the ground line, no lid.
+          // Side walls are the cross-section of dirt on either side.
+          ctx.fillStyle = '#5C4128';
+          ctx.fillRect(x, y, 3, TILE);
+          ctx.fillRect(x + TILE - 3, y, 3, TILE);
+          // Water fills the pit from the surface all the way down
+          ctx.fillStyle = '#3D7BB6';
+          ctx.fillRect(x + 3, y, TILE - 6, TILE);
+          // Depth shadow at the bottom of the water
+          ctx.fillStyle = 'rgba(0,10,40,0.4)';
+          ctx.fillRect(x + 3, y + TILE - 10, TILE - 6, 10);
+          // Surface highlights (small ripples right at the water line)
+          ctx.fillStyle = 'rgba(255,255,255,0.6)';
+          ctx.fillRect(x + 6,  y + 2, 8, 1);
+          ctx.fillRect(x + 18, y + 5, 7, 1);
+          ctx.fillRect(x + 9,  y + 9, 5, 1);
+        } else if (ch === 'M') {
+          // Open hole — pure black void from ground level to bottom.
+          // No rim/lid; the contrast with the surrounding ground is enough.
+          ctx.fillStyle = '#000';
+          ctx.fillRect(x, y, TILE, LEVEL_H - y);
+        }
+      }
+    }
+  }
+
+  function drawSchool() {
+    // Find the goal tile
+    let gc = -1, gr = -1;
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] === 'G') { gc = c; gr = r; }
+      }
+    }
+    if (gc < 0) return;
+
+    // Building footprint: 9 tiles wide, 5 tiles tall, anchored on the ground row.
+    const bW = 9 * TILE;             // 288
+    const bH = 5 * TILE;             // 160
+    const groundY = (gr + 1) * TILE; // 352
+    const topY = groundY - bH;       // 192
+    // Centre the building so the goal tile sits roughly in front of the door.
+    const baseX = gc * TILE - Math.floor(bW / 2) + Math.floor(TILE / 2);
+    const x = Math.round(baseX - cam.x);
+
+    // ----- Building body (warm sandstone-ish wall) -----
+    ctx.fillStyle = '#E8D5A8';
+    ctx.fillRect(x, topY, bW, bH);
+    // Subtle horizontal banding for masonry feel
+    ctx.fillStyle = 'rgba(0,0,0,0.05)';
+    for (let i = 0; i < 6; i++) ctx.fillRect(x, topY + i * 28, bW, 1);
+    // Foundation strip
+    ctx.fillStyle = '#5C4128';
+    ctx.fillRect(x, groundY - 10, bW, 10);
+    // Outline
+    ctx.strokeStyle = css('--brand-primary-dark');
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, topY, bW, bH);
+
+    // ----- Pitched roof -----
+    ctx.fillStyle = css('--brand-danger');
+    ctx.beginPath();
+    ctx.moveTo(x - 14, topY + 4);
+    ctx.lineTo(x + bW + 14, topY + 4);
+    ctx.lineTo(x + bW + 14, topY - 6);
+    ctx.lineTo(x + bW / 2, topY - 50);
+    ctx.lineTo(x - 14, topY - 6);
+    ctx.closePath();
+    ctx.fill();
+    // Roof shadow line
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(x - 14, topY + 4, bW + 28, 5);
+    // Roof outline
+    ctx.strokeStyle = css('--brand-primary-dark');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 14, topY + 4);
+    ctx.lineTo(x + bW / 2, topY - 50);
+    ctx.lineTo(x + bW + 14, topY + 4);
+    ctx.stroke();
+
+    // ----- School logo on the facade (smaller — leaves room for door + banner) -----
+    const logoSize = 56;
+    const logoX = x + bW / 2 - logoSize / 2;
+    const logoY = topY + 6;
+    // Plate frame
+    ctx.fillStyle = css('--brand-primary');
+    ctx.fillRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
+    ctx.strokeStyle = css('--brand-cream');
+    ctx.lineWidth = 2;
+    ctx.strokeRect(logoX - 4, logoY - 4, logoSize + 8, logoSize + 8);
+    if (logoImg._ok) {
+      // The user-supplied SVG already contains the school short-name lettering,
+      // so we just paint it cleanly with no overlay.
+      ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
+    } else {
+      // Fallback if the image fails to load — keep the short-name visible.
+      ctx.fillStyle = css('--brand-accent');
+      ctx.fillRect(logoX, logoY, logoSize, logoSize);
+      ctx.fillStyle = css('--brand-primary');
+      ctx.font = '900 22px Bungee, "Arial Black", sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(BRANDING.schoolShortName, logoX + logoSize / 2, logoY + logoSize / 2);
+    }
+
+    // ----- School-name banner under the logo -----
+    // Auto-fits the full school name (e.g. "DLTS INTERNATIONAL SCHOOL")
+    // so any branded school name reads cleanly without spilling out.
+    const banH = 24;
+    const banW = bW - 24;
+    const banX = x + bW / 2 - banW / 2;
+    const banY = logoY + logoSize + 8;
+    ctx.fillStyle = css('--brand-primary');
+    ctx.fillRect(banX, banY, banW, banH);
+    ctx.strokeStyle = css('--brand-cream');
+    ctx.lineWidth = 2;
+    ctx.strokeRect(banX + 2, banY + 2, banW - 4, banH - 4);
+    ctx.fillStyle = css('--brand-cream');
+    const banText = BRANDING.schoolName.toUpperCase();
+    let banFontSize = 14;
+    ctx.font = '900 ' + banFontSize + 'px Bungee, "Arial Black", sans-serif';
+    while (ctx.measureText(banText).width > banW - 14 && banFontSize > 8) {
+      banFontSize -= 0.5;
+      ctx.font = '900 ' + banFontSize + 'px Bungee, "Arial Black", sans-serif';
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(banText, x + bW / 2, banY + banH / 2 + 1);
+
+    // ----- Front door (arched, wooden) -----
+    const doorW = 42, doorH = 64;
+    const doorX = x + bW / 2 - doorW / 2;
+    const doorY = groundY - doorH;
+    ctx.fillStyle = '#5C3A1F';
+    ctx.fillRect(doorX, doorY + 14, doorW, doorH - 14);
+    ctx.beginPath();
+    ctx.arc(doorX + doorW / 2, doorY + 14, doorW / 2, Math.PI, 0);
+    ctx.fill();
+    // Door panel split
+    ctx.strokeStyle = '#3A2415';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(doorX + doorW / 2, doorY + 16);
+    ctx.lineTo(doorX + doorW / 2, doorY + doorH);
+    ctx.stroke();
+    // Door handles
+    ctx.fillStyle = css('--brand-sweet');
+    ctx.beginPath(); ctx.arc(doorX + doorW / 2 - 4, doorY + 40, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(doorX + doorW / 2 + 4, doorY + 40, 1.8, 0, Math.PI * 2); ctx.fill();
+    // Steps
+    ctx.fillStyle = '#A89070';
+    ctx.fillRect(doorX - 8, groundY - 4, doorW + 16, 4);
+
+    // ----- Windows (paired, either side of the door) -----
+    const wW = 26, wH = 32;
+    const wY = banY + banH + 10;
+    const wOffsets = [22, 22 + wW + 14];
+    ctx.lineWidth = 1.5;
+    for (const off of wOffsets) {
+      // Left side
+      drawWindow(x + off, wY, wW, wH);
+      // Right side (mirrored)
+      drawWindow(x + bW - off - wW, wY, wW, wH);
+    }
+
+    // ----- Flagpole + flag on the roof -----
+    const poleX = x + bW / 2;
+    const poleTop = topY - 90;
+    ctx.strokeStyle = css('--brand-primary-dark');
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(poleX, topY - 50);
+    ctx.lineTo(poleX, poleTop);
+    ctx.stroke();
+    // Flag
+    ctx.fillStyle = css('--brand-danger');
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTop);
+    ctx.lineTo(poleX + 28, poleTop + 4);
+    ctx.lineTo(poleX + 24, poleTop + 9);
+    ctx.lineTo(poleX + 28, poleTop + 14);
+    ctx.lineTo(poleX, poleTop + 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = css('--brand-cream');
+    ctx.font = 'bold 8px Outfit, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(BRANDING.schoolShortName, poleX + 12, poleTop + 8);
+
+    // ----- Goal-zone shimmer cue (subtle so the player notices) -----
+    if (gameState === 'play') {
+      const px = gc * TILE + TILE / 2 - cam.x;
+      const py = gr * TILE + TILE;
+      const t = (performance.now() / 600) % (Math.PI * 2);
+      ctx.fillStyle = `rgba(244,185,66,${0.35 + Math.sin(t) * 0.2})`;
+      ctx.beginPath();
+      ctx.ellipse(px, py - 4, 12, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.textAlign = 'start';
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  function drawWindow(wx, wy, ww, wh) {
+    // Frame
+    ctx.fillStyle = css('--brand-primary');
+    ctx.fillRect(wx - 2, wy - 2, ww + 4, wh + 4);
+    // Glass
+    ctx.fillStyle = '#A9D5E8';
+    ctx.fillRect(wx, wy, ww, wh);
+    // Glare
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillRect(wx + 2, wy + 2, 4, wh - 8);
+    // Cross mullions
+    ctx.fillStyle = css('--brand-primary');
+    ctx.fillRect(wx + ww / 2 - 1, wy, 2, wh);
+    ctx.fillRect(wx, wy + wh / 2 - 1, ww, 2);
+    // Sill
+    ctx.fillStyle = '#5C4128';
+    ctx.fillRect(wx - 4, wy + wh + 2, ww + 8, 3);
+  }
+
+  // =============================================================
+  // Dogs
+  // =============================================================
+  const dogs = [];
+
+  const DOG_W = 56, DOG_H = 36;
+  const DOG_BASE_SPEED = 0.45;
+  const MAX_DOG_RANGE = 3;  // tiles either side of spawn — kept consistent across levels
+  function spawnDogs() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== 'D') continue;
+        // Patrol bounds = contiguous run of '#' on the row below, capped to MAX_DOG_RANGE
+        const groundRow = LEVEL[r + 1];
+        if (!groundRow) continue;
+        const minL = Math.max(0, c - MAX_DOG_RANGE);
+        const maxR = Math.min(row.length - 1, c + MAX_DOG_RANGE);
+        let l = c, rr = c;
+        while (l > minL && groundRow[l - 1] === '#' && row[l - 1] === '.') l--;
+        while (rr < maxR && groundRow[rr + 1] === '#' && row[rr + 1] === '.') rr++;
+        dogs.push({
+          x: c * TILE, y: (r + 1) * TILE - DOG_H,
+          w: DOG_W, h: DOG_H, vx: -currentDogSpeed,
+          lo: l * TILE, hi: rr * TILE,
+          t: Math.random() * 100,
+        });
+      }
+    }
+  }
+  function updateDogs() {
+    for (const d of dogs) {
+      d.x += d.vx;
+      d.t += Math.abs(d.vx);
+      if (d.x <= d.lo)              { d.x = d.lo; d.vx =  Math.abs(d.vx); }
+      if (d.x + d.w >= d.hi + TILE) { d.x = d.hi + TILE - d.w; d.vx = -Math.abs(d.vx); }
+    }
+  }
+  function drawDogs() {
+    for (const d of dogs) {
+      const x = Math.round(d.x - cam.x), y = d.y;
+      const facing = d.vx < 0 ? -1 : 1;
+      const FUR  = '#7A5135';
+      const DARK = '#3D2515';
+      const HX = facing < 0 ? x + 4 : x + d.w - 18;       // head left edge
+      const HY = y - 4;                                    // head top (head sticks above body box)
+
+      // ----- Tail (curls upward, opposite the head) -----
+      const tailX = facing < 0 ? x + d.w - 4 : x + 4;
+      const wag = Math.sin(d.t * 0.5) * 4;
+      ctx.strokeStyle = FUR; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(tailX, y + 12);
+      ctx.quadraticCurveTo(
+        tailX + facing * -6, y - 8,
+        tailX + facing * -10, y - 14 + wag
+      );
+      ctx.stroke();
+      // Tail tip (lighter)
+      ctx.fillStyle = '#A87850';
+      ctx.beginPath();
+      ctx.arc(tailX + facing * -10, y - 14 + wag, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ----- Body (longer, more dog-like ellipse) -----
+      ctx.fillStyle = FUR;
+      ctx.beginPath();
+      ctx.ellipse(x + d.w / 2, y + d.h / 2 + 2, d.w / 2 - 4, d.h / 2 - 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Belly highlight
+      ctx.fillStyle = '#A87850';
+      ctx.beginPath();
+      ctx.ellipse(x + d.w / 2, y + d.h / 2 + 6, d.w / 2 - 8, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ----- Legs (4, alternating trot) -----
+      const a = Math.sin(d.t * 0.6);
+      const legY = y + d.h - 8;
+      const legH = 8;
+      ctx.fillStyle = FUR;
+      ctx.fillRect(x + 8,            legY, 4, legH + (a > 0 ? 0 : 2));
+      ctx.fillRect(x + 16,           legY, 4, legH + (a > 0 ? 2 : 0));
+      ctx.fillRect(x + d.w - 18,     legY, 4, legH + (a > 0 ? 2 : 0));
+      ctx.fillRect(x + d.w - 12,     legY, 4, legH + (a > 0 ? 0 : 2));
+
+      // ----- Head -----
+      ctx.fillStyle = FUR;
+      ctx.beginPath();
+      ctx.ellipse(HX + 9, HY + 9, 11, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ----- Pointy ears (two big triangles up) -----
+      ctx.fillStyle = FUR;
+      // back ear
+      ctx.beginPath();
+      ctx.moveTo(HX + (facing < 0 ? 2 : 14), HY + 4);
+      ctx.lineTo(HX + (facing < 0 ? 5 : 17), HY - 9);
+      ctx.lineTo(HX + (facing < 0 ? 9 : 11), HY + 1);
+      ctx.closePath(); ctx.fill();
+      // front ear
+      ctx.beginPath();
+      ctx.moveTo(HX + (facing < 0 ? 8  : 8),  HY + 2);
+      ctx.lineTo(HX + (facing < 0 ? 11 : 11), HY - 11);
+      ctx.lineTo(HX + (facing < 0 ? 14 : 5),  HY + 1);
+      ctx.closePath(); ctx.fill();
+      // ear inner-pink
+      ctx.fillStyle = '#D49A82';
+      ctx.beginPath();
+      ctx.moveTo(HX + (facing < 0 ? 9  : 9),  HY - 2);
+      ctx.lineTo(HX + (facing < 0 ? 11 : 11), HY - 8);
+      ctx.lineTo(HX + (facing < 0 ? 12 : 8),  HY - 1);
+      ctx.closePath(); ctx.fill();
+
+      // ----- Snout -----
+      ctx.fillStyle = '#A87850';
+      const snoutX = facing < 0 ? HX - 4 : HX + 14;
+      ctx.beginPath();
+      ctx.ellipse(snoutX + 4, HY + 12, 7, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Nose
+      ctx.fillStyle = DARK;
+      ctx.beginPath();
+      ctx.arc(snoutX + (facing < 0 ? 0 : 8), HY + 11, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ----- Big teeth (visible — open mouth bottom of snout) -----
+      ctx.fillStyle = '#FFFFFF';
+      const teethY = HY + 14;
+      const teethX = facing < 0 ? snoutX - 1 : snoutX + 4;
+      // mouth line
+      ctx.fillStyle = DARK;
+      ctx.fillRect(teethX, teethY, 8, 1);
+      ctx.fillStyle = '#FFFFFF';
+      // 3 small triangle teeth
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.moveTo(teethX + i * 2.5,       teethY + 1);
+        ctx.lineTo(teethX + i * 2.5 + 1.2, teethY + 4);
+        ctx.lineTo(teethX + i * 2.5 + 2.5, teethY + 1);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // ----- Eye -----
+      ctx.fillStyle = '#FFF';
+      const eyeX = HX + (facing < 0 ? 5 : 13);
+      ctx.beginPath();
+      ctx.arc(eyeX, HY + 8, 2.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = DARK;
+      ctx.beginPath();
+      ctx.arc(eyeX + (facing < 0 ? -0.5 : 0.5), HY + 8, 1.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // =============================================================
+  // Rats — variant of dog: smaller, faster, lower silhouette.
+  // Tile spawn 'R'. Draw style and palette lifted verbatim from
+  // enemy-mockups.html (drawRat). No CSS vars: enemy palette is
+  // decoupled from the school brand on purpose.
+  // =============================================================
+  const rats = [];
+  const RAT_W = 32, RAT_H = 16;
+  const MAX_RAT_RANGE = 3;
+
+  function spawnRats() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== 'R') continue;
+        const groundRow = LEVEL[r + 1];
+        if (!groundRow) continue;
+        const minL = Math.max(0, c - MAX_RAT_RANGE);
+        const maxR = Math.min(row.length - 1, c + MAX_RAT_RANGE);
+        let l = c, rr = c;
+        while (l > minL && groundRow[l - 1] === '#' && row[l - 1] === '.') l--;
+        while (rr < maxR && groundRow[rr + 1] === '#' && row[rr + 1] === '.') rr++;
+        rats.push({
+          x: c * TILE + (TILE - RAT_W) / 2,
+          y: (r + 1) * TILE - RAT_H,
+          w: RAT_W, h: RAT_H,
+          vx: -currentRatSpeed,
+          lo: l * TILE, hi: rr * TILE,
+          t: Math.random() * 100,
+        });
+      }
+    }
+  }
+
+  function updateRats() {
+    for (const r of rats) {
+      r.x += r.vx;
+      r.t += Math.abs(r.vx);
+      if (r.x <= r.lo)              { r.x = r.lo; r.vx =  Math.abs(r.vx); }
+      if (r.x + r.w >= r.hi + TILE) { r.x = r.hi + TILE - r.w; r.vx = -Math.abs(r.vx); }
+    }
+  }
+
+  function drawRats() {
+    for (const r of rats) {
+      const x = Math.round(r.x - cam.x), y = r.y;
+      const cx = x + r.w / 2;
+      const cy = y + r.h / 2;
+      const wig = Math.sin(r.t * 0.5) * 1;
+      const facing = r.vx < 0 ? -1 : 1;
+
+      // Shadow
+      ctx.fillStyle = 'rgba(60,40,20,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(cx, y + r.h, r.w * 0.45, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tail (drawn first so the body covers its base)
+      ctx.strokeStyle = '#E8A8A8';
+      ctx.lineWidth = 1.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx + facing * -13, cy + wig);
+      ctx.quadraticCurveTo(
+        cx + facing * -22, cy - 4 + wig * 2,
+        cx + facing * -30, cy - Math.sin(r.t * 0.3) * 2
+      );
+      ctx.stroke();
+
+      // Body (long stretched ellipse)
+      ctx.fillStyle = '#5C4538';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + wig, 15, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Belly highlight
+      ctx.fillStyle = '#8B6F5A';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2 + wig, 13, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Legs (4, alternating scuttle)
+      const a = Math.sin(r.t * 1.2);
+      ctx.fillStyle = '#5C4538';
+      ctx.fillRect(cx - 11, cy + 4 + wig, 1.4, 3 + (a > 0 ? 0 : 1));
+      ctx.fillRect(cx - 5,  cy + 4 + wig, 1.4, 3 + (a > 0 ? 1 : 0));
+      ctx.fillRect(cx + 5,  cy + 4 + wig, 1.4, 3 + (a > 0 ? 1 : 0));
+      ctx.fillRect(cx + 10, cy + 4 + wig, 1.4, 3 + (a > 0 ? 0 : 1));
+
+      // Head (front of body)
+      ctx.fillStyle = '#5C4538';
+      const hx = cx + facing * 14;
+      ctx.beginPath();
+      ctx.ellipse(hx, cy - 1 + wig, 4.5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pointed snout
+      ctx.beginPath();
+      ctx.moveTo(hx + facing * 2, cy + wig);
+      ctx.lineTo(hx + facing * 6, cy + 1 + wig);
+      ctx.lineTo(hx + facing * 2, cy + 2 + wig);
+      ctx.closePath();
+      ctx.fill();
+      // Pink nose
+      ctx.fillStyle = '#FF8FA8';
+      ctx.beginPath();
+      ctx.arc(hx + facing * 5.5, cy + 1 + wig, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Round ears
+      ctx.fillStyle = '#5C4538';
+      ctx.beginPath(); ctx.arc(hx + facing * 1, cy - 4 + wig, 1.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx + facing * 3, cy - 4 + wig, 1.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#D4A89A';
+      ctx.beginPath(); ctx.arc(hx + facing * 1, cy - 4 + wig, 0.8, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx + facing * 3, cy - 4 + wig, 0.7, 0, Math.PI * 2); ctx.fill();
+
+      // Eye
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(hx + facing * 1.5, cy - 1 + wig, 0.65, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // =============================================================
+  // Wasps — ambient horizontal flyers, spawn in clusters at L5+.
+  // Speed ≈ player MAX_RUN; staggered Y heights make jump windows
+  // tight when running on flat ground. Lifted from enemy-mockups.html.
+  // =============================================================
+  const wasps = [];
+  const bullies = [];
+
+  // Ambient spawner state — drives wasp clusters and bully telegraphs.
+  // Reset to all-zero on loadLevel().
+  const ambient = {
+    waspCooldown:    0,   // frames until next wasp cluster spawn
+    bullyCooldown:   0,   // frames until next bully telegraph
+    bullyTelegraph:  0,   // frames remaining on current telegraph (0 = inactive)
+  };
+
+  function updateAmbient() {
+    // Wasps — spawn cluster when cooldown elapses, at L5+.
+    if (currentWaspClusterSize > 0) {
+      if (ambient.waspCooldown <= 0) {
+        // Shift the whole cluster up/down a random amount so wasps don't
+        // arrive at identical heights every wave and every level.
+        const shift = Math.floor(Math.random() * 70) - 30;   // -30..+39 px
+        const heights = [GROUND_Y - 280, GROUND_Y - 250, GROUND_Y - 220];
+        for (let i = 0; i < currentWaspClusterSize; i++) {
+          const baseY = heights[i % 3] + shift;
+          wasps.push({
+            x: cam.x + W + 30 + i * 42,
+            y: baseY,
+            baseY,
+            w: 24, h: 16,
+            vx: -3.4,
+            bobPhase: Math.random() * Math.PI * 2,
+            t: 0,
+          });
+        }
+        // Jitter the next interval ±25% so clusters aren't metronomic.
+        ambient.waspCooldown =
+          Math.round(currentWaspIntervalFrames * (0.75 + Math.random() * 0.5));
+      } else {
+        ambient.waspCooldown--;
+      }
+    }
+    // Bully — at L7+, cooldown → telegraph → dash.
+    if (currentBullyIntervalFrames !== Infinity) {
+      if (ambient.bullyTelegraph > 0) {
+        ambient.bullyTelegraph--;
+        if (ambient.bullyTelegraph === 0) {
+          // Telegraph just ended — push the dashing entity.
+          bullies.push({
+            x: cam.x + W + 20,
+            y: GROUND_Y - 96,
+            w: 64, h: 96,
+            vx: -6.0,
+            t: 0,
+          });
+        }
+      } else if (ambient.bullyCooldown <= 0) {
+        ambient.bullyTelegraph = 48;
+        playTone(120, 0.5, 'sawtooth');
+        ambient.bullyCooldown = currentBullyIntervalFrames;
+      } else {
+        ambient.bullyCooldown--;
+      }
+    }
+  }
+
+  function updateBullies() {
+    for (const b of bullies) {
+      b.x += b.vx;
+      b.t += 1;
+    }
+    // Cull off-camera-left.
+    for (let i = bullies.length - 1; i >= 0; i--) {
+      if (bullies[i].x + bullies[i].w < cam.x - 100) bullies.splice(i, 1);
+    }
+  }
+
+  function updateWasps() {
+    for (const w of wasps) {
+      w.x += w.vx;
+      w.t += 1;
+      w.y = w.baseY + Math.sin(w.t * 0.18 + w.bobPhase) * 5;
+    }
+    // Cull off-camera-left.
+    for (let i = wasps.length - 1; i >= 0; i--) {
+      if (wasps[i].x + wasps[i].w < cam.x - 100) wasps.splice(i, 1);
+    }
+  }
+
+  function drawWasps() {
+    for (const w of wasps) {
+      const x = w.x - cam.x;
+      const y = w.y;
+      const t = w.t;
+
+      // Wing flicker — drawn first (behind body)
+      const flicker = 0.55 + Math.abs(Math.sin(t * 1.4)) * 0.25;
+      ctx.fillStyle = `rgba(168, 200, 232, ${flicker})`;
+      ctx.beginPath(); ctx.ellipse(x - 2, y - 8, 11, 5, -0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x + 4, y - 8,  9, 4,  0.2, 0, Math.PI * 2); ctx.fill();
+      // Wing veins
+      ctx.strokeStyle = 'rgba(60,40,20,0.4)'; ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(x - 12, y - 8); ctx.lineTo(x + 8, y - 6);
+      ctx.moveTo(x - 8,  y - 11); ctx.lineTo(x + 4, y - 6);
+      ctx.stroke();
+
+      // Thorax
+      ctx.fillStyle = '#3D2515';
+      ctx.beginPath(); ctx.ellipse(x, y - 2, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // Abdomen — yellow body
+      ctx.fillStyle = '#FFD93D';
+      ctx.beginPath(); ctx.ellipse(x + 9, y + 1, 10, 6, 0.1, 0, Math.PI * 2); ctx.fill();
+      // Black stripes on abdomen
+      ctx.fillStyle = '#1a1a1a';
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.ellipse(x + 5 + i * 4, y + 1, 1.6, 6 - i * 0.4, 0.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Stinger tip
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.moveTo(x + 18, y); ctx.lineTo(x + 24, y + 2); ctx.lineTo(x + 18, y + 3);
+      ctx.closePath(); ctx.fill();
+
+      // Head
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(x - 7, y - 1, 4.4, 0, Math.PI * 2); ctx.fill();
+      // Compound eyes
+      ctx.fillStyle = '#C73838';
+      ctx.beginPath(); ctx.arc(x - 9, y - 2, 2,   0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x - 5, y - 2, 1.6, 0, Math.PI * 2); ctx.fill();
+      // Antennae
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(x - 10, y - 4); ctx.lineTo(x - 14, y - 9 + Math.sin(t * 0.5) * 1);
+      ctx.moveTo(x - 6,  y - 4); ctx.lineTo(x - 8,  y - 10 + Math.cos(t * 0.5) * 1);
+      ctx.stroke();
+      // Legs (3 dangling)
+      ctx.lineWidth = 0.8;
+      for (const lx of [-3, 1, 5]) {
+        ctx.beginPath();
+        ctx.moveTo(x + lx, y + 3); ctx.lineTo(x + lx - 1, y + 8);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // =============================================================
+  // Bullies — telegraphed fast pass-through at L7+. Dust cloud
+  // appears 0.8s before the dash; cloud is visual-only with no
+  // hitbox. Entity logic added in Task 8. Lifted from
+  // enemy-mockups.html (drawBully).
+  // =============================================================
+
+  function drawBullies() {
+    // Telegraph: dust cloud only. Anchored on the camera's right edge.
+    if (ambient.bullyTelegraph > 0) {
+      const cx = W - 24;
+      const cy = GROUND_Y - 28;
+      for (let i = 0; i < 6; i++) {
+        const a = 0.12 + (i / 6) * 0.22;
+        const px = cx + i * 14;
+        const py = cy - i * 2;
+        const r  = 9 + i * 2;
+        ctx.fillStyle = `rgba(212, 184, 150, ${a})`;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Entities — dashing bullies.
+    for (const b of bullies) {
+      const sx = (b.x + b.w / 2) - cam.x;          // screen-space body centre
+      const sy = (b.y + b.h) - 14;                  // screen-space "deck" height (where scooter sits)
+      const t  = b.t;
+      const subjectShake = Math.sin(t * 1.2) * 0.6;
+      const cx = sx;
+      const cy = sy + subjectShake;
+
+      // Motion lines (background)
+      ctx.strokeStyle = 'rgba(60,40,20,0.16)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 5; i++) {
+        const ly = (b.y + 12) + i * 14;
+        const off = (t * 6 + i * 30) % 60;
+        ctx.beginPath();
+        ctx.moveTo(cx + 60 - off,      ly);
+        ctx.lineTo(cx + 60 - off - 28, ly);
+        ctx.stroke();
+      }
+
+      // Dust trail (right side, behind the subject)
+      for (let i = 0; i < 6; i++) {
+        const a = 0.12 + (i / 6) * 0.18;
+        const px = cx + 60 + i * 14 + Math.sin(t * 0.5 + i) * 2;
+        const py = cy + 18 - i * 2;
+        const r  = 9 + i * 2;
+        ctx.fillStyle = `rgba(212, 184, 150, ${a})`;
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Scooter — wheels (motion-blurred), deck, T-bar
+      ctx.fillStyle = 'rgba(26,26,26,0.45)';
+      ctx.beginPath(); ctx.arc(cx + 26, cy + 16, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - 30, cy + 16, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(cx + 26, cy + 16, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - 30, cy + 16, 7, 0, Math.PI * 2); ctx.fill();
+      // Wheel hubs
+      ctx.fillStyle = '#A8A8A8';
+      ctx.beginPath(); ctx.arc(cx + 26, cy + 16, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx - 30, cy + 16, 2, 0, Math.PI * 2); ctx.fill();
+      // Deck (red plank)
+      ctx.fillStyle = '#C73838';
+      ctx.fillRect(cx - 30, cy + 10, 56, 6);
+      ctx.fillStyle = '#8C2828';
+      ctx.fillRect(cx - 30, cy + 14, 56, 2);
+      // T-bar (front) — silver
+      ctx.fillStyle = '#A8A8A8';
+      ctx.fillRect(cx - 32, cy - 24, 3, 38);
+      ctx.fillRect(cx - 38, cy - 26, 14, 3);
+      // Grip ends
+      ctx.fillStyle = '#3D2515';
+      ctx.fillRect(cx - 40, cy - 26, 4, 3);
+      ctx.fillRect(cx - 26, cy - 26, 4, 3);
+
+      // Legs (jeans) — leaning forward
+      ctx.fillStyle = '#2A3656';
+      ctx.fillRect(cx - 6, cy - 16, 6, 24);
+      ctx.fillRect(cx + 4, cy - 14, 6, 22);
+      // Shoes
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(cx - 8, cy + 6, 8, 4);
+      ctx.fillRect(cx + 4, cy + 6, 9, 4);
+
+      // Body — gray hoodie torso, leaning forward
+      ctx.fillStyle = '#5A5A5A';
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, cy - 26, 14, 14, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+      // Hoodie pocket shadow
+      ctx.fillStyle = '#4A4A4A';
+      ctx.beginPath();
+      ctx.ellipse(cx + 2, cy - 22, 10, 4, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Arms gripping bar
+      ctx.strokeStyle = '#5A5A5A'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - 4,  cy - 30);
+      ctx.lineTo(cx - 32, cy - 24);
+      ctx.stroke();
+
+      // Hood + head
+      ctx.fillStyle = '#5A5A5A';
+      ctx.beginPath(); ctx.arc(cx - 4, cy - 42, 12, 0, Math.PI * 2); ctx.fill();
+      // Shadow under hood (covers upper face)
+      ctx.fillStyle = '#2A2A2A';
+      ctx.beginPath();
+      ctx.arc(cx - 5, cy - 44, 10, Math.PI * 0.1, Math.PI - 0.1);
+      ctx.lineTo(cx - 5, cy - 38);
+      ctx.fill();
+      // Visible jaw (skin)
+      ctx.fillStyle = '#FFE0BD';
+      ctx.beginPath(); ctx.ellipse(cx - 4, cy - 36, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+      // Mean grin
+      ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 7, cy - 36);
+      ctx.quadraticCurveTo(cx - 4, cy - 33, cx - 1, cy - 36);
+      ctx.stroke();
+      // Tiny tooth
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(cx - 5, cy - 35, 1.5, 1.5);
+
+      // Hoodie ripple at back
+      ctx.fillStyle = '#5A5A5A';
+      ctx.beginPath();
+      ctx.moveTo(cx + 14, cy - 30);
+      ctx.quadraticCurveTo(cx + 28, cy - 22 + Math.sin(t * 0.5) * 2, cx + 22, cy - 14);
+      ctx.lineTo(cx + 12, cy - 18);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // =============================================================
+  // Sweets — collectibles for score
+  // =============================================================
+  const sweets = [];
+  let score = 0;       // points collected this level
+  let totalScore = 0;  // cumulative across the whole game session
+  const popups = []; // floating "+100" score numbers
+  const lifeups = []; // rare extra-life (heart) pickups
+
+  function spawnSweets() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== 'S') continue;
+        sweets.push({
+          x: c * TILE + 1, y: r * TILE + 1,
+          w: 30, h: 30, taken: false,
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+    }
+  }
+
+  function updateSweets(t) {
+    for (const s of sweets) {
+      if (s.taken) continue;
+      if (
+        P.x < s.x + s.w && P.x + P.w > s.x &&
+        P.y < s.y + s.h && P.y + P.h > s.y
+      ) {
+        s.taken = true;
+        score += 100;
+        updateHud();
+        playCollect();
+        popups.push({ x: s.x + 8, y: s.y, vy: -1.2, life: 50, text: '+100' });
+      }
+    }
+    // Update popups
+    for (const p of popups) {
+      p.y += p.vy; p.vy *= 0.96; p.life--;
+    }
+    while (popups.length && popups[0].life <= 0) popups.shift();
+  }
+
+  // Collectibles are musical notes (the music-teacher theme).
+  function drawSweets(t) {
+    for (const s of sweets) {
+      if (s.taken) continue;
+      const bob = Math.sin(t * 0.005 + s.phase) * 3;
+      const x = s.x - cam.x, y = s.y + bob;
+      const cx = x + 15, cy = y + 15;
+      const gold = css('--brand-sweet'), edge = css('--brand-primary-dark');
+      // Stem
+      ctx.fillStyle = gold;
+      ctx.fillRect(cx + 3, cy - 13, 3, 20);
+      ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.strokeRect(cx + 3, cy - 13, 3, 20);
+      // Flag off the stem top
+      ctx.fillStyle = gold;
+      ctx.beginPath();
+      ctx.moveTo(cx + 6, cy - 13);
+      ctx.quadraticCurveTo(cx + 16, cy - 9, cx + 8, cy - 1);
+      ctx.quadraticCurveTo(cx + 12, cy - 7, cx + 6, cy - 7);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = edge; ctx.lineWidth = 1; ctx.stroke();
+      // Note head (filled, tilted ellipse)
+      ctx.save();
+      ctx.translate(cx - 3, cy + 7); ctx.rotate(-0.35);
+      ctx.fillStyle = gold;
+      ctx.beginPath(); ctx.ellipse(0, 0, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = edge; ctx.lineWidth = 1.6; ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath(); ctx.ellipse(-2, -1.5, 2, 1.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Extra-life heart pickups
+  function updateLifeups() {
+    for (const h of lifeups) {
+      if (h.taken) continue;
+      if (P.x < h.x + h.w && P.x + P.w > h.x && P.y < h.y + h.h && P.y + P.h > h.y) {
+        h.taken = true;
+        if (hearts < MAX_HEARTS) {
+          hearts++;
+          updateHud(true);
+          popups.push({ x: h.x + 8, y: h.y, vy: -1.2, life: 60, text: '+1 ♥' });
+        } else {
+          score += 200;
+          updateHud();
+          popups.push({ x: h.x + 8, y: h.y, vy: -1.2, life: 60, text: '+200' });
+        }
+        // Bright ascending chime so a life pickup feels special
+        playTone(660, 0.08, 'triangle');
+        playTone(880, 0.10, 'triangle', 0.07);
+        playTone(1100, 0.14, 'triangle', 0.15);
+      }
+    }
+  }
+
+  function drawLifeups(t) {
+    for (const h of lifeups) {
+      if (h.taken) continue;
+      const bob = Math.sin(t * 0.006 + h.phase) * 3;
+      const x = h.x - cam.x, y = h.y + bob, cx = x + 15, cy = y + 12;
+      // glow
+      ctx.fillStyle = 'rgba(200,54,47,0.22)';
+      ctx.beginPath(); ctx.arc(cx, cy + 2, 16, 0, Math.PI * 2); ctx.fill();
+      // heart
+      ctx.fillStyle = css('--brand-danger');
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 11);
+      ctx.bezierCurveTo(cx - 14, cy - 2, cx - 7, cy - 13, cx, cy - 4);
+      ctx.bezierCurveTo(cx + 7, cy - 13, cx + 14, cy - 2, cx, cy + 11);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = css('--brand-primary-dark'); ctx.lineWidth = 1.6; ctx.stroke();
+      // highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath(); ctx.ellipse(cx - 4, cy - 3, 2.6, 1.8, -0.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawPopups() {
+    ctx.font = '900 14px Bungee, Arial Black, sans-serif';
+    ctx.textAlign = 'center';
+    for (const p of popups) {
+      const a = Math.min(1, p.life / 30);
+      ctx.fillStyle = `rgba(244,185,66,${a})`;
+      ctx.strokeStyle = `rgba(11,32,74,${a})`;
+      ctx.lineWidth = 3;
+      const x = p.x - cam.x, y = p.y;
+      ctx.strokeText(p.text, x, y);
+      ctx.fillText(p.text, x, y);
+    }
+    ctx.textAlign = 'start';
+  }
+
+  // =============================================================
+  // Hearts + invincibility + damage
+  // =============================================================
+  const MAX_HEARTS = 5;
+  let hearts = MAX_HEARTS, iframes = 0;
+
+  function damage(knockDir = 0) {
+    if (iframes > 0 || gameState !== 'play') return;
+    hearts = Math.max(0, hearts - 1);
+    iframes = IFRAMES;
+    if (knockDir !== 0) { P.vx = knockDir * 4; P.vy = -5; }
+    updateHud(true);
+    if (hearts === 0) gameOver('over');
+  }
+
+  // AABB overlap → 1 heart of damage with directional knockback.
+  // Used by every enemy collision check.
+  function damageOnOverlap(box, knockDir) {
+    if (
+      P.x + 2 < box.x + box.w && P.x + P.w - 2 > box.x &&
+      P.y + 4 < box.y + box.h && P.y + P.h - 2 > box.y
+    ) damage(knockDir);
+  }
+
+  function updateCollisions() {
+    for (const d of dogs)    damageOnOverlap(d, P.x < d.x ? -1 : 1);
+    for (const r of rats)    damageOnOverlap(r, P.x < r.x ? -1 : 1);
+    for (const w of wasps)   damageOnOverlap(w, -1);
+    for (const b of bullies) damageOnOverlap(b, -1);
+  }
+
+  // =============================================================
+  // Hazards (puddles + manholes) — handled outside tile collision
+  // =============================================================
+  function updateHazards() {
+    if (gameState !== 'play') return;
+    // Puddle: foot-centre over a P tile *while on the ground* → splash, lose 1 heart,
+    // snap back to the solid tile just before the puddle. Jumping over avoids it.
+    if (P.onGround) {
+      const feetX = P.x + P.w / 2;
+      const fc = tileAt(feetX, GROUND_Y);
+      if (fc === 'P' && iframes === 0) {
+        hearts = Math.max(0, hearts - 1);
+        iframes = IFRAMES;
+        // Snap back to the nearest solid # tile to the left of the puddle column
+        let col = Math.floor(feetX / TILE);
+        while (col > 0 && LEVEL[GROUND_ROW][col] !== '#') col--;
+        P.x = col * TILE + TILE - P.w - 2;
+        P.y = GROUND_Y - P.h;
+        P.vx = 0; P.vy = 0;
+        playTone(180, 0.18, 'sawtooth');
+        updateHud(true);
+        if (hearts === 0) gameOver('over');
+      }
+    }
+    // Off-level (fell into a manhole)
+    if (P.y > LEVEL_H) {
+      hearts = Math.max(0, hearts - 1);
+      iframes = IFRAMES;
+      P.x = SPAWN.x; P.y = SPAWN.y; P.vx = 0; P.vy = 0;
+      playTone(120, 0.3, 'sawtooth');
+      updateHud(true);
+      if (hearts === 0) gameOver('over');
+    }
+  }
+
+  // =============================================================
+  // Goal — touching a 'G' tile
+  // =============================================================
+  function checkGoal() {
+    for (let r = 0; r < LEVEL.length; r++) {
+      const row = LEVEL[r];
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== 'G') continue;
+        const gx = c * TILE, gy = r * TILE;
+        if (
+          P.x + P.w > gx && P.x < gx + TILE &&
+          P.y + P.h > gy - 32 && P.y < gy + TILE
+        ) {
+          levelComplete();
+          return;
+        }
+      }
+    }
+  }
+
+  // =============================================================
+  // HUD
+  // =============================================================
+  const hudHearts = document.getElementById('hud-hearts');
+  const hudTimer  = document.getElementById('hud-timer');
+  const hudScore  = document.getElementById('hud-score');
+  const hudLevel  = document.getElementById('hud-level');
+
+  function updateHud(hit = false) {
+    hudHearts.innerHTML = '';
+    for (let i = 0; i < MAX_HEARTS; i++) {
+      const s = document.createElement('span');
+      s.textContent = i < hearts ? '♥' : '♡';
+      s.style.color = i < hearts ? css('--brand-danger') : 'rgba(255,255,255,0.4)';
+      s.style.marginRight = '2px';
+      hudHearts.appendChild(s);
+    }
+    hudScore.textContent = '🎵 ' + score;
+    if (hit) {
+      hudHearts.classList.remove('hit');
+      void hudHearts.offsetWidth;
+      hudHearts.classList.add('hit');
+    }
+  }
+
+  // =============================================================
+  // Timer
+  // =============================================================
+  let timer = 60;          // overwritten by loadLevel; 60 is just a safe default
+  let lastTimerTick = 0;
+
+  function updateTimer(now) {
+    if (gameState !== 'play') return;
+    if (lastTimerTick === 0) lastTimerTick = now;
+    if (now - lastTimerTick >= 1000) {
+      timer = Math.max(0, timer - 1);
+      lastTimerTick = now;
+      hudTimer.textContent = `🔔 ${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`;
+      if (timer <= 10) hudTimer.classList.add('warn');
+      if (timer === 0) gameOver('late');
+    }
+  }
+
+  // =============================================================
+  // Audio — tiny WebAudio beep
+  // =============================================================
+  let _ac = null;
+  function playTone(freq, dur, type = 'sine', delay = 0) {
+    try {
+      _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
+      const t0 = _ac.currentTime + delay;
+      const o = _ac.createOscillator();
+      const g = _ac.createGain();
+      o.type = type; o.frequency.value = freq;
+      g.gain.value = 0; g.gain.linearRampToValueAtTime(0.06, t0 + 0.005);
+      g.gain.linearRampToValueAtTime(0, t0 + dur);
+      o.connect(g); g.connect(_ac.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch (e) { /* ignore — no audio if blocked */ }
+  }
+
+  // Each instrument gives the jump + note-collect sounds their own timbre.
+  const INSTRUMENT_SOUND = {
+    keyboard: { wave: 'triangle', jump: 523, collect: [659, 784] },  // bright piano
+    guitar:   { wave: 'sawtooth', jump: 330, collect: [440, 554] },  // plucky
+    flute:    { wave: 'sine',     jump: 784, collect: [988, 1175] }, // airy
+    trumpet:  { wave: 'square',   jump: 392, collect: [523, 659] },  // brassy
+    mic:      { wave: 'sine',     jump: 440, collect: [587, 740] },  // voice "la"
+  };
+  function instSound() { return INSTRUMENT_SOUND[CHOICE.instrument] || INSTRUMENT_SOUND.keyboard; }
+  function playJump(strong = true) {
+    const s = instSound();
+    playTone(strong ? s.jump : s.jump * 1.5, 0.08, s.wave);
+  }
+  function playCollect() {
+    const s = instSound();
+    playTone(s.collect[0], 0.07, s.wave);
+    playTone(s.collect[1], 0.09, s.wave, 0.05);
+  }
+
+  // =============================================================
+  // End-of-level cards + state machine
+  // =============================================================
+  let gameState = 'title'; // 'title' | 'play' | 'levelComplete' | 'gameOver'
+  const titleCard = document.getElementById('title-card');
+  const endCard   = document.getElementById('end-card');
+  const endTitle  = document.getElementById('end-title');
+  const endLevel  = document.getElementById('end-level');
+  const endScore  = document.getElementById('end-score');
+  document.getElementById('end-button').addEventListener('click', () => {
+    endCard.classList.remove('show');
+    totalScore = 0;
+    loadLevel(1);
+    // Pop back to the title card so the player taps to start again, like a fresh load.
+    gameState = 'title';
+    titleCard.classList.remove('hidden');
+    renderTitleLeaderboard();
+  });
+
+  function startGame() {
+    if (gameState !== 'title') return;
+    gameState = 'play';
+    titleCard.classList.add('hidden');
+    lastTimerTick = performance.now();
+    // Try to unlock audio on first input
+    try { _ac = _ac || new (window.AudioContext || window.webkitAudioContext)(); _ac.resume?.(); } catch {}
+  }
+
+  const lcEl    = document.getElementById('level-complete');
+  const lcTitle = document.getElementById('lc-title');
+  const lcSub   = document.getElementById('lc-sub');
+
+  // Player reached the school gate. Roll level score into total, show
+  // the brief overlay, then load the next level (or game-over at 100).
+  function levelComplete() {
+    if (gameState !== 'play') return;
+    totalScore += score;
+    const finishedLevel = currentLevel;
+
+    if (finishedLevel >= 100) {
+      // Won the whole game — go straight to the game-over screen with the
+      // "all 100" headline.
+      gameOver('finished');
+      return;
+    }
+
+    gameState = 'levelComplete';
+    lcTitle.textContent = `LEVEL ${finishedLevel + 1}`;
+    lcSub.textContent   = `+${score} points · Total: ${totalScore}`;
+    lcEl.classList.add('show');
+    playTone(660, 0.06, 'square', 0);
+    playTone(880, 0.10, 'square', 0.08);
+
+    setTimeout(() => {
+      // Defensive: if state has been clobbered (e.g. user pressed R, or a
+      // future regression let gameOver fire during the overlay), don't
+      // resurrect the game.
+      if (gameState !== 'levelComplete') return;
+      lcEl.classList.remove('show');
+      loadLevel(finishedLevel + 1);
+      gameState = 'play';
+      lastTimerTick = performance.now();
+    }, 1200);
+  }
+
+  // End of game (death, ran out of time, or finished level 100).
+  // outcome is 'late' | 'over' | 'finished'.
+  function gameOver(outcome) {
+    if (gameState !== 'play' && gameState !== 'levelComplete') return;
+    gameState = 'gameOver';
+    // If we got here from a level-complete (only the level-100 finish path),
+    // totalScore already includes the final level. Otherwise roll in this run's score.
+    if (outcome !== 'finished') totalScore += score;
+    showGameOverScreen(outcome);
+  }
+
+  const endNameRow    = document.getElementById('end-name-row');
+  const endNameInput  = document.getElementById('end-name-input');
+  const endNameSubmit = document.getElementById('end-name-submit');
+  const endBoardBody  = document.getElementById('end-board-body');
+
+  let pendingEntry = null;   // the run we'd save if the player submits a name
+
+  function renderBoard(entries, highlightTs) {
+    endBoardBody.innerHTML = '';
+    if (entries.length === 0) {
+      const tr = document.createElement('tr');
+      tr.className = 'empty';
+      tr.innerHTML = `<td colspan="4">No scores yet — be the first.</td>`;
+      endBoardBody.appendChild(tr);
+      return;
+    }
+    entries.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      if (e.ts === highlightTs) tr.className = 'me';
+      tr.innerHTML =
+        `<td>${i + 1}</td>` +
+        `<td>${e.name}</td>` +
+        `<td>${e.level}</td>` +
+        `<td>${e.score}</td>`;
+      endBoardBody.appendChild(tr);
+    });
+  }
+
+  function renderTitleLeaderboard() {
+    const list = document.getElementById('title-lb-list');
+    const top3 = loadBoard().slice(0, 3);
+    list.innerHTML = '';
+    if (top3.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'No scores yet — be the first.';
+      list.appendChild(li);
+      return;
+    }
+    top3.forEach((e, i) => {
+      const li = document.createElement('li');
+      li.innerHTML =
+        `<span>${i + 1}.</span>` +
+        `<span>${e.name}</span>` +
+        `<span>L${e.level}</span>` +
+        `<span>${e.score}</span>`;
+      list.appendChild(li);
+    });
+  }
+
+  function showGameOverScreen(outcome) {
+    endTitle.textContent =
+      outcome === 'finished' ? `You did it! All 100 levels.` :
+      outcome === 'late'     ? BRANDING.copy.late :
+                               BRANDING.copy.gameOver;
+    endCard.classList.remove('win', 'late', 'over');
+    endCard.classList.add(outcome === 'finished' ? 'win' : outcome);
+    endLevel.textContent = currentLevel;
+    endScore.textContent = totalScore;
+
+    const entry = { name: '', level: currentLevel, score: totalScore };
+    const board = loadBoard();
+
+    if (qualifies({ ...entry, ts: Date.now() }, board)) {
+      pendingEntry = entry;
+      endNameRow.hidden = false;
+      let last = '';
+      try { last = localStorage.getItem(LAST_NAME_KEY) || ''; } catch (e) {}
+      endNameInput.value = last;
+      renderBoard(board, null);
+      setTimeout(() => endNameInput.focus(), 100);
+    } else {
+      pendingEntry = null;
+      endNameRow.hidden = true;
+      renderBoard(board, null);
+    }
+
+    endCard.classList.add('show');
+  }
+
+  endNameSubmit.addEventListener('click', onSubmitName);
+  endNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); onSubmitName(); }
+  });
+
+  function onSubmitName() {
+    if (!pendingEntry) return;
+    const { board, entry } = submitScore({
+      name: endNameInput.value,
+      level: pendingEntry.level,
+      score: pendingEntry.score,
+    });
+    pendingEntry = null;
+    endNameRow.hidden = true;
+    renderBoard(board, entry.ts);
+  }
+
+  function resetGame() {
+    // Reload to keep state simple and bullet-proof
+    location.reload();
+  }
+
+  // =============================================================
+  // Load level N: rebuild the grid, reset all per-level state.
+  // =============================================================
+  function loadLevel(n) {
+    currentLevel = n;
+    hudLevel.textContent = `LVL ${n}`;
+    const built = buildLevel(n);
+    LEVEL = built.grid;
+    LEVEL_W = LEVEL[0].length * TILE;
+    currentDogSpeed = built.dogSpeed;
+    currentRatSpeed = built.ratSpeed;
+    currentWaspIntervalFrames = built.waspIntervalFrames;
+    currentWaspClusterSize = built.waspClusterSize;
+    currentBullyIntervalFrames = built.bullyIntervalFrames;
+    currentTimerSeconds = built.timerSeconds;
+
+    // Reset entities + world
+    dogs.length = 0;
+    rats.length = 0;
+    wasps.length = 0;
+    bullies.length = 0;
+    sweets.length = 0;
+    popups.length = 0;
+    // Randomized first-wave delays so the opening wasp cluster / bully don't
+    // appear at the same moment every level (was: both fired on frame 1).
+    ambient.waspCooldown   = currentWaspClusterSize > 0
+      ? 90 + Math.floor(Math.random() * 210)        // ~1.5–5s into the level
+      : 0;
+    ambient.bullyCooldown  = currentBullyIntervalFrames !== Infinity
+      ? 150 + Math.floor(Math.random() * 240)       // ~2.5–6.5s into the level
+      : 0;
+    ambient.bullyTelegraph = 0;
+    spawnDogs();
+    spawnRats();
+    spawnSweets();
+
+    // Rare extra-life pickup. Lives persist between levels, so this is the only
+    // way to recover. Only when you're actually down a heart, never on level 1,
+    // and uncommon — so it never trivialises the run.
+    lifeups.length = 0;
+    if (n > 1 && hearts < MAX_HEARTS && sweets.length && Math.random() < 0.3) {
+      const s = sweets.splice(Math.floor(Math.random() * sweets.length), 1)[0];
+      lifeups.push({ x: s.x, y: s.y, w: s.w, h: s.h, taken: false, phase: Math.random() * Math.PI * 2 });
+    }
+
+    // Reset player
+    P.x = SPAWN.x; P.y = SPAWN.y;
+    P.vx = 0; P.vy = 0;
+    P.onGround = false;
+    P.coyote = 0; P.buffer = 0;
+    P.jumpsLeft = MAX_JUMPS;
+    P.facing = 1;
+    P._t = 0;
+
+    // Reset per-level scoring/timer/iframes. Hearts persist across levels —
+    // only a fresh run (level 1) restores full lives.
+    score = 0;
+    if (n === 1) hearts = MAX_HEARTS;
+    iframes = 0;
+    timer = currentTimerSeconds;
+    lastTimerTick = 0;
+    cam.x = 0;
+    hudTimer.classList.remove('warn');
+    hudTimer.textContent = `🔔 ${Math.floor(timer / 60)}:${String(timer % 60).padStart(2,'0')}`;
+    updateHud();
+  }
+
+  // =============================================================
+  // Main loop
+  // =============================================================
+  const _startLevel = (() => {
+    const m = location.search.match(/[?&]level=(\d+)/);
+    if (!m) return 1;
+    return Math.max(1, Math.min(100, parseInt(m[1], 10)));
+  })();
+  loadLevel(_startLevel);
+
+  function frame(now) {
+    if (gameState === 'play') {
+      updatePlayer();
+      updateAmbient();
+      updateDogs();
+      updateRats();
+      updateWasps();
+      updateBullies();
+      updateSweets(now);
+      updateLifeups();
+      updateCollisions();
+      updateHazards();
+      checkGoal();
+      updateTimer(now);
+      if (iframes > 0) iframes--;
+    } else if (gameState === 'title') {
+      // Idle bob — no-op for the game world; the title screen handles its own anim
+    }
+    updateCamera();
+
+    drawBackground();
+    drawTiles();
+    drawHazards();
+    drawPlatforms();
+    drawSchool();
+    drawSweets(now);
+    drawLifeups(now);
+    drawDogs();
+    drawRats();
+    drawWasps();
+    drawPlayer();
+    drawBullies();
+    drawPopups();
+
+    requestAnimationFrame(frame);
+  }
+  renderTitleLeaderboard();
+  requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
