@@ -54,6 +54,71 @@ STRIPE_SETUP.md       ← Stripe Managed Payments setup steps
 serve.js              ← local static server (node serve.js → localhost:3000)
 ```
 
+**`public/school-music-run/`** is a second, unrelated app piggybacking on this
+hosting project — see the dedicated section below before touching anything
+under `public/`.
+
+---
+
+## The other app on this hosting project — `public/school-music-run/`
+
+A second, **unrelated** app rides along on this Firebase hosting project to
+avoid paying for a second site: "Late for Music Class", a self-contained
+HTML5-canvas school music platformer. Live at
+https://kid-sequencer.web.app/school-music-run/. Two files: `index.html`
+(~128KB, no build step) + `assets/dlts-logo.svg`. Pulls Google Fonts from a
+CDN and nothing else — no API keys, no Firebase SDK, no network calls. Its
+leaderboard is `localStorage` only (per-device, NOT wired into this project's
+Firestore/auth), and shows character portraits that make it look shared —
+it isn't; that's a known, unfixed gap.
+
+**Deliberately unlisted, not private.** Nothing in the sequencer links to it,
+`public/robots.txt` disallows `/school-music-run/`, and the game's `<head>`
+carries `<meta name="robots" content="noindex, nofollow">`. Anyone with the
+URL can still play it and the disallow path is publicly readable — never
+describe it as private or secure. Don't link to it from sequencer pages/nav,
+add it to sitemaps, or remove the robots/noindex protections unless asked.
+
+**Source of truth is a SEPARATE repo:**
+`C:\Users\Joe_C\Documents\gitHub_repos\school-brand-game-app-repo`. The copy
+at `public/school-music-run/index.html` here is vendored — editing it directly
+gets silently overwritten on the next sync. Make game changes in the source
+repo, then sync:
+```bash
+cp "/c/Users/Joe_C/Documents/gitHub_repos/school-brand-game-app-repo/index.html" \
+   "/c/Users/Joe_C/Documents/kid-sequencer-repo/public/school-music-run/index.html"
+```
+**Gotcha:** the copy overwrites the `noindex` meta tag — it only exists in the
+hosted copy, not the source repo. Immediately after every sync, re-add this
+directly above `<title>`:
+```html
+<meta name="robots" content="noindex, nofollow" />
+```
+then verify before committing:
+```bash
+grep -c noindex "/c/Users/Joe_C/Documents/kid-sequencer-repo/public/school-music-run/index.html"
+```
+This is fragile and worth automating (sync + re-injection as one script) if
+asked to make it robust.
+
+**Deploys through the normal pipeline** (push to `main` → GitHub Actions
+deploys all of `public/`; no `firebase.json` rewrites needed since
+`public/<dir>/index.html` just serves at `/<dir>/`). Two verification gotchas:
+(1) the merge workflow's "verify the deploy is live" step only greps
+`public/index.html` for `styles.css?v=` — it proves *a* deploy happened, not
+that `/school-music-run/` updated; check that file yourself after a game sync.
+(2) the live URL can serve a stale cached copy right after deploy while a
+cache-busting query string (`?cb=<anything>`) returns the fresh one — use that
+when verifying, and expect kids with the page already open to sit on the old
+version for a while.
+
+**Known issues, unfixed:** leaderboard is per-device (`localStorage`) despite
+looking shared — making it genuinely shared needs a backend, which this
+project already has (Firestore) if ever asked to build it. Also: on a narrow
+landscape phone (~740px wide) the title screen's fixed 800px stage clips the
+right-hand leaderboard — predates the current leaderboard work (the previous
+version clips identically at the same viewport).
+
 ---
 
 ## Critical architecture — read before touching JS
