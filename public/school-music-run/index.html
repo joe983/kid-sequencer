@@ -4,6 +4,13 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="theme-color" content="#0B3D6B" />
+  <!-- Added to Home Screen, the game launches with no browser chrome at all.
+       On iPhone that is the ONLY route to real fullscreen — Safari there has no
+       Fullscreen API for non-video elements (WebKit bug 206854, still open). -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Music Class" />
   <!-- Unlisted: nothing on the sequencer links here, and we keep it out of search.
        This makes it unlisted, NOT private — anyone with the URL can play.
        Re-add this line whenever the game is re-copied from its own repo. -->
@@ -25,6 +32,12 @@
       --brand-cream:        #FBF6EC;
       --display: 'Bungee', 'Arial Black', sans-serif;
       --body:    'Outfit', system-ui, sans-serif;
+      /* Notch / home-indicator insets, named once so the stage can subtract
+         them from the viewport height when it works out how big it can be. */
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
     }
 
     * { box-sizing: border-box; }
@@ -35,13 +48,26 @@
       color: var(--brand-text);
       -webkit-tap-highlight-color: transparent;
     }
+
+    /* Long-pressing anything in the game is a game action, never a text
+       gesture. Without this, iOS answers a held-down movement button with the
+       selection highlight + callout ("Copy / Look Up"), which both looks wrong
+       and steals the touch. The one exception is the name field, which needs a
+       real caret and real selection. */
+    html, body, button, .stage, #hud, #touch, canvas {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input, textarea {
+      -webkit-touch-callout: default;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
     body {
       display: grid; place-items: center; min-height: 100vh;
-      padding:
-        env(safe-area-inset-top)
-        env(safe-area-inset-right)
-        env(safe-area-inset-bottom)
-        env(safe-area-inset-left);
+      padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
       background:
         radial-gradient(circle at 50% 0%, var(--brand-primary) 0%, var(--brand-primary-dark) 70%);
     }
@@ -59,12 +85,28 @@
       width: 800px; max-width: 100%;
       aspect-ratio: 800 / 448;
       max-height: 100dvh;
+      /* Work the width out FROM the available height. `max-height` alone
+         clamps the box but leaves the width at 800px, so on a short landscape
+         phone the stage came out 800x393 (aspect 2.03) and the canvas inside
+         was stretched by 12%. Deriving the width keeps 800:448 exactly at any
+         viewport, and the max-height above can then never bind. Dropped whole
+         by engines without min()/dvh, which fall back to the two lines above. */
+      width: min(800px, 100%, (100dvh - var(--safe-t) - var(--safe-b)) * 800 / 448);
       box-shadow:
         0 0 0 4px var(--brand-primary-dark),
         0 24px 60px -12px rgba(0,0,0,0.6),
         0 0 0 12px rgba(255,255,255,0.04);
       border-radius: 6px;
       overflow: hidden;
+    }
+
+    /* Fullscreen: the 800px cap is what stops the game filling the screen, so
+       drop it (and the frame) while fullscreen is engaged. Everything else —
+       including the safe-area padding — stays as it is. */
+    body.is-fullscreen .stage {
+      width: min(100%, (100dvh - var(--safe-t) - var(--safe-b)) * 800 / 448);
+      border-radius: 0;
+      box-shadow: none;
     }
 
     #game {
@@ -395,11 +437,16 @@
     }
     @media (pointer: coarse), (hover: none) { #touch { display: flex; } }
 
-    /* Fullscreen button — small icon button, only on touch devices */
+    /* Fullscreen button — small icon button, only on touch devices.
+       It lives INSIDE the stage. Anchored to the viewport it happened to land
+       on the game only when the game filled the screen (phone), and on a tablet
+       it stranded itself in the page corner, 140px clear of the game and 98px
+       above it, a faint ghost square on the dark backdrop. On the stage it
+       reads as a game control on every device. */
     #fullscreen-btn {
-      position: fixed;
-      top: max(10px, env(safe-area-inset-top));
-      right: max(10px, env(safe-area-inset-right));
+      position: absolute;
+      top: 10px;
+      right: 10px;
       width: 40px; height: 40px;
       border: 0; border-radius: 10px;
       background: rgba(255,255,255,0.18);
@@ -410,7 +457,59 @@
       box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     #fullscreen-btn:active { background: rgba(255,255,255,0.35); }
-    @media (pointer: coarse), (hover: none) { #fullscreen-btn { display: block; } }
+    @media (pointer: coarse), (hover: none) {
+      #fullscreen-btn { display: block; }
+      /* Keep the score pill out from under the button. */
+      #hud { padding-right: 58px; }
+    }
+    /* Launched from the home screen there is no browser chrome left to hide,
+       so the button has nothing to do — JS adds this. */
+    #fullscreen-btn.is-hidden { display: none !important; }
+
+    /* Shown instead of fullscreen where the browser has no Fullscreen API to
+       call — iPhone Safari. Adding the game to the home screen is the only way
+       to lose the browser bars there, so say so rather than doing nothing. */
+    #fs-hint {
+      position: fixed; inset: 0; z-index: 210;
+      display: grid; place-items: center;
+      padding: 16px;
+      background: rgba(7,42,74,0.72);
+      -webkit-backdrop-filter: blur(3px);
+      backdrop-filter: blur(3px);
+    }
+    #fs-hint[hidden] { display: none; }
+    #fs-hint .fs-hint-card {
+      position: relative;
+      max-width: 420px; width: 100%;
+      max-height: 100%; overflow: auto;
+      background: var(--brand-primary);
+      border: 3px solid rgba(255,255,255,0.25);
+      border-radius: 14px;
+      padding: 18px 20px 20px;
+      color: var(--brand-cream);
+      box-shadow: 0 20px 50px -12px rgba(0,0,0,0.6);
+      text-align: left;
+    }
+    #fs-hint h2 {
+      font-family: var(--display); font-weight: 400;
+      font-size: 20px; letter-spacing: 1px; text-transform: uppercase;
+      margin: 0 30px 10px 0; line-height: 1.1;
+    }
+    #fs-hint p { margin: 0 0 8px; font-size: 14px; line-height: 1.45; opacity: 0.92; }
+    #fs-hint p:last-child { margin-bottom: 0; }
+    #fs-hint b { color: #fff; }
+    #fs-hint .fs-share {
+      display: inline-block; padding: 0 5px; border-radius: 5px;
+      background: rgba(255,255,255,0.18); font-weight: 600;
+    }
+    #fs-hint .fs-hint-close {
+      position: absolute; top: 8px; right: 8px;
+      width: 34px; height: 34px;
+      border: 0; border-radius: 9px;
+      background: rgba(255,255,255,0.18);
+      color: #fff; font-size: 16px; line-height: 1; cursor: pointer;
+    }
+    #fs-hint .fs-hint-close:active { background: rgba(255,255,255,0.35); }
 
     /* "Rotate your phone" overlay — only shown on touch devices in portrait */
     #rotate-prompt {
@@ -544,10 +643,20 @@
         <button id="btn-jump"  aria-label="Jump">▲</button>
       </div>
     </div>
+
+    <button id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
   </div>
 
-
-  <button id="fullscreen-btn" aria-label="Toggle fullscreen" title="Fullscreen">⛶</button>
+  <div id="fs-hint" role="dialog" aria-modal="true" aria-labelledby="fs-hint-title" hidden>
+    <div class="fs-hint-card">
+      <button class="fs-hint-close" aria-label="Close">✕</button>
+      <h2 id="fs-hint-title">Play fullscreen</h2>
+      <p>Safari on iPhone won't let a web page go fullscreen by itself — but you
+         can add the game to your home screen and it opens with no browser bars.</p>
+      <p>Tap <span class="fs-share">Share&nbsp;↑</span> at the bottom of Safari,
+         then <b>Add to Home Screen</b>. Play it from there.</p>
+    </div>
+  </div>
 
   <div id="rotate-prompt" role="dialog" aria-live="polite">
     <div class="rotate-icon">📱</div>
@@ -942,11 +1051,12 @@
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = W * dpr;
     canvas.height = H * dpr;
-    canvas.style.width = W + 'px';
-    canvas.style.height = H + 'px';
-    canvas.style.maxWidth = '100%';
-    canvas.style.maxHeight = '100%';
-    canvas.style.aspectRatio = W + ' / ' + H;
+    // Fill the stage rather than pinning to 800x448. The stage now always
+    // carries the 800:448 ratio itself, so filling it can't distort the
+    // picture, and fullscreen (where the stage grows past 800px) actually
+    // grows the game instead of leaving it small in the middle of the screen.
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
     ctx.scale(dpr, dpr);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
@@ -1327,22 +1437,79 @@
   bindTouch('btn-jump',  v => input.jumpHeld = v, true);
 
   // Fullscreen toggle (touch devices)
+  //
+  // Not every browser can do this. iPad, Android and desktop have the
+  // Fullscreen API; Safari on iPhone does NOT expose it for anything but a
+  // <video>, and there is no workaround — a page there is already as large as
+  // the browser will allow. So: use the API where it exists, and where it
+  // doesn't, point the way to Add to Home Screen, which does give a genuinely
+  // fullscreen game. The old code called the API blind and swallowed the
+  // TypeError, which is why the button did nothing at all on iPhone.
   (function setupFullscreen() {
-    const btn = document.getElementById('fullscreen-btn');
+    const btn  = document.getElementById('fullscreen-btn');
+    const hint = document.getElementById('fs-hint');
     if (!btn) return;
+
+    const root = document.documentElement;
+    const fsElement = () =>
+      document.fullscreenElement || document.webkitFullscreenElement || null;
+
+    // Already launched from the home screen: no browser chrome left to hide.
+    const standalone =
+      window.navigator.standalone === true ||
+      (window.matchMedia &&
+       window.matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+    if (standalone) { btn.classList.add('is-hidden'); return; }
+
+    const request = root.requestFullscreen || root.webkitRequestFullscreen;
+    const exit    = document.exitFullscreen || document.webkitExitFullscreen;
+    // `fullscreenEnabled` is undefined where only the prefixed API exists, and
+    // false inside an iframe that wasn't granted the permission.
+    const canFullscreen = !!request && !!exit &&
+      document.fullscreenEnabled !== false &&
+      document.webkitFullscreenEnabled !== false;
+
+    function syncState() {
+      const on = !!fsElement();
+      document.body.classList.toggle('is-fullscreen', on);
+      btn.setAttribute('aria-label', on ? 'Exit fullscreen' : 'Toggle fullscreen');
+      btn.title = on ? 'Exit fullscreen' : 'Fullscreen';
+    }
+    document.addEventListener('fullscreenchange', syncState);
+    document.addEventListener('webkitfullscreenchange', syncState);
+
+    function closeHint() { if (hint) hint.hidden = true; }
+    if (hint) {
+      hint.querySelector('.fs-hint-close').addEventListener('click', closeHint);
+      // Tapping the dim backdrop closes it too; taps inside the card don't.
+      hint.addEventListener('click', (e) => { if (e.target === hint) closeHint(); });
+    }
+
     btn.addEventListener('click', async () => {
+      if (!canFullscreen) {
+        if (hint) hint.hidden = false;
+        return;
+      }
       try {
-        const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-        if (fsEl) {
-          await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-        } else {
-          const el = document.documentElement;
-          await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
-        }
+        if (fsElement()) await exit.call(document);
+        else             await request.call(root);
         vibrate(10);
-      } catch (e) { /* iOS Safari + some Android browsers — ignore */ }
+      } catch (e) {
+        // Refused (lost user gesture, iframe policy) — leave the game as it is.
+      }
+      syncState();
     });
+
+    syncState();
   })();
+
+  // A long press on a game control is a game action, never a text gesture.
+  // The CSS kills the selection highlight; this kills the callout menu that
+  // iOS and Android otherwise raise on top of it.
+  ['touch', 'fullscreen-btn'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('contextmenu', (e) => e.preventDefault());
+  });
 
   // =============================================================
   // Character select — cycle hair / colour / skin / instrument, live preview.
