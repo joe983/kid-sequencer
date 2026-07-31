@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no,viewport-fit=cover" />
   <meta name="theme-color" content="#0B3D6B" />
   <!-- Unlisted: nothing on the sequencer links here, and we keep it out of search.
-       This makes it unlisted, NOT private — anyone with the URL can play. -->
+       This makes it unlisted, NOT private — anyone with the URL can play.
+       Re-add this line whenever the game is re-copied from its own repo. -->
   <meta name="robots" content="noindex, nofollow" />
-  <title>Run to School — DLTS</title>
+  <title>Late for Music Class — DLTS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
@@ -203,6 +204,9 @@
       animation: drop 600ms ease 480ms both;
     }
     #title-leaderboard {
+      /* Top-aligned rather than centred: with ten rows the board is the tallest
+         thing in the row, so centring it pushed the whole card down. */
+      align-self: flex-start;
       display: flex; flex-direction: column; align-items: center; gap: 4px;
       font-family: var(--body);
       color: var(--brand-cream);
@@ -216,15 +220,19 @@
     }
     #title-lb-list {
       list-style: none; margin: 0; padding: 0;
-      font-size: 12px; min-width: 166px;
+      font-size: 12px; min-width: 210px;
+      /* Never let ten rows blow out a short landscape viewport. */
+      max-height: 46vh; overflow-y: auto;
     }
     #title-lb-list li {
       display: grid;
-      grid-template-columns: 18px 1fr auto auto;
-      gap: 10px;
-      padding: 2px 6px;
+      grid-template-columns: 18px 24px 1fr auto auto;
+      align-items: center;
+      gap: 8px;
+      padding: 1px 6px;
       font-variant-numeric: tabular-nums;
     }
+    .lb-thumb { display: block; border-radius: 50%; }
     #title-lb-list li.empty {
       text-align: center; opacity: 0.55; font-style: italic; display: block;
     }
@@ -451,7 +459,7 @@
     <div id="title-card">
       <div id="title-head">
         <img id="title-logo" alt="" />
-        <h1 id="title-text">Run to School!</h1>
+        <h1 id="title-text">Late for Music Class</h1>
       </div>
       <div id="title-main">
         <div id="title-left">
@@ -483,7 +491,7 @@
           </div>
         </div>
         <div id="title-leaderboard" aria-hidden="true">
-          <div class="title-lb-head">TOP 3</div>
+          <div class="title-lb-head">TOP 10</div>
           <ol id="title-lb-list"></ol>
         </div>
       </div>
@@ -569,7 +577,7 @@
       text:        "#0B1320",
     },
     copy: {
-      title:        "Run to School!",
+      title:        "Late for Music Class",
       tagline:      "Don't be late for the bell at {schoolShortName}.",
       onTime:       "On time! Welcome to {schoolShortName}.",
       late:         "Late! The bell already rang.",
@@ -906,8 +914,11 @@
   }
 
   // Single writer for scores. Today: localStorage. Tomorrow: server POST.
-  function submitScore({ name, level, score }) {
+  // `look` is the character the run was played as, kept so the board can show a
+  // portrait. It is optional — entries saved before this existed still load.
+  function submitScore({ name, level, score, look }) {
     const entry = { name: sanitizeName(name), level, score, ts: Date.now() };
+    if (look) entry.look = { hair: look.hair, hairColor: look.hairColor, skin: look.skin };
     const board = loadBoard();
     board.push(entry);
     board.sort(boardCompare);
@@ -2927,24 +2938,51 @@
     });
   }
 
+  // Scores saved before looks were recorded have no character to draw, so they
+  // fall back to the same default the chooser starts on.
+  const LB_FALLBACK_LOOK = { hair: 'crop', hairColor: '#3A2415', skin: SKINS.light };
+
+  // A small round portrait of the character a score was set with.
+  function makeHeadThumb(look) {
+    const S = 24, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cv = document.createElement('canvas');
+    cv.width = S * dpr; cv.height = S * dpr;
+    cv.style.width = S + 'px'; cv.style.height = S + 'px';
+    cv.className = 'lb-thumb';
+    const c = cv.getContext('2d');
+    c.scale(dpr, dpr);
+    const g = c.createLinearGradient(0, 0, 0, S);
+    g.addColorStop(0, PAL.sky); g.addColorStop(1, PAL.cream);
+    c.fillStyle = g; c.beginPath(); c.arc(S / 2, S / 2, S / 2, 0, 7); c.fill();
+    c.save();
+    // Clip to the circle so the tall styles (liberty spikes, afro) crop cleanly
+    // instead of forcing every head to shrink to fit the biggest hair.
+    c.beginPath(); c.arc(S / 2, S / 2, S / 2, 0, 7); c.clip();
+    c.translate(S / 2, S / 2 + 1.5); c.lineJoin = 'round';
+    const o = look || LB_FALLBACK_LOOK;
+    drawHead(c, 0, 0, { hair: o.hair, hairColor: o.hairColor, skin: o.skin });
+    c.restore();
+    return cv;
+  }
+
   function renderTitleLeaderboard() {
     const list = document.getElementById('title-lb-list');
-    const top3 = loadBoard().slice(0, 3);
+    const top = loadBoard().slice(0, LB_MAX);
     list.innerHTML = '';
-    if (top3.length === 0) {
+    if (top.length === 0) {
       const li = document.createElement('li');
       li.className = 'empty';
       li.textContent = 'No scores yet — be the first.';
       list.appendChild(li);
       return;
     }
-    top3.forEach((e, i) => {
+    top.forEach((e, i) => {
       const li = document.createElement('li');
-      li.innerHTML =
-        `<span>${i + 1}.</span>` +
-        `<span>${e.name}</span>` +
-        `<span>L${e.level}</span>` +
-        `<span>${e.score}</span>`;
+      const rank  = document.createElement('span'); rank.textContent  = (i + 1) + '.';
+      const name  = document.createElement('span'); name.textContent  = e.name;
+      const level = document.createElement('span'); level.textContent = 'L' + e.level;
+      const score = document.createElement('span'); score.textContent = e.score;
+      li.append(rank, makeHeadThumb(e.look), name, level, score);
       list.appendChild(li);
     });
   }
@@ -2990,6 +3028,7 @@
       name: endNameInput.value,
       level: pendingEntry.level,
       score: pendingEntry.score,
+      look: CHOICE,          // the character this run was played as
     });
     pendingEntry = null;
     endNameRow.hidden = true;
