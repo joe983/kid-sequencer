@@ -511,6 +511,17 @@
     }
     #fs-hint .fs-hint-close:active { background: rgba(255,255,255,0.35); }
 
+    /* Frame-rate readout, only created when ?fps=1 is in the URL. */
+    #fps-readout {
+      position: fixed;
+      left: max(8px, var(--safe-l)); bottom: max(8px, var(--safe-b));
+      z-index: 220;
+      padding: 4px 8px; border-radius: 8px;
+      background: rgba(7,42,74,0.8);
+      color: #fff; font: 600 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
+      pointer-events: none; white-space: nowrap;
+    }
+
     /* "Rotate your phone" overlay — only shown on touch devices in portrait */
     #rotate-prompt {
       display: none;
@@ -3284,25 +3295,90 @@
   })();
   loadLevel(_startLevel);
 
-  function frame(now) {
-    if (gameState === 'play') {
-      updatePlayer();
-      updateAmbient();
-      updateDogs();
-      updateRats();
-      updateWasps();
-      updateBullies();
-      updateSweets(now);
-      updateLifeups();
-      updateCollisions();
-      updateHazards();
-      checkGoal();
-      updateTimer(now);
-      if (iframes > 0) iframes--;
-    } else if (gameState === 'title') {
-      // Idle bob — no-op for the game world; the title screen handles its own anim
+  // ?fps=1 — readout of the frame rate the device is really achieving and how
+  // many simulation ticks each second is running. Off by default and allocating
+  // nothing when off. It exists so a slow phone can say what it is actually
+  // doing rather than us guessing from a desk: "30 fps · 60 ticks/s" means the
+  // display is halved but the game speed is not.
+  const _fpsOn = /[?&]fps=1/.test(location.search);
+  let _fpsEl = null, _fpsFrames = 0, _fpsSteps = 0, _fpsSince = 0;
+  if (_fpsOn) {
+    _fpsEl = document.createElement('div');
+    _fpsEl.id = 'fps-readout';
+    _fpsEl.textContent = 'measuring…';
+    document.body.appendChild(_fpsEl);
+  }
+  function fpsTick(now, steps) {
+    if (!_fpsEl) return;
+    _fpsFrames++; _fpsSteps += steps;
+    if (_fpsSince === 0) { _fpsSince = now; return; }
+    const span = now - _fpsSince;
+    if (span >= 500) {
+      const secs = span / 1000;
+      _fpsEl.textContent =
+        (_fpsFrames / secs).toFixed(0) + ' fps · ' +
+        (_fpsSteps / secs).toFixed(0) + ' ticks/s';
+      _fpsFrames = 0; _fpsSteps = 0; _fpsSince = now;
     }
-    updateCamera();
+  }
+
+  // The simulation is a FIXED STEP. updatePlayer() and everything beside it
+  // advance the world by exactly one tick and count time in frames — P.coyote,
+  // P.buffer, ambient.waspCooldown, popup life, iframes are all frame counts.
+  // Running one tick per rendered frame therefore tied the game's SPEED to the
+  // display: a device that can only deliver 30fps (any iPhone in Low Power Mode
+  // caps rAF at 30, and heavy compositing can halve it too) played the whole
+  // game at half the speed of a 60Hz desktop. Pace the same ticks off the clock
+  // instead — one second of real time is STEP_HZ ticks on every device — and a
+  // 120Hz screen can't run at double speed either.
+  // 60 is the rate the game was tuned at — a desktop on a plain 60Hz monitor
+  // was already running exactly here, which is why the PC felt right. ?hz=N
+  // overrides it for a quick A/B if that turns out to be wrong (e.g. the
+  // desktop is a 120Hz panel, in which case it had been running at DOUBLE the
+  // tuned speed and everything should now be judged against 120).
+  const STEP_HZ = (() => {
+    const m = location.search.match(/[?&]hz=(\d+)/);
+    return m ? Math.max(20, Math.min(240, parseInt(m[1], 10))) : 60;
+  })();
+  const STEP_MS = 1000 / STEP_HZ;
+  const MAX_STEPS_PER_FRAME = 5;       // after a stall (tab hidden, level load)
+                                       // drop the lost time rather than
+                                       // fast-forwarding the player into a wall
+  let _stepAccum = 0;
+  let _lastFrameAt = 0;
+
+  function frame(now) {
+    if (_lastFrameAt === 0) _lastFrameAt = now - STEP_MS;
+    _stepAccum += Math.max(0, now - _lastFrameAt);   // rAF is monotonic; belt-and-braces
+    _lastFrameAt = now;
+
+    let steps = Math.floor(_stepAccum / STEP_MS);
+    _stepAccum -= steps * STEP_MS;
+    if (steps > MAX_STEPS_PER_FRAME) { steps = MAX_STEPS_PER_FRAME; _stepAccum = 0; }
+
+    for (let i = 0; i < steps; i++) {
+      if (gameState === 'play') {
+        updatePlayer();
+        updateAmbient();
+        updateDogs();
+        updateRats();
+        updateWasps();
+        updateBullies();
+        updateSweets(now);
+        updateLifeups();
+        updateCollisions();
+        updateHazards();
+        checkGoal();
+        if (iframes > 0) iframes--;
+      }
+      // Camera follow is a per-tick lerp, so it rides the same clock as the
+      // world it is following — left on the frame it lags on a slow device.
+      updateCamera();
+    }
+
+    // Wall-clock rather than frame-counted, so once per rendered frame is right.
+    if (gameState === 'play') updateTimer(now);
+    fpsTick(now, steps);
 
     drawBackground();
     drawTiles();
