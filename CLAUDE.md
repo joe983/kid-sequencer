@@ -112,6 +112,48 @@ cache-busting query string (`?cb=<anything>`) returns the fresh one — use that
 when verifying, and expect kids with the page already open to sit on the old
 version for a while.
 
+**Touch-device behaviour (reworked 2026-08-01, live):**
+- **The game loop is a fixed-step accumulator, not one tick per frame.** Every
+  duration in the game is a frame count (`P.coyote`, `ambient.waspCooldown`,
+  `iframes`), so one tick per rendered frame made SPEED follow the display —
+  a phone at 30fps played at half desktop speed. `frame()` now banks elapsed
+  time and takes whole `STEP_MS` steps (`STEP_HZ` 60), capped at
+  `MAX_STEPS_PER_FRAME` 5 so a stall drops the lost time instead of
+  fast-forwarding the player into a hazard. `updateCamera()` is inside the step
+  loop (per-tick lerp); `updateTimer(now)` stays outside (wall-clock). **Don't
+  reintroduce per-frame updates.** Two default-off switches: `?fps=1` (readout,
+  e.g. "30 fps · 60 ticks/s") and `?hz=N` (override the step rate).
+  ⚠️ **Open assumption:** 60 was chosen because a plain 60Hz desktop felt right.
+  If the owner's PC is a 120Hz panel it had been running at double speed and 60
+  will now feel slow — `?fps=1` on both devices settles it.
+- **iPhone Safari has NO Fullscreen API for non-video elements** (WebKit bug
+  206854, still open June 2026; iPadOS has it, prefixed). The old button called
+  it blind and swallowed the TypeError, so it did nothing there. `setupFullscreen`
+  now feature-detects; where the API is missing it opens `#fs-hint` pointing at
+  Add to Home Screen (the only real fullscreen on iPhone — hence the
+  `apple-mobile-web-app-*` meta tags), and it hides itself when already
+  standalone. Fullscreen adds `body.is-fullscreen`, which lifts the stage's
+  800px cap so the game actually fills the screen.
+- **`#fullscreen-btn` lives INSIDE `.stage`.** Anchored to the viewport it only
+  landed on the game when the game filled the screen; on a tablet it stranded
+  itself 140px right of and 98px above the game. `#hud` reserves `padding-right`
+  on coarse pointers so it can't cover the score pill.
+- **The stage derives its width from the available height**
+  (`width: min(800px, 100%, (100dvh - safe) * 800 / 448)`). `max-height` alone
+  clamped the height but left the width at 800px, so a short landscape phone got
+  an 800×393 box around a 800:448 picture — the game was squashed 12%. Side
+  effect: the stage is narrower on short viewports than it used to be.
+- **Long-press is a game action, never a text gesture** — `-webkit-touch-callout`
+  and `user-select: none` across the game chrome + `contextmenu` cancelled on the
+  pads; `input`/`textarea` opt back in so the name field keeps a caret.
+
+**Testing the game locally:** `node serve.js` does NOT map directory URLs, so use
+`/school-music-run/index.html`, not `/school-music-run/`. **The level layout is
+generated with `Math.random()` at load, so two page loads are never comparable** —
+seed `Math.random` in a `<head>` script *before* the game script if you need to
+diff runs, and shim `requestAnimationFrame` there too if you want to drive the
+loop at a chosen frame rate with fabricated timestamps.
+
 **Known issues, unfixed:** leaderboard is per-device (`localStorage`) despite
 looking shared — making it genuinely shared needs a backend, which this
 project already has (Firestore) if ever asked to build it. Also: on a narrow
