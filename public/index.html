@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=73">
+<link rel="stylesheet" href="css/styles.css?v=74">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3107,7 +3107,14 @@ function buildTools(){
 
     const sym = document.createElement("div");
     sym.className = "toolSymbol " + (t.symClass || "");
-    if(t.svg){
+    // The two sub-beat lengths draw their own artwork, because what they place
+    // depends on the view (see _toolArtFor). Everything else keeps its symbol.
+    const drawn = (!LEARN_LEVEL && (t.steps === 1 || t.steps === 2))
+      ? _toolArtFor(t.steps) : null;
+    if(drawn){
+      sym.classList.add(groupSizeFor(t.steps) === 1 ? "singleNote" : "beamGroup");
+      sym.innerHTML = drawn;
+    }else if(t.svg){
       sym.innerHTML = t.svg;
     }else{
       sym.textContent = t.symbol;
@@ -3285,7 +3292,10 @@ function overlappingNoteIds(r, start, len){
    note, so grouping there would break lesson passes. */
 const NOTE_GROUP_SIZE = { 1: 4, 2: 2 };   // note length in columns → notes per group
 function groupSizeFor(len){
-  if(LEARN_LEVEL) return 1;
+  // Beginner view only. The full sequencer keeps single notes placeable
+  // anywhere, including mid-beat — that freedom is the point of the full view,
+  // and its tool buttons draw single notes to say so.
+  if(LEARN_LEVEL || !_fiveNote) return 1;
   return NOTE_GROUP_SIZE[len] || 1;
 }
 // The beat a column belongs to, as a [start, end) column span.
@@ -3398,12 +3408,19 @@ function createNoteBlock(r, note){
   // artwork as the tool button the child pressed. Keyed on len (a total function
   // over 1/2/4/8/16 — anything else simply gets no glyph).
   if(_fiveNote){
-    const art = NOTE_ART[note.len];
-    if(art){
+    // A LONE 8th or 16th — one arriving from a saved tune or a scanned sheet,
+    // not part of a complete group — draws as a single flagged note. Using the
+    // tool artwork here would stamp a whole beamed group onto one note; a
+    // complete group gets its beam from _applyGroupGlyphs instead.
+    const single = (note.len === 1 || note.len === 2)
+      ? _singleNoteSvg(note.len === 1 ? 2 : 1) : null;
+    const art = single ? null : NOTE_ART[note.len];
+    if(single || art){
       const g = document.createElement("span");
-      g.className = "noteGlyph" + (art.svg ? "" : " txt");
+      g.className = "noteGlyph" + (single || art.svg ? "" : " txt");
       g.dataset.nv = String(note.len);
-      if(art.svg) g.innerHTML = art.svg;
+      if(single) g.innerHTML = single;
+      else if(art.svg) g.innerHTML = art.svg;
       else g.textContent = art.symbol;
       block.appendChild(g);
     }
@@ -3415,6 +3432,46 @@ function createNoteBlock(r, note){
   // can't clash with the `.playing` swell later.
   block.addEventListener("animationend", () => block.classList.remove("placing"), { once: true });
   return block;
+}
+
+/* A single flagged note — one 8th (one flag) or one 16th (two). Drawn in the
+   same 120×220 box as HALF_NOTE_SVG/WHOLE_NOTE_SVG, with the same stem and head
+   geometry, so the five tool buttons read as one set.
+
+   Drawn rather than taken from a font because there is no single-sixteenth
+   character worth relying on: ♪ exists but its sixteenth partner lives in the
+   Musical Symbols block, which iOS Safari cannot be trusted to have. ♬ is not a
+   substitute — it is TWO beamed sixteenths, which is what made the 16th button
+   disagree with the single note it places. */
+function _singleNoteSvg(flags){
+  const stemX = 78, stemW = 12, stemTop = 10, headCy = 165, headCx = 55;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220"`
+        + ` aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">`
+        + `<rect x="${stemX}" y="${stemTop}" width="${stemW}"`
+        + ` height="${headCy - stemTop - 5}" rx="6" ry="6" fill="#000"/>`
+        + `<ellipse cx="${headCx}" cy="${headCy}" rx="36" ry="24" fill="#000"`
+        + ` transform="rotate(-18 ${headCx} ${headCy})"/>`;
+  const fx = stemX + stemW;              // flags hang off the stem's right edge
+  for(let i = 0; i < flags; i++){
+    const y = stemTop + i * 46;          // second flag sits below the first
+    s += `<path fill="#000" d="M ${fx} ${y} C ${fx + 40} ${y + 22}, ${fx + 38} ${y + 54},`
+       + ` ${fx + 2} ${y + 72} C ${fx + 26} ${y + 48}, ${fx + 24} ${y + 26}, ${fx} ${y + 24} Z"/>`;
+  }
+  return s + `</svg>`;
+}
+
+/* Tool-button artwork for the two sub-beat lengths, which differ by view:
+   the beginner view places a beamed group so its buttons show the group, and
+   the full sequencer places one note so its buttons show one note. Both come
+   from the same drawing code as the blocks, so a button and what it produces
+   can never drift apart again. */
+function _toolArtFor(steps){
+  const n = groupSizeFor(steps);
+  if(n === 1) return _singleNoteSvg(steps === 1 ? 2 : 1);
+  const spacing = n === 2 ? 42 : 34, margin = 24;
+  const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
+  return _beamedGroupSvg(centres, margin * 2 + (n - 1) * spacing, 100,
+                         steps === 1 ? 2 : 1, "xMidYMid meet");
 }
 
 /* Draw a real beamed group: one note head per member, each with a stem, and a
@@ -3431,7 +3488,7 @@ function createNoteBlock(r, note){
    heads line up with the blocks underneath. Units are px at the current cell
    size, published through the viewBox — CSS then scales the whole thing to the
    span, so this stays correct at any --cell. */
-function _beamedGroupSvg(centres, w, cell, beams){
+function _beamedGroupSvg(centres, w, cell, beams, fit){
   const headRx = cell * 0.155, headRy = cell * 0.113;
   const stemW  = Math.max(2, cell * 0.038);
   const beamH  = Math.max(3, cell * 0.105);
@@ -3440,7 +3497,7 @@ function _beamedGroupSvg(centres, w, cell, beams){
   const headCy = cell * 0.70;          // note-head centre
   const stemX  = (cx) => cx + headRx - stemW;   // stem rides the head's right edge
 
-  let s = `<svg viewBox="0 0 ${w} ${cell}" preserveAspectRatio="none" aria-hidden="true">`
+  let s = `<svg viewBox="0 0 ${w} ${cell}" preserveAspectRatio="${fit || "none"}" aria-hidden="true">`
         + `<g fill="#1d1d1d">`;
   for(const cx of centres){
     // Tilt matches engraved note heads; stems drawn before the beams so the
@@ -4645,6 +4702,9 @@ function setNoteView(v){
   document.documentElement.classList.toggle("fiveNote", _fiveNote);
   try{ localStorage.setItem(FIVE_VIEW_LS, _fiveNote ? "5" : "8"); }catch(e){}
   _syncViewToggleBtn();
+  // The 8th/16th buttons draw what THIS view places, so they have to be rebuilt
+  // when the view flips (groups here, single notes there).
+  try{ buildTools(); }catch(e){}
   // scheduleLayout, never fitToViewport directly — the latter measures the login
   // pill outside the transform sandbox. layoutPass rebuilds the grid for us, and
   // it already does so on every resize with no play guard, so no stop() is needed.

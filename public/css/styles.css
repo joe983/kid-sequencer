@@ -22,6 +22,11 @@
   --eighthNudgeX: 0px;
   --eighthNudgeY: 0px;
 
+  /* 8th / 16th tool buttons draw their own artwork — a single flagged note in
+     the full sequencer, a beamed group in the beginner view. */
+  --singleSvgSize: 74px;
+  --beamGroupSvgH: 58px;
+
   /* half note uses an SVG */
   --halfSvgSize: 70px;
   --halfNudgeX: 0px;
@@ -3196,6 +3201,13 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
 /* The generated beam is authored at the group's exact pixel span, so it fills
    the box rather than being sized like a font glyph. */
 .noteGroupGlyph.beamed svg{ width: 100%; height: 100%; display: block; }
+
+/* Drawn tool artwork for the two sub-beat lengths (see _toolArtFor). A single
+   flagged note uses the same box as the half/whole notes so all five buttons
+   read as one set; a beamed group is wider than it is tall, so it is sized by
+   height and lets its viewBox set the width. */
+.toolSymbol.singleNote svg{ width: var(--singleSvgSize); height: var(--singleSvgSize); }
+.toolSymbol.beamGroup svg{ height: var(--beamGroupSvgH); width: auto; max-width: 100%; }
 /* ♬ sits high in its em-box, so centring the box leaves the ink above centre. */
 .noteGroupGlyph.txt[data-nv="1"]{ transform: translateY(0.30em); }
 /* Never printed, and never present outside the 5-note view. */
