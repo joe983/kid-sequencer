@@ -3200,7 +3200,14 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
 }
 /* The generated beam is authored at the group's exact pixel span, so it fills
    the box rather than being sized like a font glyph. */
-.noteGroupGlyph.beamed svg{ width: 100%; height: 100%; display: block; }
+/* Compact, centred in the beat — NOT stretched across it. Height-sized like the
+   tool button's copy of the same symbol, so the two match. */
+.noteGroupGlyph.beamed svg{
+  height: calc(var(--cell) * 0.62);
+  width: auto;
+  max-width: 100%;
+  display: block;
+}
 
 /* Drawn tool artwork for the two sub-beat lengths (see _toolArtFor). A single
    flagged note uses the same box as the half/whole notes so all five buttons

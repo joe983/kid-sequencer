@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=74">
+<link rel="stylesheet" href="css/styles.css?v=75">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3451,11 +3451,13 @@ function _singleNoteSvg(flags){
         + ` height="${headCy - stemTop - 5}" rx="6" ry="6" fill="#000"/>`
         + `<ellipse cx="${headCx}" cy="${headCy}" rx="36" ry="24" fill="#000"`
         + ` transform="rotate(-18 ${headCx} ${headCy})"/>`;
+  // Flags are STRAIGHT diagonal strokes, not the engraved calligraphic curve —
+  // the way a child draws a note, and the way the beams above read.
   const fx = stemX + stemW;              // flags hang off the stem's right edge
   for(let i = 0; i < flags; i++){
-    const y = stemTop + i * 46;          // second flag sits below the first
-    s += `<path fill="#000" d="M ${fx} ${y} C ${fx + 40} ${y + 22}, ${fx + 38} ${y + 54},`
-       + ` ${fx + 2} ${y + 72} C ${fx + 26} ${y + 48}, ${fx + 24} ${y + 26}, ${fx} ${y + 24} Z"/>`;
+    const y = stemTop + i * 44;          // second flag sits below the first
+    s += `<path fill="#000" d="M ${fx} ${y} L ${fx + 40} ${y + 34}`
+       + ` L ${fx + 40} ${y + 52} L ${fx} ${y + 18} Z"/>`;
   }
   return s + `</svg>`;
 }
@@ -3465,13 +3467,27 @@ function _singleNoteSvg(flags){
    the full sequencer places one note so its buttons show one note. Both come
    from the same drawing code as the blocks, so a button and what it produces
    can never drift apart again. */
-function _toolArtFor(steps){
-  const n = groupSizeFor(steps);
-  if(n === 1) return _singleNoteSvg(steps === 1 ? 2 : 1);
+/* The beamed-group symbol, drawn COMPACT — its own tight proportions rather
+   than stretched across whatever it sits on. One definition serves the tool
+   button and the placed group, so the two cannot look different.
+
+   Compactness is the point on the grid: stretching the heads out to sit over
+   each block's centre made the symbol read as a wide diagram rather than as the
+   note it is, and dragged the beam across every join. Centred at this size, the
+   beam bridges just the middle gap, and the blocks' own colour does the work of
+   showing which notes belong together. */
+function _beamedGroupArt(len){
+  const n = NOTE_GROUP_SIZE[len] || 2;
   const spacing = n === 2 ? 42 : 34, margin = 24;
   const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
   return _beamedGroupSvg(centres, margin * 2 + (n - 1) * spacing, 100,
-                         steps === 1 ? 2 : 1, "xMidYMid meet");
+                         len === 1 ? 2 : 1, "xMidYMid meet");
+}
+
+function _toolArtFor(steps){
+  return groupSizeFor(steps) === 1
+    ? _singleNoteSvg(steps === 1 ? 2 : 1)
+    : _beamedGroupArt(steps);
 }
 
 /* Draw a real beamed group: one note head per member, each with a stem, and a
@@ -3534,15 +3550,10 @@ function _applyGroupGlyphs(r, layer){
       const g = document.createElement("span");
       g.className = "noteGroupGlyph beamed";
       g.dataset.nv = String(len);
-      // Note-head centres, relative to the group's left edge, so each head sits
-      // over the middle of its own block and the beam crosses every join.
-      const centres = members.map(m =>
-        (m.start - beatStart) * (CELL + GAP) + (m.len * CELL + (m.len - 1) * GAP) / 2
-      );
-      g.innerHTML = _beamedGroupSvg(centres,
-                                    COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP,
-                                    CELL,
-                                    len === 1 ? 2 : 1);
+      // The same compact symbol the button shows, centred over the group. The
+      // box still spans the beat so it centres correctly; the artwork inside it
+      // keeps its own size (see _beamedGroupArt).
+      g.innerHTML = _beamedGroupArt(len);
       // Span the beat exactly, matching applyNoteGeometry's column arithmetic.
       g.style.left  = `${beatStart * (CELL + GAP)}px`;
       g.style.width = `${COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP}px`;
