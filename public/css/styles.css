@@ -2483,6 +2483,7 @@ html.js-loading #contentWrap{
      blank starting screen, not whatever the user happened to have set. */
   .noteBlock,
   .noteGroupGlyph,
+  .noteGroupStud,
   #playhead,
   #upgradeModal,
   #viewToggleBtn,
@@ -3200,10 +3201,31 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
 }
 /* The generated beam is authored at the group's exact pixel span, so it fills
    the box rather than being sized like a font glyph. */
+/* Bridge stud — a short band of the row colour across one gap inside a group.
+   Behind the blocks (which is why they get a z-index here), so it shows only in
+   the gap itself; its thin black edges sit LOW, below the beams, because two
+   black horizontals at the same height read as a clash rather than a join. */
+html.fiveNote .noteLayer .noteBlock{ z-index: 2; }
+.noteGroupStud{
+  position: absolute;
+  /* 58%–80%: below the beam band, which ends at ~48% of the cell once the
+     symbol is centred at 0.80 × cell. That ~8px of clear air is what stops the
+     stud's edges reading as a third beam. */
+  top: 58%;
+  height: 22%;
+  z-index: 1;
+  border-top: 3px solid #1d1d1d;
+  border-bottom: 3px solid #1d1d1d;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+html:not(.fiveNote) .noteGroupStud{ display: none !important; }
+
 /* Compact, centred in the beat — NOT stretched across it. Height-sized like the
-   tool button's copy of the same symbol, so the two match. */
+   tool button's copy of the same symbol, so the two match. Big enough that the
+   symbol spans its gap comfortably rather than perching on it. */
 .noteGroupGlyph.beamed svg{
-  height: calc(var(--cell) * 0.62);
+  height: calc(var(--cell) * 0.80);
   width: auto;
   max-width: 100%;
   display: block;

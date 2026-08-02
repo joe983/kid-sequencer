@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=75">
+<link rel="stylesheet" href="css/styles.css?v=76">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3537,7 +3537,7 @@ function _beamedGroupSvg(centres, w, cell, beams, fit){
    layer as a sibling, above the blocks, and the members' own glyphs are hidden
    via `.grouped`. Rebuilt from scratch each redraw — at most 4 per row. */
 function _applyGroupGlyphs(r, layer){
-  for(const el of layer.querySelectorAll(".noteGroupGlyph")) el.remove();
+  for(const el of layer.querySelectorAll(".noteGroupGlyph, .noteGroupStud")) el.remove();
   for(const b of layer.querySelectorAll(".noteBlock.grouped")) b.classList.remove("grouped");
 
   for(let beatStart = 0; beatStart < cols; beatStart += COLS_PER_BEAT){
@@ -3557,6 +3557,24 @@ function _applyGroupGlyphs(r, layer){
       // Span the beat exactly, matching applyNoteGeometry's column arithmetic.
       g.style.left  = `${beatStart * (CELL + GAP)}px`;
       g.style.width = `${COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP}px`;
+
+      // Bridge studs: a short band of the row's colour across each gap INSIDE
+      // the group, so the members read as one chain without merging into a
+      // single bar (a child still has to be able to count them). They sit
+      // behind the blocks, so each shows only in its 4px gap, and they sit low
+      // enough to clear the beams — two black horizontals at the same height
+      // would fight each other.
+      for(let i = 0; i < members.length - 1; i++){
+        const a = members[i], b = members[i + 1];
+        const aRight = a.start * (CELL + GAP) + a.len * CELL + (a.len - 1) * GAP;
+        const bLeft  = b.start * (CELL + GAP);
+        const stud = document.createElement("span");
+        stud.className = "noteGroupStud";
+        stud.style.left = `${aRight - 2}px`;          // 2px under each neighbour
+        stud.style.width = `${(bLeft - aRight) + 4}px`;  // so no sub-pixel seam
+        stud.style.background = rowColors[r];
+        layer.appendChild(stud);
+      }
       layer.appendChild(g);
     }
   }
