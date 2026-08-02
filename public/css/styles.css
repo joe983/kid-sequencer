@@ -3208,11 +3208,12 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
 html.fiveNote .noteLayer .noteBlock{ z-index: 2; }
 .noteGroupStud{
   position: absolute;
-  /* 58%–80%: below the beam band, which ends at ~48% of the cell once the
-     symbol is centred at 0.80 × cell. That ~8px of clear air is what stops the
-     stud's edges reading as a third beam. */
-  top: 58%;
-  height: 22%;
+  /* Sits low and clear: the symbol is lifted (below), so the beam band ends
+     around 40% of the cell and the note heads around 67%. 70%–88% keeps the
+     stud's edges away from both, and still leaves the block's own bottom
+     border untouched. */
+  top: 70%;
+  height: 18%;
   z-index: 1;
   border-top: 3px solid #1d1d1d;
   border-bottom: 3px solid #1d1d1d;
@@ -3229,6 +3230,10 @@ html:not(.fiveNote) .noteGroupStud{ display: none !important; }
   width: auto;
   max-width: 100%;
   display: block;
+  /* Lifted off centre so the symbol clears the bridge below it. Expressed in
+     cell units, not a percentage of the symbol's own height, so the offset
+     tracks the grid rather than the artwork. */
+  transform: translateY(calc(var(--cell) * -0.09));
 }
 
 /* Drawn tool artwork for the two sub-beat lengths (see _toolArtFor). A single
