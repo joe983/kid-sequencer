@@ -3193,6 +3193,9 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
   width: auto;
   display: block;
 }
+/* The generated beam is authored at the group's exact pixel span, so it fills
+   the box rather than being sized like a font glyph. */
+.noteGroupGlyph.beamed svg{ width: 100%; height: 100%; display: block; }
 /* ♬ sits high in its em-box, so centring the box leaves the ink above centre. */
 .noteGroupGlyph.txt[data-nv="1"]{ transform: translateY(0.30em); }
 /* Never printed, and never present outside the 5-note view. */

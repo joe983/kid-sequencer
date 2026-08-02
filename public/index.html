@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=72">
+<link rel="stylesheet" href="css/styles.css?v=73">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3417,6 +3417,46 @@ function createNoteBlock(r, note){
   return block;
 }
 
+/* Draw a real beamed group: one note head per member, each with a stem, and a
+   beam running the FULL width from the first stem to the last — 1 beam for 8ths,
+   2 for 16ths, exactly as notation does it.
+
+   Why not reuse the tool-button artwork here: ♬ (U+266C) is only TWO beamed
+   16ths, so on a group of four it spanned the middle join and left the outer two
+   bare, while the 8th pair's SVG did join its single seam. Generating the beam
+   makes every join in both lengths look identical, which is the point of showing
+   a group at all.
+
+   `centres` are note-head x positions relative to the group's left edge, so the
+   heads line up with the blocks underneath. Units are px at the current cell
+   size, published through the viewBox — CSS then scales the whole thing to the
+   span, so this stays correct at any --cell. */
+function _beamedGroupSvg(centres, w, cell, beams){
+  const headRx = cell * 0.155, headRy = cell * 0.113;
+  const stemW  = Math.max(2, cell * 0.038);
+  const beamH  = Math.max(3, cell * 0.105);
+  const beamGap = beamH * 0.60;
+  const topY   = cell * 0.20;          // top edge of the first beam
+  const headCy = cell * 0.70;          // note-head centre
+  const stemX  = (cx) => cx + headRx - stemW;   // stem rides the head's right edge
+
+  let s = `<svg viewBox="0 0 ${w} ${cell}" preserveAspectRatio="none" aria-hidden="true">`
+        + `<g fill="#1d1d1d">`;
+  for(const cx of centres){
+    // Tilt matches engraved note heads; stems drawn before the beams so the
+    // beams cap them cleanly.
+    s += `<ellipse cx="${cx}" cy="${headCy}" rx="${headRx}" ry="${headRy}"`
+       + ` transform="rotate(-18 ${cx} ${headCy})"/>`
+       + `<rect x="${stemX(cx)}" y="${topY}" width="${stemW}" height="${headCy - topY}"/>`;
+  }
+  const x0 = stemX(centres[0]), x1 = stemX(centres[centres.length - 1]) + stemW;
+  for(let i = 0; i < beams; i++){
+    s += `<rect x="${x0}" y="${topY + i * (beamH + beamGap)}"`
+       + ` width="${x1 - x0}" height="${beamH}" rx="${Math.min(2, beamH / 3)}"/>`;
+  }
+  return s + `</g></svg>`;
+}
+
 /* A beamed group has to be drawn as ONE symbol spanning the whole beat — two
    pair-glyphs side by side would read as four 8ths, not two. `.noteBlock` is
    `overflow:hidden` (the candy-bar overlay needs it), so the group symbol cannot
@@ -3434,13 +3474,18 @@ function _applyGroupGlyphs(r, layer){
       for(const m of members){
         layer.querySelector(`.noteBlock[data-id="${m.id}"]`)?.classList.add("grouped");
       }
-      const art = NOTE_ART[len];
-      if(!art) continue;
       const g = document.createElement("span");
-      g.className = "noteGroupGlyph" + (art.svg ? "" : " txt");
+      g.className = "noteGroupGlyph beamed";
       g.dataset.nv = String(len);
-      if(art.svg) g.innerHTML = art.svg;
-      else g.textContent = art.symbol;
+      // Note-head centres, relative to the group's left edge, so each head sits
+      // over the middle of its own block and the beam crosses every join.
+      const centres = members.map(m =>
+        (m.start - beatStart) * (CELL + GAP) + (m.len * CELL + (m.len - 1) * GAP) / 2
+      );
+      g.innerHTML = _beamedGroupSvg(centres,
+                                    COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP,
+                                    CELL,
+                                    len === 1 ? 2 : 1);
       // Span the beat exactly, matching applyNoteGeometry's column arithmetic.
       g.style.left  = `${beatStart * (CELL + GAP)}px`;
       g.style.width = `${COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP}px`;
