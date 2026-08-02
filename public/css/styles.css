@@ -2477,6 +2477,7 @@ html.js-loading #contentWrap{
   /* Hide transient/ephemeral state so the printed page reads as the
      blank starting screen, not whatever the user happened to have set. */
   .noteBlock,
+  .noteGroupGlyph,
   #playhead,
   #upgradeModal,
   #viewToggleBtn,
@@ -3162,3 +3163,37 @@ html.fiveNote .noteBlock .noteGlyph.txt[data-nv="4"]{ transform: translateY(0.36
 /* Belt and braces: a length glyph can never leak into the 8-row view. Learning
    mode is excluded — its data-kind glyph is a different feature entirely. */
 html:not(.fiveNote):not(.learning-mode) .noteBlock .noteGlyph{ display: none !important; }
+
+/* --- Beamed groups (8ths in twos, 16ths in fours) -------------------------
+   One symbol spanning the whole beat, drawn as a sibling of the note blocks
+   because a block is overflow:hidden and could never spill the beam across its
+   neighbour. Sits above the blocks (z 5 > the in-block glyph's 3) and, like
+   them, takes no pointer events — taps belong to the .cell underneath. */
+html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
+.noteGroupGlyph{
+  position: absolute;
+  top: 0;
+  height: var(--cell);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: "Noto Music", "Bravura", "Arial Unicode MS", "Segoe UI Symbol", serif;
+  /* Larger than the single-note glyph: a group symbol has a whole beat of width
+     to sit in, and at the solo size its thin beams/stems read lighter than the
+     ♩ next to it. Sized so a beamed group looks the same weight as a quarter. */
+  font-size: calc(var(--cell) * 0.76);
+  line-height: 1;
+  color: #1d1d1d;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.45);
+}
+.noteGroupGlyph svg{
+  height: calc(var(--cell) * 0.80);
+  width: auto;
+  display: block;
+}
+/* ♬ sits high in its em-box, so centring the box leaves the ink above centre. */
+.noteGroupGlyph.txt[data-nv="1"]{ transform: translateY(0.30em); }
+/* Never printed, and never present outside the 5-note view. */
+html:not(.fiveNote) .noteGroupGlyph{ display: none !important; }

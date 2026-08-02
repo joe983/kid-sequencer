@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=71">
+<link rel="stylesheet" href="css/styles.css?v=72">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -585,6 +585,15 @@ function viewRowCount(){ return _fiveNote ? FIVE_VIEW_ROWS : rows; }
 // freqs is a SHORT array (1-3 entries) and the key control is hidden, so we just
 // return freqs[row] there.
 const KEY_ORDER = ['A','Am','B','Bm','C','Cm','D','Dm','E','Em','F','Fm','G','Gm'];
+/* Order the PICKER reads in, bottom of the list upwards: C, Cm, D, Dm … B, Bm.
+   Reading up the menu therefore goes up in pitch, matching the grid itself
+   (root at the bottom row, octave at the top), and each minor sits directly
+   above its major. Alphabetical-with-minors-interleaved (KEY_ORDER, which still
+   drives SCALES and save-file validation — both order-independent) put A at the
+   top and read as an arbitrary list. The menu is a vertical list, so DOM order
+   is this reversed. */
+const KEY_MENU_ORDER = ['C','Cm','D','Dm','E','Em','F','Fm','G','Gm','A','Am','B','Bm']
+  .slice().reverse();
 const _MAJOR_STEPS = [0,2,4,5,7,9,11,12];
 const _MINOR_STEPS = [0,2,3,5,7,8,10,12]; // natural minor
 const _ROOT_SEMITONES = { C:0, D:2, E:4, F:5, G:7, A:9, B:11 };
@@ -3260,6 +3269,68 @@ function overlappingNoteIds(r, start, len){
   return set;
 }
 
+/* --- Notation grouping: 8ths beam in twos, 16ths in fours ------------------
+   Standard notation beams sub-beat notes into one group per beat, and the tool
+   buttons have always DRAWN the group (♬ = four beamed 16ths, the 8th SVG = a
+   beamed pair) while a tap placed a single note. These make the tap match the
+   button: one tap = one beamed group filling exactly one beat.
+
+   A group is stored as real, separate notes — two 8ths, four 16ths — not one
+   wide note. So saving, loading, the AI payload and the worksheet scanner all
+   keep seeing plain notes and need no change; "grouped" is only a placement,
+   deletion and drawing rule derived from position.
+
+   Learning levels and lessons are excluded: they have their own eighth-pair
+   semantics (one double-attacked note) and their targets are matched note-for-
+   note, so grouping there would break lesson passes. */
+const NOTE_GROUP_SIZE = { 1: 4, 2: 2 };   // note length in columns → notes per group
+function groupSizeFor(len){
+  if(LEARN_LEVEL) return 1;
+  return NOTE_GROUP_SIZE[len] || 1;
+}
+// The beat a column belongs to, as a [start, end) column span.
+function _beatSpan(col){
+  const start = Math.floor(col / COLS_PER_BEAT) * COLS_PER_BEAT;
+  return { start, end: start + COLS_PER_BEAT };
+}
+/* Place a whole beamed group. Groups snap to the beat: a group that straddled a
+   bar's beat boundary could not be beamed, which is the whole point of grouping.
+   Anything already in that beat is cleared first — a beat holds one group. */
+function placeNoteGroup(r, clickCol, len){
+  const n = groupSizeFor(len);
+  const { start } = _beatSpan(Math.min(clickCol, cols - 1));
+  if(start + n * len > cols) return;
+  const overlaps = overlappingNoteIds(r, start, n * len);
+  if(LESSON && [...overlaps].some(id => _lessonLockedIds.has(id))) return;
+  overlaps.forEach(id => deleteNoteById(r, id));
+  for(let i = 0; i < n; i++) placeNote(r, start + i * len, len);
+}
+/* Delete the whole group a note belongs to — "always grouped in twos/fours"
+   means a tap can't leave half a beam behind. A group is inferred, not stored:
+   same row, same length, same beat. A lone leftover (e.g. one 16th off a scanned
+   worksheet) simply deletes on its own. */
+function deleteGroupAt(r, id){
+  const note = notesByRow[r].find(n => n.id === id);
+  if(!note) return;
+  if(groupSizeFor(note.len) === 1){ deleteNoteById(r, id); return; }
+  const { start, end } = _beatSpan(note.start);
+  const ids = notesByRow[r]
+    .filter(n => n.len === note.len && n.start >= start && n.start < end)
+    .map(n => n.id);
+  for(const gid of ids) deleteNoteById(r, gid);
+}
+/* Notes of `len` in this beat, in column order, when they form a COMPLETE group
+   (a full beat's worth). Used only for drawing the beam — a partial run falls
+   back to per-note glyphs rather than a beam over a gap. */
+function completeGroupIn(r, beatStart, len){
+  const n = groupSizeFor(len);
+  if(n === 1) return null;
+  const members = notesByRow[r]
+    .filter(x => x.len === len && x.start >= beatStart && x.start < beatStart + COLS_PER_BEAT)
+    .sort((a, b) => a.start - b.start);
+  return members.length === n ? members : null;
+}
+
 function smartPlaceNote(r, clickCol, len, kind){
   let baseStart = Math.min(clickCol, cols - len);
   baseStart = Math.max(0, baseStart);
@@ -3286,13 +3357,14 @@ function onCellClick(r, c){
     // so a fill-the-gap exercise can't be wrecked into an accidental free-build.
     if(LESSON && _lessonLockedIds.has(existing)){ _lessonLockedNudge(r, existing); return; }
     pushUndo();
-    deleteNoteById(r, existing);
+    deleteGroupAt(r, existing);
     redrawRowNotes(r);
     return;
   }
 
   pushUndo();
-  smartPlaceNote(r, c, selectedSteps, selectedKind);
+  if(groupSizeFor(selectedSteps) > 1) placeNoteGroup(r, c, selectedSteps);
+  else smartPlaceNote(r, c, selectedSteps, selectedKind);
   redrawRowNotes(r);
 }
 
@@ -3345,6 +3417,38 @@ function createNoteBlock(r, note){
   return block;
 }
 
+/* A beamed group has to be drawn as ONE symbol spanning the whole beat — two
+   pair-glyphs side by side would read as four 8ths, not two. `.noteBlock` is
+   `overflow:hidden` (the candy-bar overlay needs it), so the group symbol cannot
+   live inside a member block and spill across its neighbour; it goes in the note
+   layer as a sibling, above the blocks, and the members' own glyphs are hidden
+   via `.grouped`. Rebuilt from scratch each redraw — at most 4 per row. */
+function _applyGroupGlyphs(r, layer){
+  for(const el of layer.querySelectorAll(".noteGroupGlyph")) el.remove();
+  for(const b of layer.querySelectorAll(".noteBlock.grouped")) b.classList.remove("grouped");
+
+  for(let beatStart = 0; beatStart < cols; beatStart += COLS_PER_BEAT){
+    for(const len of [1, 2]){
+      const members = completeGroupIn(r, beatStart, len);
+      if(!members) continue;
+      for(const m of members){
+        layer.querySelector(`.noteBlock[data-id="${m.id}"]`)?.classList.add("grouped");
+      }
+      const art = NOTE_ART[len];
+      if(!art) continue;
+      const g = document.createElement("span");
+      g.className = "noteGroupGlyph" + (art.svg ? "" : " txt");
+      g.dataset.nv = String(len);
+      if(art.svg) g.innerHTML = art.svg;
+      else g.textContent = art.symbol;
+      // Span the beat exactly, matching applyNoteGeometry's column arithmetic.
+      g.style.left  = `${beatStart * (CELL + GAP)}px`;
+      g.style.width = `${COLS_PER_BEAT * CELL + (COLS_PER_BEAT - 1) * GAP}px`;
+      layer.appendChild(g);
+    }
+  }
+}
+
 // Diff against the existing DOM instead of wiping innerHTML. Wiping destroyed and
 // recreated every block on each redraw, which flashed on mobile when placing a note
 // (Safari repaints the whole layer). Now only changed blocks are touched.
@@ -3370,6 +3474,10 @@ function redrawRowNotes(r){
     if(block) applyNoteGeometry(block, r, note);
     else layer.appendChild(createNoteBlock(r, note));
   }
+
+  // Draw one beamed glyph across each complete group, in place of the members'
+  // own glyphs (5-note view only — the 8-row view carries no glyphs at all).
+  if(_fiveNote) _applyGroupGlyphs(r, layer);
 
   // Live-update the learning-mode staff (no-op unless it's a learning level and
   // the panel is open). Every grid mutation — place, delete, clear, undo, scan —
@@ -4400,7 +4508,7 @@ function _renderKeyMenu(){
   const menu = document.getElementById('keyMenu');
   if(!menu) return;
   menu.innerHTML = '';
-  KEY_ORDER.forEach(k => {
+  KEY_MENU_ORDER.forEach(k => {
     const item = document.createElement('div');
     item.className = 'keyMenuItem' + (k === currentKey ? ' current' : '');
     item.textContent = k;
