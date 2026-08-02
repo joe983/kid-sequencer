@@ -2479,6 +2479,7 @@ html.js-loading #contentWrap{
   .noteBlock,
   #playhead,
   #upgradeModal,
+  #viewToggleBtn,
   #camModal,
   #saveModal,
   #loadModal,
@@ -3082,3 +3083,82 @@ html.js-loading #contentWrap{
   .lessonNudge, .cell.ghostHint, #lessonConfetti span,
   .tool.toolFlash, .lessonCard.hintPulse{ animation: none; }
 }
+
+/* ============================================================================
+   FIVE-NOTE (C–G) BEGINNER VIEW + VIEW TOGGLE
+   The toggle sits below the note-length circles, which shrink to make room.
+   The 5-note view is a render window over the unchanged 8-row model, so nothing
+   here may depend on note count or model state.
+   ========================================================================== */
+
+/* Circles 124 -> 108 to free vertical room for the toggle. Scoped away from
+   learning mode: lesson chrome is positioned at hand-tuned stage coords, so
+   ?level= / ?lesson= must stay byte-identical.
+   Budget: 5x108 + 4x10 + 14 + 58 = 652, vs 660 before — 8px SHORTER, so the
+   column still clears the iPhone-landscape stage-floor crop.
+   --toolW deliberately stays 124: #titleBox, --centerPad and the printed
+   layout's centreOf(['titleBox','toolsList','tools']) all read it. */
+html:not(.learning-mode){ --toolBtnSize: 108px; }
+/* REQUIRED, not cosmetic: #toolsList has no align-items and .tool has an
+   explicit width, so a 108px circle would default to flex-start and sit LEFT
+   inside the 124px column. */
+html:not(.learning-mode) #toolsList{ align-items: center; }
+
+/* The toggle button. Visual vocabulary copied from #keyBtn (the app's other
+   small square control); lit state from #staveBtn.active, the only existing
+   aria-pressed mode toggle. */
+#viewToggleBtn{
+  width: 58px;
+  height: 58px;
+  /* No margin: #tools is a flex column with gap:14px, which already separates the
+     button from #toolsList. A margin here would be additive and push the column
+     6px BELOW today's, back towards the iPhone-landscape stage-floor crop. */
+  border-radius: 16px;
+  border: 4px solid #1d1d1d;
+  background: #ffffff;
+  box-shadow: 0 8px 0 rgba(0,0,0,0.07);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex: 0 0 auto;
+  -webkit-appearance: none;
+}
+#viewToggleBtn svg{ width: 34px; height: 34px; display: block; }
+#viewToggleBtn:hover{ transform: translateY(-1px); box-shadow: 0 9px 0 rgba(0,0,0,0.08); }
+#viewToggleBtn:active{ transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,0.07); }
+#viewToggleBtn.active{ background: #ffe14d; }
+/* Learning levels and lessons have their own fixed layout and no 8-row model. */
+.learning-mode #viewToggleBtn,
+.lesson-mode #viewToggleBtn{ display: none; }
+
+/* No printable sheet template exists for the 5-note layout (see _buildPrintMarks). */
+html.fiveNote #printBtn{ display: none !important; }
+
+/* The volume fader's default height hardcodes 8 rows (cell*8 - 322), which at
+   cell 78 would grow #rightCol by 112px; scaling it to 5 rows instead leaves a
+   56px stub, since the fader's fixed chrome alone is 350px. Pin it to the value
+   the 8-row view produces today, so the right column is pixel-identical in both
+   views. */
+html.fiveNote #masterVolUI{ --faderTrackH: 190px; }
+
+/* Note-length glyph inside a placed block (5-note view only). Positioning,
+   font and shadow all come from the base `.noteBlock .noteGlyph` rule above;
+   only the SVG sizing and the ink-centring nudges are new. The candy-bar
+   ::after segmentation stays on every length — a child can still count the
+   segments behind the symbol. */
+html.fiveNote .noteBlock .noteGlyph svg{
+  height: calc(var(--cell) * 0.66);
+  width: auto;
+  display: block;
+}
+/* ♬ and ♩ render high within their em-box, so flex-centring the box does not
+   centre the visible ink (same reason as the learning-mode nudges above). */
+html.fiveNote .noteBlock .noteGlyph.txt[data-nv="1"]{ transform: translateY(0.30em); }
+html.fiveNote .noteBlock .noteGlyph.txt[data-nv="4"]{ transform: translateY(0.36em); }
+/* Belt and braces: a length glyph can never leak into the 8-row view. Learning
+   mode is excluded — its data-kind glyph is a different feature entirely. */
+html:not(.fiveNote):not(.learning-mode) .noteBlock .noteGlyph{ display: none !important; }

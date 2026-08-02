@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=70">
+<link rel="stylesheet" href="css/styles.css?v=71">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -100,6 +100,7 @@
 <div id="mainLayout">
 <div id="tools">
 <div id="toolsList"></div>
+<button id="viewToggleBtn" type="button" aria-pressed="false" onclick="toggleNoteView()"></button>
 </div>
 <div id="sequencerShell">
 <div id="beatHeader" aria-hidden="true"></div>
@@ -553,6 +554,29 @@ if (LEARN_LEVEL) document.documentElement.style.setProperty("--learnRows", Strin
 const freqs = LEARN_LEVEL ? LEARN_LEVEL.freqs : [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
 
+/* --- Five-note (C–G) beginner view ------------------------------------------
+   An alternative face for the SAME 8×16 model: it renders and plays only the
+   BOTTOM FIVE model rows (indices 3..7 = G,F,E,D,C top-to-bottom), with bigger
+   cells and the note-length glyph drawn inside each block.
+
+   It is a *window*, not a different grid. notesByRow/occ stay 8 rows forever, so
+   notes on the hidden top three rows are simply not drawn and not played, and
+   come back untouched on switching back. Every function keeps taking MODEL row
+   indices; only buildGrid and _cellEl translate to a DOM child index.
+
+   With _fiveNote === false both helpers return today's values, so every 8-row
+   expression below is unchanged by construction. */
+const FIVE_VIEW_ROWS    = 5;
+const FIVE_VIEW_OFFSET  = rows - FIVE_VIEW_ROWS;   // 3 in the full app
+const FIVE_VIEW_MAXCELL = 78;                      // largest the centring solve allows
+const FIVE_VIEW_LS      = "kidseq_note_view";
+const FIVE_VIEW_AVAILABLE = !LEARN_LEVEL;          // inert on ?level=N and ?lesson=
+let _fiveNote = false;
+try{ _fiveNote = FIVE_VIEW_AVAILABLE && localStorage.getItem(FIVE_VIEW_LS) === "5"; }catch(e){}
+if(_fiveNote) document.documentElement.classList.add("fiveNote");
+function viewRow0(){ return _fiveNote ? FIVE_VIEW_OFFSET : 0; }   // MODEL index of top visible row
+function viewRowCount(){ return _fiveNote ? FIVE_VIEW_ROWS : rows; }
+
 // --- Key selector (paid tier) -----------------------------------------------
 // 14 keys cycle in this order; the up arrow advances forward, down reverses, both wrap.
 // "m" suffix = natural minor. Default `C` matches the unchanged C-major freqs above.
@@ -597,6 +621,14 @@ const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps : [
   { steps: 8,  label: "1/2",   svg: HALF_NOTE_SVG,  divs: 2,  symClass:"half" },
   { steps: 16, label: "Whole",  svg: WHOLE_NOTE_SVG,  divs: 1,  symClass:"whole" }
 ];
+
+// Artwork for the glyph drawn inside a placed block in the 5-note view, keyed by
+// note.len (1/2/4/8/16). Built FROM the tool definitions, so a block always shows
+// literally the artwork on the button the child pressed and the two can't drift.
+// Deliberately NOT keyed on note.kind — that is a learning-mode-only concept that
+// undo/cloud-load/scan all drop, and its CSS belongs to the lesson grid.
+const NOTE_ART = {};
+if(!LEARN_LEVEL) for(const t of toolSteps) NOTE_ART[t.steps] = { svg: t.svg || null, symbol: t.symbol || "" };
 
 let selectedSteps = LEARN_LEVEL ? LEARN_LEVEL.selectedSteps : 1;
 // Learning levels distinguish two same-width tools by kind ("quarter"|"eighth").
@@ -797,7 +829,9 @@ const UNDO_MAX = 10;
 
 function cloneState(){
   return {
-    notesByRow: notesByRow.map(row => row.map(n => ({ id:n.id, start:n.start, len:n.len }))),
+    // `kind` must be carried: without it undo strips a lesson eighth's ♫ AND makes
+    // it play its full length instead of two 8ths.
+    notesByRow: notesByRow.map(row => row.map(n => ({ id:n.id, start:n.start, len:n.len, kind:n.kind || null }))),
     occ: occ.map(row => row.slice()),
     nextId
   };
@@ -1870,12 +1904,16 @@ function fitToViewport(){
   //   availableH = rows*cell + (rows-1)*GAP + hdrK*cell + GAP
   const hdrK = USE_BEAT_HEADER ? BEAT_HDR_K : 0;
   const availableH = vh - headerH - controlsH - vMargins - gridExtra - (hdrK ? GAP : 0);
-  const maxCellByHeight = Math.floor((availableH - (rows - 1) * GAP) / (rows + hdrK));
+  const vRows = viewRowCount();
+  const maxCellByHeight = Math.floor((availableH - (vRows - 1) * GAP) / (vRows + hdrK));
 
   let cell = Math.min(maxCellByWidth, maxCellByHeight);
   // Learning levels have far fewer/larger cells; let them grow past the default
-  // 64px cap so a 3×8 grid still fills the stage.
-  const MAXCELL = (LEARN_LEVEL && LEARN_LEVEL.maxCell) ? LEARN_LEVEL.maxCell : 64;
+  // 64px cap so a 3×8 grid still fills the stage. The 5-note view caps at 78:
+  // above that the centring solve runs out of stage width (maxCellByWidth is a
+  // pixel optimistic, so it cannot be relied on as the ceiling).
+  const MAXCELL = (LEARN_LEVEL && LEARN_LEVEL.maxCell) ? LEARN_LEVEL.maxCell
+                : (_fiveNote ? FIVE_VIEW_MAXCELL : 64);
   cell = Math.max(26, Math.min(MAXCELL, cell));
 
   if(cell <= 36){
@@ -3145,9 +3183,12 @@ function clearBeatFlashes(){
 
 function buildGrid(){
   sequencerEl.innerHTML = "";
-  noteLayerEls = [];
+  // Indexed by MODEL row, so it has holes for rows the current view hides.
+  // Every reader must tolerate a missing layer (see redrawRowNotes).
+  noteLayerEls = new Array(rows).fill(null);
 
-  for(let r=0;r<rows;r++){
+  for(let i=0, r0=viewRow0(), n=viewRowCount(); i<n; i++){
+    const r = r0 + i;
     const wrap = document.createElement("div");
     wrap.className = "rowWrap";
     wrap.style.width = `${cols * CELL + (cols-1) * GAP}px`;
@@ -3167,7 +3208,7 @@ function buildGrid(){
       // Lesson mode only: beat number in the top row's beat-start cells (faded
       // grey, pointer-none, sits behind note blocks so it shows only on empty
       // beats). The full sequencer numbers its beats in #beatHeader instead.
-      if(!USE_BEAT_HEADER && r === 0 && c % COLS_PER_BEAT === 0){
+      if(!USE_BEAT_HEADER && i === 0 && c % COLS_PER_BEAT === 0){
         const bn = document.createElement("span");
         bn.className = "beatNum";
         bn.textContent = String(c / COLS_PER_BEAT + 1);
@@ -3180,7 +3221,7 @@ function buildGrid(){
     wrap.appendChild(layer);
     sequencerEl.appendChild(wrap);
 
-    noteLayerEls.push(layer);
+    noteLayerEls[r] = layer;
   }
 
   buildBeatHeader();
@@ -3281,6 +3322,20 @@ function createNoteBlock(r, note){
     glyph.textContent = NOTE_GLYPHS[note.kind] || "";
     block.appendChild(glyph);
   }
+  // 5-note view: draw the note-length notation inside the block, using the same
+  // artwork as the tool button the child pressed. Keyed on len (a total function
+  // over 1/2/4/8/16 — anything else simply gets no glyph).
+  if(_fiveNote){
+    const art = NOTE_ART[note.len];
+    if(art){
+      const g = document.createElement("span");
+      g.className = "noteGlyph" + (art.svg ? "" : " txt");
+      g.dataset.nv = String(note.len);
+      if(art.svg) g.innerHTML = art.svg;
+      else g.textContent = art.symbol;
+      block.appendChild(g);
+    }
+  }
   applyNoteGeometry(block, r, note);
   // Note blocks are pointer-events:none — clicks pass through to the
   // underlying .cell, where onCellClick handles deletion via occ[r][c].
@@ -3294,7 +3349,11 @@ function createNoteBlock(r, note){
 // recreated every block on each redraw, which flashed on mobile when placing a note
 // (Safari repaints the whole layer). Now only changed blocks are touched.
 function redrawRowNotes(r){
+  // No layer = this model row is outside the current view (5-note view hides the
+  // top three). One guard here keeps every model-row caller — redrawAllNotes
+  // included — safe without a change of its own.
   const layer = noteLayerEls[r];
+  if(!layer) return;
   const existing = new Map();
   for(const block of layer.querySelectorAll(".noteBlock")) existing.set(block.dataset.id, block);
   const modelIds = new Set(notesByRow[r].map(n => String(n.id)));
@@ -3958,8 +4017,12 @@ function startSequencer(){
       firstTick = false;
     }
 
+    // Only rows the current view SHOWS are collected. stepNotes is the sole source
+    // of playInstrument() calls and of _triggeredNotes entries, so this one window
+    // is the whole of "notes on hidden rows go silent" — they stay in the model
+    // untouched and sound again the moment the view is switched back.
     const stepNotes = [];
-    for(let r=0;r<rows;r++){
+    for(let r=viewRow0(), rEnd=viewRow0()+viewRowCount(); r<rEnd; r++){
       const note = notesByRow[r].find(n => n.start === step);
       if(note) stepNotes.push({ r, note });
     }
@@ -3992,7 +4055,7 @@ function startSequencer(){
       // mode it falls back to the level's short freqs array.
       playInstrument(pitchFor(r), note.kind === "eighth" ? 1 : note.len);
 
-      const block = noteLayerEls[r].querySelector(`.noteBlock[data-id="${note.id}"]`);
+      const block = noteLayerEls[r]?.querySelector(`.noteBlock[data-id="${note.id}"]`);
       if(block){
         setBlockPulseVars(block);
         block.classList.remove("playing");
@@ -4391,6 +4454,55 @@ function clearGrid(){
   redrawAllNotes();
 }
 
+/* -------------------- 5-NOTE VIEW TOGGLE -------------------- */
+// Icons: coloured bars standing for the rows you'd GET by pressing the button —
+// five fat ones (C–G) or eight thin ones — so a pre-reading child can read it.
+const VIEW_ICON_5 = (() => {
+  const cols5 = ["#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+  return '<svg viewBox="0 0 32 32" aria-hidden="true">' +
+    cols5.map((c,i) => `<rect x="4" y="${3 + i*5.6}" width="24" height="4.2" rx="2.1" fill="${c}"/>`).join("") +
+    '</svg>';
+})();
+const VIEW_ICON_8 = (() => {
+  return '<svg viewBox="0 0 32 32" aria-hidden="true">' +
+    rowColors.map((c,i) => `<rect x="4" y="${3 + i*3.4}" width="24" height="2.4" rx="1.2" fill="${c}"/>`).join("") +
+    '</svg>';
+})();
+
+function _syncViewToggleBtn(){
+  const btn = document.getElementById("viewToggleBtn");
+  if(!btn) return;
+  // The button always advertises where it takes you, not where you are.
+  const toFive = !_fiveNote;
+  btn.innerHTML = toFive ? VIEW_ICON_5 : VIEW_ICON_8;
+  btn.setAttribute("aria-pressed", _fiveNote ? "true" : "false");
+  const label = toFive ? "Show five notes (C to G)" : "Show all eight notes";
+  btn.setAttribute("aria-label", label);
+  btn.setAttribute("title", label);
+  btn.classList.toggle("active", _fiveNote);
+}
+
+// v: "5" | "8". Notes are never touched — this only changes which model rows are
+// rendered and played (see viewRow0/viewRowCount and the tick() window).
+function setNoteView(v){
+  if(!FIVE_VIEW_AVAILABLE) return;
+  const five = (v === "5" || v === 5 || v === true);
+  if(five === _fiveNote){ _syncViewToggleBtn(); return; }
+  _fiveNote = five;
+  document.documentElement.classList.toggle("fiveNote", _fiveNote);
+  try{ localStorage.setItem(FIVE_VIEW_LS, _fiveNote ? "5" : "8"); }catch(e){}
+  _syncViewToggleBtn();
+  // scheduleLayout, never fitToViewport directly — the latter measures the login
+  // pill outside the transform sandbox. layoutPass rebuilds the grid for us, and
+  // it already does so on every resize with no play guard, so no stop() is needed.
+  try{
+    if(typeof window.scheduleLayout === 'function') window.scheduleLayout();
+    else fitToViewport();
+  }catch(e){}
+}
+function toggleNoteView(){ setNoteView(_fiveNote ? "8" : "5"); }
+window.toggleNoteView = toggleNoteView;
+
 
 
 /* -------------------- CAMERA SCAN (simple heuristic) -------------------- */
@@ -4450,6 +4562,9 @@ function _applySequenceData(d){
          typeof n.start==="number" && typeof n.len==="number" &&
          n.start>=0 && n.start+n.len<=cols) placeNote(n.row, n.start, n.len);
     }
+    // A loaded tune must never appear silently truncated: if it uses any of the
+    // three rows the 5-note view hides, show the full grid.
+    if(_fiveNote && d.notesByRow.some(n => typeof n.row === "number" && n.row < FIVE_VIEW_OFFSET)) setNoteView("8");
   }
   redrawAllNotes();
 }
@@ -5794,6 +5909,9 @@ function _gridRegistration(imgData, geom, mapPoint){
 /* ---- apply a scanned note list onto the CURRENT page's grid ---- */
 function _applyScannedNotes(notes){
   pushUndo();
+  // A printed worksheet is always the 8-row sheet, so never drop a scan into the
+  // 5-note window where three of its rows would be invisible.
+  setNoteView("8");
   notesByRow = Array.from({length: rows}, () => []);
   occ        = Array.from({length: rows}, () => Array(cols).fill(null));
   nextId     = 1;
@@ -6418,7 +6536,8 @@ function _lessonProgSave(p){ try{ localStorage.setItem(_LS_LESSONS, JSON.stringi
 function _lt(fn, ms){ const t = setTimeout(fn, ms); _stepTimers.push(t); return t; }
 function _clearStepTimers(){ for(const t of _stepTimers) clearTimeout(t); _stepTimers = []; }
 function _cellEl(r, c){
-  const wrap = sequencerEl.children[r];
+  // r is a MODEL row; children are only the rows the current view renders.
+  const wrap = sequencerEl.children[r - viewRow0()];
   if(!wrap) return null;
   const grid = wrap.querySelector(".grid");
   return grid ? grid.children[c] : null;
@@ -7337,6 +7456,7 @@ function init(){
   }
   updateTempoBox();
   _updateKeyBtn();
+  _syncViewToggleBtn();
   setPlayheadWobbleFromTempo(tempo);
   // Rhythm Trail: build the lesson shell (hearts, mascot, START overlay).
   if(LESSON) _lessonInit();
@@ -7467,6 +7587,12 @@ function _clearPrintMarks(){
 function _buildPrintMarks(pr, content){
   const page = document.getElementById('page');
   if(!page || !content) return null;
+  // The 5-note view is not a scannable template: its printed layout does not match
+  // SHEET_GEOMETRY["kidseq:main"]. Ctrl+P still fires beforeprint even though the
+  // Print button is hidden, so refuse HERE — marks on a 5-row sheet would produce
+  // a page that looks scannable and reads back garbage. With no marks the scanner
+  // simply refuses at `no-sheet`.
+  if(_fiveNote){ _clearPrintMarks(); return null; }
   _clearPrintMarks();
 
   const box = (id) => {
@@ -7650,6 +7776,8 @@ window.addEventListener('beforeprint', _applyPrintScale);
 window.addEventListener('afterprint', _restorePrintScale);
 
 function printSheet(){
+  // window.printSheet is global; the 5-note view has no printable sheet template.
+  if(_fiveNote) return;
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
@@ -7690,7 +7818,10 @@ window.KidSequencer = {
     undo,
     buildGrid,
     buildTools,
-    redrawAllNotes
+    redrawAllNotes,
+    setNoteView,
+    toggleNoteView,
+    get fiveNote(){ return _fiveNote; }
   },
   Camera: {
     openCameraModal,
