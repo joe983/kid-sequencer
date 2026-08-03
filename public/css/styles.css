@@ -25,7 +25,10 @@
   /* 8th / 16th tool buttons draw their own artwork — a single flagged note in
      the full sequencer, a beamed group in the beginner view. */
   --singleSvgSize: 74px;
-  --beamGroupSvgH: 58px;
+  /* As large as four beamed heads can be drawn and still sit inside the circle
+     — the beam's ends are near the top of the artwork, where the circle is
+     already narrowing, so this is a real ceiling rather than a preference. */
+  --beamGroupSvgH: 54px;
 
   /* half note uses an SVG */
   --halfSvgSize: 70px;
@@ -3226,7 +3229,11 @@ html:not(.fiveNote) .noteGroupStud{ display: none !important; }
    tool button's copy of the same symbol, so the two match. Big enough that the
    symbol spans its gap comfortably rather than perching on it. */
 .noteGroupGlyph.beamed svg{
-  height: calc(var(--cell) * 0.80);
+  /* 0.66 × cell is EXACTLY the height the half and whole notes render at above,
+     and the group is authored in the same 220-tall box — so its note heads come
+     out the same size as theirs. Do not tune this to taste on its own; it is a
+     match, not a preference. */
+  height: calc(var(--cell) * 0.66);
   width: auto;
   max-width: 100%;
   display: block;

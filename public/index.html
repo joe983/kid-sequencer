@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=77">
+<link rel="stylesheet" href="css/styles.css?v=78">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3443,14 +3443,29 @@ function createNoteBlock(r, note){
    Musical Symbols block, which iOS Safari cannot be trusted to have. ♬ is not a
    substitute — it is TWO beamed sixteenths, which is what made the 16th button
    disagree with the single note it places. */
+/* ONE authoring space for every drawn note, matching HALF_NOTE_SVG's original
+   120×220 box and its exact head/stem geometry. Because the group symbol is
+   authored at the same scale as the half and whole notes and rendered at the
+   same height, its note heads come out the SAME SIZE as theirs — which is the
+   whole reason these constants are shared rather than each shape carrying its
+   own numbers. Change a head here and every note changes together. */
+const NOTE_BOX_H   = 220;
+const NOTE_HEAD_RX = 36, NOTE_HEAD_RY = 24;
+const NOTE_STEM_W  = 12, NOTE_STEM_TOP = 10, NOTE_HEAD_CY = 165;
+const _noteHead = (cx) =>
+  `<ellipse cx="${cx}" cy="${NOTE_HEAD_CY}" rx="${NOTE_HEAD_RX}" ry="${NOTE_HEAD_RY}"`
+  + ` transform="rotate(-18 ${cx} ${NOTE_HEAD_CY})"/>`;
+// The stem rides the head's right edge, as on the half note.
+const _noteStemX = (cx) => cx + NOTE_HEAD_RX - NOTE_STEM_W;
+
 function _singleNoteSvg(flags){
-  const stemX = 78, stemW = 12, stemTop = 10, headCy = 165, headCx = 55;
-  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 220"`
+  const headCx = 55, stemX = _noteStemX(headCx), stemW = NOTE_STEM_W;
+  const stemTop = NOTE_STEM_TOP, headCy = NOTE_HEAD_CY;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 ${NOTE_BOX_H}"`
         + ` aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">`
         + `<rect x="${stemX}" y="${stemTop}" width="${stemW}"`
         + ` height="${headCy - stemTop - 5}" rx="6" ry="6" fill="#000"/>`
-        + `<ellipse cx="${headCx}" cy="${headCy}" rx="36" ry="24" fill="#000"`
-        + ` transform="rotate(-18 ${headCx} ${headCy})"/>`;
+        + `<g fill="#000">${_noteHead(headCx)}</g>`;
   // Flags are STRAIGHT diagonal strokes, not the engraved calligraphic curve —
   // the way a child draws a note, and the way the beams above read.
   const fx = stemX + stemW;              // flags hang off the stem's right edge
@@ -3476,18 +3491,29 @@ function _singleNoteSvg(flags){
    note it is, and dragged the beam across every join. Centred at this size, the
    beam bridges just the middle gap, and the blocks' own colour does the work of
    showing which notes belong together. */
-function _beamedGroupArt(len){
+/* `where` picks the head spacing, and only the spacing — the heads themselves
+   are identical everywhere.
+
+   ON THE GRID the beam has a job: it must clearly cross the dark strip between
+   two blocks (a 4px gap with a 4px border either side). A beam that stops near
+   those black edges is hard to read against them, so the heads sit wider apart
+   than engraving would put them.
+
+   ON A BUTTON there is no gap to cross, and the circle is the constraint: four
+   heads plus wide spacing would have to shrink to fit, which is what made the
+   16th button's heads look small next to the half note. Tighter spacing lets
+   the same heads render larger in the same circle. */
+function _beamedGroupArt(len, where){
   const n = NOTE_GROUP_SIZE[len] || 2;
-  const spacing = n === 2 ? 42 : 34, margin = 24;
-  const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
-  return _beamedGroupSvg(centres, margin * 2 + (n - 1) * spacing, 100,
-                         len === 1 ? 2 : 1, "xMidYMid meet");
+  const grid = where !== "button";
+  const spacing = n === 2 ? (grid ? 154 : 110) : (grid ? 120 : 84);
+  return _beamedGroupSvg(n, len === 1 ? 2 : 1, spacing);
 }
 
 function _toolArtFor(steps){
   return groupSizeFor(steps) === 1
     ? _singleNoteSvg(steps === 1 ? 2 : 1)
-    : _beamedGroupArt(steps);
+    : _beamedGroupArt(steps, "button");
 }
 
 /* Draw a real beamed group: one note head per member, each with a stem, and a
@@ -3500,32 +3526,30 @@ function _toolArtFor(steps){
    makes every join in both lengths look identical, which is the point of showing
    a group at all.
 
-   `centres` are note-head x positions relative to the group's left edge, so the
-   heads line up with the blocks underneath. Units are px at the current cell
-   size, published through the viewBox — CSS then scales the whole thing to the
-   span, so this stays correct at any --cell. */
-function _beamedGroupSvg(centres, w, cell, beams, fit){
-  const headRx = cell * 0.155, headRy = cell * 0.113;
-  const stemW  = Math.max(2, cell * 0.038);
-  const beamH  = Math.max(3, cell * 0.105);
-  const beamGap = beamH * 0.60;
-  const topY   = cell * 0.20;          // top edge of the first beam
-  const headCy = cell * 0.70;          // note-head centre
-  const stemX  = (cx) => cx + headRx - stemW;   // stem rides the head's right edge
+   Authored in the SHARED 220-tall note box (see NOTE_BOX_H), not in cell pixels.
+   That is what makes the heads come out the same size as the half and whole
+   notes: same geometry, same box, rendered at the same height. `spacing` is the
+   only thing that varies, and it is a readability choice — see _beamedGroupArt. */
+function _beamedGroupSvg(n, beams, spacing){
+  const margin = NOTE_HEAD_RX + 16;                 // air outside the outer heads
+  const w = margin * 2 + (n - 1) * spacing;
+  const beamH = 26, beamGap = 16;
+  const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
 
-  let s = `<svg viewBox="0 0 ${w} ${cell}" preserveAspectRatio="${fit || "none"}" aria-hidden="true">`
-        + `<g fill="#1d1d1d">`;
+  let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${NOTE_BOX_H}"`
+        + ` aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">`
+        + `<g fill="#000">`;
+  // Stems before beams, so the beams cap them cleanly.
   for(const cx of centres){
-    // Tilt matches engraved note heads; stems drawn before the beams so the
-    // beams cap them cleanly.
-    s += `<ellipse cx="${cx}" cy="${headCy}" rx="${headRx}" ry="${headRy}"`
-       + ` transform="rotate(-18 ${cx} ${headCy})"/>`
-       + `<rect x="${stemX(cx)}" y="${topY}" width="${stemW}" height="${headCy - topY}"/>`;
+    s += _noteHead(cx)
+       + `<rect x="${_noteStemX(cx)}" y="${NOTE_STEM_TOP}" width="${NOTE_STEM_W}"`
+       + ` height="${NOTE_HEAD_CY - NOTE_STEM_TOP}"/>`;
   }
-  const x0 = stemX(centres[0]), x1 = stemX(centres[centres.length - 1]) + stemW;
+  const x0 = _noteStemX(centres[0]);
+  const x1 = _noteStemX(centres[n - 1]) + NOTE_STEM_W;
   for(let i = 0; i < beams; i++){
-    s += `<rect x="${x0}" y="${topY + i * (beamH + beamGap)}"`
-       + ` width="${x1 - x0}" height="${beamH}" rx="${Math.min(2, beamH / 3)}"/>`;
+    s += `<rect x="${x0}" y="${NOTE_STEM_TOP + i * (beamH + beamGap)}"`
+       + ` width="${x1 - x0}" height="${beamH}" rx="3"/>`;
   }
   return s + `</g></svg>`;
 }
