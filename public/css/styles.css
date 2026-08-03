@@ -3211,12 +3211,11 @@ html.fiveNote .noteBlock.grouped .noteGlyph{ display: none; }
 html.fiveNote .noteLayer .noteBlock{ z-index: 2; }
 .noteGroupStud{
   position: absolute;
-  /* Sits low and clear: the symbol is lifted (below), so the beam band ends
-     around 40% of the cell and the note heads around 67%. 70%–88% keeps the
-     stud's edges away from both, and still leaves the block's own bottom
-     border untouched. */
-  top: 70%;
-  height: 18%;
+  /* Sits low and clear of the symbol above it. 73%–90% keeps the stud's edges
+     away from both the beam band and the note heads, and still leaves the
+     block's own bottom border untouched. */
+  top: 73%;
+  height: 17%;
   z-index: 1;
   border-top: 3px solid #1d1d1d;
   border-bottom: 3px solid #1d1d1d;
@@ -3237,10 +3236,12 @@ html:not(.fiveNote) .noteGroupStud{ display: none !important; }
   width: auto;
   max-width: 100%;
   display: block;
-  /* Lifted off centre so the symbol clears the bridge below it. Expressed in
-     cell units, not a percentage of the symbol's own height, so the offset
-     tracks the grid rather than the artwork. */
-  transform: translateY(calc(var(--cell) * -0.09));
+  /* Nudged off centre so the symbol clears the bridge below it, and left so it
+     sits square over the gap it spans rather than reading right-of-centre (the
+     stems and beam hang to the RIGHT of each head, so geometric centring puts
+     the visual weight off to one side). Both are in cell units, not percentages
+     of the symbol's own height, so the offsets track the grid not the artwork. */
+  transform: translate(calc(var(--cell) * -0.05), calc(var(--cell) * -0.06));
 }
 
 /* Drawn tool artwork for the two sub-beat lengths (see _toolArtFor). A single

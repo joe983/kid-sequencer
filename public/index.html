@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=78">
+<link rel="stylesheet" href="css/styles.css?v=79">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3533,7 +3533,10 @@ function _toolArtFor(steps){
 function _beamedGroupSvg(n, beams, spacing){
   const margin = NOTE_HEAD_RX + 16;                 // air outside the outer heads
   const w = margin * 2 + (n - 1) * spacing;
-  const beamH = 26, beamGap = 16;
+  // beamGap is the air BETWEEN the two bars of a 16th group. Wider than it is
+  // strictly engraved, because at grid size two bars closer than their own
+  // thickness read as one thick smudge.
+  const beamH = 26, beamGap = 24;
   const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
 
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${NOTE_BOX_H}"`
