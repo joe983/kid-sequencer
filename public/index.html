@@ -1436,9 +1436,20 @@ async function runAiGeneration(){
   }catch(e){
     console.error('[AI generate]', e);
     _aiBusy = false;
-    const msg = (e && e.code === 'functions/resource-exhausted')
-      ? 'You\'ve used all your AI tracks this month.'
-      : 'Something went wrong making your track — please try again.';
+    // The server charges only once a track is delivered, so every failure here
+    // is free — say so, because being charged for nothing is the complaint
+    // this whole path exists to prevent.
+    const code = e && e.code;
+    let msg;
+    if(code === 'functions/resource-exhausted'){
+      msg = 'You\'ve used all your AI tracks this month.';
+    }else if(code === 'functions/failed-precondition'){
+      msg = 'Your track is still being made — give it a minute, then try again.<br><span class="aiNote">You haven\'t been charged.</span>';
+    }else if(code === 'functions/unavailable'){
+      msg = 'Too many tries that didn\'t work. Please take a short break and try again.<br><span class="aiNote">You haven\'t been charged for any of them.</span>';
+    }else{
+      msg = 'Something went wrong making your track — please try again.<br><span class="aiNote">You haven\'t been charged.</span>';
+    }
     _aiSetBody(`<div class="aiMsg">${msg}</div><button class="aiCta" id="aiRetryBtn">Back</button>`);
     document.getElementById('aiRetryBtn')?.addEventListener('click', _aiShowIntro);
   }

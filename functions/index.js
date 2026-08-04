@@ -5,6 +5,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const crypto = require("crypto");
 const { isPayingSubscription } = require("./subscription-state");
+const { attemptGate, beginAttempt, succeedAttempt, failAttempt } = require("./ai-attempts");
 
 initializeApp();
 const db = getFirestore();
@@ -181,40 +182,55 @@ exports.generateAiTrack = onCall(
     const variation = Number.isFinite(request.data.variation)
       ? Math.abs(Math.trunc(request.data.variation)) % 1000000 : 0;
 
-    // --- Quota: lazy monthly reset, consume monthly-first then top-up ---
+    // --- Reserve, render, THEN charge -------------------------------------
+    // The credit is consumed only once the track is actually in Storage. It
+    // used to be consumed up front and refunded in the catch below, which
+    // charged for nothing whenever the failure killed the process before the
+    // catch could run (540s timeout, OOM, instance torn down mid-render).
+    // A refund cannot cover a failure mode that stops the code executing.
+    //
+    // Failures being free needs its own brake, or a broken account can retry a
+    // 2-minute Modal render forever: see ai-attempts.js.
     const userRef = db.doc(`users/${uid}`);
     const month = monthKey();
-    const consumed = await db.runTransaction(async (tx) => {
+    const startedAt = Date.now();
+
+    await db.runTransaction(async (tx) => {
       const snap = await tx.get(userRef);
       const d = snap.exists ? snap.data() : {};
       if (d.tier !== "paid") throw new HttpsError("permission-denied", "Pro required");
 
-      let used = d.aiMonthKey === month ? (d.aiUsedThisMonth || 0) : 0;
-      let topup = d.aiTopupBalance || 0;
-      const available = Math.max(0, BASE_MONTHLY_AI - used) + topup;
+      // Balance is only CHECKED here. The check-to-charge window is closed by
+      // the in-flight gate below, which allows one run at a time per user.
+      const used = d.aiMonthKey === month ? (d.aiUsedThisMonth || 0) : 0;
+      const available = Math.max(0, BASE_MONTHLY_AI - used) + (d.aiTopupBalance || 0);
       if (available <= 0) throw new HttpsError("resource-exhausted", "No AI tracks left this month");
 
-      let from;
-      if (used < BASE_MONTHLY_AI) { used += 1; from = "monthly"; }
-      else { topup -= 1; from = "topup"; }
+      const gate = attemptGate(d, startedAt, month);
+      if (!gate.allow) {
+        const message = gate.reason === "in-flight"
+          ? "A track is already being made"
+          : "Too many failed attempts — please try again later";
+        throw new HttpsError(
+          gate.reason === "in-flight" ? "failed-precondition" : "unavailable",
+          message,
+          { reason: gate.reason, retryAfterSec: gate.retryAfterSec },
+        );
+      }
 
-      tx.set(userRef, { aiMonthKey: month, aiUsedThisMonth: used, aiTopupBalance: topup }, { merge: true });
-      return from;
+      tx.set(userRef, beginAttempt(startedAt), { merge: true });
     });
 
-    // refund the consumed credit if generation fails
-    const refund = async () => {
+    // Release the slot and record the failure. No credit to refund — one was
+    // never taken. Best-effort: if this write fails the in-flight marker simply
+    // ages out after IN_FLIGHT_TTL_MS rather than stranding the user.
+    const recordFailure = async () => {
       try {
         await db.runTransaction(async (tx) => {
           const snap = await tx.get(userRef);
-          const d = snap.exists ? snap.data() : {};
-          if (consumed === "monthly") {
-            tx.set(userRef, { aiUsedThisMonth: Math.max(0, (d.aiUsedThisMonth || 0) - 1) }, { merge: true });
-          } else {
-            tx.set(userRef, { aiTopupBalance: (d.aiTopupBalance || 0) + 1 }, { merge: true });
-          }
+          tx.set(userRef, failAttempt(snap.exists ? snap.data() : {}, Date.now(), month), { merge: true });
         });
-      } catch (e) { console.error("[generateAiTrack] refund failed:", e); }
+      } catch (e) { console.error("[generateAiTrack] failure bookkeeping failed:", e); }
     };
 
     try {
@@ -229,7 +245,7 @@ exports.generateAiTrack = onCall(
       if (!resp.ok) {
         const text = await resp.text().catch(() => "");
         console.error("[generateAiTrack] engine error", resp.status, text.slice(0, 500));
-        await refund();
+        await recordFailure();
         throw new HttpsError("internal", "AI generation failed");
       }
 
@@ -253,11 +269,29 @@ exports.generateAiTrack = onCall(
       const url = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/` +
         `${encodeURIComponent(destPath)}?alt=media&token=${token}`;
 
+      // The track exists and is reachable — NOW charge for it. Monthly first,
+      // then top-up, re-reading the balance because the reservation only
+      // checked it. If this write throws, the user keeps the track for free:
+      // the alternative is failing a request whose work is already delivered.
+      try {
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(userRef);
+          const d = snap.exists ? snap.data() : {};
+          const used = d.aiMonthKey === month ? (d.aiUsedThisMonth || 0) : 0;
+          const charge = used < BASE_MONTHLY_AI
+            ? { aiUsedThisMonth: used + 1 }
+            : { aiTopupBalance: Math.max(0, (d.aiTopupBalance || 0) - 1) };
+          tx.set(userRef, { aiMonthKey: month, ...charge, ...succeedAttempt() }, { merge: true });
+        });
+      } catch (e) {
+        console.error("[generateAiTrack] charge failed, track delivered free:", destPath, e);
+      }
+
       return { path: destPath, url };
     } catch (e) {
       if (e instanceof HttpsError) throw e;
       console.error("[generateAiTrack] unexpected:", e);
-      await refund();
+      await recordFailure();
       throw new HttpsError("internal", "AI generation failed");
     }
   }
