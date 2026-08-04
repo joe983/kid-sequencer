@@ -297,7 +297,7 @@
           <div class="stripeNote">🔒 Secure checkout · powered by Stripe — opens in a new tab</div>
         </div>
       </div>
-      <div class="upgradeFooter">
+      <div class="upgradeFooter" id="upgradeMarketingFooter">
         Already have an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
       </div>
     </div>
@@ -1257,10 +1257,35 @@ function _markCurrentTierCard(){
   document.getElementById('tierCardGuest')?.classList.toggle('tierCard-current', !isLoggedIn);
   document.getElementById('tierCardMember')?.classList.toggle('tierCard-current', isLoggedIn && !isPaid);
   document.getElementById('tierCardPro')?.classList.toggle('tierCard-current', isPaid);
-  const memberCta = document.querySelector('.tierCta-member');
-  if(memberCta) memberCta.style.display = isLoggedIn ? 'none' : '';
-  const guestCta = document.querySelector('.tierCta-ghost');
-  if(guestCta) guestCta.textContent = isLoggedIn ? 'Current plan' : "You're here";
+
+  // "Current plan" belongs on whichever card the user is actually on. The Guest
+  // card said it whenever the user was LOGGED IN, which is precisely when Guest
+  // is NOT their plan — a signed-in Member was told the free tier was current
+  // while the Member card showed nothing at all (its CTA was hidden outright).
+  // Selected by card, not by .tierCta-ghost: the member button below borrows that
+  // same class for its "Current plan" state, so a class-based lookup would be one
+  // DOM reorder away from grabbing the wrong button.
+  const guestCta = document.querySelector('#tierCardGuest .tierCta');
+  if(guestCta){
+    guestCta.textContent = isLoggedIn ? '' : "You're here";
+    guestCta.style.display = isLoggedIn ? 'none' : '';
+  }
+  // Signed-in free member: the sign-up button is meaningless, but the card is
+  // their plan and should say so. Reuse the ghost styling so it reads as a
+  // label rather than something to press, and disable it so the register view
+  // can't be reached from a button that no longer offers registration.
+  const memberCta = document.querySelector('#tierCardMember .tierCta');
+  if(memberCta){
+    const memberIsCurrent = isLoggedIn && !isPaid;
+    memberCta.style.display = isPaid ? 'none' : '';
+    memberCta.textContent = memberIsCurrent ? 'Current plan' : 'Sign up free';
+    memberCta.disabled = memberIsCurrent;
+    memberCta.classList.toggle('tierCta-ghost', memberIsCurrent);
+  }
+  // Same logic for the marketing view's "Already have an account? Log in"
+  // footer — nonsense to offer a login to someone who is already logged in.
+  const marketingFooter = document.getElementById('upgradeMarketingFooter');
+  if(marketingFooter) marketingFooter.style.display = isLoggedIn ? 'none' : '';
 }
 
 function _highlightProCard(){
@@ -6711,8 +6736,33 @@ root.classList.add('stageScaled');
 
   // iOS Safari can still allow a tiny rubber-band scroll even with overflow hidden.
   // When we are in stageScaled mode (no scrolling intended), block touchmove to eliminate that wiggle.
+  // A gesture that STARTS inside a scrollable overlay must be left alone, or that
+  // overlay cannot be scrolled at all on a phone. This is what made the Subscribe
+  // button unreachable on iPhone: the upgrade modal's card has overflow-y:auto and
+  // real overflow, but every touchmove over it was cancelled here, so the tier
+  // list could never be scrolled down to the button. The old escape hatch only
+  // covered form controls — and the one control that mattered was below the fold.
+  //
+  // Decided once per gesture on touchstart, not per move: walking ancestors with
+  // getComputedStyle on every touchmove would be needless work at 60Hz.
+  let _touchInScrollable = false;
+  const _startsInScrollable = (el) => {
+    for(let n = el; n && n !== document.body; n = n.parentElement){
+      if(n.scrollHeight > n.clientHeight + 1){
+        const oy = getComputedStyle(n).overflowY;
+        if(oy === 'auto' || oy === 'scroll') return true;
+      }
+    }
+    return false;
+  };
+  document.addEventListener('touchstart', (e) => {
+    const t = e.target;
+    _touchInScrollable = !!(t && t.nodeType === 1 && _startsInScrollable(t));
+  }, { passive: true });
+
   document.addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
+    if(_touchInScrollable) return;
     // Allow native interaction on form controls if any.
     const t = e.target;
     if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
