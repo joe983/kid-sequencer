@@ -4,6 +4,7 @@ const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
 const crypto = require("crypto");
+const { isPayingSubscription } = require("./subscription-state");
 
 initializeApp();
 const db = getFirestore();
@@ -265,6 +266,28 @@ exports.generateAiTrack = onCall(
 // ---------------------------------------------------------------------------
 // Stripe webhook — subscriptions + one-off top-ups
 // ---------------------------------------------------------------------------
+// Stripe identifies the payer by customer id; the uid is only on the original
+// checkout session, so every later subscription event has to look the user up
+// by the stripeCustomerId the first webhook stored.
+//
+// Writes only on an actual change: Stripe emits customer.subscription.updated
+// for plenty of things that don't touch entitlement (a card updated, metadata
+// edited, cancel_at_period_end toggled), and re-writing "paid" over "paid" on
+// each one is pure write churn.
+async function setTierByCustomer(customerId, tier, reason) {
+  if (!customerId) return;
+  const snap = await db.collection("users")
+    .where("stripeCustomerId", "==", customerId).limit(1).get();
+  if (snap.empty) {
+    console.warn(`[Webhook] No user for customer ${customerId} (${reason}) — ignoring`);
+    return;
+  }
+  const ref = snap.docs[0].ref;
+  if ((snap.docs[0].data().tier || "free") === tier) return;
+  await ref.set({ tier }, { merge: true });
+  console.log(`[Webhook] ${ref.id} -> ${tier} (${reason})`);
+}
+
 exports.stripeWebhook = onRequest(
   { region: "europe-west1", secrets: [stripeSecretKey, stripeWebhookSecret] },
   async (req, res) => {
@@ -304,13 +327,27 @@ exports.stripeWebhook = onRequest(
     }
 
     if (event.type === "customer.subscription.deleted") {
-      const customerId = event.data.object.customer;
-      const snap = await db.collection("users")
-        .where("stripeCustomerId", "==", customerId).limit(1).get();
-      if (!snap.empty) {
-        await snap.docs[0].ref.set({ tier: "free" }, { merge: true });
-        console.log(`[Webhook] Downgraded customer ${customerId} to free`);
-      }
+      await setTierByCustomer(event.data.object.customer, "free", "subscription deleted");
+    }
+
+    // A subscription can stop paying without ever being deleted. Stripe's retry
+    // schedule leaves a failed renewal in "past_due" for WEEKS before it finally
+    // becomes "unpaid" or "canceled", and a paused subscription stops collecting
+    // indefinitely — in every one of those states the customer is not paying.
+    // Without this handler the tier simply stayed "paid" through all of it.
+    //
+    // Only "active"/"trialing" grants Pro. Note that cancel_at_period_end does
+    // NOT appear here as a status: the subscription stays "active" until the
+    // period actually ends, which is right — they paid for the month. And access
+    // comes back on its own when a retry succeeds, because that fires this same
+    // event with the status back to "active".
+    if (event.type === "customer.subscription.updated") {
+      const sub = event.data.object;
+      await setTierByCustomer(
+        sub.customer,
+        isPayingSubscription(sub) ? "paid" : "free",
+        `subscription ${sub.status}${sub.pause_collection ? " (paused)" : ""}`
+      );
     }
 
     res.json({ received: true });
