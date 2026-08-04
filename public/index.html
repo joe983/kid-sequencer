@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=80">
+<link rel="stylesheet" href="css/styles.css?v=81">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3419,12 +3419,21 @@ function createNoteBlock(r, note){
   // artwork as the tool button the child pressed. Keyed on len (a total function
   // over 1/2/4/8/16 — anything else simply gets no glyph).
   if(_fiveNote){
-    // A LONE 8th or 16th — one arriving from a saved tune or a scanned sheet,
-    // not part of a complete group — draws as a single flagged note. Using the
-    // tool artwork here would stamp a whole beamed group onto one note; a
-    // complete group gets its beam from _applyGroupGlyphs instead.
-    const single = (note.len === 1 || note.len === 2)
-      ? _singleNoteSvg(note.len === 1 ? 2 : 1) : null;
+    // A quarter, or a LONE 8th or 16th — one arriving from a saved tune or a
+    // scanned sheet, not part of a complete group — draws as a single stemmed
+    // note. Using the tool artwork for a sub-beat length would stamp a whole
+    // beamed group onto one note; a complete group gets its beam from
+    // _applyGroupGlyphs instead.
+    //
+    // The quarter is DRAWN (no flags) rather than taken from the ♩ character:
+    // where the ink sits inside the em box differs per font, so the measured
+    // nudge that centred it against the desktop stack ("Noto Music"/"Bravura"/
+    // "Arial Unicode MS"/"Segoe UI Symbol") pushed it visibly low on iOS and
+    // iPadOS, which have none of those fonts and fall back to serif. Drawn from
+    // the shared geometry it is box-aligned, so it centres identically on every
+    // platform and matches the other four lengths by construction.
+    const flags = note.len === 1 ? 2 : note.len === 2 ? 1 : note.len === 4 ? 0 : null;
+    const single = flags === null ? null : _singleNoteSvg(flags);
     const art = single ? null : NOTE_ART[note.len];
     if(single || art){
       const g = document.createElement("span");

@@ -3165,10 +3165,12 @@ html.fiveNote .noteBlock .noteGlyph svg{
   width: auto;
   display: block;
 }
-/* ♬ and ♩ render high within their em-box, so flex-centring the box does not
-   centre the visible ink (same reason as the learning-mode nudges above). */
-html.fiveNote .noteBlock .noteGlyph.txt[data-nv="1"]{ transform: translateY(0.30em); }
-html.fiveNote .noteBlock .noteGlyph.txt[data-nv="4"]{ transform: translateY(0.36em); }
+/* Every length in this view is now DRAWN (see _singleNoteSvg / _beamedGroupArt),
+   so there is nothing left to nudge: an SVG is centred by its own box. The two
+   rules that used to sit here corrected where ♩ and ♬ place their ink inside the
+   em box, measured against the desktop font stack — and that measurement is
+   exactly what made the quarter sit low on iOS/iPadOS, which have none of those
+   fonts. Don't reintroduce a per-glyph nudge; draw the note instead. */
 /* Belt and braces: a length glyph can never leak into the 8-row view. Learning
    mode is excluded — its data-kind glyph is a different feature entirely. */
 html:not(.fiveNote):not(.learning-mode) .noteBlock .noteGlyph{ display: none !important; }
