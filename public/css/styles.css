@@ -3241,7 +3241,7 @@ html:not(.fiveNote) .noteGroupStud{ display: none !important; }
      stems and beam hang to the RIGHT of each head, so geometric centring puts
      the visual weight off to one side). Both are in cell units, not percentages
      of the symbol's own height, so the offsets track the grid not the artwork. */
-  transform: translate(calc(var(--cell) * -0.05), calc(var(--cell) * -0.06));
+  transform: translate(calc(var(--cell) * -0.02), calc(var(--cell) * -0.06));
 }
 
 /* Drawn tool artwork for the two sub-beat lengths (see _toolArtFor). A single

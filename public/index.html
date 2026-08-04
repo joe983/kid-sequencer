@@ -12,7 +12,7 @@
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=79">
+<link rel="stylesheet" href="css/styles.css?v=80">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -3506,7 +3506,10 @@ function _singleNoteSvg(flags){
 function _beamedGroupArt(len, where){
   const n = NOTE_GROUP_SIZE[len] || 2;
   const grid = where !== "button";
-  const spacing = n === 2 ? (grid ? 154 : 110) : (grid ? 120 : 84);
+  // Grid spacing is wider than the button's: on the grid every head has to sit
+  // INSIDE its own square, clear of the black edges, leaving only the beam to
+  // cross them. The button has no squares to clear, so it stays compact.
+  const spacing = n === 2 ? (grid ? 180 : 110) : (grid ? 148 : 84);
   return _beamedGroupSvg(n, len === 1 ? 2 : 1, spacing);
 }
 
@@ -3533,10 +3536,11 @@ function _toolArtFor(steps){
 function _beamedGroupSvg(n, beams, spacing){
   const margin = NOTE_HEAD_RX + 16;                 // air outside the outer heads
   const w = margin * 2 + (n - 1) * spacing;
-  // beamGap is the air BETWEEN the two bars of a 16th group. Wider than it is
-  // strictly engraved, because at grid size two bars closer than their own
-  // thickness read as one thick smudge.
-  const beamH = 26, beamGap = 24;
+  // Thin bars, only slightly thicker than the 12-wide stems: the beam is the
+  // one part allowed to cross a square's black edge, so it has to read as a
+  // line rather than a slab. beamGap (air between a 16th group's two bars) is
+  // back to 16 — widening it was the wrong lever, the bars were just too fat.
+  const beamH = 16, beamGap = 16;
   const centres = Array.from({length: n}, (_, i) => margin + i * spacing);
 
   let s = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${NOTE_BOX_H}"`
