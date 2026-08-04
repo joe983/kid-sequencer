@@ -572,7 +572,18 @@ const FIVE_VIEW_MAXCELL = 78;                      // largest the centring solve
 const FIVE_VIEW_LS      = "kidseq_note_view";
 const FIVE_VIEW_AVAILABLE = !LEARN_LEVEL;          // inert on ?level=N and ?lesson=
 let _fiveNote = false;
-try{ _fiveNote = FIVE_VIEW_AVAILABLE && localStorage.getItem(FIVE_VIEW_LS) === "5"; }catch(e){}
+/* ?notes=5 / ?notes=8 opens straight into a view, so a teacher can hand out a
+   link (or a QR code made from it) that lands every device on the five-note
+   grid. Without it the choice is per-device localStorage that only the toggle
+   ever writes, so a fresh phone always got the 8-row view. The param wins over
+   the stored choice and is then remembered, so re-opening the tab without the
+   link keeps the same screen. Anything else in ?notes= is ignored. */
+const _notesParam = new URLSearchParams(location.search).get("notes");
+let _viewStored = null;
+try{ _viewStored = localStorage.getItem(FIVE_VIEW_LS); }catch(e){}
+const _viewPick = (_notesParam === "5" || _notesParam === "8") ? _notesParam : _viewStored;
+_fiveNote = FIVE_VIEW_AVAILABLE && _viewPick === "5";
+try{ if(FIVE_VIEW_AVAILABLE && _viewPick && _viewPick !== _viewStored) localStorage.setItem(FIVE_VIEW_LS, _viewPick); }catch(e){}
 if(_fiveNote) document.documentElement.classList.add("fiveNote");
 function viewRow0(){ return _fiveNote ? FIVE_VIEW_OFFSET : 0; }   // MODEL index of top visible row
 function viewRowCount(){ return _fiveNote ? FIVE_VIEW_ROWS : rows; }
