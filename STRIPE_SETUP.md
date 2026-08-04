@@ -128,17 +128,26 @@ checkout". Nothing in the deploy output mentions it. Step 4 is the guard.
    Adaptive only fills the unlisted currencies. If a USD checkout shows anything
    other than $5.99 at step 8, that assumption is wrong.
 
-2. **Create the live products/prices.** From `functions/`, with the **live** key:
+2. **Create the live products/prices, and write them straight into the config.**
+   From `functions/` (run `npm install` there first if you never have), with the
+   **live** key:
    ```powershell
-   $env:STRIPE_SECRET_KEY="sk_live_xxx"; npm run setup:stripe
+   $env:STRIPE_SECRET_KEY="sk_live_xxx"; npm run setup:stripe -- --write-env
    ```
-   It prints six live `price_…` IDs.
+   It creates the six products/prices, prints the live `price_…` IDs, and
+   rewrites the six price-ID lines of
+   [`functions/.env.kid-sequencer`](functions/.env.kid-sequencer) with them.
+   Nothing else in that file is touched. Drop `--write-env` if you would rather
+   paste them yourself.
 
-3. **Paste those six IDs over the existing lines in
-   [`functions/.env.kid-sequencer`](functions/.env.kid-sequencer).** That file
-   wins over the `defineString` defaults in `index.js`, so it is the only place
-   that has to change. Price IDs are config, not secrets — committing them is
-   fine and intended.
+3. **Check the diff.**
+   ```bash
+   git diff functions/.env.kid-sequencer
+   ```
+   Six lines should have changed and nothing else. That file wins over the
+   `defineString` defaults in `index.js`, so it is the only place that has to
+   change. Price IDs are config, not secrets — committing them is fine and
+   intended.
 
 4. **Pre-flight, with the live key still in the environment:**
    ```powershell
