@@ -386,6 +386,27 @@
 let CELL = 46;
 const GAP  = 4;
 
+/* Rhythm Trail's entry point — the mortar-board button — is hidden FOR NOW at
+   the owner's request. Nothing about the course is removed or disabled: the
+   lesson data still ships, the narration sprite and mascot still load,
+   goToLessons() still works, and ?lesson=a1..a5 / ?level=N still run the whole
+   thing. This switch only decides whether the button is on screen, so putting
+   it back is one word.
+
+   Hiding rather than removing the element matters for two measured reasons:
+   syncTopBarLoginPosition() anchors the login pill to the last VISIBLE button
+   in #controls (it filters on offsetWidth/offsetHeight, so display:none is
+   already handled), and _applyPrintScale measures the printed content bbox that
+   SHEET_GEOMETRY's grid insets are calibrated against — verified unchanged at
+   u0 0.07425 / v0 0.20202 / u1 0.95248 / v1 0.83115 with the button hidden, so
+   the live worksheet scanner is untouched. Re-check with
+   KidSequencer.Scan.printMarkInsets() if this row ever moves. */
+const SHOW_LESSONS_BTN = false;
+if(!SHOW_LESSONS_BTN){
+  const _lessonsBtnEl = document.getElementById("lessonsBtn");
+  if(_lessonsBtnEl) _lessonsBtnEl.style.display = "none";
+}
+
 const EIGHTH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
   <text x="16" y="22" text-anchor="middle"
         font-size="24"
