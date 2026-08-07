@@ -5277,7 +5277,12 @@ function closeCameraModal(){
    into longer notes via the gap rule → place notes (routing to the right grid
    template). The QR only changes how we interpret the frame, never the lens. */
 
-const SCAN_WORK_W      = 420;   // working resolution width for QR + marker detection
+const SCAN_WORK_W      = 720;   // working resolution width for QR + marker detection.
+                                // Bumped 420→720 so a printed ring's HOLE spans ≥6px
+                                // (SCAN_RING_HOLE_PX) in the working frame and survives
+                                // blur/JPEG — at 420 the holes closed up and every ring
+                                // fell back to the solid pool. The local-field radius
+                                // (min(w,h)/8) scales with this automatically. See NEXT-SCAN.md §1.
 const SCAN_LOCK_FRAMES = 3;     // consecutive good frames before auto-capture
 const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is heavy)
 const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local paper
@@ -6279,8 +6284,11 @@ function _applyScannedNotes(notes){
    matching grid (?level=N or the param-less main page). ---- */
 function _routeScannedNotes(geom, notes){
   if(geom.levelKey === CURRENT_LEVEL_KEY){
-    _applyScannedNotes(notes);
+    // Close FIRST so a successful scan always dismisses the modal and reveals the
+    // grid — even if applying the notes below were to throw, the camera never
+    // stays stuck open over the result.
     closeCameraModal();
+    _applyScannedNotes(notes);
     try{ showSaveToast("loaded"); }catch(e){}
     return;
   }
@@ -7946,8 +7954,10 @@ let _preprintPageOrigin = null;
    verify on paper, plus a PRINT_MARK_K bump — at 0.56 the mark lands ~6px across
    in the working frame, and a hole that small does not survive blur. Read
    NEXT-SCAN.md before changing it. */
-const PRINT_MARK_SHAPE = "solid";
-const PRINT_MARK_K = 0.56;     // black square side, in cells (≈7mm on A4 landscape)
+const PRINT_MARK_SHAPE = "ring";
+const PRINT_MARK_K = 0.9;      // ring outer side, in cells — bumped from 0.56 so the
+                               // hole survives blur/JPEG (~10px mark, ~4px hole in the
+                               // 420px working frame). See NEXT-SCAN.md §1.
 const PRINT_MARK_GAP_K = 0.37; // clear space between content edge and mark, in cells
 let _printMarkBox = null;      // outer extent of the 4 marks, stage coords
 
@@ -8008,9 +8018,12 @@ function _buildPrintMarks(pr, content){
     m.style.top  = y + 'px';
     m.style.width = size + 'px';
     m.style.height = size + 'px';
-    // Wall is 30% of the side — thick enough to survive a camera, thin enough to
-    // leave a hole worth detecting. Inline because the side is inline too.
-    if(PRINT_MARK_SHAPE === 'ring') m.style.borderWidth = (size * 0.3) + 'px';
+    // Wall is 22% of the side — thinner than the original 30% so the HOLE is a
+    // bigger fraction of the mark (holeFrac ~0.31 vs ~0.16, solidity ~0.69), which
+    // both clears SCAN_RING_HOLE_MIN comfortably and makes the absolute hole wider
+    // in the working frame. Still thick enough to survive a camera. Inline because
+    // the side is inline too.
+    if(PRINT_MARK_SHAPE === 'ring') m.style.borderWidth = (size * 0.22) + 'px';
     page.appendChild(m);
   });
 
