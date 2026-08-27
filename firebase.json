@@ -9,6 +9,14 @@
       "samples/melodic/**",
       "scan-tests.html",
       "scan-fixtures/**"
+    ],
+    "headers": [
+      {
+        "source": "/school-music-run/index.html",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+        ]
+      }
     ]
   },
   "firestore": {

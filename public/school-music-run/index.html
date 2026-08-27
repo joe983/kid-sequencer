@@ -985,6 +985,7 @@
   // =============================================================
   const LB_KEY = 'dlts-runner-leaderboard-v1';
   const LAST_NAME_KEY = 'dlts-runner-last-name-v1';
+  const PENDING_KEY = 'dlts-runner-pending-v1';
   const LB_MAX = 10;
 
   function loadBoard() {
@@ -1015,6 +1016,46 @@
     return a.ts - b.ts;
   }
 
+  // Identity of a single run. Client and server clocks differ, so `ts` can't be
+  // part of the key — the local copy and the cloud copy of one run must fold
+  // together into a single row.
+  function entryKey(e) { return e.name + '|' + e.level + '|' + e.score; }
+
+  // Union of two boards, newest-wins-nothing: a local score is NEVER dropped
+  // just because the cloud hasn't received it yet. Replacing (rather than
+  // merging) is what used to delete scores when a write hadn't landed.
+  function mergeBoards(a, b) {
+    const seen = new Map();
+    for (const e of [].concat(a || [], b || [])) {
+      if (!isEntryShape(e)) continue;
+      const k = entryKey(e);
+      const prev = seen.get(k);
+      if (!prev) { seen.set(k, e); continue; }
+      // Same run from both sides: keep the earlier timestamp so tie-breaks
+      // stay stable, but don't lose the character portrait if only one has it.
+      const keep  = e.ts < prev.ts ? e : prev;
+      const other = keep === e ? prev : e;
+      if (!keep.look && other.look) keep.look = other.look;
+      seen.set(k, keep);
+    }
+    return Array.from(seen.values()).sort(boardCompare).slice(0, LB_MAX);
+  }
+
+  // Scores that haven't reached the cloud yet (offline, or the page was
+  // reloaded before the write finished). Retried on the next load.
+  function loadPending() {
+    try {
+      const raw = localStorage.getItem(PENDING_KEY);
+      const p = raw ? JSON.parse(raw) : [];
+      return Array.isArray(p) ? p.filter(isEntryShape) : [];
+    } catch (e) { return []; }
+  }
+
+  function savePending(list) {
+    try { localStorage.setItem(PENDING_KEY, JSON.stringify(list.slice(0, 50))); }
+    catch (e) { /* ignore — private mode etc */ }
+  }
+
   // Does this run beat the 10th-place entry?
   function qualifies(entry, board) {
     if (board.length < LB_MAX) return true;
@@ -1033,20 +1074,51 @@
       .slice(0, 10) || 'PLAYER';
   }
 
-  // Single writer for scores. Today: localStorage. Tomorrow: server POST.
+  // Single writer for scores. Writes the local cache optimistically, then
+  // pushes to the shared cloud board and pulls the true global standings back.
   // `look` is the character the run was played as, kept so the board can show a
   // portrait. It is optional — entries saved before this existed still load.
   function submitScore({ name, level, score, look }) {
     const entry = { name: sanitizeName(name), level, score, ts: Date.now() };
     if (look) entry.look = { hair: look.hair, hairColor: look.hairColor, skin: look.skin };
-    const board = loadBoard();
-    board.push(entry);
-    board.sort(boardCompare);
-    const top = board.slice(0, LB_MAX);
+    const top = mergeBoards(loadBoard(), [entry]);
     saveBoard(top);
     try { localStorage.setItem(LAST_NAME_KEY, entry.name); } catch (e) {}
+    // Queue BEFORE sending. If the write is cut short — "Play Again" reloads
+    // the page mid-request — or the device is offline, the score waits in the
+    // queue and is retried on the next load instead of being lost.
+    savePending(loadPending().concat([entry]));
+    flushPending().then(refreshCloudBoard).catch(() => {});
     return { board: top, entry };
   }
+
+  // Send anything still queued. Entries that fail stay queued for next time.
+  async function flushPending() {
+    if (!window.RunnerCloud) return;
+    const queue = loadPending();
+    if (!queue.length) return;
+    const left = [];
+    for (const e of queue) {
+      try { await window.RunnerCloud.submit(e); }
+      catch (err) { left.push(e); }
+    }
+    savePending(left);
+  }
+
+  // Merge the shared top-10 into the local board and re-render. Safe to call
+  // before Firebase has loaded (it just no-ops).
+  async function refreshCloudBoard() {
+    if (!window.RunnerCloud) return;
+    try {
+      await flushPending();
+      const cloud = await window.RunnerCloud.fetchTop(LB_MAX);
+      saveBoard(mergeBoards(loadBoard(), cloud));
+      renderTitleLeaderboard();
+    } catch (e) {
+      console.warn('[leaderboard] cloud refresh failed:', e);
+    }
+  }
+  window.refreshCloudBoard = refreshCloudBoard;
 
   // =============================================================
   // Canvas + helpers
@@ -3397,7 +3469,85 @@
     requestAnimationFrame(frame);
   }
   renderTitleLeaderboard();
+  refreshCloudBoard();
   requestAnimationFrame(frame);
+  </script>
+
+  <script type="module">
+  // =============================================================
+  // Cloud leaderboard bridge — shared global scores via Firebase.
+  // Reuses the existing "kid-sequencer" Firestore project. Scores go
+  // to an isolated `runnerScores` collection (rules live in the
+  // kid-sequencer repo's firestore.rules). Best-effort: if Firebase
+  // can't load (offline, or opened from file://), the game silently
+  // falls back to the localStorage board and keeps working.
+  // =============================================================
+  const firebaseConfig = {
+    apiKey: "AIzaSyBokU1u4hJIxZ0Y4U9BxQreI3hnxEJzuwc",
+    authDomain: "kid-sequencer.firebaseapp.com",
+    projectId: "kid-sequencer",
+    storageBucket: "kid-sequencer.firebasestorage.app",
+  };
+
+  const COLL = "runnerScores";
+  const SORT_BIG = 1000000000;   // score kept below this so sortKey orders cleanly
+
+  try {
+    // Dynamic imports so an offline load (or file://) fails cleanly into the
+    // local-board fallback instead of throwing an uncaught module error.
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+    const {
+      getFirestore, collection, addDoc, getDocs,
+      query, orderBy, limit, serverTimestamp
+    } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+
+    const db = getFirestore(initializeApp(firebaseConfig));
+    const col = collection(db, COLL);
+
+    window.RunnerCloud = {
+      // Write one score row. Resolves on success, rejects on failure.
+      async submit(entry) {
+        const level = Math.max(0, Math.min(100000, Math.round(entry.level || 0)));
+        const score = Math.max(0, Math.min(SORT_BIG - 1, Math.round(entry.score || 0)));
+        const row = {
+          name: String(entry.name || 'PLAYER').slice(0, 10),
+          level, score,
+          sortKey: level * SORT_BIG + score,
+          createdAt: serverTimestamp(),
+        };
+        // Only include defined look fields — Firestore rejects `undefined`.
+        if (entry.look && typeof entry.look === 'object') {
+          const look = {};
+          if (entry.look.hair != null)      look.hair = entry.look.hair;
+          if (entry.look.hairColor != null) look.hairColor = entry.look.hairColor;
+          if (entry.look.skin != null)      look.skin = entry.look.skin;
+          if (Object.keys(look).length) row.look = look;
+        }
+        await addDoc(col, row);
+      },
+      // Read the global top-N (highest sortKey first).
+      async fetchTop(n) {
+        const snap = await getDocs(query(col, orderBy('sortKey', 'desc'), limit(n)));
+        const rows = [];
+        snap.forEach((d) => {
+          const v = d.data();
+          rows.push({
+            name: v.name,
+            level: v.level,
+            score: v.score,
+            look: v.look || null,
+            ts: (v.createdAt && v.createdAt.toMillis) ? v.createdAt.toMillis() : Date.now(),
+          });
+        });
+        return rows;
+      },
+    };
+
+    // Firebase is ready — pull the live board now.
+    if (typeof window.refreshCloudBoard === 'function') window.refreshCloudBoard();
+  } catch (e) {
+    console.warn('[leaderboard] cloud unavailable — using local board:', e);
+  }
   </script>
 </body>
 </html>
