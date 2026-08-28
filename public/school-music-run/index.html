@@ -1474,8 +1474,20 @@
   // =============================================================
   const input = { left: false, right: false, jumpHeld: false, jumpPressed: false };
 
+  // Keys typed into a text field (the leaderboard name box) must never reach
+  // the game controls: without this, typing a name containing "r" hits the
+  // restart binding and reloads the page before the score can be submitted,
+  // and space is swallowed as a jump instead of typing.
+  function isTypingTarget(e) {
+    const t = e.target;
+    if (!t) return false;
+    return t.tagName === "INPUT" || t.tagName === "TEXTAREA"
+        || t.tagName === "SELECT" || t.isContentEditable === true;
+  }
+
   addEventListener('keydown', (e) => {
     if (e.repeat) return;
+    if (isTypingTarget(e)) return;
     if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') input.left = true;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = true;
     if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
@@ -1487,6 +1499,7 @@
     if (e.key === 'r' || e.key === 'R') resetGame();
   });
   addEventListener('keyup', (e) => {
+    if (isTypingTarget(e)) return;
     if (e.key === 'ArrowLeft'  || e.key === 'a' || e.key === 'A') input.left = false;
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') input.right = false;
     if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
