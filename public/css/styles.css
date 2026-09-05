@@ -773,16 +773,16 @@ body.loggedIn #robotLogo{
       align-items: center;
       justify-content: center;
       box-sizing: border-box;
-      min-width: calc(var(--cell) * 0.52);
-      height: calc(var(--cell) * 0.52);
-      padding: 0 calc(var(--cell) * 0.06);
+      min-width: calc(var(--cell) * var(--beatBadgeK, 0.52));
+      height: calc(var(--cell) * var(--beatBadgeK, 0.52));
+      padding: 0 calc(var(--cell) * var(--beatBadgePadK, 0.06));
       border: 3px solid #1d1d1d;
       border-radius: 999px;
       background: #ffffff;
       box-shadow: 0 3px 0 rgba(0,0,0,0.08);
       font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", Arial, sans-serif;
       font-weight: 900;
-      font-size: calc(var(--cell) * 0.3);
+      font-size: calc(var(--cell) * var(--beatBadgeFontK, 0.3));
       line-height: 1;
       color: #1f2a44;
     }
@@ -3153,6 +3153,19 @@ html.beginner-view #viewToggleBtn{ display: flex; }
    which keeps its reserved width (fitToViewport's `rightW`) and simply shows
    nothing — the grid stays centred against the same budget as every other view. */
 html.beginner-view #masterVolUI{ display: none; }
+/* No staff on the first-notes face — reading notation is a later step than
+   finding out that tapping a square makes a sound. Beats .learning-mode's
+   `display:inline-flex` on specificity (id + class + element). */
+html.beginner-view #staveBtn{ display: none; }
+/* This view's cell is 140px against the full sequencer's 64, so the badge
+   fractions that suit that grid would print a 73px pill with 42px digits above
+   it. These land the badge at roughly the size it is in the full view — small
+   labels over big squares, which is the way round a beginner needs it. */
+html.beginner-view{
+  --beatBadgeK: 0.24;
+  --beatBadgePadK: 0.028;
+  --beatBadgeFontK: 0.135;
+}
 
 /* No printable sheet template exists for the 5-note layout (see _buildPrintMarks). */
 html.fiveNote #printBtn{ display: none !important; }
