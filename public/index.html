@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=83">
+<link rel="stylesheet" href="css/styles.css?v=84">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -599,9 +599,28 @@ const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
    mode hides #printBtn (.learning-mode #printBtn{display:none}), so there is no
    way to print one yet. Give them measured insets if that changes. */
 const SHEET_GEOMETRY = {
-  "kidseq:main": { levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
+  "kidseq:main": { view: "full", levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
                    grid: { u0: 0.07425, v0: 0.20202, u1: 0.95248, v1: 0.83115 },
                    quadAspect: 1.438 },
+  /* The two simpler faces print their own sheets (see VIEW ROUTING). Each is a
+     different printed layout — different row count, cell size and, on /03, a
+     different column count — so each needs its own measured insets and aspect;
+     re-derive with printMarkInsets() from that view and paste back.
+
+     ⚠️ These two are measured, NOT yet confirmed against a real printed sheet.
+     printMarkInsets() reads "kidseq:main" as v0 0.20939 / v1 0.82296 where the
+     committed (production-verified) values are 0.20202 / 0.83115 — a ~0.008
+     vertical disagreement that predates this work and reproduces identically on
+     unmodified main, so the same bias probably sits in the two rows below. The
+     horizontal insets agree to 5 decimal places on main, so u0/u1 are trusted.
+     Print one of each and scan it before treating these as settled — see
+     NEXT-SCAN.md. */
+  "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
+                    grid: { u0: 0.06284, v0: 0.26038, u1: 0.95978, v1: 0.77892 },
+                    quadAspect: 1.863 },
+  "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
+                    grid: { u0: 0.06766, v0: 0.31660, u1: 0.91524, v1: 0.85546 },
+                    quadAspect: 1.705 },
   "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl2": { levelKey: "2", rows: 2, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl3": { levelKey: "3", rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 }
@@ -6131,10 +6150,22 @@ function _cornerMarkersFrom(imgData, diag){
    Nearest is measured on a LOG scale because note lengths are geometric, so
    the boundary between "quarter" and "half" sits at 5.66 columns rather than 6.
    Ties go up, matching the intuition that a block is at least as long as drawn. */
+/* Note lengths a SCANNED sheet may produce, in columns.
+
+   Deliberately NOT the tool buttons' lengths. A child colouring a worksheet
+   colours squares, and what comes back should be what they coloured — so every
+   power-of-two run the grid can hold is legal, even where no button places it.
+   On /03 both buttons are one beat (2 columns) wide, so reading off the buttons
+   would round a single coloured square up to a whole beat and move it; on /02
+   the buttons place beamed groups, but one shaded square is a single 8th and
+   should come back as one. Off-beat starts are kept as drawn for the same
+   reason — the beat lock belongs to tapping, not to reading a child's pencil.
+
+   Powers of two because they are the note values the sequencer can represent;
+   a 3-square run still has to land on one of them (see _snapNoteLen). */
 function _legalNoteLens(){
-  const set = new Set();
-  for(const t of toolSteps) if(t && t.steps > 0) set.add(t.steps);
-  const arr = Array.from(set).sort((a, b) => a - b);
+  const arr = [];
+  for(let L = 1; L <= cols; L *= 2) arr.push(L);
   return arr.length ? arr : [1];
 }
 
@@ -6317,30 +6348,38 @@ function _gridRegistration(imgData, geom, mapPoint){
   return med(interior) - med(border);
 }
 
-/* ---- apply a scanned note list onto the CURRENT page's grid ---- */
+/* ---- apply a scanned note list onto the CURRENT page's grid ----
+   The scanner counts rows down the printed sheet, so row 0 is the top row a
+   child can SEE. On /02 that is not model row 0: the five-note view is a window
+   over the bottom five rows of an unchanged 8-row model (see viewRow0), so the
+   sheet's rows have to be shifted down into the model or every scanned note
+   lands in one of the three rows this view doesn't draw — invisible and silent.
+   viewRow0() is 0 everywhere else, so this is a no-op on the other two sheets. */
 function _applyScannedNotes(notes){
   pushUndo();
   notesByRow = Array.from({length: rows}, () => []);
   occ        = Array.from({length: rows}, () => Array(cols).fill(null));
   nextId     = 1;
   const kind = LEARN_LEVEL ? (LEARN_LEVEL.selectedKind || null) : null;
+  const row0 = viewRow0();
   for(const n of notes){
-    if(n.row >= 0 && n.row < rows && n.start >= 0 && canPlace(n.row, n.start, n.len)){
-      placeNote(n.row, n.start, n.len, kind);
+    const r = n.row + row0;
+    if(n.row >= 0 && r < rows && n.start >= 0 && canPlace(r, n.start, n.len)){
+      placeNote(r, n.start, n.len, kind);
     }
   }
   redrawAllNotes();
 }
 
 /* ---- route a scan to the right template: apply in place when the scanned
-   sheet matches this page, otherwise stash the notes and navigate to the
-   matching grid (?level=N or the param-less main page). ---- */
+   sheet matches this page, otherwise stash the notes and navigate to the view
+   that owns that sheet. ----
+   Each of the three views prints its own sheet now, so "does this sheet belong
+   here" is a comparison of sheet identity, not of level key — /02 and /03 both
+   carry a null levelKey, as does the full grid, and matching on that alone
+   would drop an 8-row worksheet onto a 3-row grid. */
 function _routeScannedNotes(geom, notes){
-  // A printed worksheet is always the 8-row sheet, so a scan taken on the
-  // five-note view does NOT belong to this page even though both carry a null
-  // level key — three of its rows would land where they can't be seen. Send it
-  // down the redirect path below instead.
-  if(geom.levelKey === CURRENT_LEVEL_KEY && VIEW === "full"){
+  if(geom.view === VIEW){
     // Close FIRST so a successful scan always dismisses the modal and reveals the
     // grid — even if applying the notes below were to throw, the camera never
     // stays stuck open over the result.
@@ -6350,10 +6389,7 @@ function _routeScannedNotes(geom, notes){
     return;
   }
   try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes })); }catch(e){}
-  // Worksheets are always printed from the full sequencer, so route to its URL
-  // explicitly — location.pathname would keep a scan taken on /02 or /03 on that
-  // view, which is precisely the template that didn't match.
-  const base = VIEW_URL.full;
+  const base = VIEW_URL[geom.view] || VIEW_URL.full;
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
 }
 
@@ -6364,10 +6400,15 @@ function _routeScannedNotes(geom, notes){
    that can be printed — learning mode hides the Print button — so the template
    is simply "the one this page is". Returns null on pages with no printable
    sheet, which disables sheet scanning there rather than guessing. */
+/* Which template the page in front of the camera IS. Each of the three public
+   views prints its own sheet, so each has its own id; ?level=N and ?lesson=
+   still print nothing (their layouts have no measured insets, and a template
+   without `grid` is skipped rather than guessed at). */
+const VIEW_SHEET_ID = { full: "kidseq:main", five: "kidseq:main5", three: "kidseq:main3" };
 function _currentSheetId(){
-  if(LEARN_LEVEL) return null;             // lesson/level pages can't print a sheet
-  const geom = SHEET_GEOMETRY["kidseq:main"];
-  return (geom && geom.grid) ? "kidseq:main" : null;
+  if(LEARN_LEVEL && VIEW !== "three") return null;   // ?level=N / ?lesson= pages
+  const geom = SHEET_GEOMETRY[VIEW_SHEET_ID[VIEW]];
+  return (geom && geom.grid) ? VIEW_SHEET_ID[VIEW] : null;
 }
 
 /* The homography maps the unit square onto the 4 corner MARKS, which bound the
@@ -8052,12 +8093,11 @@ function _clearPrintMarks(){
 function _buildPrintMarks(pr, content){
   const page = document.getElementById('page');
   if(!page || !content) return null;
-  // The 5-note view is not a scannable template: its printed layout does not match
-  // SHEET_GEOMETRY["kidseq:main"]. Ctrl+P still fires beforeprint even though the
-  // Print button is hidden, so refuse HERE — marks on a 5-row sheet would produce
-  // a page that looks scannable and reads back garbage. With no marks the scanner
-  // simply refuses at `no-sheet`.
-  if(_fiveNote){ _clearPrintMarks(); return null; }
+  // Only mark a page this build can actually read back. Ctrl+P fires beforeprint
+  // even where the Print button is hidden, and marks on a layout with no measured
+  // insets would produce a sheet that LOOKS scannable and reads back garbage —
+  // with no marks the scanner simply refuses at `no-sheet`.
+  if(!_currentSheetId()){ _clearPrintMarks(); return null; }
   _clearPrintMarks();
 
   const box = (id) => {
@@ -8067,14 +8107,19 @@ function _buildPrintMarks(pr, content){
     if(r.width <= 0 || r.height <= 0) return null;   // hidden (e.g. #aiBtn for guests)
     return { x: r.left - pr.left, r: r.right - pr.left };
   };
-  // Centre line of each outer column. Fall back to the column container if a
-  // specific control is hidden, then to the content edge, so this can never
-  // produce a degenerate quad.
-  const centreOf = (ids, fallbackEdge) => {
+  // Centre line of each outer column, falling back to the column container if a
+  // specific control is hidden. Returns null when the whole column is empty —
+  // the caller then places the mark CLEAR of the content instead, the way the
+  // top and bottom marks always are. Returning the content edge here (as this
+  // used to) centres the mark exactly on the grid's own border, which both
+  // buries it in the grid's ink and puts grid ink outside the quad: the two
+  // things `edge` and `marks-not-outermost` exist to refuse. /03 hits this —
+  // its right column is empty, so nothing in it has a measurable box.
+  const centreOf = (ids) => {
     let lo = Infinity, hi = -Infinity;
     ids.forEach(id => { const b = box(id); if(!b) return;
       lo = Math.min(lo, b.x); hi = Math.max(hi, b.r); });
-    return (lo < hi) ? (lo + hi) / 2 : fallbackEdge;
+    return (lo < hi) ? (lo + hi) / 2 : null;
   };
 
   const cell = parseFloat(getComputedStyle(document.documentElement)
@@ -8082,8 +8127,10 @@ function _buildPrintMarks(pr, content){
   const size = PRINT_MARK_K * cell;
   const gap  = PRINT_MARK_GAP_K * cell;
 
-  const leftX  = centreOf(['titleBox', 'toolsList', 'tools'], content.minX);
-  const rightX = centreOf(['tempoControls', 'aiBtn', 'rightCol'], content.maxX);
+  const outL = content.minX - gap - size / 2;
+  const outR = content.maxX + gap + size / 2;
+  const leftX  = centreOf(['titleBox', 'toolsList', 'tools'])       ?? outL;
+  const rightX = centreOf(['tempoControls', 'aiBtn', 'rightCol'])   ?? outR;
   const topY   = content.minY - gap - size / 2;
   const botY   = content.maxY + gap + size / 2;
   if(!(rightX > leftX && botY > topY)) return null;
@@ -8244,8 +8291,9 @@ window.addEventListener('beforeprint', _applyPrintScale);
 window.addEventListener('afterprint', _restorePrintScale);
 
 function printSheet(){
-  // window.printSheet is global; the 5-note view has no printable sheet template.
-  if(_fiveNote) return;
+  // window.printSheet is global, so guard on the same thing the marks do: a view
+  // with no measured template can't produce a sheet anyone could scan back.
+  if(!_currentSheetId()) return;
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
   try{ window.print(); }catch(e){ console.warn('print failed', e); }

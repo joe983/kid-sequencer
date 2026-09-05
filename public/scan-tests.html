@@ -286,6 +286,85 @@ async function run(){
     if(!ok) fails.push("length "+n);
   }
 
+  /* The two simpler faces print their own sheets, and the thing that matters
+     about them is that a scan gives back what the child COLOURED — not what
+     that view's buttons happen to place. /03's two buttons are both one beat
+     (2 columns) wide, so reading the legal lengths off the buttons would round
+     a single coloured square up to a whole beat and shift it onto the beat;
+     /02's buttons place beamed groups, but one shaded square is a single 8th.
+     Off-beat starts survive for the same reason: the beat lock is a property of
+     tapping, not of reading a pencil mark. */
+  /* Each template prints a differently-shaped sheet, so each fixture needs a
+     quad of ITS aspect — the default one here is the 8-row sheet's 1.41, and
+     feeding that to a 1.86 template is correctly refused as quad-implausible.
+     Built from the geometry's own quadAspect so these can't drift apart. */
+  const quadFor = (aspect, skew) => {
+    const w = 340, h = Math.round(w / aspect);
+    const x0 = Math.round((FRAME_W - w) / 2), y0 = Math.round((FRAME_H - h) / 2);
+    const s = skew || 0;
+    return [{x:x0+s*0.5, y:y0}, {x:x0+w, y:y0+s*0.6},
+            {x:x0+w-s*0.5, y:y0+h}, {x:x0, y:y0+h-s*0.6}];
+  };
+  const VIEW_SHEETS = [
+    { id:"kidseq:main5", legal:[1,2,4,8,16],
+      cases:[
+        { name:"5-note · plain",        opt:{cells:[[0,0],[2,5],[4,12]]}, want:"0:0+1 2:5+1 4:12+1",
+          why:"three coloured squares on the five-row sheet come back as three notes" },
+        { name:"5-note · single 16th",  opt:{cells:[[1,3]]},              want:"1:3+1",
+          why:"one square is one 16th, even though this view's button places a beamed pair" },
+        { name:"5-note · off-beat",     opt:{cells:[[3,1]]},              want:"3:1+1",
+          why:"a square that is not on a beat stays where it was coloured" },
+        { name:"5-note · bottom row",   opt:{cells:[[4,15]]},             want:"4:15+1",
+          why:"the last row and last column are both reachable — geometry is not clipped" },
+        { name:"5-note · askew",        opt:{cells:[[0,0],[4,15]], askew:true},  want:"0:0+1 4:15+1",
+          why:"photographed at an angle, the homography still lands on the right cells" },
+        { name:"5-note · run of 4",     opt:{runs:[[2,4,4]]},             want:"2:4+4",
+          why:"a continuous block is one held note, not four" }
+      ] },
+    { id:"kidseq:main3", legal:[1,2,4,8],
+      cases:[
+        { name:"3-note · plain",        opt:{cells:[[0,0],[1,2],[2,4]]},  want:"0:0+1 1:2+1 2:4+1",
+          why:"three coloured squares on the three-row sheet come back as three notes" },
+        { name:"3-note · single 8th",   opt:{cells:[[1,2]]},              want:"1:2+1",
+          why:"THE case: one square must stay one 8th, not round up to the 2-column beat" },
+        { name:"3-note · off-beat",     opt:{cells:[[0,1]]},              want:"0:1+1",
+          why:"column 1 is the second half of beat 1 — colouring it there keeps it there" },
+        { name:"3-note · beat pair",    opt:{cells:[[2,0],[2,1]]},        want:"2:0+1 2:1+1",
+          why:"two squares coloured separately are two 8ths, because the gap between them is white" },
+        { name:"3-note · held beat",    opt:{runs:[[2,0,2]]},             want:"2:0+2",
+          why:"colouring straight through the gap makes ONE quarter — that is the difference" },
+        { name:"3-note · last cell",    opt:{cells:[[2,7]]},              want:"2:7+1",
+          why:"the far corner of the smallest grid still maps inside the sheet" },
+        { name:"3-note · askew",        opt:{cells:[[0,0],[2,7]], askew:true},  want:"0:0+1 2:7+1",
+          why:"photographed at an angle, the smallest grid still registers" }
+      ] }
+  ];
+  for(const sheet of VIEW_SHEETS){
+    const VG = S.SHEET_GEOMETRY[sheet.id];
+    if(!VG || !VG.grid){
+      addRow(sheet.id, "-", "no grid insets", "measured insets",
+             "template is unscannable until printMarkInsets() values are pasted in", false);
+      fails.push(sheet.id + " has no grid insets");
+      continue;
+    }
+    for(const t of sheet.cases){
+      const opt = Object.assign({}, t.opt,
+        { quad: quadFor(VG.quadAspect, t.opt.askew ? 16 : 0) });
+      delete opt.askew;
+      const d = S.diagnose(makeSheet(S, VG, opt), sheet.id);
+      const got = fmtNotes(d.notes);
+      const pass = d.verdict === "ok" && got === t.want;
+      addRow(t.name, d.verdict, got, t.want, t.why, pass);
+      results.push({name:t.name, pass, verdict:d.verdict, got});
+      if(!pass) fails.push(t.name);
+      for(const n of (d.notes||[])) if(!sheet.legal.includes(n.len)){
+        fails.push(t.name+" illegal length "+n.len);
+        addRow(t.name+" · legal lengths", "-", "len "+n.len, sheet.legal.join("/"),
+               "this grid cannot hold that length", false);
+      }
+    }
+  }
+
   /* Real camera frames — the authority. Synthetic sheets misled us twice, so
      every frame the owner ever sent is kept here with what the CURRENT pipeline
      should make of it. The verdicts recorded in the original logs are NOT used:

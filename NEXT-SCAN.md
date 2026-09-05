@@ -293,3 +293,45 @@ above came from a number this panel printed.
   ink — use the `scribble` option.
 - **A run only merges into one note if the colouring crosses the gaps** between
   cells, which real scribble does and a per-cell generator does not.
+
+## ⚠️ /02 and /03 sheets are measured but NOT paper-verified (2026-09-05)
+
+The five-note (`/02`) and first-notes (`/03`) views now print and scan their own
+sheets, `SHEET_GEOMETRY["kidseq:main5"]` and `["kidseq:main3"]`. Their insets and
+`quadAspect` came from `printMarkInsets()` plus a mark-quad read, both taken in
+one pass on one machine — **no printed sheet has been photographed and scanned
+back yet.** Do that before trusting them the way `kidseq:main` is trusted.
+
+**The reason to be careful.** On the SAME instrument, `kidseq:main` measures
+
+| | u0 | v0 | u1 | v1 | aspect |
+|---|---|---|---|---|---|
+| committed (production-verified) | 0.07425 | 0.20202 | 0.95248 | 0.83115 | 1.438 |
+| `printMarkInsets()` today        | 0.07425 | 0.20939 | 0.95248 | 0.82296 | 1.403 |
+
+The horizontal insets agree to five decimal places; the vertical ones are ~0.008
+apart and the aspect 2.4% low. **This predates the /02+/03 work** — unmodified
+`main` at `?v=81` measures byte-identically to the branch that added them, so it
+is not a regression, and it is not measurement noise either: repeated calls, a
+fresh load, a 1440x900 viewport and `await document.fonts.ready` all return the
+same numbers. Ruled out so far: stale marks inflating the content box, first-call
+vs later-call state, viewport size, web fonts (the app uses none), and
+`@media print` hiding `#beatHeader` (it doesn't).
+
+So whatever produced the committed values is not what `printMarkInsets()` reports
+now, and the two new templates were measured with the reporting instrument. They
+very likely carry the same ~0.008 vertical bias. That is inside what the pipeline
+tolerates in practice — `kidseq:main` has been scanning real sheets correctly
+with exactly that disagreement — but it is unproven for a sheet nobody has
+printed.
+
+**To settle it:** print one `/02` and one `/03` sheet, photograph each, and run
+them through `?scandebug=1`. If `grid-misregistered` fires or the registration
+score sits near `SCAN_REG_MIN`, re-derive that template's `v0`/`v1` from the
+photograph rather than from the DOM. Commit the frames to
+`public/scan-fixtures/` and add them to the REAL block in `scan-tests.html`,
+which is the only part of that suite that has ever caught something the
+synthetic sheets agreed with.
+
+Related open item: the ring-mark reprint above needs a printer too — do both in
+one sitting.

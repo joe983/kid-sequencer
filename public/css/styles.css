@@ -3157,6 +3157,10 @@ html.beginner-view #masterVolUI{ display: none; }
    finding out that tapping a square makes a sound. Beats .learning-mode's
    `display:inline-flex` on specificity (id + class + element). */
 html.beginner-view #staveBtn{ display: none; }
+/* /03 prints and scans its own sheet, so it keeps Print even though .learning-mode
+   hides it for ?level=N (which has no measured template). Same id+class+element
+   specificity trick as the toggle button above. */
+html.beginner-view #printBtn{ display: inline-flex !important; }
 /* This view's cell is 140px against the full sequencer's 64, so the badge
    fractions that suit that grid would print a 73px pill with 42px digits above
    it. These land the badge at roughly the size it is in the full view — small
@@ -3167,8 +3171,8 @@ html.beginner-view{
   --beatBadgeFontK: 0.135;
 }
 
-/* No printable sheet template exists for the 5-note layout (see _buildPrintMarks). */
-html.fiveNote #printBtn{ display: none !important; }
+/* /02 prints its own sheet now (SHEET_GEOMETRY["kidseq:main5"]), so the rule that
+   used to hide Print here is gone. */
 
 /* The volume fader's default height hardcodes 8 rows (cell*8 - 322), which at
    cell 78 would grow #rightCol by 112px; scaling it to 5 rows instead leaves a
