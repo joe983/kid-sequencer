@@ -16,7 +16,10 @@ const MIME = {
 
 http.createServer((req, res) => {
   const url = req.url.split('?')[0];
-  const file = path.join(ROOT, url === '/' ? 'index.html' : url);
+  // Mirror the hosting rewrites for the view URLs (see firebase.json), so /02
+  // and /03 are reachable locally too.
+  const view = /^\/0[23]\/?$/.test(url);
+  const file = path.join(ROOT, (url === '/' || view) ? 'index.html' : url);
   try {
     const data = fs.readFileSync(file);
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'text/plain' });

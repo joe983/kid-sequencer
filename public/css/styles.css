@@ -3144,6 +3144,15 @@ html:not(.learning-mode) #toolsList{ align-items: center; }
 /* Learning levels and lessons have their own fixed layout and no 8-row model. */
 .learning-mode #viewToggleBtn,
 .lesson-mode #viewToggleBtn{ display: none; }
+/* …except /03, which is built on a learning level but is one of the three public
+   faces, so it has to keep the way back round the cycle. Higher specificity than
+   the rule above (id + class + element), so it wins without !important. */
+html.beginner-view #viewToggleBtn{ display: flex; }
+/* /03 has no controls at all, and the learning levels' volume fader is the last
+   one standing after .learning-mode has hidden the rest. That empties #rightCol,
+   which keeps its reserved width (fitToViewport's `rightW`) and simply shows
+   nothing — the grid stays centred against the same budget as every other view. */
+html.beginner-view #masterVolUI{ display: none; }
 
 /* No printable sheet template exists for the 5-note layout (see _buildPrintMarks). */
 html.fiveNote #printBtn{ display: none !important; }

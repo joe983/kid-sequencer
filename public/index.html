@@ -10,9 +10,15 @@
   </script>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
+<!-- The three views are served from /, /02 and /03 by hosting rewrites (see
+     firebase.json), so this one file loads at three different path depths. Every
+     relative URL below — and every relative fetch() in the script, which resolves
+     against the document base — needs to keep pointing at the site root, whether
+     or not the address the child opened carried a trailing slash. -->
+<base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=81">
+<link rel="stylesheet" href="css/styles.css?v=82">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -443,6 +449,35 @@ const WHOLE_NOTE_SVG = `
 `;
 
 
+/* -------------------- VIEW ROUTING --------------------
+   Three progressively simpler faces of the sequencer, each on its OWN URL:
+
+     /    full     8 rows, 16 columns, every control
+     /02  five     bottom 5 rows (C–G), bigger cells, notation drawn in the block
+     /03  three    bottom 3 rows (C–E), 4 beats, two note tools, no controls
+
+   Separate URLs rather than one address that remembers a per-device choice: a
+   teacher needs to hand a class a link that lands every device on one face and
+   keeps it there, and a learner reloading the page must not find a different,
+   busier app than the one the lesson is about.
+
+   The URL is the single source of truth for which face you get. There is no
+   stored preference any more — a stored one would silently contradict the
+   address bar, which is the thing being handed out.
+
+   Hosting rewrites /02 and /03 to this file (see firebase.json). */
+const VIEW_ORDER = ["full", "five", "three"];
+const VIEW_URL   = { full: "/", five: "/02", three: "/03" };
+const _viewSeg = location.pathname.replace(/^\/+|\/+$/g, "").toLowerCase();
+const VIEW = _viewSeg === "02" ? "five" : _viewSeg === "03" ? "three" : "full";
+/* ?notes=5 was the previous way in to the five-note view, and QR codes printed
+   from it are already out with teachers. Forward them rather than keeping a
+   second source of truth. (?notes=8 already lands on the right face, so it just
+   falls through and is ignored.) */
+if(VIEW === "full" && new URLSearchParams(location.search).get("notes") === "5"){
+  location.replace(VIEW_URL.five);
+}
+
 /* -------------------- LEARNING LEVELS --------------------
    Scaled-back "scaffolding" variants selected by a ?level=N URL param.
    Reachable only via that URL (nothing on the main site links to them).
@@ -490,6 +525,20 @@ const LEARN_LEVELS = {
   "3": _mkLearnLevel(3, [392.00, 329.63, 261.63], ["#3DA9FF", "#FFFF00", "#FF0000"], 112)
 };
 const _lvlParam = new URLSearchParams(location.search).get("level");
+/* The /03 face. Structurally a learning level and built by the same builder, so
+   it inherits the whole stripped-back configuration for free: drums/save/load/
+   print/tempo/key/AI/pots all hidden, piano, the techlearn beat, tempo locked.
+   The important inheritance is the grid — 8 columns at 8th-note resolution with
+   two note tools that are BOTH exactly one beat wide, so a note physically
+   cannot land off the beat; there is no snapping rule to get wrong.
+   Rows are the bottom three of the other two faces: E, D, C, in their colours.
+   Unlike ?level=N it is reached by URL path and keeps the view-cycle button. */
+// The cell cap is 140 rather than level 3's 112: 24 cells and no right-hand
+// controls leave the stage with room to spare in both directions, and this is a
+// public face for the youngest learners, where the size of the thing you tap is
+// the point. (8×140 + gaps + the tool column still clears the 1600 stage width.)
+const BEGINNER_LEVEL = _mkLearnLevel(
+  3, [329.63, 293.66, 261.63], ["#FFFF00", "#FF8C00", "#FF0000"], 140);
 /* -------------------- LESSON MODE (Rhythm Trail) --------------------
    ?lesson=<id> derives a learning level from the lesson's config (reusing
    _mkLearnLevel verbatim) and attaches the lesson runner (see LESSON RUNNER
@@ -511,9 +560,13 @@ function _mkLessonLevel(l){
   return lv;
 }
 // NB: named LEARN_LEVEL to avoid colliding with the instrument-gain map `LEVEL` below.
-const LEARN_LEVEL = LESSON ? _mkLessonLevel(LESSON)
+const LEARN_LEVEL = VIEW === "three" ? BEGINNER_LEVEL
+                  : LESSON ? _mkLessonLevel(LESSON)
                   : (_lvlParam && LEARN_LEVELS[_lvlParam]) ? LEARN_LEVELS[_lvlParam] : null;
 if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <html> always exists at parse time
+// Distinguishes /03 from a ?level=N page, which shares its layout but has no way
+// back out (see the #viewToggleBtn override in styles.css).
+if (VIEW === "three") document.documentElement.classList.add("beginner-view");
 if (LESSON) document.documentElement.classList.add("lesson-mode");
 // The level key for the page currently loaded: null for the full/main grid,
 // "1"/"2"/"3" for a scaffolding level. Used by the worksheet scanner to decide
@@ -590,21 +643,11 @@ const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7
 const FIVE_VIEW_ROWS    = 5;
 const FIVE_VIEW_OFFSET  = rows - FIVE_VIEW_ROWS;   // 3 in the full app
 const FIVE_VIEW_MAXCELL = 78;                      // largest the centring solve allows
-const FIVE_VIEW_LS      = "kidseq_note_view";
 const FIVE_VIEW_AVAILABLE = !LEARN_LEVEL;          // inert on ?level=N and ?lesson=
-let _fiveNote = false;
-/* ?notes=5 / ?notes=8 opens straight into a view, so a teacher can hand out a
-   link (or a QR code made from it) that lands every device on the five-note
-   grid. Without it the choice is per-device localStorage that only the toggle
-   ever writes, so a fresh phone always got the 8-row view. The param wins over
-   the stored choice and is then remembered, so re-opening the tab without the
-   link keeps the same screen. Anything else in ?notes= is ignored. */
-const _notesParam = new URLSearchParams(location.search).get("notes");
-let _viewStored = null;
-try{ _viewStored = localStorage.getItem(FIVE_VIEW_LS); }catch(e){}
-const _viewPick = (_notesParam === "5" || _notesParam === "8") ? _notesParam : _viewStored;
-_fiveNote = FIVE_VIEW_AVAILABLE && _viewPick === "5";
-try{ if(FIVE_VIEW_AVAILABLE && _viewPick && _viewPick !== _viewStored) localStorage.setItem(FIVE_VIEW_LS, _viewPick); }catch(e){}
+// Which face you get is decided by the URL alone (see VIEW ROUTING above), so
+// this is a constant for the life of the page rather than something the toggle
+// flips in place.
+const _fiveNote = VIEW === "five";
 if(_fiveNote) document.documentElement.classList.add("fiveNote");
 function viewRow0(){ return _fiveNote ? FIVE_VIEW_OFFSET : 0; }   // MODEL index of top visible row
 function viewRowCount(){ return _fiveNote ? FIVE_VIEW_ROWS : rows; }
@@ -3410,10 +3453,17 @@ function completeGroupIn(r, beatStart, len){
 }
 
 function smartPlaceNote(r, clickCol, len, kind){
-  let baseStart = Math.min(clickCol, cols - len);
+  /* The /03 face has four beats and nothing smaller: a note lands on beat 1, 2,
+     3 or 4 or not at all. Both its tools are exactly one beat wide, so this is
+     the only thing that could put one between beats — tapping the second half of
+     a beat would otherwise start the note there. Snap the tap down to the beat it
+     is inside, and step the search for free room a whole beat at a time.
+     Every other view keeps a step of 1 and an unsnapped start. */
+  const beatSnap = VIEW === "three" ? COLS_PER_BEAT : 1;
+  let baseStart = Math.min(Math.floor(clickCol / beatSnap) * beatSnap, cols - len);
   baseStart = Math.max(0, baseStart);
 
-  for(let start = baseStart; start >= 0; start--){
+  for(let start = baseStart; start >= 0; start -= beatSnap){
     if(start + len > cols) continue;
     if(canPlace(r, start, len)){
       placeNote(r, start, len, kind);
@@ -4801,56 +4851,51 @@ function clearGrid(){
   redrawAllNotes();
 }
 
-/* -------------------- 5-NOTE VIEW TOGGLE -------------------- */
-// Icons: coloured bars standing for the rows you'd GET by pressing the button —
-// five fat ones (C–G) or eight thin ones — so a pre-reading child can read it.
-const VIEW_ICON_5 = (() => {
-  const cols5 = ["#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+/* -------------------- VIEW CYCLE BUTTON -------------------- */
+/* Icons: coloured bars standing for the rows you'd GET by pressing the button —
+   eight thin, five fat, or three fatter — so a pre-reading child can read it.
+   The colours are the grid's own, always taken from the BOTTOM of the 8-row
+   palette, so the bars in the icon are the bars on the screen you're going to.
+   Written out rather than read from `rowColors`, which is already narrowed to
+   the current view's rows and so can't describe the other two. */
+const _VIEW_ICON_COLORS = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+// n bars evenly filling y 3..29, so every icon has the same ink extent.
+function _viewIcon(n){
+  const colors = _VIEW_ICON_COLORS.slice(-n);
+  const span = 26, gap = 1.4;
+  const h = (span - gap * (n - 1)) / n;
   return '<svg viewBox="0 0 32 32" aria-hidden="true">' +
-    cols5.map((c,i) => `<rect x="4" y="${3 + i*5.6}" width="24" height="4.2" rx="2.1" fill="${c}"/>`).join("") +
+    colors.map((c,i) => `<rect x="4" y="${(3 + i*(h+gap)).toFixed(2)}" width="24" height="${h.toFixed(2)}" rx="${Math.min(h/2,2.6).toFixed(2)}" fill="${c}"/>`).join("") +
     '</svg>';
-})();
-const VIEW_ICON_8 = (() => {
-  return '<svg viewBox="0 0 32 32" aria-hidden="true">' +
-    rowColors.map((c,i) => `<rect x="4" y="${3 + i*3.4}" width="24" height="2.4" rx="1.2" fill="${c}"/>`).join("") +
-    '</svg>';
-})();
+}
+const VIEW_ICON  = { full: _viewIcon(8), five: _viewIcon(5), three: _viewIcon(3) };
+const VIEW_LABEL = {
+  full:  "Show all eight notes",
+  five:  "Show five notes (C to G)",
+  three: "Show three notes (C to E)"
+};
+// Pressing the button always moves forward one step and wraps, so every view is
+// at most two presses away and the button never becomes a dead end.
+const VIEW_NEXT = VIEW_ORDER[(VIEW_ORDER.indexOf(VIEW) + 1) % VIEW_ORDER.length];
 
 function _syncViewToggleBtn(){
   const btn = document.getElementById("viewToggleBtn");
   if(!btn) return;
   // The button always advertises where it takes you, not where you are.
-  const toFive = !_fiveNote;
-  btn.innerHTML = toFive ? VIEW_ICON_5 : VIEW_ICON_8;
-  btn.setAttribute("aria-pressed", _fiveNote ? "true" : "false");
-  const label = toFive ? "Show five notes (C to G)" : "Show all eight notes";
-  btn.setAttribute("aria-label", label);
-  btn.setAttribute("title", label);
-  btn.classList.toggle("active", _fiveNote);
+  btn.innerHTML = VIEW_ICON[VIEW_NEXT];
+  btn.setAttribute("aria-label", VIEW_LABEL[VIEW_NEXT]);
+  btn.setAttribute("title", VIEW_LABEL[VIEW_NEXT]);
+  btn.removeAttribute("aria-pressed");   // it navigates now; it is not a two-state toggle
+  btn.classList.toggle("active", VIEW !== "full");
 }
 
-// v: "5" | "8". Notes are never touched — this only changes which model rows are
-// rendered and played (see viewRow0/viewRowCount and the tick() window).
-function setNoteView(v){
-  if(!FIVE_VIEW_AVAILABLE) return;
-  const five = (v === "5" || v === 5 || v === true);
-  if(five === _fiveNote){ _syncViewToggleBtn(); return; }
-  _fiveNote = five;
-  document.documentElement.classList.toggle("fiveNote", _fiveNote);
-  try{ localStorage.setItem(FIVE_VIEW_LS, _fiveNote ? "5" : "8"); }catch(e){}
-  _syncViewToggleBtn();
-  // The 8th/16th buttons draw what THIS view places, so they have to be rebuilt
-  // when the view flips (groups here, single notes there).
-  try{ buildTools(); }catch(e){}
-  // scheduleLayout, never fitToViewport directly — the latter measures the login
-  // pill outside the transform sandbox. layoutPass rebuilds the grid for us, and
-  // it already does so on every resize with no play guard, so no stop() is needed.
-  try{
-    if(typeof window.scheduleLayout === 'function') window.scheduleLayout();
-    else fitToViewport();
-  }catch(e){}
-}
-function toggleNoteView(){ setNoteView(_fiveNote ? "8" : "5"); }
+/* Each view is its own URL, so switching is a navigation and the grid starts
+   empty on the other side. That is unavoidable between /03 and the rest — an
+   8-column, 3-row model has nowhere to put a 16-column tune — and doing it the
+   same way everywhere is more predictable than carrying notes across one hop
+   and dropping them on the next. */
+function goToView(v){ location.assign(VIEW_URL[v] || VIEW_URL.full); }
+function toggleNoteView(){ goToView(VIEW_NEXT); }
 window.toggleNoteView = toggleNoteView;
 
 
@@ -4892,7 +4937,19 @@ async function _getFirebaseUser(){
   const { onAuthStateChanged } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
   return new Promise(resolve => { const u = onAuthStateChanged(auth, user => { u(); resolve(user); }); });
 }
+/* A loaded tune must never appear silently truncated. The five-note view hides
+   the top three model rows, and switching face is a navigation now, so a tune
+   that uses them is handed to the full sequencer and we go there — carrying the
+   sequence in sessionStorage, since the load itself would otherwise be lost in
+   the page change. Picked up by _applyPendingViewHandoff after the grid builds. */
+const VIEW_HANDOFF_KEY = "kidseq_view_handoff";
 function _applySequenceData(d){
+  if(_fiveNote && Array.isArray(d.notesByRow) &&
+     d.notesByRow.some(n => typeof n.row === "number" && n.row < FIVE_VIEW_OFFSET)){
+    try{ sessionStorage.setItem(VIEW_HANDOFF_KEY, JSON.stringify(d)); }catch(e){}
+    goToView("full");
+    return;
+  }
   try{ stop(); }catch(e){}
   pushUndo();
   if(typeof d.tempo === "number") requestTempo(d.tempo);
@@ -4912,9 +4969,6 @@ function _applySequenceData(d){
          typeof n.start==="number" && typeof n.len==="number" &&
          n.start>=0 && n.start+n.len<=cols) placeNote(n.row, n.start, n.len);
     }
-    // A loaded tune must never appear silently truncated: if it uses any of the
-    // three rows the 5-note view hides, show the full grid.
-    if(_fiveNote && d.notesByRow.some(n => typeof n.row === "number" && n.row < FIVE_VIEW_OFFSET)) setNoteView("8");
   }
   redrawAllNotes();
 }
@@ -6264,9 +6318,6 @@ function _gridRegistration(imgData, geom, mapPoint){
 /* ---- apply a scanned note list onto the CURRENT page's grid ---- */
 function _applyScannedNotes(notes){
   pushUndo();
-  // A printed worksheet is always the 8-row sheet, so never drop a scan into the
-  // 5-note window where three of its rows would be invisible.
-  setNoteView("8");
   notesByRow = Array.from({length: rows}, () => []);
   occ        = Array.from({length: rows}, () => Array(cols).fill(null));
   nextId     = 1;
@@ -6283,7 +6334,11 @@ function _applyScannedNotes(notes){
    sheet matches this page, otherwise stash the notes and navigate to the
    matching grid (?level=N or the param-less main page). ---- */
 function _routeScannedNotes(geom, notes){
-  if(geom.levelKey === CURRENT_LEVEL_KEY){
+  // A printed worksheet is always the 8-row sheet, so a scan taken on the
+  // five-note view does NOT belong to this page even though both carry a null
+  // level key — three of its rows would land where they can't be seen. Send it
+  // down the redirect path below instead.
+  if(geom.levelKey === CURRENT_LEVEL_KEY && VIEW === "full"){
     // Close FIRST so a successful scan always dismisses the modal and reveals the
     // grid — even if applying the notes below were to throw, the camera never
     // stays stuck open over the result.
@@ -6293,7 +6348,10 @@ function _routeScannedNotes(geom, notes){
     return;
   }
   try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes })); }catch(e){}
-  const base = location.pathname;
+  // Worksheets are always printed from the full sequencer, so route to its URL
+  // explicitly — location.pathname would keep a scan taken on /02 or /03 on that
+  // view, which is precisely the template that didn't match.
+  const base = VIEW_URL.full;
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
 }
 
@@ -6423,6 +6481,23 @@ function _applyPendingScanImport(){
   try{ payload = JSON.parse(raw); }catch(e){ return; }
   if(!payload || !Array.isArray(payload.notes)) return;
   _applyScannedNotes(payload.notes);
+  try{ showSaveToast("loaded"); }catch(e){}
+}
+
+/* ---- apply a sequence handed over from the five-note view (see
+   _applySequenceData) — same one-shot shape as the scan import above. ---- */
+let _viewHandoffApplied = false;
+function _applyPendingViewHandoff(){
+  if(_viewHandoffApplied || _fiveNote || LEARN_LEVEL) return;
+  let raw = null;
+  try{ raw = sessionStorage.getItem(VIEW_HANDOFF_KEY); }catch(e){}
+  if(!raw) return;
+  _viewHandoffApplied = true;
+  try{ sessionStorage.removeItem(VIEW_HANDOFF_KEY); }catch(e){}
+  let d = null;
+  try{ d = JSON.parse(raw); }catch(e){ return; }
+  if(!d) return;
+  _applySequenceData(d);
   try{ showSaveToast("loaded"); }catch(e){}
 }
 
@@ -6713,6 +6788,9 @@ root.classList.add('stageScaled');
       // Apply any notes scanned on another grid before a cross-template redirect.
       // One-shot (guarded inside); must run after buildGrid has rendered the rows.
       try{ _applyPendingScanImport(); }catch(e){}
+      // Likewise for a tune the five-note view handed over because it used rows
+      // that view can't show.
+      try{ _applyPendingViewHandoff(); }catch(e){}
       positionRobotLogo();
       // Cell rects only become valid AFTER buildGrid renders rows.
       syncTopBarLayout();
@@ -8207,8 +8285,9 @@ window.KidSequencer = {
     buildGrid,
     buildTools,
     redrawAllNotes,
-    setNoteView,
+    goToView,
     toggleNoteView,
+    get view(){ return VIEW; },
     get fiveNote(){ return _fiveNote; }
   },
   Camera: {

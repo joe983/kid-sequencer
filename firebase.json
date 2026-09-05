@@ -10,6 +10,12 @@
       "scan-tests.html",
       "scan-fixtures/**"
     ],
+    "rewrites": [
+      { "source": "/02", "destination": "/index.html" },
+      { "source": "/02/**", "destination": "/index.html" },
+      { "source": "/03", "destination": "/index.html" },
+      { "source": "/03/**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "source": "/school-music-run/**",
