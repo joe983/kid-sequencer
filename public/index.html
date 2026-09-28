@@ -616,11 +616,11 @@ const SHEET_GEOMETRY = {
      Print one of each and scan it before treating these as settled — see
      NEXT-SCAN.md. */
   "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
-                    grid: { u0: 0.06284, v0: 0.26038, u1: 0.95978, v1: 0.77892 },
-                    quadAspect: 1.863 },
+                    grid: { u0: 0.06280, v0: 0.25636, u1: 0.95984, v1: 0.78337 },
+                    quadAspect: 1.893 },
   "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
-                    grid: { u0: 0.06766, v0: 0.31660, u1: 0.91524, v1: 0.85546 },
-                    quadAspect: 1.705 },
+                    grid: { u0: 0.06936, v0: 0.29922, u1: 0.93895, v1: 0.88894 },
+                    quadAspect: 1.819 },
   "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl2": { levelKey: "2", rows: 2, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
   "kidseq:lvl3": { levelKey: "3", rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 }
@@ -8080,6 +8080,7 @@ const PRINT_MARK_K = 0.9;      // ring outer side, in cells — bumped from 0.56
                                // hole survives blur/JPEG (~10px mark, ~4px hole in the
                                // 420px working frame). See NEXT-SCAN.md §1.
 const PRINT_MARK_GAP_K = 0.37; // clear space between content edge and mark, in cells
+const PRINT_MARK_REF_CELL = 64; // PRINT_MARK_K's cell: the full view's, on every view
 let _printMarkBox = null;      // outer extent of the 4 marks, stage coords
 
 function _clearPrintMarks(){
@@ -8122,9 +8123,15 @@ function _buildPrintMarks(pr, content){
     return (lo < hi) ? (lo + hi) / 2 : null;
   };
 
+  // Every view prints the stage at about the same scale, so sizing the mark off
+  // a fixed reference cell (the full view's 64px) prints the same mark on every
+  // sheet — sizing off each view's own --cell made /03's marks (cell 140) twice
+  // as big. The clear space keeps the view's own cell: on /03 the grid IS the
+  // content's bottom edge, and a 64-cell gap there put the bottom marks close
+  // enough to its last row that the scanner read two separate 8ths as one note.
   const cell = parseFloat(getComputedStyle(document.documentElement)
                  .getPropertyValue('--cell')) || 64;
-  const size = PRINT_MARK_K * cell;
+  const size = PRINT_MARK_K * PRINT_MARK_REF_CELL;
   const gap  = PRINT_MARK_GAP_K * cell;
 
   const outL = content.minX - gap - size / 2;
@@ -8226,8 +8233,9 @@ function _applyPrintScale(){
     measured = true;
   });
   const PAD = 12; // px of breathing room around the content (stage coords)
-  let cx, cy, cw, ch;
+  let cx, cy, cw, ch, contentBox = null;
   if(measured && maxX > minX && maxY > minY){
+    contentBox = { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
     cx = Math.max(0, minX - PAD); cy = Math.max(0, minY - PAD);
     cw = Math.min(w, maxX + PAD) - cx; ch = Math.min(h, maxY + PAD) - cy;
     // Add the scanner's corner marks, then grow the fit box to include them.
@@ -8244,7 +8252,15 @@ function _applyPrintScale(){
   } else {
     cx = 0; cy = 0; cw = w; ch = h;   // fallback: whole stage
   }
-  const ccx = cx + cw / 2, ccy = cy + ch / 2;   // content centre, stage coords
+  // Centre the page on the APP content, not the mark box: on /03 the right
+  // column is empty, so its right marks sit out in blank space and centring the
+  // marks pushed the sequencer visibly left. The fit then sizes by the larger
+  // half-extent about that centre so the marks still land on the page. Only
+  // position/scale change, so the scanner's mark-relative insets are unaffected.
+  const ccx = contentBox ? contentBox.cx : cx + cw / 2;
+  const ccy = contentBox ? contentBox.cy : cy + ch / 2;
+  cw = 2 * Math.max(ccx - cx, cx + cw - ccx);
+  ch = 2 * Math.max(ccy - cy, cy + ch - ccy);
 
   // Printable area (A4 minus @page 10mm margin) in CSS px (1mm = 96/25.4 px).
   // Computed per orientation; #page is positioned top:0/left:0 with origin 0 0,
