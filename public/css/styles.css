@@ -2551,6 +2551,37 @@ html.js-loading #contentWrap{
 /* Off-screen by default — the marks belong to the printed sheet only. */
 .wsMark { display: none; }
 
+/* Print chooser (Empty sheet / Score). Same overlay + card as the scan modal. */
+#printModal{ position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 10px; box-sizing: border-box; }
+#printModal.show{ display: flex; }
+#printModal .modalCard{ width: min(460px, 100%); }
+.printChoices{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px; }
+.printChoice{
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 16px 10px 14px; background: #fff; color: #1d1d1d; cursor: pointer;
+  border: 4px solid #1d1d1d; border-radius: 16px; box-shadow: 0 6px 0 rgba(0,0,0,0.10);
+  font: 900 16px/1.1 inherit; -webkit-appearance: none; appearance: none;
+}
+.printChoice svg{ width: 100%; max-width: 120px; height: auto; }
+.printChoice:hover{ transform: translateY(-1px); background: #f6f9ff; }
+.printChoice:active{ transform: translateY(2px); box-shadow: 0 3px 0 rgba(0,0,0,0.10); }
+
+/* The score page: built by buildScoreSvg() just before printing. Never shown
+   on screen; when printing a score, it replaces the whole app on the page. */
+#printScore{ display: none; }
+@media print {
+  #printModal{ display: none !important; }
+  html.printing-score body > *:not(#printScore){ display: none !important; }
+  html.printing-score #printScore{
+    display: block !important;
+    width: calc(297mm - 20mm);
+    height: calc(210mm - 20mm);
+    margin: 0 auto;
+    overflow: hidden;
+  }
+  html.printing-score #printScore svg{ display: block; width: 100%; height: 100%; }
+}
+
 /* No `@media print and (orientation: portrait)` fallback, on purpose. Chromium
    (Edge/Chrome, 2026) evaluates that query against the printer's default paper,
    not the landscape page box @page creates, so a rotate-for-portrait block fired
@@ -2648,6 +2679,10 @@ html.js-loading #contentWrap{
    the glyph/cell size; per-kind because ♩ and ♫ differ. */
 .noteBlock[data-kind="quarter"] .noteGlyph{ transform: translateY(0.36em); }
 .noteBlock[data-kind="eighth"]  .noteGlyph{ transform: translateY(0.27em); }
+/* /03 draws its symbols as SVG (see createNoteBlock), which centre by their own
+   box — so no nudge, just a size. */
+html.beginner-view .noteBlock .noteGlyph{ transform: none; }
+html.beginner-view .noteBlock .noteGlyph svg{ height: calc(var(--cell) * 0.62); width: auto; display: block; }
 
 /* Dormant tier-gate. <html> gets `.level-locked` only when a level declares
    requiresTier:"member"/"paid" AND the user lacks it (see enforceLevelEntitlement).

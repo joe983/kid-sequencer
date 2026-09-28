@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=85">
+<link rel="stylesheet" href="css/styles.css?v=87">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -221,6 +221,27 @@
 </div>
 </div>
 </div>
+
+<!-- Print chooser: an empty worksheet (the running UI) or the tune as a score -->
+<div aria-hidden="true" id="printModal">
+<div aria-label="Print" aria-modal="true" class="modalCard" role="dialog">
+<div class="modalHeader">
+<div class="modalTitle">Print</div>
+<button aria-label="Close" class="modalClose" onclick="closePrintModal()">×</button>
+</div>
+<div class="printChoices">
+<button class="printChoice" onclick="choosePrint('sheet')">
+<svg aria-hidden="true" viewBox="0 0 64 44"><rect x="2" y="2" width="60" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><g fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="10" height="10" rx="2"/><rect x="23" y="9" width="10" height="10" rx="2"/><rect x="37" y="9" width="10" height="10" rx="2"/><rect x="9" y="24" width="10" height="10" rx="2"/><rect x="23" y="24" width="10" height="10" rx="2"/><rect x="37" y="24" width="10" height="10" rx="2"/></g></svg>
+<span>Empty sheet</span>
+</button>
+<button class="printChoice" onclick="choosePrint('score')">
+<svg aria-hidden="true" viewBox="0 0 64 44"><g stroke="currentColor" stroke-width="2"><line x1="2" y1="8" x2="62" y2="8"/><line x1="2" y1="15" x2="62" y2="15"/><line x1="2" y1="22" x2="62" y2="22"/><line x1="2" y1="29" x2="62" y2="29"/><line x1="2" y1="36" x2="62" y2="36"/></g><g fill="currentColor"><ellipse cx="18" cy="32.5" rx="5" ry="3.6" transform="rotate(-20 18 32.5)"/><rect x="22" y="9" width="2.2" height="23"/><ellipse cx="42" cy="25.5" rx="5" ry="3.6" transform="rotate(-20 42 25.5)"/><rect x="46" y="4" width="2.2" height="21"/></g></svg>
+<span>Score</span>
+</button>
+</div>
+</div>
+</div>
+<div aria-hidden="true" id="printScore"></div>
 
 <!-- Save toast — position:fixed, sits above everything -->
 <div aria-live="polite" id="saveToast"></div>
@@ -3540,7 +3561,10 @@ function createNoteBlock(r, note){
     block.dataset.kind = note.kind;
     const glyph = document.createElement("span");
     glyph.className = "noteGlyph";
-    glyph.textContent = NOTE_GLYPHS[note.kind] || "";
+    // /03 draws the symbol: a font glyph centres its em box, not its ink, and the
+    // fonts that box was measured against don't exist on iOS/iPadOS.
+    if(VIEW === "three") glyph.innerHTML = note.kind === "eighth" ? _beamedGroupArt(2) : _singleNoteSvg(0);
+    else glyph.textContent = NOTE_GLYPHS[note.kind] || "";
     block.appendChild(glyph);
   }
   // 5-note view: draw the note-length notation inside the block, using the same
@@ -8305,9 +8329,273 @@ function printSheet(){
   if(!_currentSheetId()) return;
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
+  const m = document.getElementById('printModal');
+  if(!m){ _printNow(); return; }
+  m.classList.add('show');
+  m.setAttribute('aria-hidden', 'false');
+}
+function closePrintModal(){
+  const m = document.getElementById('printModal');
+  if(!m) return;
+  m.classList.remove('show');
+  m.setAttribute('aria-hidden', 'true');
+}
+function choosePrint(kind){
+  closePrintModal();
+  const root = document.documentElement;
+  root.classList.remove('printing-score');
+  if(kind === 'score'){
+    const host = document.getElementById('printScore');
+    if(host) host.innerHTML = buildScoreSvg();
+    root.classList.add('printing-score');
+  }
+  // Let the modal's close paint first, or Safari can snapshot it into the page.
+  setTimeout(_printNow, 60);
+}
+function _printNow(){
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }
+// Ctrl+P after a score print must fall back to the empty sheet.
+window.addEventListener('afterprint', () => document.documentElement.classList.remove('printing-score'));
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && document.getElementById('printModal')?.classList.contains('show')) closePrintModal();
+});
+document.getElementById('printModal')?.addEventListener('click', (e) => {
+  if(e.target.id === 'printModal') closePrintModal();
+});
 window.printSheet = printSheet;
+window.closePrintModal = closePrintModal;
+window.choosePrint = choosePrint;
+
+/* -------------------- PRINTED SCORE --------------------
+   The melody on one large 4/4 treble stave, black ink, for A4 landscape. Every
+   symbol is DRAWN (no music-font glyphs — iOS has none of those fonts, see the
+   notation gotcha in CLAUDE.md). Only the rows the current view shows are
+   printed, in the grid's own C-major pitches. Time is worked in 16th-note ticks
+   so all three views (16th or 8th columns) share one engraver. */
+const SCORE_VALUES = [          // ticks, base note value (16=whole … 1=16th), dotted
+  { t: 16, base: 16, dot: false }, { t: 12, base: 8, dot: true },
+  { t: 8,  base: 8,  dot: false }, { t: 6,  base: 4, dot: true },
+  { t: 4,  base: 4,  dot: false }, { t: 3,  base: 2, dot: true },
+  { t: 2,  base: 2,  dot: false }, { t: 1,  base: 1, dot: false }
+];
+// Split one span into notatable values the way a beginner's book writes them:
+// nothing short crosses a beat, nothing crosses the bar's middle unless it is a
+// whole bar, and rests are never dotted.
+function _scoreSplit(pos, len, isRest){
+  const out = [];
+  while(len > 0){
+    const v = SCORE_VALUES.find(v => {
+      if(v.t > len || (isRest && v.dot)) return false;
+      const end = pos + v.t;
+      if(v.t === 16) return pos === 0;
+      if(v.t === 12) return pos === 0 || pos === 4;
+      if(v.t >= 4){
+        if(pos % 4 !== 0) return false;
+        return v.t >= 8 && !v.dot ? pos % 8 === 0 : (pos < 8) === (end <= 8);
+      }
+      if(v.t === 2 && pos % 2 !== 0) return false;
+      if(v.t === 3 && pos % 4 !== 0) return false;
+      return Math.floor(pos / 4) === Math.floor((end - 1) / 4);
+    });
+    out.push({ t: pos, dur: v.t, base: v.base, dot: v.dot });
+    pos += v.t; len -= v.t;
+  }
+  return out;
+}
+// Half-line steps above the bottom line (E4 = 0), from the row's frequency.
+function _scoreStaffPos(freq){
+  const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+  const step = { 0:0, 1:0, 2:1, 3:1, 4:2, 5:3, 6:3, 7:4, 8:4, 9:5, 10:5, 11:6 }[((midi % 12) + 12) % 12];
+  return (Math.floor(midi / 12) - 5) * 7 + step - 2;
+}
+// Every sounding note as {a, b, pos}: start/end tick and staff position.
+function _scoreSpans(){
+  const TPC = 16 / cols;                          // ticks per grid column
+  const spans = [];
+  const r0 = viewRow0(), rN = r0 + viewRowCount();
+  for(let r = r0; r < rN; r++){
+    const pos = _scoreStaffPos(freqs[r]);
+    for(const n of notesByRow[r]){
+      // A learning-mode eighth is one 2-column object that plays as two 8ths.
+      const attacks = n.kind === 'eighth' ? [[n.start, 1], [n.start + 1, 1]] : [[n.start, n.len]];
+      for(const [s, l] of attacks){
+        const a = s * TPC, b = Math.min(16, (s + l) * TPC);
+        if(b > a) spans.push({ a, b, pos });
+      }
+    }
+  }
+  return spans;
+}
+function _scoreEvents(spans){
+  const cuts = new Set([0, 16]);
+  spans.forEach(s => { cuts.add(s.a); cuts.add(s.b); });
+  const edges = [...cuts].sort((x, y) => x - y);
+  const events = [];
+  for(let i = 0; i < edges.length - 1; i++){
+    const a = edges[i], b = edges[i + 1];
+    const sounding = spans.filter(s => s.a <= a && s.b >= b);
+    const isRest = sounding.length === 0;
+    for(const piece of _scoreSplit(a, b - a, isRest)){
+      const end = piece.t + piece.dur;
+      piece.rest = isRest;
+      piece.notes = sounding.map(s => ({ pos: s.pos, tie: s.b > end }))
+                            .filter((n, k, arr) => arr.findIndex(m => m.pos === n.pos) === k)
+                            .sort((x, y) => x.pos - y.pos);
+      events.push(piece);
+    }
+  }
+  return events;
+}
+function buildScoreSvg(spans){
+  const W = 277, H = 190;                          // A4 landscape printable area, mm
+  const INK = '#000';
+  const events = _scoreEvents(spans || _scoreSpans());
+  const weight = e => 2.3 + 1.0 * Math.log2(e.dur) + (e.dot ? 0.6 : 0);
+  const LEAD = 6.2, TAIL = 1.2;                    // clef + 4/4, and space before the final barline, in staff gaps
+  const staffL = 6, staffR = W - 6;
+  const totalG = LEAD + TAIL + events.reduce((s, e) => s + weight(e), 0);
+  const G = Math.min(16, (staffR - staffL) / totalG);   // staff-line gap
+  const stretch = (staffR - staffL - (LEAD + TAIL) * G) / events.reduce((s, e) => s + weight(e) * G, 0);
+  const B = H / 2 + 1.95 * G;                      // bottom staff line
+  const y = p => B - p * G / 2;
+  const rx = 0.66 * G, ry = 0.46 * G, stemW = 0.11 * G, STEM = 3.4 * G;
+  const parts = [];
+  const line = (x1, y1, x2, y2, w) => parts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${INK}" stroke-width="${w}"/>`);
+
+  for(let i = 0; i < 5; i++) line(staffL, y(i * 2), staffR, y(i * 2), 0.09 * G);
+  line(staffL, y(8), staffL, y(0), 0.14 * G);
+  line(staffR - 0.75 * G, y(8), staffR - 0.75 * G, y(0), 0.14 * G);
+  parts.push(`<rect x="${staffR - 0.45 * G}" y="${y(8)}" width="${0.45 * G}" height="${4 * G}" fill="${INK}"/>`);
+
+  // Treble clef, authored in a staff with gap 10 and top line at y 0; the curl
+  // wraps the G line (y 30).
+  parts.push(`<g transform="translate(${staffL + 2.2 * G} ${y(8)}) scale(${G / 10})" fill="none" stroke="${INK}" stroke-linecap="round" stroke-linejoin="round">`
+    + `<path stroke-width="2.4" d="M4 31 C1 33 -3 30 -2 26 C-1 21 8 20 11 25 C14 31 9 39 1 39 C-9 39 -13 30 -9 22 C-5 14 8 8 11 -2 C13 -8 11 -15 7 -15 C3 -15 1 -9 2 -2 L7 48 C8 54 3 57 -1 54"/>`
+    + `<circle cx="-1" cy="51" r="3" fill="${INK}" stroke="none"/></g>`);
+  // 4/4 — plain digits render on every platform, unlike music-font glyphs.
+  const tsX = staffL + 5 * G;
+  [4, 0].forEach(p => parts.push(`<text x="${tsX}" y="${y(p + 2) + 0.72 * G}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="${2.05 * G}" fill="${INK}">4</text>`));
+
+  // Horizontal layout: each event gets a slot; heads sit near the slot's left.
+  let x = staffL + LEAD * G;
+  events.forEach(e => { e.x = x + 0.95 * G; x += weight(e) * G * stretch; });
+
+  const head = (hx, p, hollow) => {
+    let s = '';
+    for(let L = -2; L >= p; L -= 2) s += `<line x1="${hx - rx - 0.4 * G}" y1="${y(L)}" x2="${hx + rx + 0.4 * G}" y2="${y(L)}" stroke="${INK}" stroke-width="${0.11 * G}"/>`;
+    for(let L = 10; L <= p; L += 2) s += `<line x1="${hx - rx - 0.4 * G}" y1="${y(L)}" x2="${hx + rx + 0.4 * G}" y2="${y(L)}" stroke="${INK}" stroke-width="${0.11 * G}"/>`;
+    s += `<ellipse cx="${hx}" cy="${y(p)}" rx="${rx}" ry="${ry}" fill="${INK}" transform="rotate(-20 ${hx} ${y(p)})"/>`;
+    if(hollow) s += `<ellipse cx="${hx}" cy="${y(p)}" rx="${rx * 0.72}" ry="${ry * 0.42}" fill="#fff" transform="rotate(-38 ${hx} ${y(p)})"/>`;
+    return s;
+  };
+
+  // Stem direction per event, shared across a beamed group; beams are flat.
+  const beamable = e => !e.rest && e.base <= 2;
+  const groups = [];
+  events.forEach((e, i) => {
+    const prev = events[i - 1];
+    if(beamable(e) && prev && beamable(prev) && Math.floor(prev.t / 4) === Math.floor(e.t / 4)) groups[groups.length - 1].push(e);
+    else groups.push([e]);
+  });
+  const upFor = evs => {
+    const ps = evs.flatMap(e => e.notes.map(n => n.pos));
+    const far = ps.reduce((a, p) => Math.abs(p - 4) > Math.abs(a - 4) ? p : a, ps[0]);
+    return far < 4;
+  };
+
+  for(const grp of groups){
+    const e0 = grp[0];
+    if(e0.rest){ parts.push(_scoreRest(e0, y, G, INK)); continue; }
+    const up = upFor(grp);
+    const beamed = grp.length > 1;
+    let beamY = null;
+    if(beamed){
+      beamY = up ? Math.min(...grp.map(e => y(Math.max(...e.notes.map(n => n.pos))))) - STEM
+                 : Math.max(...grp.map(e => y(Math.min(...e.notes.map(n => n.pos))))) + STEM;
+    }
+    for(const e of grp){
+      e.up = up;
+      const hollow = e.base >= 8;
+      const ps = e.notes.map(n => n.pos);
+      const hi = Math.max(...ps), lo = Math.min(...ps);
+      // Seconds in a chord: the second head goes on the far side of the stem.
+      e.notes.forEach((n, k) => {
+        const clash = k > 0 && n.pos - e.notes[k - 1].pos === 1 && !e.notes[k - 1].shifted;
+        n.shifted = clash;
+        n.hx = e.x + (clash ? (up ? 2 * rx * 0.93 : -2 * rx * 0.93) : 0);
+        parts.push(head(n.hx, n.pos, hollow));
+        if(e.dot){
+          const dy = n.pos % 2 === 0 ? -G / 2 : 0;
+          parts.push(`<circle cx="${e.x + rx + 0.55 * G + (clash && up ? 2 * rx : 0)}" cy="${y(n.pos) + dy}" r="${0.15 * G}" fill="${INK}"/>`);
+        }
+      });
+      if(e.base === 16) continue;
+      e.sx = up ? e.x + rx * 0.93 - stemW / 2 : e.x - rx * 0.93 + stemW / 2;
+      const from = up ? y(lo) : y(hi);
+      e.stemEnd = beamed ? beamY : (up ? y(hi) - STEM : y(lo) + STEM);
+      line(e.sx, from, e.sx, e.stemEnd, stemW);
+      if(!beamed && e.base <= 2){
+        const n = e.base === 1 ? 2 : 1;
+        for(let k = 0; k < n; k++) parts.push(_scoreFlag(e.sx, e.stemEnd + (up ? 1 : -1) * k * 0.85 * G, up, G, INK));
+      }
+    }
+    if(beamed){
+      const th = 0.48 * G, dir = up ? 1 : -1;
+      const by = up ? beamY : beamY - th;
+      const first = grp[0], last = grp[grp.length - 1];
+      parts.push(`<rect x="${first.sx - stemW / 2}" y="${by}" width="${last.sx - first.sx + stemW}" height="${th}" fill="${INK}"/>`);
+      const y2 = by + dir * 0.8 * G;
+      grp.forEach((e, k) => {
+        if(e.base !== 1) return;
+        const nx = grp[k + 1], pv = grp[k - 1];
+        if(nx && nx.base === 1) parts.push(`<rect x="${e.sx - stemW / 2}" y="${y2}" width="${nx.sx - e.sx + stemW}" height="${th}" fill="${INK}"/>`);
+        else if(!(pv && pv.base === 1)){
+          const stub = 1.1 * G, toLeft = !nx;
+          const x0 = toLeft ? e.sx - stub : e.sx - stemW / 2;
+          parts.push(`<rect x="${x0}" y="${y2}" width="${stub + stemW / 2}" height="${th}" fill="${INK}"/>`);
+        }
+      });
+    }
+  }
+
+  // Ties, drawn once every head has a position: on the side away from the stem.
+  events.forEach((e, i) => {
+    const nx = events[i + 1];
+    if(e.rest || !nx || nx.rest) return;
+    e.notes.forEach(n => {
+      if(!n.tie) return;
+      const m = nx.notes.find(q => q.pos === n.pos);
+      if(!m) return;
+      const s = e.up ? 1 : -1;
+      const x1 = n.hx + rx * 0.9, x2 = m.hx - rx * 0.9, yy = y(n.pos) + s * ry * 1.4;
+      const mid = (x1 + x2) / 2, bow = s * 0.75 * G, thick = s * 0.18 * G;
+      parts.push(`<path d="M${x1} ${yy} Q${mid} ${yy + bow} ${x2} ${yy} Q${mid} ${yy + bow + thick} ${x1} ${yy} Z" fill="${INK}"/>`);
+    });
+  });
+
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Score of the tune">${parts.join('')}</svg>`;
+}
+function _scoreFlag(sx, sy, up, G, INK){
+  const d = up ? 1 : -1;
+  return `<path d="M${sx} ${sy} C${sx + 0.25 * G} ${sy + d * 1.1 * G} ${sx + 1.5 * G} ${sy + d * 1.3 * G} ${sx + 0.95 * G} ${sy + d * 2.9 * G}`
+       + ` C${sx + 1.15 * G} ${sy + d * 1.8 * G} ${sx + 0.35 * G} ${sy + d * 1.35 * G} ${sx} ${sy + d * 1.3 * G} Z" fill="${INK}"/>`;
+}
+function _scoreRest(e, y, G, INK){
+  const x = e.x, m = y(4);
+  if(e.base === 16) return `<rect x="${x - 0.6 * G}" y="${y(6)}" width="${1.2 * G}" height="${0.5 * G}" fill="${INK}"/>`;
+  if(e.base === 8)  return `<rect x="${x - 0.6 * G}" y="${y(4) - 0.5 * G}" width="${1.2 * G}" height="${0.5 * G}" fill="${INK}"/>`;
+  if(e.base === 4)  return `<path d="M${x - 0.3 * G} ${m - 1.5 * G} L${x + 0.35 * G} ${m - 0.6 * G} L${x - 0.25 * G} ${m + 0.1 * G} L${x + 0.35 * G} ${m + 0.8 * G} C${x - 0.3 * G} ${m + 0.5 * G} ${x - 0.45 * G} ${m + 1.1 * G} ${x} ${m + 1.5 * G}" fill="none" stroke="${INK}" stroke-width="${0.26 * G}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // 8th and 16th rests: a dot with an arm, on a slanted stem.
+  const arms = e.base === 1 ? 2 : 1;
+  let s = `<line x1="${x + 0.45 * G}" y1="${m - 0.75 * G}" x2="${x - 0.15 * G - (arms - 1) * 0.3 * G}" y2="${m + 1.0 * G + (arms - 1) * 0.9 * G}" stroke="${INK}" stroke-width="${0.13 * G}" stroke-linecap="round"/>`;
+  for(let k = 0; k < arms; k++){
+    const ay = m - 0.75 * G + k * 0.9 * G, ax = x + 0.45 * G - k * 0.3 * G;
+    s += `<circle cx="${ax - 0.62 * G}" cy="${ay + 0.05 * G}" r="${0.21 * G}" fill="${INK}"/>`
+       + `<path d="M${ax - 0.62 * G} ${ay + 0.2 * G} Q${ax - 0.2 * G} ${ay + 0.35 * G} ${ax} ${ay}" fill="none" stroke="${INK}" stroke-width="${0.12 * G}"/>`;
+  }
+  return s;
+}
 
 // Organised namespace for maintenance/debugging (optional)
 window.KidSequencer = {
@@ -8336,6 +8624,9 @@ window.KidSequencer = {
     setInstrument,
     playInstrument
   },
+  // score([{a, b, pos}, …]) → SVG string for hand-made test tunes (ticks are
+  // 16ths, pos is half-line steps above E4); with no argument, the grid's tune.
+  Print: { score: buildScoreSvg },
   Sequencer: {
     play,
     stop,
