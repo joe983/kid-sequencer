@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=84">
+<link rel="stylesheet" href="css/styles.css?v=85">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -8251,23 +8251,16 @@ function _applyPrintScale(){
   // so the transform maps stage coords straight into the #viewport box.
   const MM = 96 / 25.4, MARGIN = 10, SAFETY = 0.98;
   const VWl = (297 - 2 * MARGIN) * MM, VHl = (210 - 2 * MARGIN) * MM; // landscape
-  const VWp = (210 - 2 * MARGIN) * MM, VHp = (297 - 2 * MARGIN) * MM; // portrait
   const sL = Math.min(VWl / cw, VHl / ch) * SAFETY;
-  // Portrait rotates the content 90°, so it occupies ch horizontally, cw vertically.
-  const sP = Math.min(VWp / ch, VHp / cw) * SAFETY;
 
-  // Place the content centre at the viewport centre (derived from the
-  // translate→rotate→scale composition; see the print CSS comment).
+  // Place the content centre at the viewport centre.
   const txL = VWl / 2 - sL * ccx, tyL = VHl / 2 - sL * ccy;
-  const txP = VWp / 2 + sP * ccy, tyP = VHp / 2 - sP * ccx;
 
-  const root = document.documentElement.style;
-  root.setProperty('--print-tf-landscape', `translate(${txL}px, ${tyL}px) scale(${sL})`);
-  root.setProperty('--print-tf-portrait', `translate(${txP}px, ${tyP}px) rotate(90deg) scale(${sP})`);
+  document.documentElement.style.setProperty('--print-tf-landscape', `translate(${txL}px, ${tyL}px) scale(${sL})`);
 
-  // Leave inline transform as 'none' — the @media print rules override it
-  // (with !important) via the vars above, and afterprint restores the saved
-  // screen transform. The CSS handles landscape vs portrait reactively.
+  // Leave inline transform as 'none' — the @media print rule overrides it
+  // (with !important) via the var above, and afterprint restores the saved
+  // screen transform.
 }
 function _restorePrintScale(){
   const page = document.getElementById('page');

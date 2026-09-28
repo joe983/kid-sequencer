@@ -2551,26 +2551,12 @@ html.js-loading #contentWrap{
 /* Off-screen by default — the marks belong to the printed sheet only. */
 .wsMark { display: none; }
 
-/* Portrait fallback — if the printout ends up on portrait paper (user
-   overrode the dialog, or a printer that ignores @page size), rotate the
-   whole stage 90° so the sequencer still prints large and landscape-
-   oriented (sideways on the page) instead of tiny. The `orientation` print
-   media feature reflects the *actual* page-box orientation and browsers
-   re-evaluate it live when the user flips the dialog, so this reacts
-   correctly even though _applyPrintScale runs before the choice is made.
-   #viewport is sized to the portrait printable area (swapped w/h vars) and
-   #page gets the rotate variant of the transform. */
-@media print and (orientation: portrait) {
-  /* #viewport takes the portrait page-area dimensions (swap w/h) so it still
-     fills the page → one centred page; #page rotates 90° inside it. */
-  #viewport {
-    width: calc(210mm - 20mm) !important;
-    height: calc(297mm - 20mm) !important;
-  }
-  #page {
-    transform: var(--print-tf-portrait, translate(653px,0px) rotate(90deg) scale(0.654)) !important;
-  }
-}
+/* No `@media print and (orientation: portrait)` fallback, on purpose. Chromium
+   (Edge/Chrome, 2026) evaluates that query against the printer's default paper,
+   not the landscape page box @page creates, so a rotate-for-portrait block fired
+   on landscape paper: the stage came out sideways, sized for portrait, with its
+   bottom cut off, and the dialog's Layout radio could not fix it. @page forces
+   A4 landscape, which is the only layout printed. */
 
 /* ---- Scaffolded learning levels (?level=N) ----
    <html> gets `.learning-mode` (set in the IIFE) when a LEARN_LEVEL is active.
