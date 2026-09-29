@@ -18,6 +18,12 @@
     ],
     "headers": [
       {
+        "source": "{/,/02,/02/**,/03,/03/**,**/*.html,/js/**}",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }
+        ]
+      },
+      {
         "source": "/school-music-run/**",
         "headers": [
           { "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }

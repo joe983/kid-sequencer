@@ -8346,7 +8346,12 @@ function choosePrint(kind){
   root.classList.remove('printing-score');
   if(kind === 'score'){
     const host = document.getElementById('printScore');
-    if(host) host.innerHTML = buildScoreSvg();
+    if(host){
+      // Score mode hides every body child but this one, and the markup nests it
+      // inside #viewport — so lift it to <body> or the page prints blank.
+      if(host.parentElement !== document.body) document.body.appendChild(host);
+      host.innerHTML = buildScoreSvg();
+    }
     root.classList.add('printing-score');
   }
   // Let the modal's close paint first, or Safari can snapshot it into the page.
