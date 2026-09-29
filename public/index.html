@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=87">
+<link rel="stylesheet" href="css/styles.css?v=88">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -70,7 +70,7 @@
 <circle cx="12" cy="14" fill="#ffffff" opacity="0.9" r="4"></circle>
 <circle cx="12" cy="14" fill="currentColor" opacity="0.75" r="2.2"></circle>
 </svg></span></button>
-<button aria-label="Show staff" aria-pressed="false" class="bigBtn iconBtn" id="staveBtn" onclick="toggleStave()" title="Show staff"><span class="icon staveIcon">𝄞</span></button>
+<button aria-label="Show staff" aria-pressed="false" class="bigBtn iconBtn" id="staveBtn" onclick="toggleStave()" title="Show staff"><span class="icon staveIcon"><svg aria-hidden="true" viewBox="-16 -19 33 79"><g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 31 C1 33 -3 30 -2 26 C-1 21 8 20 11 25 C14 31 9 39 1 39 C-9 39 -13 30 -9 22 C-5 14 8 8 11 -2 C13 -8 11 -15 7 -15 C3 -15 1 -9 2 -2 L7 48 C8 54 3 57 -1 54"/></g><circle cx="-1" cy="51" r="4.2" fill="currentColor"/></svg></span></button>
 <button aria-label="Save" class="bigBtn iconBtn" id="saveBtn" onclick="saveToCloud()" title="Save tune"><span class="icon saveIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
 <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z" fill="currentColor"></path>
 <polyline fill="white" opacity="0.85" points="9,3 9,9 15,9 15,3"></polyline>
@@ -114,6 +114,7 @@
 <div id="playhead" style="display:none;"><div class="playheadBody"></div></div>
 <div id="sequencer"></div>
 </div>
+<div id="scorePanel" aria-hidden="true"></div>
 <div id="stavePanel" aria-hidden="true"></div>
 <div aria-label="Drum controls" id="drumPanel">
 <div class="drumBox rhythmBox">
@@ -221,27 +222,6 @@
 </div>
 </div>
 </div>
-
-<!-- Print chooser: an empty worksheet (the running UI) or the tune as a score -->
-<div aria-hidden="true" id="printModal">
-<div aria-label="Print" aria-modal="true" class="modalCard" role="dialog">
-<div class="modalHeader">
-<div class="modalTitle">Print</div>
-<button aria-label="Close" class="modalClose" onclick="closePrintModal()">×</button>
-</div>
-<div class="printChoices">
-<button class="printChoice" onclick="choosePrint('sheet')">
-<svg aria-hidden="true" viewBox="0 0 64 44"><rect x="2" y="2" width="60" height="40" rx="5" fill="none" stroke="currentColor" stroke-width="3"/><g fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="10" height="10" rx="2"/><rect x="23" y="9" width="10" height="10" rx="2"/><rect x="37" y="9" width="10" height="10" rx="2"/><rect x="9" y="24" width="10" height="10" rx="2"/><rect x="23" y="24" width="10" height="10" rx="2"/><rect x="37" y="24" width="10" height="10" rx="2"/></g></svg>
-<span>Empty sheet</span>
-</button>
-<button class="printChoice" onclick="choosePrint('score')">
-<svg aria-hidden="true" viewBox="0 0 64 44"><g stroke="currentColor" stroke-width="2"><line x1="2" y1="8" x2="62" y2="8"/><line x1="2" y1="15" x2="62" y2="15"/><line x1="2" y1="22" x2="62" y2="22"/><line x1="2" y1="29" x2="62" y2="29"/><line x1="2" y1="36" x2="62" y2="36"/></g><g fill="currentColor"><ellipse cx="18" cy="32.5" rx="5" ry="3.6" transform="rotate(-20 18 32.5)"/><rect x="22" y="9" width="2.2" height="23"/><ellipse cx="42" cy="25.5" rx="5" ry="3.6" transform="rotate(-20 42 25.5)"/><rect x="46" y="4" width="2.2" height="21"/></g></svg>
-<span>Score</span>
-</button>
-</div>
-</div>
-</div>
-<div aria-hidden="true" id="printScore"></div>
 
 <!-- Save toast — position:fixed, sits above everything -->
 <div aria-live="polite" id="saveToast"></div>
@@ -588,6 +568,10 @@ if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <ht
 // Distinguishes /03 from a ?level=N page, which shares its layout but has no way
 // back out (see the #viewToggleBtn override in styles.css).
 if (VIEW === "three") document.documentElement.classList.add("beginner-view");
+// The three public faces swap their grid for a score; ?level=N keeps its stave
+// panel and lessons keep the stave button hidden.
+const SCORE_VIEW_AVAILABLE = !LESSON && (!LEARN_LEVEL || VIEW === "three");
+if (SCORE_VIEW_AVAILABLE) document.documentElement.classList.add("score-view-ok");
 if (LESSON) document.documentElement.classList.add("lesson-mode");
 // The level key for the page currently loaded: null for the full/main grid,
 // "1"/"2"/"3" for a scaffolding level. Used by the worksheet scanner to decide
@@ -766,6 +750,7 @@ const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
 // Declared with state (not beside its functions) so the live-update hook in
 // redrawRowNotes can never hit a temporal-dead-zone reference.
 let _staveOpen = false;
+let _scoreOpen = false;   // the public views' score-instead-of-grid toggle
 // Lesson-runner state — declared early for the same TDZ-safety reason (hooks in
 // redrawRowNotes/onCellClick/tick fire before the LESSON RUNNER section parses).
 let _lessonRunning = false;          // true once the child taps START
@@ -3817,6 +3802,7 @@ function redrawRowNotes(r){
   // the panel is open). Every grid mutation — place, delete, clear, undo, scan —
   // flows through redrawRowNotes, so this single hook keeps the staff in sync.
   if(LEARN_LEVEL && _staveOpen) renderStave();
+  if(_scoreOpen) _scheduleScoreRender();
   // Lesson completion detection rides the same funnel (debounced in the runner).
   if(LESSON) _lessonGridChanged();
 }
@@ -3841,6 +3827,7 @@ const STAVE_PITCH = {
 function _stavePitch(freq){ return STAVE_PITCH[Math.round(freq)] || { name: "", staffPos: 0 }; }
 
 function toggleStave(){
+  if(SCORE_VIEW_AVAILABLE){ toggleScoreView(); return; }
   if(!LEARN_LEVEL) return;
   _staveOpen = !_staveOpen;
   const panel = document.getElementById("stavePanel");
@@ -8329,54 +8316,33 @@ function printSheet(){
   if(!_currentSheetId()) return;
   if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
-  const m = document.getElementById('printModal');
-  if(!m){ _printNow(); return; }
-  m.classList.add('show');
-  m.setAttribute('aria-hidden', 'false');
-}
-function closePrintModal(){
-  const m = document.getElementById('printModal');
-  if(!m) return;
-  m.classList.remove('show');
-  m.setAttribute('aria-hidden', 'true');
-}
-function choosePrint(kind){
-  closePrintModal();
-  const root = document.documentElement;
-  root.classList.remove('printing-score');
-  if(kind === 'score'){
-    const host = document.getElementById('printScore');
-    if(host){
-      // Score mode hides every body child but this one, and the markup nests it
-      // inside #viewport — so lift it to <body> or the page prints blank.
-      if(host.parentElement !== document.body) document.body.appendChild(host);
-      host.innerHTML = buildScoreSvg();
-    }
-    root.classList.add('printing-score');
-  }
-  // Let the modal's close paint first, or Safari can snapshot it into the page.
-  setTimeout(_printNow, 60);
-}
-function _printNow(){
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }
-// Ctrl+P after a score print must fall back to the empty sheet.
-window.addEventListener('afterprint', () => document.documentElement.classList.remove('printing-score'));
-document.addEventListener('keydown', (e) => {
-  if(e.key === 'Escape' && document.getElementById('printModal')?.classList.contains('show')) closePrintModal();
-});
-document.getElementById('printModal')?.addEventListener('click', (e) => {
-  if(e.target.id === 'printModal') closePrintModal();
-});
 window.printSheet = printSheet;
-window.closePrintModal = closePrintModal;
-window.choosePrint = choosePrint;
 
-/* -------------------- PRINTED SCORE --------------------
-   The melody on one large 4/4 treble stave, black ink, for A4 landscape. Every
+// Print what is on screen: with the score showing, the page is the score (in
+// colour — the print dialog's own Colour setting gives black and white). Done at
+// beforeprint so Ctrl+P behaves the same as the button.
+window.addEventListener('beforeprint', () => {
+  if(!_scoreOpen) return;
+  let host = document.getElementById('printScore');
+  if(!host){
+    host = document.createElement('div');
+    host.id = 'printScore';
+    host.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(host);   // score printing hides every OTHER body child
+  }
+  host.innerHTML = _scoreSvg(null, 277, 190, false).svg;
+  document.documentElement.classList.add('printing-score');
+});
+window.addEventListener('afterprint', () => document.documentElement.classList.remove('printing-score'));
+
+/* -------------------- SCORE --------------------
+   The melody on one 4/4 treble stave: on screen in place of the grid (notes in
+   their row colours, draggable up and down), and printed on A4 landscape. Every
    symbol is DRAWN (no music-font glyphs — iOS has none of those fonts, see the
    notation gotcha in CLAUDE.md). Only the rows the current view shows are
-   printed, in the grid's own C-major pitches. Time is worked in 16th-note ticks
+   included, in the grid's own C-major pitches. Time is worked in 16th-note ticks
    so all three views (16th or 8th columns) share one engraver. */
 const SCORE_VALUES = [          // ticks, base note value (16=whole … 1=16th), dotted
   { t: 16, base: 16, dot: false }, { t: 12, base: 8, dot: true },
@@ -8414,7 +8380,8 @@ function _scoreStaffPos(freq){
   const step = { 0:0, 1:0, 2:1, 3:1, 4:2, 5:3, 6:3, 7:4, 8:4, 9:5, 10:5, 11:6 }[((midi % 12) + 12) % 12];
   return (Math.floor(midi / 12) - 5) * 7 + step - 2;
 }
-// Every sounding note as {a, b, pos}: start/end tick and staff position.
+// Every sounding note as {a, b, pos, r, id}: start/end tick, staff position, and
+// the grid note it came from (so a drag on the score can move that note).
 function _scoreSpans(){
   const TPC = 16 / cols;                          // ticks per grid column
   const spans = [];
@@ -8426,7 +8393,7 @@ function _scoreSpans(){
       const attacks = n.kind === 'eighth' ? [[n.start, 1], [n.start + 1, 1]] : [[n.start, n.len]];
       for(const [s, l] of attacks){
         const a = s * TPC, b = Math.min(16, (s + l) * TPC);
-        if(b > a) spans.push({ a, b, pos });
+        if(b > a) spans.push({ a, b, pos, r, id: n.id });
       }
     }
   }
@@ -8444,7 +8411,7 @@ function _scoreEvents(spans){
     for(const piece of _scoreSplit(a, b - a, isRest)){
       const end = piece.t + piece.dur;
       piece.rest = isRest;
-      piece.notes = sounding.map(s => ({ pos: s.pos, tie: s.b > end }))
+      piece.notes = sounding.map(s => ({ pos: s.pos, tie: s.b > end, r: s.r, id: s.id }))
                             .filter((n, k, arr) => arr.findIndex(m => m.pos === n.pos) === k)
                             .sort((x, y) => x.pos - y.pos);
       events.push(piece);
@@ -8452,16 +8419,19 @@ function _scoreEvents(spans){
   }
   return events;
 }
-function buildScoreSvg(spans){
-  const W = 277, H = 190;                          // A4 landscape printable area, mm
-  const INK = '#000';
+// Draw the score into a W×H box (any units: mm for print, px on screen). Returns
+// the SVG plus the bottom-line y and line gap, which the drag code needs.
+function _scoreSvg(spans, W, H, interactive){
+  const INK = '#1d1d1d';
   const events = _scoreEvents(spans || _scoreSpans());
   const weight = e => 2.3 + 1.0 * Math.log2(e.dur) + (e.dot ? 0.6 : 0);
   const LEAD = 6.2, TAIL = 1.2;                    // clef + 4/4, and space before the final barline, in staff gaps
-  const staffL = 6, staffR = W - 6;
-  const totalG = LEAD + TAIL + events.reduce((s, e) => s + weight(e), 0);
-  const G = Math.min(16, (staffR - staffL) / totalG);   // staff-line gap
-  const stretch = (staffR - staffL - (LEAD + TAIL) * G) / events.reduce((s, e) => s + weight(e) * G, 0);
+  const staffL = W * 0.022, staffR = W - W * 0.022;
+  const sumW = events.reduce((s, e) => s + weight(e), 0);
+  // Staff-line gap: as big as the width allows, but the whole stave with stems
+  // and the ledger-line C (about 8 gaps tall) must fit the height.
+  const G = Math.min(H / 8.2, (staffR - staffL) / (LEAD + TAIL + sumW));
+  const stretch = (staffR - staffL - (LEAD + TAIL) * G) / (sumW * G);
   const B = H / 2 + 1.95 * G;                      // bottom staff line
   const y = p => B - p * G / 2;
   const rx = 0.66 * G, ry = 0.46 * G, stemW = 0.11 * G, STEM = 3.4 * G;
@@ -8480,19 +8450,29 @@ function buildScoreSvg(spans){
     + `<circle cx="-1" cy="51" r="3" fill="${INK}" stroke="none"/></g>`);
   // 4/4 — plain digits render on every platform, unlike music-font glyphs.
   const tsX = staffL + 5 * G;
-  [4, 0].forEach(p => parts.push(`<text x="${tsX}" y="${y(p + 2) + 0.72 * G}" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-weight="900" font-size="${2.05 * G}" fill="${INK}">4</text>`));
+  [4, 0].forEach(p => parts.push(`<text x="${tsX}" y="${y(p + 2) + 0.72 * G}" text-anchor="middle" font-family="Fredoka,'Comic Sans MS','Trebuchet MS',Arial,sans-serif" font-weight="700" font-size="${2.05 * G}" fill="${INK}">4</text>`));
 
   // Horizontal layout: each event gets a slot; heads sit near the slot's left.
   let x = staffL + LEAD * G;
   events.forEach(e => { e.x = x + 0.95 * G; x += weight(e) * G * stretch; });
 
-  const head = (hx, p, hollow) => {
+  // A head in its grid row's colour with an ink outline (so yellow still reads on
+  // white, and in black-and-white print). Half and whole notes keep the white
+  // hole that makes them "open". Ledger lines stay outside the head's group so
+  // they don't travel with it while it is dragged.
+  const head = (hx, n, hollow) => {
+    const p = n.pos, cy = y(p);
     let s = '';
     for(let L = -2; L >= p; L -= 2) s += `<line x1="${hx - rx - 0.4 * G}" y1="${y(L)}" x2="${hx + rx + 0.4 * G}" y2="${y(L)}" stroke="${INK}" stroke-width="${0.11 * G}"/>`;
     for(let L = 10; L <= p; L += 2) s += `<line x1="${hx - rx - 0.4 * G}" y1="${y(L)}" x2="${hx + rx + 0.4 * G}" y2="${y(L)}" stroke="${INK}" stroke-width="${0.11 * G}"/>`;
-    s += `<ellipse cx="${hx}" cy="${y(p)}" rx="${rx}" ry="${ry}" fill="${INK}" transform="rotate(-20 ${hx} ${y(p)})"/>`;
-    if(hollow) s += `<ellipse cx="${hx}" cy="${y(p)}" rx="${rx * 0.72}" ry="${ry * 0.42}" fill="#fff" transform="rotate(-38 ${hx} ${y(p)})"/>`;
-    return s;
+    const fill = (n.r != null && rowColors[n.r]) || INK;
+    let h = `<ellipse cx="${hx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${INK}" stroke-width="${0.1 * G}" transform="rotate(-20 ${hx} ${cy})"/>`;
+    if(hollow) h += `<ellipse cx="${hx}" cy="${cy}" rx="${rx * 0.6}" ry="${ry * 0.36}" fill="#fff" stroke="${INK}" stroke-width="${0.06 * G}" transform="rotate(-38 ${hx} ${cy})"/>`;
+    if(interactive && n.id != null){
+      h = `<g class="sHead" data-key="${n.r}:${n.id}" data-pos="${p}">`
+        + `<ellipse class="sHit" cx="${hx}" cy="${cy}" rx="${rx * 1.7}" ry="${ry * 2.3}" fill="transparent" pointer-events="all"/>${h}</g>`;
+    }
+    return s + h;
   };
 
   // Stem direction per event, shared across a beamed group; beams are flat.
@@ -8529,7 +8509,7 @@ function buildScoreSvg(spans){
         const clash = k > 0 && n.pos - e.notes[k - 1].pos === 1 && !e.notes[k - 1].shifted;
         n.shifted = clash;
         n.hx = e.x + (clash ? (up ? 2 * rx * 0.93 : -2 * rx * 0.93) : 0);
-        parts.push(head(n.hx, n.pos, hollow));
+        parts.push(head(n.hx, n, hollow));
         if(e.dot){
           const dy = n.pos % 2 === 0 ? -G / 2 : 0;
           parts.push(`<circle cx="${e.x + rx + 0.55 * G + (clash && up ? 2 * rx : 0)}" cy="${y(n.pos) + dy}" r="${0.15 * G}" fill="${INK}"/>`);
@@ -8579,8 +8559,11 @@ function buildScoreSvg(spans){
     });
   });
 
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Score of the tune">${parts.join('')}</svg>`;
+  const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Score of the tune">${parts.join('')}</svg>`;
+  return { svg, B, G };
 }
+// score([{a, b, pos}, …]) → print-page SVG string (see KidSequencer.Print).
+function buildScoreSvg(spans){ return _scoreSvg(spans, 277, 190, false).svg; }
 function _scoreFlag(sx, sy, up, G, INK){
   const d = up ? 1 : -1;
   return `<path d="M${sx} ${sy} C${sx + 0.25 * G} ${sy + d * 1.1 * G} ${sx + 1.5 * G} ${sy + d * 1.3 * G} ${sx + 0.95 * G} ${sy + d * 2.9 * G}`
@@ -8600,6 +8583,125 @@ function _scoreRest(e, y, G, INK){
        + `<path d="M${ax - 0.62 * G} ${ay + 0.2 * G} Q${ax - 0.2 * G} ${ay + 0.35 * G} ${ax} ${ay}" fill="none" stroke="${INK}" stroke-width="${0.12 * G}"/>`;
   }
   return s;
+}
+
+/* Score view: the stave button swaps the grid (beat numbers + cells) for the
+   score, laid over exactly that area so nothing else on the page moves. The
+   rhythm is fixed here; a note head can only be dragged to another of this
+   view's rows, which moves that grid note to the row. Rests are not dragged. */
+let _scoreQueued = false, _scoreLayout = null, _scoreRO = null;
+function toggleScoreView(){
+  _scoreOpen = !_scoreOpen;
+  document.documentElement.classList.toggle('score-open', _scoreOpen);
+  const btn = document.getElementById('staveBtn');
+  if(btn){
+    const label = _scoreOpen ? 'Show grid' : 'Show score';
+    btn.classList.toggle('active', _scoreOpen);
+    btn.setAttribute('aria-pressed', _scoreOpen ? 'true' : 'false');
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+  }
+  const panel = document.getElementById('scorePanel');
+  if(panel) panel.setAttribute('aria-hidden', _scoreOpen ? 'false' : 'true');
+  if(_scoreOpen){
+    // Any layout change (a resize, a rotate) resizes the grid; follow it.
+    if(!_scoreRO && window.ResizeObserver){
+      const wrap = document.getElementById('sequencerWrapper');
+      if(wrap){ _scoreRO = new ResizeObserver(() => _scheduleScoreRender()); _scoreRO.observe(wrap); }
+    }
+    _renderScore();
+  }
+}
+function _scheduleScoreRender(){
+  if(!_scoreOpen || _scoreQueued) return;
+  _scoreQueued = true;
+  setTimeout(() => { _scoreQueued = false; _renderScore(); }, 0);
+}
+function _renderScore(){
+  const panel = document.getElementById('scorePanel');
+  const hdr = document.getElementById('beatHeader');
+  const wrap = document.getElementById('sequencerWrapper');
+  if(!_scoreOpen || !panel || !wrap) return;
+  // Offsets are in the unscaled stage's own px, against #sequencerShell (made a
+  // positioning box by html.score-open), so the stage scale doesn't matter.
+  const top = (hdr && hdr.offsetHeight) ? Math.min(hdr.offsetTop, wrap.offsetTop) : wrap.offsetTop;
+  panel.style.left = wrap.offsetLeft + 'px';
+  panel.style.top = top + 'px';
+  panel.style.width = wrap.offsetWidth + 'px';
+  panel.style.height = (wrap.offsetTop + wrap.offsetHeight - top) + 'px';
+  const W = panel.clientWidth, H = panel.clientHeight;
+  if(!W || !H) return;
+  const out = _scoreSvg(null, W, H, true);
+  panel.innerHTML = out.svg;
+  const r0 = viewRow0();
+  _scoreLayout = {
+    B: out.B, G: out.G,
+    allowed: Array.from({ length: viewRowCount() }, (_, i) => ({ r: r0 + i, pos: _scoreStaffPos(freqs[r0 + i]) }))
+  };
+  const svg = panel.querySelector('svg');
+  if(svg) svg.addEventListener('pointerdown', _scorePointerDown);
+}
+function _scorePointerDown(e){
+  const svg = e.currentTarget;
+  const g = e.target.closest && e.target.closest('.sHead');
+  if(!g || !_scoreLayout) return;
+  e.preventDefault();
+  const key = g.dataset.key;
+  const [r0, id] = key.split(':').map(Number);
+  const pos0 = Number(g.dataset.pos);
+  // Every head drawn for this grid note — a long note is several tied heads.
+  const heads = svg.querySelectorAll(`.sHead[data-key="${key}"]`);
+  heads.forEach(h => h.classList.add('dragging'));
+  const { B, G, allowed } = _scoreLayout;
+  const svgY = ev => {
+    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse()).y;
+  };
+  let cur = allowed.find(a => a.r === r0) || { r: r0, pos: pos0 };
+  try{ svg.setPointerCapture(e.pointerId); }catch(err){}
+  _scorePreview(r0);
+  const move = ev => {
+    const p = (B - svgY(ev)) / (G / 2);
+    const best = allowed.reduce((a, b) => Math.abs(b.pos - p) < Math.abs(a.pos - p) ? b : a);
+    if(best.r !== cur.r){ cur = best; _scorePreview(best.r); }
+    const dy = -(cur.pos - pos0) * G / 2;
+    heads.forEach(h => h.setAttribute('transform', `translate(0 ${dy})`));
+  };
+  const up = () => {
+    svg.removeEventListener('pointermove', move);
+    svg.removeEventListener('pointerup', up);
+    svg.removeEventListener('pointercancel', up);
+    if(cur.r !== r0 && _scoreMoveNote(r0, id, cur.r)) return;   // redraw re-renders the score
+    _renderScore();
+  };
+  svg.addEventListener('pointermove', move);
+  svg.addEventListener('pointerup', up);
+  svg.addEventListener('pointercancel', up);
+}
+// Move one grid note to another row, same start and length. Refuses (false) if
+// anything on the target row is in the way — the rhythm can't change here.
+function _scoreMoveNote(r0, id, r1){
+  const note = notesByRow[r0].find(n => n.id === id);
+  if(!note) return false;
+  for(let c = note.start; c < note.start + note.len; c++){
+    if(occ[r1][c] !== null && occ[r1][c] !== id) return false;
+  }
+  pushUndo();
+  const idx = notesByRow[r0].indexOf(note);
+  notesByRow[r0].splice(idx, 1);
+  for(let c = note.start; c < note.start + note.len; c++){ occ[r0][c] = null; occ[r1][c] = id; }
+  notesByRow[r1].push(note);
+  redrawRowNotes(r0);
+  redrawRowNotes(r1);
+  return true;
+}
+// A short note at the row's pitch, so dragging is heard as well as seen.
+function _scorePreview(r){
+  try{
+    getAudio();
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    playInstrument(pitchFor(r), COLS_PER_BEAT / 2);
+  }catch(e){}
 }
 
 // Organised namespace for maintenance/debugging (optional)

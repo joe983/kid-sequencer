@@ -2551,26 +2551,12 @@ html.js-loading #contentWrap{
 /* Off-screen by default — the marks belong to the printed sheet only. */
 .wsMark { display: none; }
 
-/* Print chooser (Empty sheet / Score). Same overlay + card as the scan modal. */
-#printModal{ position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 10px; box-sizing: border-box; }
-#printModal.show{ display: flex; }
-#printModal .modalCard{ width: min(460px, 100%); }
-.printChoices{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 16px; }
-.printChoice{
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 16px 10px 14px; background: #fff; color: #1d1d1d; cursor: pointer;
-  border: 4px solid #1d1d1d; border-radius: 16px; box-shadow: 0 6px 0 rgba(0,0,0,0.10);
-  font: 900 16px/1.1 inherit; -webkit-appearance: none; appearance: none;
-}
-.printChoice svg{ width: 100%; max-width: 120px; height: auto; }
-.printChoice:hover{ transform: translateY(-1px); background: #f6f9ff; }
-.printChoice:active{ transform: translateY(2px); box-shadow: 0 3px 0 rgba(0,0,0,0.10); }
-
-/* The score page: built by buildScoreSvg() just before printing. Never shown
-   on screen; when printing a score, it replaces the whole app on the page. */
+/* The printed score: built at beforeprint when the score view is showing. Never
+   shown on screen; when printing, it replaces the whole app on the page, in
+   colour (the base print rule greys everything, so lift that here). */
 #printScore{ display: none; }
 @media print {
-  #printModal{ display: none !important; }
+  html.printing-score, html.printing-score body { filter: none !important; -webkit-filter: none !important; }
   html.printing-score body > *:not(#printScore){ display: none !important; }
   html.printing-score #printScore{
     display: block !important;
@@ -2612,18 +2598,37 @@ html.js-loading #contentWrap{
 .learning-mode #rightCol { transform: none !important; }
 .learning-mode #masterVolUI { --faderTrackH: calc(var(--cell) * var(--learnRows, 2) + var(--gap) * (var(--learnRows, 2) - 1)); }
 
-/* Treble-clef staff toggle — learning levels only. Hidden in the full app; the
-   icon is a music-font clef glyph centred by the shared .bigBtn .icon flexbox. */
+/* Treble-clef button. Learning levels: opens the staff panel below the grid.
+   The three public views (html.score-view-ok): swaps the grid for the score.
+   The clef is a drawn SVG, centred by its own box on every platform. */
 #staveBtn { display: none; }
-.learning-mode #staveBtn { display: inline-flex; }
-#staveBtn .staveIcon {
-  font-family: "Noto Music", "Bravura", "Segoe UI Symbol", "Arial Unicode MS", serif;
-  font-size: 23px;        /* clef glyph is tall; keep it inside the 58px button (was clipped at 36px) */
-  line-height: 1;
-  color: #1d1d1d;
-  transform: translateY(5px);  /* the clef's ink sits high in its em-box; push down to centre it */
+.learning-mode #staveBtn,
+html.score-view-ok #staveBtn { display: inline-flex; }
+#staveBtn .staveIcon { color: #1d1d1d; }
+#staveBtn .staveIcon svg { height: 38px; width: auto; display: block; }
+#staveBtn.active { background: #ffe14d; }   /* lit while the staff/score is showing */
+
+/* Score view: laid over the beat numbers + grid (position set by _renderScore),
+   which keep their space but go invisible, so nothing else on the page moves. */
+#scorePanel { display: none; }
+html.score-open #sequencerShell { position: relative; }
+html.score-open #beatHeader,
+html.score-open #sequencerWrapper { visibility: hidden; }
+html.score-open #scorePanel {
+  display: block;
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  background: #ffffff;
+  border: 3px solid #1d1d1d;
+  border-radius: 12px;
+  overflow: hidden;
+  touch-action: none;           /* a drag moves a note, never the page */
+  -webkit-user-select: none; user-select: none;
 }
-#staveBtn.active { background: #ffe14d; }   /* lit while the staff is showing */
+#scorePanel svg { display: block; }
+#scorePanel .sHead { cursor: grab; }
+#scorePanel .sHead.dragging { cursor: grabbing; filter: drop-shadow(0 3px 0 rgba(0,0,0,0.25)); }
 
 /* The staff panel sits below the grid, matching its width so the bar lines up
    under the sequencer. Hidden until toggled open. */
@@ -3174,10 +3179,6 @@ html.beginner-view #viewToggleBtn{ display: flex; }
    which keeps its reserved width (fitToViewport's `rightW`) and simply shows
    nothing — the grid stays centred against the same budget as every other view. */
 html.beginner-view #masterVolUI{ display: none; }
-/* No staff on the first-notes face — reading notation is a later step than
-   finding out that tapping a square makes a sound. Beats .learning-mode's
-   `display:inline-flex` on specificity (id + class + element). */
-html.beginner-view #staveBtn{ display: none; }
 /* /03 prints and scans its own sheet, so it keeps Print even though .learning-mode
    hides it for ?level=N (which has no measured template). Same id+class+element
    specificity trick as the toggle button above. */
