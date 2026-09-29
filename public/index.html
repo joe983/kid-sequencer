@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=88">
+<link rel="stylesheet" href="css/styles.css?v=90">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -568,9 +568,10 @@ if (LEARN_LEVEL) document.documentElement.classList.add("learning-mode"); // <ht
 // Distinguishes /03 from a ?level=N page, which shares its layout but has no way
 // back out (see the #viewToggleBtn override in styles.css).
 if (VIEW === "three") document.documentElement.classList.add("beginner-view");
-// The three public faces swap their grid for a score; ?level=N keeps its stave
-// panel and lessons keep the stave button hidden.
-const SCORE_VIEW_AVAILABLE = !LESSON && (!LEARN_LEVEL || VIEW === "three");
+// Only the first-notes face (/03) swaps its grid for a score — with three pitches
+// and one note per beat it stays readable; the busier views' scores don't.
+// ?level=N keeps its stave panel and lessons keep the stave button hidden.
+const SCORE_VIEW_AVAILABLE = !LESSON && VIEW === "three";
 if (SCORE_VIEW_AVAILABLE) document.documentElement.classList.add("score-view-ok");
 if (LESSON) document.documentElement.classList.add("lesson-mode");
 // The level key for the page currently loaded: null for the full/main grid,
@@ -751,6 +752,8 @@ const NOTE_GLYPHS = { quarter: "♩", eighth: "♫" };
 // redrawRowNotes can never hit a temporal-dead-zone reference.
 let _staveOpen = false;
 let _scoreOpen = false;   // the public views' score-instead-of-grid toggle
+let _scoreTapeStep = 0;   // last step the playhead moved to, so a fresh score tape starts in step
+let _scoreQueued = false, _scoreLayout = null, _scoreRO = null;
 // Lesson-runner state — declared early for the same TDZ-safety reason (hooks in
 // redrawRowNotes/onCellClick/tick fire before the LESSON RUNNER section parses).
 let _lessonRunning = false;          // true once the child taps START
@@ -3518,9 +3521,28 @@ function onCellClick(r, c){
   }
 
   pushUndo();
+  const idBefore = nextId;
   if(groupSizeFor(selectedSteps) > 1) placeNoteGroup(r, c, selectedSteps);
   else smartPlaceNote(r, c, selectedSteps, selectedKind);
+  if(VIEW === "three" && nextId > idBefore) _keepOneNotePerBeat(r, idBefore);
   redrawRowNotes(r);
+}
+
+/* /03: one note per beat. Whatever was just placed on row r wins; a note on any
+   other row that shares its beat is removed, so tapping a different pitch in a
+   filled beat changes that beat's note (undoable — pushUndo already ran). */
+function _keepOneNotePerBeat(r, firstNewId){
+  for(const n of notesByRow[r]){
+    if(n.id < firstNewId) continue;
+    for(let rr = 0; rr < rows; rr++){
+      if(rr === r) continue;
+      const clash = new Set();
+      for(let col = n.start; col < n.start + n.len; col++) if(occ[rr][col] !== null) clash.add(occ[rr][col]);
+      if(!clash.size) continue;
+      clash.forEach(id => deleteNoteById(rr, id));
+      redrawRowNotes(rr);
+    }
+  }
 }
 
 function redrawAllNotes(){
@@ -3940,14 +3962,21 @@ function renderStave(){
 }
 
 /* -------------------- PLAYHEAD -------------------- */
-function setPlayheadVisible(on){ playheadEl.style.display = on ? "block" : "none"; }
-function setPlayheadPlaying(isPlaying){ playheadEl.classList.toggle("playing", isPlaying); }
-function movePlayheadToStep(s){ playheadEl.style.transform = `translateX(${s * (CELL + GAP)}px)`; }
+// Each of these also drives the score's tape head (a no-op unless the score is
+// showing), which copies the grid playhead's state so the two never disagree.
+function setPlayheadVisible(on){ playheadEl.style.display = on ? "block" : "none"; _scoreTapeSync(); }
+function setPlayheadPlaying(isPlaying){ playheadEl.classList.toggle("playing", isPlaying); _scoreTapeSync(); }
+function movePlayheadToStep(s){
+  playheadEl.style.transform = `translateX(${s * (CELL + GAP)}px)`;
+  _scoreTapeStep = s;
+  _scoreTapeMove(false);
+}
 function resetPlayheadInstant(){
   playheadEl.style.transition = "none";
   movePlayheadToStep(0);
   void playheadEl.offsetWidth;
   playheadEl.style.transition = "";
+  _scoreTapeMove(true);
 }
 
 /* -------------------- ENVELOPE -------------------- */
@@ -8332,7 +8361,7 @@ window.addEventListener('beforeprint', () => {
     host.setAttribute('aria-hidden', 'true');
     document.body.appendChild(host);   // score printing hides every OTHER body child
   }
-  host.innerHTML = _scoreSvg(null, 277, 190, false).svg;
+  host.innerHTML = _scoreSvg(null, 277, 190).svg;
   document.documentElement.classList.add('printing-score');
 });
 window.addEventListener('afterprint', () => document.documentElement.classList.remove('printing-score'));
@@ -8380,8 +8409,8 @@ function _scoreStaffPos(freq){
   const step = { 0:0, 1:0, 2:1, 3:1, 4:2, 5:3, 6:3, 7:4, 8:4, 9:5, 10:5, 11:6 }[((midi % 12) + 12) % 12];
   return (Math.floor(midi / 12) - 5) * 7 + step - 2;
 }
-// Every sounding note as {a, b, pos, r, id}: start/end tick, staff position, and
-// the grid note it came from (so a drag on the score can move that note).
+// Every sounding note as {a, b, pos, r}: start/end tick, staff position, and
+// the grid row it came from (its colour).
 function _scoreSpans(){
   const TPC = 16 / cols;                          // ticks per grid column
   const spans = [];
@@ -8393,7 +8422,7 @@ function _scoreSpans(){
       const attacks = n.kind === 'eighth' ? [[n.start, 1], [n.start + 1, 1]] : [[n.start, n.len]];
       for(const [s, l] of attacks){
         const a = s * TPC, b = Math.min(16, (s + l) * TPC);
-        if(b > a) spans.push({ a, b, pos, r, id: n.id });
+        if(b > a) spans.push({ a, b, pos, r });
       }
     }
   }
@@ -8411,7 +8440,7 @@ function _scoreEvents(spans){
     for(const piece of _scoreSplit(a, b - a, isRest)){
       const end = piece.t + piece.dur;
       piece.rest = isRest;
-      piece.notes = sounding.map(s => ({ pos: s.pos, tie: s.b > end, r: s.r, id: s.id }))
+      piece.notes = sounding.map(s => ({ pos: s.pos, tie: s.b > end, r: s.r }))
                             .filter((n, k, arr) => arr.findIndex(m => m.pos === n.pos) === k)
                             .sort((x, y) => x.pos - y.pos);
       events.push(piece);
@@ -8420,8 +8449,8 @@ function _scoreEvents(spans){
   return events;
 }
 // Draw the score into a W×H box (any units: mm for print, px on screen). Returns
-// the SVG plus the bottom-line y and line gap, which the drag code needs.
-function _scoreSvg(spans, W, H, interactive){
+// the SVG and the tape-head geometry.
+function _scoreSvg(spans, W, H){
   const INK = '#1d1d1d';
   const events = _scoreEvents(spans || _scoreSpans());
   const weight = e => 2.3 + 1.0 * Math.log2(e.dur) + (e.dot ? 0.6 : 0);
@@ -8458,8 +8487,7 @@ function _scoreSvg(spans, W, H, interactive){
 
   // A head in its grid row's colour with an ink outline (so yellow still reads on
   // white, and in black-and-white print). Half and whole notes keep the white
-  // hole that makes them "open". Ledger lines stay outside the head's group so
-  // they don't travel with it while it is dragged.
+  // hole that makes them "open".
   const head = (hx, n, hollow) => {
     const p = n.pos, cy = y(p);
     let s = '';
@@ -8468,10 +8496,6 @@ function _scoreSvg(spans, W, H, interactive){
     const fill = (n.r != null && rowColors[n.r]) || INK;
     let h = `<ellipse cx="${hx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="${fill}" stroke="${INK}" stroke-width="${0.1 * G}" transform="rotate(-20 ${hx} ${cy})"/>`;
     if(hollow) h += `<ellipse cx="${hx}" cy="${cy}" rx="${rx * 0.6}" ry="${ry * 0.36}" fill="#fff" stroke="${INK}" stroke-width="${0.06 * G}" transform="rotate(-38 ${hx} ${cy})"/>`;
-    if(interactive && n.id != null){
-      h = `<g class="sHead" data-key="${n.r}:${n.id}" data-pos="${p}">`
-        + `<ellipse class="sHit" cx="${hx}" cy="${cy}" rx="${rx * 1.7}" ry="${ry * 2.3}" fill="transparent" pointer-events="all"/>${h}</g>`;
-    }
     return s + h;
   };
 
@@ -8522,7 +8546,7 @@ function _scoreSvg(spans, W, H, interactive){
       line(e.sx, from, e.sx, e.stemEnd, stemW);
       if(!beamed && e.base <= 2){
         const n = e.base === 1 ? 2 : 1;
-        for(let k = 0; k < n; k++) parts.push(_scoreFlag(e.sx, e.stemEnd + (up ? 1 : -1) * k * 0.85 * G, up, G, INK));
+        for(let k = 0; k < n; k++) parts.push(_scoreFlag(e.sx - stemW / 2, e.stemEnd + (up ? 1 : -1) * k * 0.8 * G, up, G, INK));
       }
     }
     if(beamed){
@@ -8559,44 +8583,65 @@ function _scoreSvg(spans, W, H, interactive){
     });
   });
 
+  // Tape head: an x for every 16th tick. Each event's tick sits on its head (or
+  // rest) and the ticks inside it spread evenly towards the next one, so a long
+  // note is crossed at the same pace the grid's playhead crosses its block.
+  const endX = staffR - 1.3 * G;
+  const tickX = new Array(17);
+  events.forEach((e, i) => {
+    const nextX = events[i + 1] ? events[i + 1].x : endX;
+    for(let t = e.t; t < e.t + e.dur; t++) tickX[t] = e.x + (t - e.t) / e.dur * (nextX - e.x);
+  });
+  tickX[16] = endX;
+  const tape = {
+    tickX,
+    top: Math.max(0, y(8) - 2.9 * G),
+    height: Math.min(H, y(0) + 2.5 * G) - Math.max(0, y(8) - 2.9 * G),
+    width: 1.9 * G
+  };
+
   const svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Score of the tune">${parts.join('')}</svg>`;
-  return { svg, B, G };
+  return { svg, tape };
 }
 // score([{a, b, pos}, …]) → print-page SVG string (see KidSequencer.Print).
-function buildScoreSvg(spans){ return _scoreSvg(spans, 277, 190, false).svg; }
-function _scoreFlag(sx, sy, up, G, INK){
-  const d = up ? 1 : -1;
-  return `<path d="M${sx} ${sy} C${sx + 0.25 * G} ${sy + d * 1.1 * G} ${sx + 1.5 * G} ${sy + d * 1.3 * G} ${sx + 0.95 * G} ${sy + d * 2.9 * G}`
-       + ` C${sx + 1.15 * G} ${sy + d * 1.8 * G} ${sx + 0.35 * G} ${sy + d * 1.35 * G} ${sx} ${sy + d * 1.3 * G} Z" fill="${INK}"/>`;
+function buildScoreSvg(spans){ return _scoreSvg(spans, 277, 190).svg; }
+// A STRAIGHT flag, the same parallelogram the grid's note buttons draw: it hangs
+// off the stem end and slants away from the head (down-right on an up stem,
+// up-right on a down stem). x0 is the stem's left edge so the two join solidly.
+function _scoreFlag(x0, sy, up, G, INK){
+  const d = up ? 1 : -1, w = 1.05 * G, drop = 0.85 * G, th = 0.42 * G;
+  return `<path d="M${x0} ${sy} L${x0 + w} ${sy + d * drop} L${x0 + w} ${sy + d * (drop + th)} L${x0} ${sy + d * th} Z" fill="${INK}"/>`;
 }
+// Rests, all centred on the stave's middle line. 8th and 16th rests share one
+// height; a 16th just carries a second flag.
 function _scoreRest(e, y, G, INK){
-  const x = e.x, m = y(4);
-  if(e.base === 16) return `<rect x="${x - 0.6 * G}" y="${y(6)}" width="${1.2 * G}" height="${0.5 * G}" fill="${INK}"/>`;
-  if(e.base === 8)  return `<rect x="${x - 0.6 * G}" y="${y(4) - 0.5 * G}" width="${1.2 * G}" height="${0.5 * G}" fill="${INK}"/>`;
-  if(e.base === 4)  return `<path d="M${x - 0.3 * G} ${m - 1.5 * G} L${x + 0.35 * G} ${m - 0.6 * G} L${x - 0.25 * G} ${m + 0.1 * G} L${x + 0.35 * G} ${m + 0.8 * G} C${x - 0.3 * G} ${m + 0.5 * G} ${x - 0.45 * G} ${m + 1.1 * G} ${x} ${m + 1.5 * G}" fill="none" stroke="${INK}" stroke-width="${0.26 * G}" stroke-linejoin="round" stroke-linecap="round"/>`;
-  // 8th and 16th rests: a dot with an arm, on a slanted stem.
-  const arms = e.base === 1 ? 2 : 1;
-  let s = `<line x1="${x + 0.45 * G}" y1="${m - 0.75 * G}" x2="${x - 0.15 * G - (arms - 1) * 0.3 * G}" y2="${m + 1.0 * G + (arms - 1) * 0.9 * G}" stroke="${INK}" stroke-width="${0.13 * G}" stroke-linecap="round"/>`;
-  for(let k = 0; k < arms; k++){
-    const ay = m - 0.75 * G + k * 0.9 * G, ax = x + 0.45 * G - k * 0.3 * G;
-    s += `<circle cx="${ax - 0.62 * G}" cy="${ay + 0.05 * G}" r="${0.21 * G}" fill="${INK}"/>`
-       + `<path d="M${ax - 0.62 * G} ${ay + 0.2 * G} Q${ax - 0.2 * G} ${ay + 0.35 * G} ${ax} ${ay}" fill="none" stroke="${INK}" stroke-width="${0.12 * G}"/>`;
+  const x = e.x, m = y(4), k = 0.82;              // k: overall rest size
+  if(e.base === 16) return `<rect x="${x - 0.5 * G}" y="${y(6)}" width="${G}" height="${0.45 * G}" fill="${INK}"/>`;
+  if(e.base === 8)  return `<rect x="${x - 0.5 * G}" y="${y(4) - 0.45 * G}" width="${G}" height="${0.45 * G}" fill="${INK}"/>`;
+  const u = k * G;
+  if(e.base === 4)  return `<path d="M${x - 0.3 * u} ${m - 1.5 * u} L${x + 0.35 * u} ${m - 0.6 * u} L${x - 0.25 * u} ${m + 0.1 * u} L${x + 0.35 * u} ${m + 0.8 * u} C${x - 0.3 * u} ${m + 0.5 * u} ${x - 0.45 * u} ${m + 1.1 * u} ${x} ${m + 1.5 * u}" fill="none" stroke="${INK}" stroke-width="${0.26 * u}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  const xt = x + 0.4 * u, yt = m - 0.95 * u, xb = x - 0.2 * u, yb = m + 1.05 * u;
+  let s = `<line x1="${xt}" y1="${yt}" x2="${xb}" y2="${yb}" stroke="${INK}" stroke-width="${0.14 * u}" stroke-linecap="round"/>`;
+  const flags = e.base === 1 ? 2 : 1;
+  for(let f = 0; f < flags; f++){
+    const ay = yt + f * 0.8 * u;                     // where this flag meets the stem
+    const ax = xt + (xb - xt) * (ay - yt) / (yb - yt);
+    s += `<circle cx="${ax - 0.62 * u}" cy="${ay + 0.08 * u}" r="${0.22 * u}" fill="${INK}"/>`
+       + `<path d="M${ax - 0.62 * u} ${ay + 0.24 * u} Q${ax - 0.22 * u} ${ay + 0.36 * u} ${ax} ${ay}" fill="none" stroke="${INK}" stroke-width="${0.13 * u}"/>`;
   }
   return s;
 }
 
-/* Score view: the stave button swaps the grid (beat numbers + cells) for the
-   score, laid over exactly that area so nothing else on the page moves. The
-   rhythm is fixed here; a note head can only be dragged to another of this
-   view's rows, which moves that grid note to the row. Rests are not dragged. */
-let _scoreQueued = false, _scoreLayout = null, _scoreRO = null;
+/* Score view (/03): the stave button swaps the grid (beat numbers + cells) for
+   the score, laid over exactly that area so nothing else on the page moves. It
+   is read-only — notes are entered on the grid. */
 function toggleScoreView(){
   _scoreOpen = !_scoreOpen;
   document.documentElement.classList.toggle('score-open', _scoreOpen);
   const btn = document.getElementById('staveBtn');
   if(btn){
+    // No lit state: the button stays white whichever way round it is.
     const label = _scoreOpen ? 'Show grid' : 'Show score';
-    btn.classList.toggle('active', _scoreOpen);
     btn.setAttribute('aria-pressed', _scoreOpen ? 'true' : 'false');
     btn.setAttribute('aria-label', label);
     btn.title = label;
@@ -8631,77 +8676,53 @@ function _renderScore(){
   panel.style.height = (wrap.offsetTop + wrap.offsetHeight - top) + 'px';
   const W = panel.clientWidth, H = panel.clientHeight;
   if(!W || !H) return;
-  const out = _scoreSvg(null, W, H, true);
-  panel.innerHTML = out.svg;
-  const r0 = viewRow0();
-  _scoreLayout = {
-    B: out.B, G: out.G,
-    allowed: Array.from({ length: viewRowCount() }, (_, i) => ({ r: r0 + i, pos: _scoreStaffPos(freqs[r0 + i]) }))
-  };
-  const svg = panel.querySelector('svg');
-  if(svg) svg.addEventListener('pointerdown', _scorePointerDown);
-}
-function _scorePointerDown(e){
-  const svg = e.currentTarget;
-  const g = e.target.closest && e.target.closest('.sHead');
-  if(!g || !_scoreLayout) return;
-  e.preventDefault();
-  const key = g.dataset.key;
-  const [r0, id] = key.split(':').map(Number);
-  const pos0 = Number(g.dataset.pos);
-  // Every head drawn for this grid note — a long note is several tied heads.
-  const heads = svg.querySelectorAll(`.sHead[data-key="${key}"]`);
-  heads.forEach(h => h.classList.add('dragging'));
-  const { B, G, allowed } = _scoreLayout;
-  const svgY = ev => {
-    const pt = svg.createSVGPoint(); pt.x = ev.clientX; pt.y = ev.clientY;
-    return pt.matrixTransform(svg.getScreenCTM().inverse()).y;
-  };
-  let cur = allowed.find(a => a.r === r0) || { r: r0, pos: pos0 };
-  try{ svg.setPointerCapture(e.pointerId); }catch(err){}
-  _scorePreview(r0);
-  const move = ev => {
-    const p = (B - svgY(ev)) / (G / 2);
-    const best = allowed.reduce((a, b) => Math.abs(b.pos - p) < Math.abs(a.pos - p) ? b : a);
-    if(best.r !== cur.r){ cur = best; _scorePreview(best.r); }
-    const dy = -(cur.pos - pos0) * G / 2;
-    heads.forEach(h => h.setAttribute('transform', `translate(0 ${dy})`));
-  };
-  const up = () => {
-    svg.removeEventListener('pointermove', move);
-    svg.removeEventListener('pointerup', up);
-    svg.removeEventListener('pointercancel', up);
-    if(cur.r !== r0 && _scoreMoveNote(r0, id, cur.r)) return;   // redraw re-renders the score
-    _renderScore();
-  };
-  svg.addEventListener('pointermove', move);
-  svg.addEventListener('pointerup', up);
-  svg.addEventListener('pointercancel', up);
-}
-// Move one grid note to another row, same start and length. Refuses (false) if
-// anything on the target row is in the way — the rhythm can't change here.
-function _scoreMoveNote(r0, id, r1){
-  const note = notesByRow[r0].find(n => n.id === id);
-  if(!note) return false;
-  for(let c = note.start; c < note.start + note.len; c++){
-    if(occ[r1][c] !== null && occ[r1][c] !== id) return false;
+  // The SVG lives in its own host so a redraw never takes the tape head with it.
+  let host = panel.querySelector('.scoreSvgHost');
+  if(!host){
+    host = document.createElement('div');
+    host.className = 'scoreSvgHost';
+    const tapeEl = document.createElement('div');
+    tapeEl.className = 'scorePlayhead';
+    tapeEl.innerHTML = '<div class="playheadBody"></div>';
+    panel.innerHTML = '';
+    panel.append(host, tapeEl);
   }
-  pushUndo();
-  const idx = notesByRow[r0].indexOf(note);
-  notesByRow[r0].splice(idx, 1);
-  for(let c = note.start; c < note.start + note.len; c++){ occ[r0][c] = null; occ[r1][c] = id; }
-  notesByRow[r1].push(note);
-  redrawRowNotes(r0);
-  redrawRowNotes(r1);
-  return true;
+  const out = _scoreSvg(null, W, H);
+  host.innerHTML = out.svg;
+  _scoreLayout = { tape: out.tape };
+  _scoreTapeLayout();
 }
-// A short note at the row's pitch, so dragging is heard as well as seen.
-function _scorePreview(r){
-  try{
-    getAudio();
-    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    playInstrument(pitchFor(r), COLS_PER_BEAT / 2);
-  }catch(e){}
+// The score's tape head: the grid playhead's look (same .playheadBody, same
+// bouncy move transition, same wiggle while playing), riding the score's own
+// tick positions instead of the grid's columns.
+function _scoreTapeEl(){
+  return (_scoreOpen && _scoreLayout) ? document.querySelector('#scorePanel .scorePlayhead') : null;
+}
+function _scoreTapeSync(){
+  const el = _scoreTapeEl();
+  if(!el) return;
+  el.classList.toggle('on', playheadEl.style.display === 'block');
+  el.classList.toggle('playing', playheadEl.classList.contains('playing'));
+}
+function _scoreTapeMove(instant){
+  const el = _scoreTapeEl();
+  if(!el) return;
+  const tape = _scoreLayout.tape;
+  const tick = Math.max(0, Math.min(16, Math.round(_scoreTapeStep * 16 / cols)));
+  const x = tape.tickX[tick] - tape.width / 2;
+  if(instant) el.style.transition = 'none';
+  el.style.transform = `translateX(${x}px)`;
+  if(instant){ void el.offsetWidth; el.style.transition = ''; }
+}
+function _scoreTapeLayout(){
+  const el = _scoreTapeEl();
+  if(!el) return;
+  const tape = _scoreLayout.tape;
+  el.style.top = tape.top + 'px';
+  el.style.height = tape.height + 'px';
+  el.style.width = tape.width + 'px';
+  _scoreTapeSync();
+  _scoreTapeMove(true);
 }
 
 // Organised namespace for maintenance/debugging (optional)
