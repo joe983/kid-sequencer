@@ -6395,7 +6395,45 @@ function _gridRegistration(imgData, geom, mapPoint){
    sheet's rows have to be shifted down into the model or every scanned note
    lands in one of the three rows this view doesn't draw — invisible and silent.
    viewRow0() is 0 everywhere else, so this is a no-op on the other two sheets. */
+/* /03 allows one pitch per beat. When a scanned sheet colours two rows in the
+   same beat, beats 1 and 3 keep the LOWER pitch (the bottom row, larger index)
+   and beats 2 and 4 keep the HIGHER one. The losing note is clipped away only
+   over the beats it lost — one that also sits in a beat it won stays there.
+   Two notes on the SAME row in a beat (a pair of 8ths) are not a clash. */
+function _onePitchPerBeat(notes){
+  const cpb = COLS_PER_BEAT, beats = Math.ceil(cols / cpb);
+  const inBeat = (n, b) => n.start < (b + 1) * cpb && n.start + n.len > b * cpb;
+  const winner = [];
+  for(let b = 0; b < beats; b++){
+    const present = [...new Set(notes.filter(n => inBeat(n, b)).map(n => n.row))];
+    if(present.length < 2){ winner.push(present.length ? present[0] : null); continue; }
+    winner.push(b % 2 === 0 ? Math.max(...present) : Math.min(...present));
+  }
+  const out = [];
+  for(const n of notes){
+    let segStart = null;
+    const flush = end => {
+      if(segStart === null) return;
+      // A clipped remainder can be any length; write it as legal ones, longest first.
+      for(let s = segStart, left = end - segStart; left > 0;){
+        const len = [8, 4, 2, 1].find(l => l <= left);
+        out.push({ ...n, start: s, len });
+        s += len; left -= len;
+      }
+      segStart = null;
+    };
+    for(let c = n.start; c < n.start + n.len; c++){
+      const keep = winner[Math.floor(c / cpb)] === n.row;
+      if(keep && segStart === null) segStart = c;
+      else if(!keep) flush(c);
+    }
+    flush(n.start + n.len);
+  }
+  return out;
+}
+
 function _applyScannedNotes(notes){
+  if(VIEW === "three") notes = _onePitchPerBeat(notes);
   pushUndo();
   notesByRow = Array.from({length: rows}, () => []);
   occ        = Array.from({length: rows}, () => Array(cols).fill(null));
@@ -8782,6 +8820,7 @@ window.KidSequencer = {
     notesFromFrame: _scanNotesFromFrame,
     processFrame: _processScanFrame,
     applyPending: _applyPendingScanImport,
+    applyNotes: _applyScannedNotes,          // headless: place a scanned note list on this page
     currentSheetId: _currentSheetId,
     gridMapper: _gridMapper,
     sheetCornersFrom: _sheetCornersFrom,
