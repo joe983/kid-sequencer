@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=90">
+<link rel="stylesheet" href="css/styles.css?v=91">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -71,6 +71,7 @@
 <circle cx="12" cy="14" fill="currentColor" opacity="0.75" r="2.2"></circle>
 </svg></span></button>
 <button aria-label="Show staff" aria-pressed="false" class="bigBtn iconBtn" id="staveBtn" onclick="toggleStave()" title="Show staff"><span class="icon staveIcon"><svg aria-hidden="true" viewBox="-16 -19 33 79"><g fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 31 C1 33 -3 30 -2 26 C-1 21 8 20 11 25 C14 31 9 39 1 39 C-9 39 -13 30 -9 22 C-5 14 8 8 11 -2 C13 -8 11 -15 7 -15 C3 -15 1 -9 2 -2 L7 48 C8 54 3 57 -1 54"/></g><circle cx="-1" cy="51" r="4.2" fill="currentColor"/></svg></span></button>
+<button aria-label="Time signature" class="bigBtn iconBtn" id="timeSigBtn" onclick="toggleTimeSig()" title="Time signature"><span class="icon timeSigIcon" aria-hidden="true"><span class="tsNum" id="tsTop">4</span><span class="tsNum" id="tsBot">4</span></span></button>
 <button aria-label="Save" class="bigBtn iconBtn" id="saveBtn" onclick="saveToCloud()" title="Save tune"><span class="icon saveIcon"><svg aria-hidden="true" viewBox="0 0 24 24">
 <path d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z" fill="currentColor"></path>
 <polyline fill="white" opacity="0.85" points="9,3 9,9 15,9 15,3"></polyline>
@@ -478,6 +479,16 @@ const VIEW = _viewSeg === "02" ? "five" : _viewSeg === "03" ? "three" : "full";
 if(VIEW === "full" && new URLSearchParams(location.search).get("notes") === "5"){
   location.replace(VIEW_URL.five);
 }
+/* Time signature — /02 only, chosen by the address like the view itself:
+   /02?time=34 is 3/4, anything else is 4/4. A 3/4 bar is 3 beats of 4
+   sixteenths, so `cols` is 12 there. Switching is a page load that carries the
+   tune across (see toggleTimeSig). 6/8 is meant to slot in here later as
+   another entry: it needs its own beat grouping (2 beats of 3 eighths), so
+   BEATS_PER_BAR and COLS_PER_BEAT will both come from this table then. */
+const TIME_SIGS = { "4/4": { param: null, beats: 4 }, "3/4": { param: "34", beats: 3 } };
+const TIME_SIG = (VIEW === "five" && new URLSearchParams(location.search).get("time") === "34") ? "3/4" : "4/4";
+const BEATS_PER_BAR = TIME_SIGS[TIME_SIG].beats;
+if(TIME_SIG === "3/4") document.documentElement.classList.add("ts-34");
 
 /* -------------------- LEARNING LEVELS --------------------
    Scaled-back "scaffolding" variants selected by a ?level=N URL param.
@@ -633,7 +644,8 @@ const SHEET_GEOMETRY = {
 };
 
 const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
-const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : 16;
+const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : BEATS_PER_BAR * 4;
+document.documentElement.style.setProperty("--gridCols", String(cols));
 
 // Beat numbering, two different treatments (see buildBeatHeader):
 //  - ?level=N and lesson mode keep the faded in-cell `.beatNum`. Their stage is
@@ -731,7 +743,7 @@ const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps : [
   { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
   { steps: 8,  label: "1/2",   svg: HALF_NOTE_SVG,  divs: 2,  symClass:"half" },
   { steps: 16, label: "Whole",  svg: WHOLE_NOTE_SVG,  divs: 1,  symClass:"whole" }
-];
+].filter(t => t.steps <= cols);   // a whole note can't fit a 3/4 bar
 
 // Artwork for the glyph drawn inside a placed block in the 5-note view, keyed by
 // note.len (1/2/4/8/16). Built FROM the tool definitions, so a block always shows
@@ -918,6 +930,16 @@ const DRUM_PATTERNS = {
     shaker:  [0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22,  0.28,0.22,0.28,0.22],
     cowbell: [0.35,0,0,0, 0,0,0,0,    0.35,0,0,0,  0,0,0,0]
   },
+  // 3/4 (the /02 3/4 page's only rhythm) — 12 steps, three beats of 16ths.
+  // "OOM-pah-pah": a heavy kick on beat 1, lighter claps on beats 2 and 3, and
+  // hats that are strongest on the beats so the 1-2-3 count is easy to feel.
+  // Plays on the Techno kit's samples (DRUM_KIT_ALIAS).
+  waltz: {
+    kick: [1.2,0,0,0,  0,0,0,0,  0,0,0,0],
+    sub:  [0.65,0,0,0, 0,0,0,0,  0,0,0,0],
+    clap: [0,0,0,0,    0.55,0,0,0, 0.55,0,0,0],
+    hatC: [0.30,0,0.12,0, 0.22,0,0.12,0, 0.22,0,0.12,0]
+  },
   // Learning Level 1 — 8 columns at 8th-note resolution (stepDiv:2), so the bar
   // is one 4/4 measure. Length-8 arrays, indexed by column 0–7. Key ≠ "techhouse"
   // so the techhouse swing branch in playDrumsAtStep stays off (on-the-beat feel).
@@ -1078,8 +1100,10 @@ function syncAudioAndUI(){
   // Audio: mute/unmute the drum bus
   setDrumsMuted(isMuted);
 
-  // Audio: pick which pattern to play when unmuted (default to techhouse)
-  drumStyle = DRUM_STYLE_AUDIO[activeDrumStyle] || "techhouse";
+  // Audio: pick which pattern to play when unmuted (default to techhouse). In
+  // 3/4 there is one rhythm: the Techno button plays the waltz pattern, and the
+  // other style buttons are greyed out (html.ts-34 in styles.css).
+  drumStyle = TIME_SIG === "3/4" ? "waltz" : (DRUM_STYLE_AUDIO[activeDrumStyle] || "techhouse");
 
   // UI: selected state across all 6 buttons
   const buttons = DRUM_STYLE_BUTTONS();
@@ -1094,6 +1118,7 @@ function syncAudioAndUI(){
 
 // Function called when a drum button (style) is clicked
 function handleDrumClick(clickedStyle){
+  if(TIME_SIG === "3/4" && clickedStyle !== "techno") return;   // one rhythm in 3/4
   // Ensure audio exists if the user is trying to hear drums.
   getAudio();
   ensureAudioRunning();
@@ -1213,7 +1238,8 @@ function applyLockState(){
   // a striped overlay — the click handler (handleAiBtn) decides upsell vs run.
   const aiBtnEl = document.getElementById("aiBtn");
   if(aiBtnEl){
-    const showAi = isLoggedIn && !LEARN_LEVEL;
+    // The AI track engine builds 4/4 songs only, so there is no AI song in 3/4.
+    const showAi = isLoggedIn && !LEARN_LEVEL && TIME_SIG === "4/4";
     aiBtnEl.style.display = showAi ? "" : "none";
     aiBtnEl.classList.toggle("locked", !isPaid);
   }
@@ -2857,6 +2883,8 @@ function playMelodicSample(instrument, freq, steps){
   return true;
 }
 
+// Patterns that have no sample kit of their own borrow another style's.
+const DRUM_KIT_ALIAS = { waltz: "techhouse" };
 function playDrumsAtStep(s){
   if(drumsMuted) return;
   if(!audioCtx || !drumBus) return;
@@ -2874,7 +2902,7 @@ function playDrumsAtStep(s){
 
   // Generic voice dispatch — any pattern can include any subset of these tracks.
   // Each voice prefers its sample kit layer (if loaded) and falls back to synth.
-  const kit = drumSampleKits && drumSampleKits[drumStyle];
+  const kit = drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle];
   const hit = (voice, synthFn) => {
     const v = pat[voice] && pat[voice][s];
     if(!v) return;
@@ -3332,6 +3360,8 @@ function flashBeat(i){
   badge.classList.remove("beatOn");
   void badge.offsetWidth;
   badge.classList.add("beatOn");
+  // 3/4: beat 1 is the strong beat, so it flashes bigger (CSS .beatOne).
+  if(TIME_SIG === "3/4") badge.classList.toggle("beatOne", i === 0);
 }
 
 function clearBeatFlashes(){
@@ -4956,6 +4986,44 @@ function _syncViewToggleBtn(){
    same way everywhere is more predictable than carrying notes across one hop
    and dropping them on the next. */
 function goToView(v){ location.assign(VIEW_URL[v] || VIEW_URL.full); }
+
+/* /02's time-signature button: 4/4 ⇄ 3/4. Like a view change it is a page load
+   (cols is fixed per page), so the tune rides across in sessionStorage and is
+   re-applied by _applyPendingTimeHandoff — whatever fits the new bar is kept. */
+const TIME_SIG_ORDER = ["4/4", "3/4"];
+function toggleTimeSig(){
+  if(VIEW !== "five") return;
+  const next = TIME_SIG_ORDER[(TIME_SIG_ORDER.indexOf(TIME_SIG) + 1) % TIME_SIG_ORDER.length];
+  try{ stop(); }catch(e){}
+  try{ sessionStorage.setItem(TS_HANDOFF_KEY, JSON.stringify({ ..._currentSequenceData(), _tsSwitch: true })); }catch(e){}
+  location.assign(_timeSigUrl(next));
+}
+window.toggleTimeSig = toggleTimeSig;
+function _applyPendingTimeHandoff(){
+  if(_tsHandoffApplied || !_fiveNote) return;
+  let raw = null;
+  try{ raw = sessionStorage.getItem(TS_HANDOFF_KEY); }catch(e){}
+  if(!raw) return;
+  _tsHandoffApplied = true;
+  try{ sessionStorage.removeItem(TS_HANDOFF_KEY); }catch(e){}
+  let d = null;
+  try{ d = JSON.parse(raw); }catch(e){ return; }
+  if(!d) return;
+  d._tsSwitch = true;   // already on the page it was sent to — never bounce again
+  _applySequenceData(d);
+}
+(function _syncTimeSigBtn(){
+  const [top, bot] = TIME_SIG.split("/");
+  const t = document.getElementById("tsTop"), b = document.getElementById("tsBot");
+  if(t) t.textContent = top;
+  if(b) b.textContent = bot;
+  const btn = document.getElementById("timeSigBtn");
+  if(btn){
+    const label = TIME_SIG + " time — tap to change";
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+  }
+})();
 function toggleNoteView(){ goToView(VIEW_NEXT); }
 window.toggleNoteView = toggleNoteView;
 
@@ -5004,11 +5072,33 @@ async function _getFirebaseUser(){
    sequence in sessionStorage, since the load itself would otherwise be lost in
    the page change. Picked up by _applyPendingViewHandoff after the grid builds. */
 const VIEW_HANDOFF_KEY = "kidseq_view_handoff";
+// The same hand-over across a time-signature switch on /02 (see toggleTimeSig).
+const TS_HANDOFF_KEY = "kidseq_ts_handoff";
+let _tsHandoffApplied = false;
+function _timeSigUrl(ts){
+  const p = TIME_SIGS[ts] && TIME_SIGS[ts].param;
+  return VIEW_URL.five + (p ? "?time=" + p : "");
+}
+// The tune as save stores it — also what a time-signature switch carries.
+function _currentSequenceData(){
+  return {
+    tempo, instrument, drumStyle, drumsMuted, selectedSteps, key: currentKey, timeSig: TIME_SIG,
+    notesByRow: notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})))
+  };
+}
 function _applySequenceData(d){
   if(_fiveNote && Array.isArray(d.notesByRow) &&
      d.notesByRow.some(n => typeof n.row === "number" && n.row < FIVE_VIEW_OFFSET)){
     try{ sessionStorage.setItem(VIEW_HANDOFF_KEY, JSON.stringify(d)); }catch(e){}
     goToView("full");
+    return;
+  }
+  // A tune saved in the other time signature opens on that page of /02 rather
+  // than being squeezed into this one. Saves from before 3/4 existed are 4/4.
+  const dTs = TIME_SIGS[d.timeSig] ? d.timeSig : "4/4";
+  if(_fiveNote && dTs !== TIME_SIG && !d._tsSwitch){
+    try{ sessionStorage.setItem(TS_HANDOFF_KEY, JSON.stringify(d)); }catch(e){}
+    location.assign(_timeSigUrl(dTs));
     return;
   }
   try{ stop(); }catch(e){}
@@ -5018,7 +5108,7 @@ function _applySequenceData(d){
   currentKey = (typeof d.key === "string" && KEY_ORDER.includes(d.key)) ? d.key : 'C';
   _updateKeyBtn();
   if(d.instrument) setInstrument(d.instrument);
-  if(typeof d.selectedSteps === "number"){ selectedSteps = d.selectedSteps; buildTools(); }
+  if(typeof d.selectedSteps === "number" && d.selectedSteps <= cols){ selectedSteps = d.selectedSteps; buildTools(); }
   activeDrumStyle = d.drumsMuted ? null : (DRUM_STYLE_UI[d.drumStyle] || "techno");
   syncAudioAndUI();
   notesByRow = Array.from({length: rows}, () => []);
@@ -5026,9 +5116,14 @@ function _applySequenceData(d){
   nextId     = 1;
   if(Array.isArray(d.notesByRow)){
     for(const n of d.notesByRow){
-      if(typeof n.row==="number" && n.row>=0 && n.row<rows &&
-         typeof n.start==="number" && typeof n.len==="number" &&
-         n.start>=0 && n.start+n.len<=cols) placeNote(n.row, n.start, n.len);
+      if(!(typeof n.row==="number" && n.row>=0 && n.row<rows &&
+           typeof n.start==="number" && typeof n.len==="number" &&
+           n.start>=0 && n.start<cols)) continue;
+      // Going 4/4 → 3/4, a note that runs past the shorter bar keeps the part
+      // that fits, as the longest note length that does (beat-4 notes go).
+      let len = n.len;
+      if(n.start + len > cols) len = [8, 4, 2, 1].find(l => l <= cols - n.start);
+      if(len && canPlace(n.row, n.start, len)) placeNote(n.row, n.start, len);
     }
   }
   redrawAllNotes();
@@ -5089,11 +5184,7 @@ async function confirmSaveName(){
       return;
     }
 
-    const payload = {
-      name, savedAt: serverTimestamp(),
-      tempo, instrument, drumStyle, drumsMuted, selectedSteps, key: currentKey,
-      notesByRow: notesByRow.flatMap((row,r)=>row.map(n=>({row:r,start:n.start,len:n.len})))
-    };
+    const payload = { name, savedAt: serverTimestamp(), ..._currentSequenceData() };
     if(_currentAiTrack){ payload.hasAi = true; payload.audioPath = _currentAiTrack.path; payload.audioUrl = _currentAiTrack.url; }
     await setDoc(doc(db,"users",user.uid,"sequences",slug), payload);
     showSaveToast("saved");
@@ -6485,6 +6576,7 @@ function _routeScannedNotes(geom, notes){
 const VIEW_SHEET_ID = { full: "kidseq:main", five: "kidseq:main5", three: "kidseq:main3" };
 function _currentSheetId(){
   if(LEARN_LEVEL && VIEW !== "three") return null;   // ?level=N / ?lesson= pages
+  if(TIME_SIG !== "4/4") return null;                 // no 3/4 worksheet yet
   const geom = SHEET_GEOMETRY[VIEW_SHEET_ID[VIEW]];
   return (geom && geom.grid) ? VIEW_SHEET_ID[VIEW] : null;
 }
@@ -6912,6 +7004,8 @@ root.classList.add('stageScaled');
       // Likewise for a tune the five-note view handed over because it used rows
       // that view can't show.
       try{ _applyPendingViewHandoff(); }catch(e){}
+      // …and a tune carried across a 3/4 ⇄ 4/4 switch on /02.
+      try{ _applyPendingTimeHandoff(); }catch(e){}
       positionRobotLogo();
       // Cell rects only become valid AFTER buildGrid renders rows.
       syncTopBarLayout();

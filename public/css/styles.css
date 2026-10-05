@@ -569,7 +569,7 @@ body.loggedIn #robotLogo{
     /* -------------------- DRUMS PANEL -------------------- */
     #drumPanel{
       margin-top: 10px;
-      width: calc(var(--cell) * 16 + var(--gap) * 15);
+      width: calc(var(--cell) * var(--gridCols, 16) + var(--gap) * (var(--gridCols, 16) - 1));
       border: none;
       background: none;
       box-shadow: none;
@@ -801,6 +801,16 @@ body.loggedIn #robotLogo{
     .beatBadge.beatOn{
       animation: beatFlash var(--beatFlash, 260ms) ease-out;
     }
+    /* 3/4: beat 1 is the strong beat — a deeper colour, a bigger glow and a
+       brief swell. transform doesn't move layout, so column alignment holds. */
+    @keyframes beatFlashStrong{
+      0%   { background:#ffb820; transform: scale(1.32); box-shadow: 0 3px 0 rgba(0,0,0,0.12), 0 0 18px 5px rgba(255,170,30,0.80); }
+      55%  { background:#ffe08a; transform: scale(1.12); box-shadow: 0 3px 0 rgba(0,0,0,0.10), 0 0 9px 2px rgba(255,170,30,0.35); }
+      100% { background:#ffffff; transform: scale(1);    box-shadow: 0 3px 0 rgba(0,0,0,0.08), 0 0 0 0 rgba(255,170,30,0); }
+    }
+    .beatBadge.beatOn.beatOne{
+      animation: beatFlashStrong var(--beatFlash, 260ms) ease-out;
+    }
     /* Respect a reduced-motion preference: keep the beat legible (a flat tint
        that blinks off, no pulsing glow or travelling brightness).
        It must still be an ANIMATION, not a static background: .beatOn is only
@@ -812,7 +822,8 @@ body.loggedIn #robotLogo{
       100% { background:#ffffff; }
     }
     @media (prefers-reduced-motion: reduce){
-      .beatBadge.beatOn{
+      .beatBadge.beatOn,
+      .beatBadge.beatOn.beatOne{
         animation: beatFlashFlat var(--beatFlash, 260ms) steps(1, end);
       }
     }
@@ -2608,6 +2619,24 @@ html.score-view-ok #staveBtn { display: inline-flex; }
 #staveBtn .staveIcon { color: #1d1d1d; }
 #staveBtn .staveIcon svg { height: 38px; width: auto; display: block; }
 #staveBtn.active { background: #ffe14d; }   /* lit while the staff/score is showing */
+
+/* Time-signature button — /02 only. The current signature as two stacked
+   numbers, like it is written on a stave; tap to switch (toggleTimeSig).
+   Plain digits, so they render the same everywhere (no music font). */
+#timeSigBtn { display: none; }
+html.fiveNote #timeSigBtn { display: inline-flex; }
+#timeSigBtn .timeSigIcon {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: "Fredoka", "Comic Sans MS", "Trebuchet MS", Arial, sans-serif;
+  font-weight: 900; font-size: 19px; line-height: 0.92; color: #1d1d1d;
+}
+#timeSigBtn .tsNum { display: block; }
+/* 3/4 has one rhythm (the waltz pattern on the Techno button); the other
+   styles are shown but unavailable. And there is no 3/4 worksheet yet, so
+   Print and Scan are hidden. */
+html.ts-34 .drumStyleBtn:not(#drumStyleTech) { opacity: 0.3; filter: grayscale(1); pointer-events: none; }
+html.ts-34 #printBtn,
+html.ts-34 #cameraBtn { display: none !important; }
 
 /* Score view: laid over the beat numbers + grid (position set by _renderScore),
    which keep their space but go invisible, so nothing else on the page moves. */
