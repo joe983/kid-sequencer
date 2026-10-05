@@ -3513,13 +3513,14 @@ function completeGroupIn(r, beatStart, len){
 }
 
 function smartPlaceNote(r, clickCol, len, kind){
-  /* The /03 face has four beats and nothing smaller: a note lands on beat 1, 2,
-     3 or 4 or not at all. Both its tools are exactly one beat wide, so this is
-     the only thing that could put one between beats — tapping the second half of
-     a beat would otherwise start the note there. Snap the tap down to the beat it
-     is inside, and step the search for free room a whole beat at a time.
-     Every other view keeps a step of 1 and an unsnapped start. */
-  const beatSnap = VIEW === "three" ? COLS_PER_BEAT : 1;
+  /* /03 and /02 place notes ON THE BEAT only. On /03 both tools are one beat
+     wide; on /02 the 8th/16th tools already place a whole beat's beamed group
+     (placeNoteGroup), so this is the only path that could start a quarter or
+     half between beats — tapping inside a beat would otherwise start it there.
+     Snap the tap down to the beat it is inside, and step the search for free
+     room a whole beat at a time. The full sequencer keeps a step of 1 and an
+     unsnapped start. (Scans still reproduce colouring cell for cell.) */
+  const beatSnap = (VIEW === "three" || VIEW === "five") ? COLS_PER_BEAT : 1;
   let baseStart = Math.min(Math.floor(clickCol / beatSnap) * beatSnap, cols - len);
   baseStart = Math.max(0, baseStart);
 
