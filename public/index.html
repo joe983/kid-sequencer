@@ -3072,6 +3072,15 @@ function iosStartSilentVideo(){
   }
 }
 
+/* Master volume as the fader last set it (<seq-volume-fader> writes
+   window.__kidseqMasterLevel; 0.65 = fader at the top). The fader lives in its own
+   scope, so this is the one shared value: a new context starts at it and
+   stopAllAudioNow() restores it after its click-free duck. */
+function _masterLevel(){
+  const v = window.__kidseqMasterLevel;
+  return (typeof v === "number" && v >= 0) ? v : 0.65;
+}
+
 function getAudio(){
   iosStartSilentVideo();
   if(!audioCtx){
@@ -3085,7 +3094,7 @@ function getAudio(){
 masterGain = audioCtx.createGain();
 
     window.masterGain = masterGain;
-masterGain.gain.setValueAtTime(0.65, audioCtx.currentTime);
+masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
 
     masterComp = audioCtx.createDynamicsCompressor();
     masterComp.threshold.setValueAtTime(-4, audioCtx.currentTime);
@@ -3326,7 +3335,9 @@ function stopAllAudioNow(){
   masterGain.gain.cancelScheduledValues(now);
   masterGain.gain.setValueAtTime(masterGain.gain.value, now);
   masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.02);
-  masterGain.gain.setValueAtTime(0.65, now + 0.03);
+  // Back to the volume fader's level, not a constant: a fixed 0.65 here undid the
+  // fader on every Stop/Play while the knob still showed the lowered position.
+  masterGain.gain.setValueAtTime(_masterLevel(), now + 0.03);
 }
 
 function stepDurationSec(){
@@ -9653,8 +9664,10 @@ window.KidSequencer = {
         const mg = (typeof window.masterGain !== 'undefined' ? window.masterGain :
                    (typeof masterGain !== 'undefined' ? masterGain : null));
         const ctx = (typeof window.audioCtx !== 'undefined' ? window.audioCtx : null);
-        if(!mg || !mg.gain) return;
         const target = taperGain(t);
+        // Remembered even before audio exists, and read back by Stop/Play (_masterLevel).
+        window.__kidseqMasterLevel = target;
+        if(!mg || !mg.gain) return;
         if(ctx && ctx.state === 'running'){
           const now = ctx.currentTime;
           mg.gain.cancelScheduledValues(now);
