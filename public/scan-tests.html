@@ -321,6 +321,19 @@ async function run(){
         { name:"5-note · run of 4",     opt:{runs:[[2,4,4]]},             want:"2:4+4",
           why:"a continuous block is one held note, not four" }
       ] },
+    { id:"kidseq:main5_34", legal:[1,2,4,8],
+      cases:[
+        { name:"3/4 · plain",           opt:{cells:[[0,0],[2,4],[4,8]]},  want:"0:0+1 2:4+1 4:8+1",
+          why:"one square on each of the three beats comes back as three notes" },
+        { name:"3/4 · last cell",       opt:{cells:[[4,11]]},             want:"4:11+1",
+          why:"column 11 is the end of a 3/4 bar — the 12-column grid maps right to its edge" },
+        { name:"3/4 · run of 4",        opt:{runs:[[1,4,4]]},             want:"1:4+4",
+          why:"a coloured beat is one quarter note" },
+        { name:"3/4 · run of 8",        opt:{runs:[[3,4,8]]},             want:"3:4+8",
+          why:"two beats coloured through is a half note that ends exactly at the bar line" },
+        { name:"3/4 · askew",           opt:{cells:[[0,0],[4,11]], askew:true},  want:"0:0+1 4:11+1",
+          why:"photographed at an angle, the 12-column sheet still registers" }
+      ] },
     { id:"kidseq:main3", legal:[1,2,4,8],
       cases:[
         { name:"3-note · plain",        opt:{cells:[[0,0],[1,2],[2,4]]},  want:"0:0+1 1:2+1 2:4+1",

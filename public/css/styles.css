@@ -2677,11 +2677,9 @@ html.fiveNote #timeSigBtn { display: inline-flex; }
 }
 #timeSigBtn .tsNum { display: block; }
 /* 3/4 has one rhythm (the waltz pattern on the Techno button); the other
-   styles are shown but unavailable. And there is no 3/4 worksheet yet, so
-   Print and Scan are hidden. */
+   styles are shown but unavailable. Print and Scan work: 3/4 has its own
+   worksheet (SHEET_GEOMETRY["kidseq:main5_34"]). */
 html.ts-34 .drumStyleBtn:not(#drumStyleTech) { opacity: 0.3; filter: grayscale(1); pointer-events: none; }
-html.ts-34 #printBtn,
-html.ts-34 #cameraBtn { display: none !important; }
 
 /* Score view: laid over the beat numbers + grid (position set by _renderScore),
    which keep their space but go invisible, so nothing else on the page moves. */

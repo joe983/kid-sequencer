@@ -335,3 +335,15 @@ synthetic sheets agreed with.
 
 Related open item: the ring-mark reprint above needs a printer too — do both in
 one sitting.
+
+**Third template, same caveat (2026-10-07):** `/02?time=34` (3/4) prints and
+scans its own 12-column sheet, `SHEET_GEOMETRY["kidseq:main5_34"]`. Measured in
+headless Chrome at 1600x900 in one run with `/02` and `/03` as controls — both
+re-read within 0.0006 of their committed values, so the 3/4 numbers sit on the
+same footing as theirs. A headless `printToPDF` of the sheet shows the marks clear
+of the content and a mark-quad aspect of ~1.476 against the committed 1.477. Not
+paper-verified: print and scan one alongside the /02 and /03 sheets. `_currentSheetId`
+picks it by time signature (`TS_SHEET_ID`), and `_routeScannedNotes` now matches on
+view AND time signature. Note its aspect (1.477) is within the aspect tolerance of
+the full sheet's (1.438), so only `grid-misregistered` separates the two if a full
+sheet is scanned on the 3/4 page.

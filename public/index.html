@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=92">
+<link rel="stylesheet" href="css/styles.css?v=93">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -635,6 +635,13 @@ const SHEET_GEOMETRY = {
   "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
                     grid: { u0: 0.06280, v0: 0.25636, u1: 0.95984, v1: 0.78337 },
                     quadAspect: 1.893 },
+  /* /02 in 3/4 (/02?time=34): the same five rows over a 12-column bar. Measured
+     2026-10-07 the same way as the two above (headless Chrome 1600x900, same run
+     as a control that re-read "kidseq:main5"/"main3" within 0.0006 of the values
+     committed above) — so it carries the same caveat: not yet paper-verified. */
+  "kidseq:main5_34": { view: "five", timeSig: "3/4", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
+                    grid: { u0: 0.08134, v0: 0.25850, u1: 0.94783, v1: 0.78883 },
+                    quadAspect: 1.477 },
   "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
                     grid: { u0: 0.06936, v0: 0.29922, u1: 0.93895, v1: 0.88894 },
                     quadAspect: 1.819 },
@@ -6879,7 +6886,8 @@ function _applyScannedNotes(notes){
    carry a null levelKey, as does the full grid, and matching on that alone
    would drop an 8-row worksheet onto a 3-row grid. */
 function _routeScannedNotes(geom, notes){
-  if(geom.view === VIEW){
+  const ts = geom.timeSig || "4/4";
+  if(geom.view === VIEW && ts === TIME_SIG){
     // Close FIRST so a successful scan always dismisses the modal and reveals the
     // grid — even if applying the notes below were to throw, the camera never
     // stays stuck open over the result.
@@ -6889,6 +6897,7 @@ function _routeScannedNotes(geom, notes){
     return;
   }
   try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes })); }catch(e){}
+  if(ts !== "4/4"){ location.assign(_timeSigUrl(ts)); return; }   // /02?time=…
   const base = VIEW_URL[geom.view] || VIEW_URL.full;
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
 }
@@ -6905,11 +6914,14 @@ function _routeScannedNotes(geom, notes){
    still print nothing (their layouts have no measured insets, and a template
    without `grid` is skipped rather than guessed at). */
 const VIEW_SHEET_ID = { full: "kidseq:main", five: "kidseq:main5", three: "kidseq:main3" };
+// A time signature other than 4/4 is a different printed grid (3/4 = 12 columns),
+// so it has its own sheet. Only /02 has time signatures.
+const TS_SHEET_ID = { "3/4": "kidseq:main5_34" };
 function _currentSheetId(){
   if(LEARN_LEVEL && VIEW !== "three") return null;   // ?level=N / ?lesson= pages
-  if(TIME_SIG !== "4/4") return null;                 // no 3/4 worksheet yet
-  const geom = SHEET_GEOMETRY[VIEW_SHEET_ID[VIEW]];
-  return (geom && geom.grid) ? VIEW_SHEET_ID[VIEW] : null;
+  const id = TIME_SIG !== "4/4" ? TS_SHEET_ID[TIME_SIG] : VIEW_SHEET_ID[VIEW];
+  const geom = SHEET_GEOMETRY[id];
+  return (geom && geom.grid) ? id : null;
 }
 
 /* The homography maps the unit square onto the 4 corner MARKS, which bound the
