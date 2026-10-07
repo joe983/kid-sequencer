@@ -6524,8 +6524,23 @@ function _onePitchPerBeat(notes){
   return out;
 }
 
+/* /02 places notes on the beat only (smartPlaceNote), and a scan follows the
+   same rule: a note a beat or longer starts on the beat it was coloured in; a
+   shorter one (8th, 16th) starts on its own grid inside that beat — 8ths on the
+   beat or its half, 16ths anywhere. Snapping can't push a note past the bar end;
+   if it lands on a note already placed, _applyScannedNotes' canPlace drops it. */
+function _snapScanToBeat(notes){
+  return notes.map(n => {
+    const step = n.len >= COLS_PER_BEAT ? COLS_PER_BEAT : n.len;
+    let start = Math.floor(n.start / step) * step;
+    if(start + n.len > cols) start = Math.max(0, Math.floor((cols - n.len) / step) * step);
+    return { ...n, start };
+  });
+}
+
 function _applyScannedNotes(notes){
   if(VIEW === "three") notes = _onePitchPerBeat(notes);
+  if(VIEW === "five") notes = _snapScanToBeat(notes);
   pushUndo();
   notesByRow = Array.from({length: rows}, () => []);
   occ        = Array.from({length: rows}, () => Array(cols).fill(null));
