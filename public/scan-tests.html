@@ -334,6 +334,19 @@ async function run(){
         { name:"3/4 · askew",           opt:{cells:[[0,0],[4,11]], askew:true},  want:"0:0+1 4:11+1",
           why:"photographed at an angle, the 12-column sheet still registers" }
       ] },
+    { id:"kidseq:main5_68", legal:[1,2,4,6,8,12],
+      cases:[
+        { name:"6/8 · held beat",       opt:{runs:[[2,6,6]]},             want:"2:6+6",
+          why:"THE case: six squares are one dotted quarter — the 6/8 beat — not rounded to 4 or 8" },
+        { name:"6/8 · held bar",        opt:{runs:[[1,0,12]]},            want:"1:0+12",
+          why:"the whole 12-square bar is a dotted half" },
+        { name:"6/8 · quarter",         opt:{runs:[[3,0,4]]},             want:"3:0+4",
+          why:"four squares stay a quarter — adding 6 to the legal lengths must not pull it up to the beat" },
+        { name:"6/8 · single 16th",     opt:{cells:[[0,11]]},             want:"0:11+1",
+          why:"a lone square in the last column is still a 16th — colouring is reproduced as drawn" },
+        { name:"6/8 · askew",           opt:{runs:[[2,6,6]], cells:[[0,0]], askew:true},  want:"0:0+1 2:6+6",
+          why:"photographed at an angle, the dotted beat survives" }
+      ] },
     { id:"kidseq:main3", legal:[1,2,4,8],
       cases:[
         { name:"3-note · plain",        opt:{cells:[[0,0],[1,2],[2,4]]},  want:"0:0+1 1:2+1 2:4+1",

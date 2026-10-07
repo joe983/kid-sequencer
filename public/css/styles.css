@@ -2676,10 +2676,11 @@ html.fiveNote #timeSigBtn { display: inline-flex; }
   font-weight: 900; font-size: 19px; line-height: 0.92; color: #1d1d1d;
 }
 #timeSigBtn .tsNum { display: block; }
-/* 3/4 has one rhythm (the waltz pattern on the Techno button); the other
-   styles are shown but unavailable. Print and Scan work: 3/4 has its own
-   worksheet (SHEET_GEOMETRY["kidseq:main5_34"]). */
-html.ts-34 .drumStyleBtn:not(#drumStyleTech) { opacity: 0.3; filter: grayscale(1); pointer-events: none; }
+/* 3/4 and 6/8 each have one rhythm (the waltz / 6/8 pattern on the Techno
+   button); the other styles are shown but unavailable. Print and Scan work:
+   each has its own worksheet (SHEET_GEOMETRY["kidseq:main5_34"/"_68"]). */
+html.ts-34 .drumStyleBtn:not(#drumStyleTech),
+html.ts-68 .drumStyleBtn:not(#drumStyleTech) { opacity: 0.3; filter: grayscale(1); pointer-events: none; }
 
 /* Score view: laid over the beat numbers + grid (position set by _renderScore),
    which keep their space but go invisible, so nothing else on the page moves. */

@@ -450,6 +450,29 @@ const WHOLE_NOTE_SVG = `
 </svg>
 `;
 
+/* 6/8's two dotted notes (the beat, and the whole bar). Same head, stem and box
+   height as HALF_NOTE_SVG so all the tool buttons read as one set; the box is
+   10 units wider to make room for the dot beside the head, which leaves the
+   rendered head size unchanged (the box is height-limited either way). */
+const _DOT = `<circle cx="112" cy="168" r="12" fill="#000"/>`;
+const DOTTED_QUARTER_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <rect x="78" y="10" width="12" height="150" rx="6" ry="6" fill="#000"/>
+  <ellipse cx="55" cy="165" rx="36" ry="24" transform="rotate(-18 55 165)" fill="#000"/>
+  ${_DOT}
+</svg>
+`;
+const DOTTED_HALF_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 220" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet">
+  <rect x="78" y="10" width="12" height="150" rx="6" ry="6" fill="#000"/>
+  <path fill="#000" fill-rule="evenodd"
+        d="M 55 165 m -36 0 a 36 24 0 1 0 72 0 a 36 24 0 1 0 -72 0
+           M 57 167 m -18 0 a 18 11 0 1 0 36 0 a 18 11 0 1 0 -36 0"
+        transform="rotate(-18 55 165)"/>
+  ${_DOT}
+</svg>
+`;
+
 
 /* -------------------- VIEW ROUTING --------------------
    Three progressively simpler faces of the sequencer, each on its OWN URL:
@@ -480,15 +503,27 @@ if(VIEW === "full" && new URLSearchParams(location.search).get("notes") === "5")
   location.replace(VIEW_URL.five);
 }
 /* Time signature — /02 only, chosen by the address like the view itself:
-   /02?time=34 is 3/4, anything else is 4/4. A 3/4 bar is 3 beats of 4
-   sixteenths, so `cols` is 12 there. Switching is a page load that carries the
-   tune across (see toggleTimeSig). 6/8 is meant to slot in here later as
-   another entry: it needs its own beat grouping (2 beats of 3 eighths), so
-   BEATS_PER_BAR and COLS_PER_BEAT will both come from this table then. */
-const TIME_SIGS = { "4/4": { param: null, beats: 4 }, "3/4": { param: "34", beats: 3 } };
-const TIME_SIG = (VIEW === "five" && new URLSearchParams(location.search).get("time") === "34") ? "3/4" : "4/4";
+   /02?time=34 is 3/4, /02?time=68 is 6/8, anything else is 4/4. A column is
+   always a 16th and `tempo` always counts quarter notes, so the audio engine
+   needs nothing per signature; only the bar length and the beat grouping vary:
+     4/4  4 beats of 4 columns (16 cols)
+     3/4  3 beats of 4 columns (12 cols)
+     6/8  2 beats of 6 columns (12 cols) — each beat a dotted quarter, i.e.
+          three 8ths, which is what makes it 6/8 rather than 3/4.
+   `drum` is the one rhythm a signature other than 4/4 plays (on the Techno
+   button; the rest are greyed by `cls` in styles.css). Switching is a page
+   load that carries the tune across (see toggleTimeSig). */
+const TIME_SIGS = {
+  "4/4": { param: null, beats: 4, colsPerBeat: 4, drum: null,       cls: null },
+  "3/4": { param: "34", beats: 3, colsPerBeat: 4, drum: "waltz",    cls: "ts-34" },
+  "6/8": { param: "68", beats: 2, colsPerBeat: 6, drum: "sixeight", cls: "ts-68" }
+};
+const _timeParam = new URLSearchParams(location.search).get("time");
+const TIME_SIG = (VIEW === "five" &&
+  Object.keys(TIME_SIGS).find(k => TIME_SIGS[k].param && TIME_SIGS[k].param === _timeParam)) || "4/4";
 const BEATS_PER_BAR = TIME_SIGS[TIME_SIG].beats;
-if(TIME_SIG === "3/4") document.documentElement.classList.add("ts-34");
+const TS_COLS_PER_BEAT = TIME_SIGS[TIME_SIG].colsPerBeat;
+if(TIME_SIGS[TIME_SIG].cls) document.documentElement.classList.add(TIME_SIGS[TIME_SIG].cls);
 
 /* -------------------- LEARNING LEVELS --------------------
    Scaled-back "scaffolding" variants selected by a ?level=N URL param.
@@ -642,6 +677,14 @@ const SHEET_GEOMETRY = {
   "kidseq:main5_34": { view: "five", timeSig: "3/4", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
                     grid: { u0: 0.08134, v0: 0.25850, u1: 0.94783, v1: 0.78883 },
                     quadAspect: 1.477 },
+  /* /02 in 6/8 (/02?time=68): also 5 rows x 12 columns, with its own id so a scan
+     routes back to 6/8 and reads dotted lengths (_legalNoteLens). Its tool column
+     carries different buttons, but the same NUMBER of them, so the print bbox —
+     and therefore every inset — measured identical to 3/4's (same run). Re-measure
+     if 6/8 ever gains or loses a tool. Same not-paper-verified caveat. */
+  "kidseq:main5_68": { view: "five", timeSig: "6/8", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
+                    grid: { u0: 0.08134, v0: 0.25850, u1: 0.94783, v1: 0.78883 },
+                    quadAspect: 1.477 },
   "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
                     grid: { u0: 0.06936, v0: 0.29922, u1: 0.93895, v1: 0.88894 },
                     quadAspect: 1.819 },
@@ -651,7 +694,7 @@ const SHEET_GEOMETRY = {
 };
 
 const rows = LEARN_LEVEL ? LEARN_LEVEL.rows : 8;
-const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : BEATS_PER_BAR * 4;
+const cols = LEARN_LEVEL ? LEARN_LEVEL.cols : BEATS_PER_BAR * TS_COLS_PER_BEAT;
 document.documentElement.style.setProperty("--gridCols", String(cols));
 
 // Beat numbering, two different treatments (see buildBeatHeader):
@@ -744,23 +787,45 @@ function pitchFor(row){
   return (SCALES[currentKey] || SCALES.C)[row];
 }
 
-const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps : [
+const _TOOLS_SIMPLE = [
   { steps: 1,  label: "16th",  symbol: "♬", divs: 16, symClass:"sixteenth" },
   { steps: 2,  label: "8th",   svg: EIGHTH_SVG, divs: 8,  symClass:"eighth" },
   { steps: 4,  label: "1/4",   symbol: "♩", divs: 4,  symClass:"normal" },
   { steps: 8,  label: "1/2",   svg: HALF_NOTE_SVG,  divs: 2,  symClass:"half" },
   { steps: 16, label: "Whole",  svg: WHOLE_NOTE_SVG,  divs: 1,  symClass:"whole" }
-].filter(t => t.steps <= cols);   // a whole note can't fit a 3/4 bar
+];
+/* 6/8 counts in dotted quarters, so its note set is the compound-time one a
+   child learns it with: three 8ths to a beat ("ti-ti-ti"), long-short ("ta-ti",
+   a quarter + an 8th — the figure that makes 6/8 sound like 6/8), a held beat
+   (dotted quarter) and a held bar (dotted half). `steps` is the tool's identity
+   and the length of its first note; the 8ths and long-short tools place a whole
+   beat's group (groupPatternFor). */
+const _TOOLS_68 = [
+  { steps: 2,  label: "8th",           svg: EIGHTH_SVG,         symClass:"eighth" },
+  { steps: 4,  label: "Long-short",    longShort: true,         symClass:"longShort" },
+  { steps: 6,  label: "Dotted 1/4",    svg: DOTTED_QUARTER_SVG, symClass:"half" },
+  { steps: 12, label: "Dotted 1/2",    svg: DOTTED_HALF_SVG,    symClass:"half" }
+];
+const toolSteps = LEARN_LEVEL ? LEARN_LEVEL.toolSteps
+  : TIME_SIG === "6/8" ? _TOOLS_68
+  : _TOOLS_SIMPLE.filter(t => t.steps <= cols);   // a whole note can't fit a 3/4 bar
 
 // Artwork for the glyph drawn inside a placed block in the 5-note view, keyed by
 // note.len (1/2/4/8/16). Built FROM the tool definitions, so a block always shows
 // literally the artwork on the button the child pressed and the two can't drift.
 // Deliberately NOT keyed on note.kind — that is a learning-mode-only concept that
 // undo/cloud-load/scan all drop, and its CSS belongs to the lesson grid.
+// Built from EVERY signature's tools, not just this page's: a tune carried across
+// a time-signature switch can bring a half note into 6/8 or a dotted quarter
+// into 4/4, and it should still be drawn. (Long-short is two notes, each drawn
+// as itself, so it has no art of its own here.)
 const NOTE_ART = {};
-if(!LEARN_LEVEL) for(const t of toolSteps) NOTE_ART[t.steps] = { svg: t.svg || null, symbol: t.symbol || "" };
+if(!LEARN_LEVEL) for(const t of [..._TOOLS_SIMPLE, ..._TOOLS_68]){
+  if(!t.longShort && !NOTE_ART[t.steps]) NOTE_ART[t.steps] = { svg: t.svg || null, symbol: t.symbol || "" };
+}
 
-let selectedSteps = LEARN_LEVEL ? LEARN_LEVEL.selectedSteps : 1;
+// The first tool is the default (the 16th everywhere except 6/8, which has none).
+let selectedSteps = LEARN_LEVEL ? LEARN_LEVEL.selectedSteps : toolSteps[0].steps;
 // Learning levels distinguish two same-width tools by kind ("quarter"|"eighth").
 // null in the full app (note kind is a learning-mode-only concept).
 let selectedKind = LEARN_LEVEL ? (LEARN_LEVEL.selectedKind || null) : null;
@@ -962,6 +1027,17 @@ const DRUM_PATTERNS = {
     clap: [0,0,0,0,    0.55,0,0,0, 0.55,0,0,0],
     hatC: [0.30,0,0.12,0, 0.22,0,0.12,0, 0.22,0,0.12,0]
   },
+  // 6/8 (the /02 6/8 page's only rhythm) — 12 steps, two beats of three 8ths.
+  // "BOOM-ti-ti CLAP-ti-ti": kick on beat 1, clap on beat 2, and a hat on every
+  // 8th, strongest on the two beats, so the long ONE-two-three pulse is easy to
+  // feel. Same 12 columns as the waltz; the accents are what tell them apart
+  // (waltz hits every 4 columns, this every 6). Plays on the Techno kit.
+  sixeight: {
+    kick: [1.2,0,0,0,0,0,   0,0,0,0,0,0],
+    sub:  [0.65,0,0,0,0,0,  0,0,0,0,0,0],
+    clap: [0,0,0,0,0,0,     0.55,0,0,0,0,0],
+    hatC: [0.30,0,0.13,0,0.13,0,  0.24,0,0.13,0,0.13,0]
+  },
   // Learning Level 1 — 8 columns at 8th-note resolution (stepDiv:2), so the bar
   // is one 4/4 measure. Length-8 arrays, indexed by column 0–7. Key ≠ "techhouse"
   // so the techhouse swing branch in playDrumsAtStep stays off (on-the-beat feel).
@@ -1123,9 +1199,10 @@ function syncAudioAndUI(){
   setDrumsMuted(isMuted);
 
   // Audio: pick which pattern to play when unmuted (default to techhouse). In
-  // 3/4 there is one rhythm: the Techno button plays the waltz pattern, and the
-  // other style buttons are greyed out (html.ts-34 in styles.css).
-  drumStyle = TIME_SIG === "3/4" ? "waltz" : (DRUM_STYLE_AUDIO[activeDrumStyle] || "techhouse");
+  // 3/4 and 6/8 there is one rhythm: the Techno button plays that signature's
+  // pattern (TIME_SIGS[…].drum), and the other style buttons are greyed out
+  // (html.ts-34 / html.ts-68 in styles.css).
+  drumStyle = TIME_SIGS[TIME_SIG].drum || (DRUM_STYLE_AUDIO[activeDrumStyle] || "techhouse");
 
   // UI: selected state across all 6 buttons
   const buttons = DRUM_STYLE_BUTTONS();
@@ -1140,7 +1217,7 @@ function syncAudioAndUI(){
 
 // Function called when a drum button (style) is clicked
 function handleDrumClick(clickedStyle){
-  if(TIME_SIG === "3/4" && clickedStyle !== "techno") return;   // one rhythm in 3/4
+  if(TIME_SIGS[TIME_SIG].drum && clickedStyle !== "techno") return;   // one rhythm in 3/4 and 6/8
   // Ensure audio exists if the user is trying to hear drums.
   getAudio();
   ensureAudioRunning();
@@ -1222,7 +1299,7 @@ function applyLockState(){
   // If we just moved into Guest/locked mode and a locked note-length was selected,
   // bump back to a free length (16th).
   if(locked && typeof LOCKED_STEPS !== "undefined" && LOCKED_STEPS.has(selectedSteps)){
-    selectedSteps = 1;
+    selectedSteps = toolSteps[0].steps;
   }
 
   // Rebuild tool buttons so their locked state updates on login/logout.
@@ -1260,7 +1337,7 @@ function applyLockState(){
   // a striped overlay — the click handler (handleAiBtn) decides upsell vs run.
   const aiBtnEl = document.getElementById("aiBtn");
   if(aiBtnEl){
-    // The AI track engine builds 4/4 songs only, so there is no AI song in 3/4.
+    // The AI track engine builds 4/4 songs only, so there is no AI song in 3/4 or 6/8.
     const showAi = isLoggedIn && !LEARN_LEVEL && TIME_SIG === "4/4";
     aiBtnEl.style.display = showAi ? "" : "none";
     aiBtnEl.classList.toggle("locked", !isPaid);
@@ -2971,7 +3048,7 @@ function playMelodicSample(instrument, freq, steps){
 }
 
 // Patterns that have no sample kit of their own borrow another style's.
-const DRUM_KIT_ALIAS = { waltz: "techhouse" };
+const DRUM_KIT_ALIAS = { waltz: "techhouse", sixeight: "techhouse" };
 function playDrumsAtStep(s){
   if(drumsMuted) return;
   if(!audioCtx || !drumBus) return;
@@ -3408,7 +3485,7 @@ function buildTools(){
     sym.className = "toolSymbol " + (t.symClass || "");
     // The two sub-beat lengths draw their own artwork, because what they place
     // depends on the view (see _toolArtFor). Everything else keeps its symbol.
-    const drawn = (!LEARN_LEVEL && (t.steps === 1 || t.steps === 2))
+    const drawn = (!LEARN_LEVEL && (t.steps === 1 || t.steps === 2 || t.longShort))
       ? _toolArtFor(t.steps) : null;
     if(drawn){
       sym.classList.add(groupSizeFor(t.steps) === 1 ? "singleNote" : "beamGroup");
@@ -3450,8 +3527,9 @@ let beatBadgeEls = [];   // .beatBadge pills, index = beat number - 1
 let nextId = 1;
 
 // Columns per beat: a beat (quarter) spans stepDiv grid columns in learning
-// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th).
-const COLS_PER_BEAT = (LEARN_LEVEL && LEARN_LEVEL.stepDiv) ? LEARN_LEVEL.stepDiv : 4;
+// mode (column = 8th ⇒ 2), and 4 in the full app (column = 16th) — except in
+// 6/8, where the beat is a dotted quarter: 6 columns (see TIME_SIGS).
+const COLS_PER_BEAT = (LEARN_LEVEL && LEARN_LEVEL.stepDiv) ? LEARN_LEVEL.stepDiv : TS_COLS_PER_BEAT;
 
 // Numbered badges above the grid, one per beat, column-aligned with that beat's
 // first cell (USE_BEAT_HEADER / BEAT_HDR_K are declared next to rows/cols).
@@ -3490,8 +3568,8 @@ function flashBeat(i){
   badge.classList.remove("beatOn");
   void badge.offsetWidth;
   badge.classList.add("beatOn");
-  // 3/4: beat 1 is the strong beat, so it flashes bigger (CSS .beatOne).
-  if(TIME_SIG === "3/4") badge.classList.toggle("beatOne", i === 0);
+  // 3/4 and 6/8: beat 1 is the strong beat, so it flashes bigger (CSS .beatOne).
+  if(TIME_SIG !== "4/4") badge.classList.toggle("beatOne", i === 0);
 }
 
 function clearBeatFlashes(){
@@ -3592,13 +3670,24 @@ function overlappingNoteIds(r, start, len){
    Learning levels and lessons are excluded: they have their own eighth-pair
    semantics (one double-attacked note) and their targets are matched note-for-
    note, so grouping there would break lesson passes. */
-const NOTE_GROUP_SIZE = { 1: 4, 2: 2 };   // note length in columns → notes per group
-function groupSizeFor(len){
+const NOTE_GROUP_SIZE = { 1: 4, 2: 2 };   // 4/4 group sizes; also the fallback for /03's drawn pair
+/* The lengths, in columns, of the notes one tap places to fill a beat — or null
+   for a tool that places a single note. Derived from the beat, so a group always
+   fills exactly one: 16ths in fours and 8ths in twos in 4/4 and 3/4, 8ths in
+   threes in 6/8. 6/8 adds long-short (a quarter + an 8th), the one group whose
+   notes differ in length. */
+function groupPatternFor(len){
   // Beginner view only. The full sequencer keeps single notes placeable
   // anywhere, including mid-beat — that freedom is the point of the full view,
   // and its tool buttons draw single notes to say so.
-  if(LEARN_LEVEL || !_fiveNote) return 1;
-  return NOTE_GROUP_SIZE[len] || 1;
+  if(LEARN_LEVEL || !_fiveNote) return null;
+  if(TIME_SIG === "6/8" && len === 4) return [4, 2];
+  if(len === 1 || len === 2) return Array(COLS_PER_BEAT / len).fill(len);
+  return null;
+}
+function groupSizeFor(len){
+  const p = groupPatternFor(len);
+  return p ? p.length : 1;
 }
 // The beat a column belongs to, as a [start, end) column span.
 function _beatSpan(col){
@@ -3609,13 +3698,15 @@ function _beatSpan(col){
    bar's beat boundary could not be beamed, which is the whole point of grouping.
    Anything already in that beat is cleared first — a beat holds one group. */
 function placeNoteGroup(r, clickCol, len){
-  const n = groupSizeFor(len);
+  const pattern = groupPatternFor(len);
+  const total = pattern.reduce((a, b) => a + b, 0);
   const { start } = _beatSpan(Math.min(clickCol, cols - 1));
-  if(start + n * len > cols) return;
-  const overlaps = overlappingNoteIds(r, start, n * len);
+  if(start + total > cols) return;
+  const overlaps = overlappingNoteIds(r, start, total);
   if(LESSON && [...overlaps].some(id => _lessonLockedIds.has(id))) return;
   overlaps.forEach(id => deleteNoteById(r, id));
-  for(let i = 0; i < n; i++) placeNote(r, start + i * len, len);
+  let c = start;
+  for(const L of pattern){ placeNote(r, c, L); c += L; }
 }
 /* Delete the whole group a note belongs to — "always grouped in twos/fours"
    means a tap can't leave half a beam behind. A group is inferred, not stored:
@@ -3624,10 +3715,15 @@ function placeNoteGroup(r, clickCol, len){
 function deleteGroupAt(r, id){
   const note = notesByRow[r].find(n => n.id === id);
   if(!note) return;
-  if(groupSizeFor(note.len) === 1){ deleteNoteById(r, id); return; }
+  const pattern = groupPatternFor(note.len);
+  if(!pattern){ deleteNoteById(r, id); return; }
   const { start, end } = _beatSpan(note.start);
+  // 6/8: every sub-beat note in the beat goes, so tapping either half of a
+  // long-short removes both (and a leftover 8th can't strand its quarter).
+  // 4/4 and 3/4 keep their rule: the same-length notes in that beat.
+  const inGroup = TIME_SIG === "6/8" ? (n => n.len < COLS_PER_BEAT) : (n => n.len === note.len);
   const ids = notesByRow[r]
-    .filter(n => n.len === note.len && n.start >= start && n.start < end)
+    .filter(n => inGroup(n) && n.start >= start && n.start < end)
     .map(n => n.id);
   for(const gid of ids) deleteNoteById(r, gid);
 }
@@ -3845,7 +3941,9 @@ function _singleNoteSvg(flags){
    16th button's heads look small next to the half note. Tighter spacing lets
    the same heads render larger in the same circle. */
 function _beamedGroupArt(len, where){
-  const n = NOTE_GROUP_SIZE[len] || 2;
+  // /03 draws its 8th pair outside the five-note grouping, hence the fallback.
+  const p = groupPatternFor(len);
+  const n = p ? p.length : (NOTE_GROUP_SIZE[len] || 2);
   const grid = where !== "button";
   // Grid spacing is wider than the button's: on the grid every head has to sit
   // INSIDE its own square, clear of the black edges, leaving only the beam to
@@ -3855,9 +3953,29 @@ function _beamedGroupArt(len, where){
 }
 
 function _toolArtFor(steps){
+  if(TIME_SIG === "6/8" && steps === 4 && groupSizeFor(4) > 1) return _longShortSvg();
   return groupSizeFor(steps) === 1
     ? _singleNoteSvg(steps === 1 ? 2 : 1)
     : _beamedGroupArt(steps, "button");
+}
+
+/* 6/8's long-short button: a quarter then a flagged 8th, side by side and NOT
+   beamed — a quarter never joins a beam. Same heads, stems and flag as every
+   other drawn note; spaced like the button's beamed pair so the two read as
+   one set. On the grid each half is its own block with its own glyph. */
+function _longShortSvg(){
+  const margin = NOTE_HEAD_RX + 16, spacing = 110;
+  const a = margin, b = margin + spacing;
+  const flagX = _noteStemX(b) + NOTE_STEM_W;
+  const w = flagX + 40 + 8;                         // room for the flag
+  const stem = (cx) => `<rect x="${_noteStemX(cx)}" y="${NOTE_STEM_TOP}" width="${NOTE_STEM_W}"`
+                     + ` height="${NOTE_HEAD_CY - NOTE_STEM_TOP}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${NOTE_BOX_H}"`
+       + ` aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid meet"><g fill="#000">`
+       + _noteHead(a) + stem(a) + _noteHead(b) + stem(b)
+       + `<path d="M ${flagX} ${NOTE_STEM_TOP} L ${flagX + 40} ${NOTE_STEM_TOP + 34}`
+       + ` L ${flagX + 40} ${NOTE_STEM_TOP + 52} L ${flagX} ${NOTE_STEM_TOP + 18} Z"/>`
+       + `</g></svg>`;
 }
 
 /* Draw a real beamed group: one note head per member, each with a stem, and a
@@ -5310,10 +5428,12 @@ function _syncViewToggleBtn(){
    and dropping them on the next. */
 function goToView(v){ location.assign(VIEW_URL[v] || VIEW_URL.full); }
 
-/* /02's time-signature button: 4/4 ⇄ 3/4. Like a view change it is a page load
-   (cols is fixed per page), so the tune rides across in sessionStorage and is
-   re-applied by _applyPendingTimeHandoff — whatever fits the new bar is kept. */
-const TIME_SIG_ORDER = ["4/4", "3/4"];
+/* /02's time-signature button: 4/4 → 3/4 → 6/8 → 4/4. Like a view change it is
+   a page load (cols is fixed per page), so the tune rides across in
+   sessionStorage and is re-applied by _applyPendingTimeHandoff — whatever fits
+   the new bar is kept. 3/4 and 6/8 are both 12 columns, so between those two
+   every note survives exactly where it was; only the beat it is counted in moves. */
+const TIME_SIG_ORDER = ["4/4", "3/4", "6/8"];
 function toggleTimeSig(){
   if(VIEW !== "five") return;
   const next = TIME_SIG_ORDER[(TIME_SIG_ORDER.indexOf(TIME_SIG) + 1) % TIME_SIG_ORDER.length];
@@ -5431,7 +5551,8 @@ function _applySequenceData(d){
   currentKey = (typeof d.key === "string" && KEY_ORDER.includes(d.key)) ? d.key : 'C';
   _updateKeyBtn();
   if(d.instrument) setInstrument(d.instrument);
-  if(typeof d.selectedSteps === "number" && d.selectedSteps <= cols){ selectedSteps = d.selectedSteps; buildTools(); }
+  // Only a tool this page actually has (6/8 has no 16th; 3/4 no whole note).
+  if(typeof d.selectedSteps === "number" && toolSteps.some(t => t.steps === d.selectedSteps)){ selectedSteps = d.selectedSteps; buildTools(); }
   activeDrumStyle = d.drumsMuted ? null : (DRUM_STYLE_UI[d.drumStyle] || "techno");
   syncAudioAndUI();
   notesByRow = Array.from({length: rows}, () => []);
@@ -5442,10 +5563,12 @@ function _applySequenceData(d){
       if(!(typeof n.row==="number" && n.row>=0 && n.row<rows &&
            typeof n.start==="number" && typeof n.len==="number" &&
            n.start>=0 && n.start<cols)) continue;
-      // Going 4/4 → 3/4, a note that runs past the shorter bar keeps the part
-      // that fits, as the longest note length that does (beat-4 notes go).
+      // Going 4/4 → 3/4 or 6/8, a note that runs past the shorter bar keeps the
+      // part that fits, as the longest note length that does (beat-4 notes go).
+      // 6/8 counts dotted notes among its lengths.
       let len = n.len;
-      if(n.start + len > cols) len = [8, 4, 2, 1].find(l => l <= cols - n.start);
+      const fitLens = TIME_SIG === "6/8" ? [6, 4, 2, 1] : [8, 4, 2, 1];
+      if(n.start + len > cols) len = fitLens.find(l => l <= cols - n.start);
       if(len && canPlace(n.row, n.start, len)) placeNote(n.row, n.start, len);
     }
   }
@@ -6616,10 +6739,16 @@ function _cornerMarkersFrom(imgData, diag){
    reason — the beat lock belongs to tapping, not to reading a child's pencil.
 
    Powers of two because they are the note values the sequencer can represent;
-   a 3-square run still has to land on one of them (see _snapNoteLen). */
-function _legalNoteLens(){
+   a 3-square run still has to land on one of them (see _snapNoteLen). A 6/8
+   sheet adds its dotted beat and dotted bar (6 and 12): there a 6-square run
+   is THE note of the bar, and rounding it to 4 or 8 would knock it off the beat.
+   Taken from the SHEET, not the page, so the fixtures can read any template. */
+function _legalNoteLens(geom){
+  const C = geom && geom.cols ? geom.cols : cols;
   const arr = [];
-  for(let L = 1; L <= cols; L *= 2) arr.push(L);
+  for(let L = 1; L <= C; L *= 2) arr.push(L);
+  if(geom && geom.timeSig === "6/8") for(const L of [6, 12]) if(L <= C) arr.push(L);
+  arr.sort((a, b) => a - b);
   return arr.length ? arr : [1];
 }
 
@@ -6743,7 +6872,7 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
   }
 
-  const legal = _legalNoteLens();
+  const legal = _legalNoteLens(geom);
   const snaps = [];
   const notes = [];
   for(let r=0; r<R; r++){
@@ -6853,7 +6982,10 @@ function _onePitchPerBeat(notes){
    if it lands on a note already placed, _applyScannedNotes' canPlace drops it. */
 function _snapScanToBeat(notes){
   return notes.map(n => {
-    const step = n.len >= COLS_PER_BEAT ? COLS_PER_BEAT : n.len;
+    // 6/8's beat is three 8ths, so inside it a quarter may start on any 8th
+    // (long-short or short-long); its own 4-column grid would cross the beat.
+    const sub = TIME_SIG === "6/8" ? Math.min(n.len, 2) : n.len;
+    const step = n.len >= COLS_PER_BEAT ? COLS_PER_BEAT : sub;
     let start = Math.floor(n.start / step) * step;
     if(start + n.len > cols) start = Math.max(0, Math.floor((cols - n.len) / step) * step);
     return { ...n, start };
@@ -6916,7 +7048,7 @@ function _routeScannedNotes(geom, notes){
 const VIEW_SHEET_ID = { full: "kidseq:main", five: "kidseq:main5", three: "kidseq:main3" };
 // A time signature other than 4/4 is a different printed grid (3/4 = 12 columns),
 // so it has its own sheet. Only /02 has time signatures.
-const TS_SHEET_ID = { "3/4": "kidseq:main5_34" };
+const TS_SHEET_ID = { "3/4": "kidseq:main5_34", "6/8": "kidseq:main5_68" };
 function _currentSheetId(){
   if(LEARN_LEVEL && VIEW !== "three") return null;   // ?level=N / ?lesson= pages
   const id = TIME_SIG !== "4/4" ? TS_SHEET_ID[TIME_SIG] : VIEW_SHEET_ID[VIEW];

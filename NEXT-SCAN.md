@@ -347,3 +347,17 @@ picks it by time signature (`TS_SHEET_ID`), and `_routeScannedNotes` now matches
 view AND time signature. Note its aspect (1.477) is within the aspect tolerance of
 the full sheet's (1.438), so only `grid-misregistered` separates the two if a full
 sheet is scanned on the 3/4 page.
+
+**And a fourth: `/02?time=68` (6/8), `SHEET_GEOMETRY["kidseq:main5_68"]`.** Same 5x12
+grid and the same number of tools as 3/4, so it measured identical to 3/4 in the
+same run; it exists as its own id so a scan routes back to 6/8 and so the reader
+accepts 6/8's dotted lengths — `_legalNoteLens(geom)` now takes the SHEET and adds
+6 and 12 for a 6/8 one (a coloured 6-run is the dotted-quarter beat; rounding it
+to 4 or 8 would knock it off the beat). On the 6/8 page `_snapScanToBeat` lets a
+quarter start on any 8th inside a beat. Fixtures: 5 cases, 77/77.
+
+**Known limit found while writing them (pre-existing, every template):** two
+coloured runs that TOUCH on one row, with the printed gap between them left white,
+read back as ONE note — e.g. on `/02` 4/4 a quarter then a quarter comes back as a
+half (`{runs:[[2,0,4],[2,4,4]]}` → `2:0+8`). Separate single squares split fine.
+Not yet investigated (reader bug vs fixture artefact); tracked as T-012.
