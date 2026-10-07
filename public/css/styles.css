@@ -785,47 +785,81 @@ body.loggedIn #robotLogo{
       font-size: calc(var(--cell) * var(--beatBadgeFontK, 0.3));
       line-height: 1;
       color: #1f2a44;
+      position: relative;   /* anchors the flash layers below */
+      isolation: isolate;   /* so they sit over the white fill but under the number */
     }
 
     /* Per-beat flash. Lights on the beat and decays away, so at any tempo the
        pulse reads as "this is where the beat is". Duration comes from --beatFlash
        (set from tempo in JS) rather than being fixed: at tempo 40 a beat is 1.5s,
        so a fixed short flash would leave three-quarters of the beat dark.
-       Animated on background/box-shadow only — no transform, so it can't fight
-       the badge's layout or nudge the grid alignment. */
-    @keyframes beatFlash{
-      0%   { background:#ffe14d; box-shadow: 0 3px 0 rgba(0,0,0,0.10), 0 0 12px 2px rgba(255,205,60,0.70); }
-      55%  { background:#fff2b8; box-shadow: 0 3px 0 rgba(0,0,0,0.09), 0 0 7px 1px rgba(255,205,60,0.28); }
-      100% { background:#ffffff; box-shadow: 0 3px 0 rgba(0,0,0,0.08), 0 0 0 0 rgba(255,205,60,0); }
+
+       Two layers fade out: a yellow fill inside the border (::after) and a glow
+       outside it (::before — its box is the border box, and an outer shadow is
+       never drawn inside its own box, so the glow can't tint the black border).
+       Only OPACITY animates. The first version animated background + box-shadow,
+       which repaints every frame on the main thread — the thread that also
+       schedules the audio — and on a slower device that was enough to make the
+       music skip while notes were being added. Opacity runs on the compositor.
+       Fading yellow over white passes through the same colours the old
+       background ramp did (55% ≈ #fff2b8). No transform on the normal beat, so it
+       can't nudge the grid alignment. */
+    .beatBadge::before,
+    .beatBadge::after{
+      content: "";
+      position: absolute;
+      border-radius: inherit;
+      pointer-events: none;
+      opacity: 0;
+      z-index: -1;
     }
-    .beatBadge.beatOn{
+    .beatBadge::after{
+      inset: 0;
+      background: #ffe14d;
+    }
+    .beatBadge::before{
+      inset: -3px;          /* the badge's 3px border */
+      box-shadow: 0 0 12px 2px rgba(255,205,60,0.70);
+    }
+    @keyframes beatFlash{
+      0%   { opacity: 1; }
+      55%  { opacity: 0.45; }
+      100% { opacity: 0; }
+    }
+    .beatBadge.beatOn::before,
+    .beatBadge.beatOn::after{
       animation: beatFlash var(--beatFlash, 260ms) ease-out;
     }
     /* 3/4: beat 1 is the strong beat — a deeper colour, a bigger glow and a
        brief swell. transform doesn't move layout, so column alignment holds. */
+    .beatBadge.beatOne::after{ background: #ffb820; }
+    .beatBadge.beatOne::before{ box-shadow: 0 0 18px 5px rgba(255,170,30,0.80); }
     @keyframes beatFlashStrong{
-      0%   { background:#ffb820; transform: scale(1.32); box-shadow: 0 3px 0 rgba(0,0,0,0.12), 0 0 18px 5px rgba(255,170,30,0.80); }
-      55%  { background:#ffe08a; transform: scale(1.12); box-shadow: 0 3px 0 rgba(0,0,0,0.10), 0 0 9px 2px rgba(255,170,30,0.35); }
-      100% { background:#ffffff; transform: scale(1);    box-shadow: 0 3px 0 rgba(0,0,0,0.08), 0 0 0 0 rgba(255,170,30,0); }
+      0%   { transform: scale(1.32); }
+      55%  { transform: scale(1.12); }
+      100% { transform: scale(1); }
     }
     .beatBadge.beatOn.beatOne{
       animation: beatFlashStrong var(--beatFlash, 260ms) ease-out;
     }
     /* Respect a reduced-motion preference: keep the beat legible (a flat tint
        that blinks off, no pulsing glow or travelling brightness).
-       It must still be an ANIMATION, not a static background: .beatOn is only
-       removed on the next retrigger (or on stop), so `animation:none` + a plain
-       background would leave every badge permanently yellow after the first bar.
+       It must still be an ANIMATION, not a static tint: .beatOn is only
+       removed on the next retrigger (or on stop), so a plain opacity:1 would
+       leave every badge permanently yellow after the first bar.
        steps(1,end) holds the tint flat for the beat, then drops it. */
     @keyframes beatFlashFlat{
-      0%   { background:#ffe9a3; }
-      100% { background:#ffffff; }
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
     }
     @media (prefers-reduced-motion: reduce){
-      .beatBadge.beatOn,
-      .beatBadge.beatOn.beatOne{
+      .beatBadge::after,
+      .beatBadge.beatOne::after{ background: #ffe9a3; }
+      .beatBadge.beatOn::before{ animation: none; }
+      .beatBadge.beatOn::after{
         animation: beatFlashFlat var(--beatFlash, 260ms) steps(1, end);
       }
+      .beatBadge.beatOn.beatOne{ animation: none; }
     }
 
     /* Faded beat number (1..N) centred in each beat's first cell. pointer-none
@@ -868,6 +902,12 @@ body.loggedIn #robotLogo{
       transform-origin:center center;
       touch-action: manipulation;
       overflow:hidden; /* needed for candy-bar overlay */
+      /* Every sounding note swells (pulseNoteBlock). Without its own layer, each swell
+         promotes the block for 260 ms and drops it again, rebuilding the layer tree on
+         the main thread every time — on a packed grid that is ~80 rebuilds a second,
+         enough to starve the audio scheduler on a slower device. A standing layer
+         lets the swell run on the compositor. */
+      will-change: transform;
     }
 
     /* Candy-bar inner bevel (cartoony) */
@@ -2527,6 +2567,11 @@ html.js-loading #contentWrap{
     animation: none !important;
     background: #ffffff !important;
     box-shadow: none !important;
+  }
+  .beatBadge::before,
+  .beatBadge::after {
+    animation: none !important;
+    opacity: 0 !important;
   }
 
   /* Scanner registration marks. Built by _buildPrintMarks at beforeprint and

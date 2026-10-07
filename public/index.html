@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=91">
+<link rel="stylesheet" href="css/styles.css?v=92">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -838,6 +838,10 @@ let masterGain = null;
 let masterComp = null;
 let _compDense = false;
 const _triggeredNotes = new Set();
+// Swell on a playing note block (see pulseNoteBlock). Declared up here, not beside the
+// function, because buildGrid() resets _pulseScale and runs before that code does.
+let _pulseScale = 0;         // on-screen px per layout px of the stage; 0 = measure again
+let _pulseKF = {};           // note length (columns) -> keyframes at that scale
 
 let delaySend = null;
 let delayNode = null;
@@ -3470,6 +3474,7 @@ function clearBeatFlashes(){
 }
 
 function buildGrid(){
+  _pulseScale = 0;          // the stage may have been resized; re-measure at the next swell
   sequencerEl.innerHTML = "";
   // Indexed by MODEL row, so it has holes for rows the current view hides.
   // Every reader must tolerate a missing layer (see redrawRowNotes).
@@ -4131,11 +4136,23 @@ function scheduleEnvelope(g, now, hold, attack, peak, sustain, release, decay1){
 // audioCtx.currentTime exactly.
 const AUDIO_AHEAD_S = 0.010;
 
-// The sequencer places every step on the AUDIO clock this far ahead of the tick that
-// schedules it (see slotForStep in startSequencer). It is how long the main thread can
-// stall — a burst of taps, a layout, a GC — without moving a note. 100 ms is the
-// standard figure ("A tale of two clocks", web.dev/articles/audio-scheduling).
-const SCHED_LEAD_S = 0.100;
+// The sequencer places every step on the AUDIO clock ahead of the tick that schedules
+// it (see slotForStep in startSequencer). The lead is how long the main thread can
+// stall — a burst of taps, a layout, a GC, a frame of animation — without the music
+// skipping. The first step after Play (or after a restart) goes SCHED_START_S ahead so
+// Play still answers at once; the timer then runs early until SCHED_LEAD_S of audio is
+// queued, and holds it there.
+//
+// 100 ms ("A tale of two clocks", web.dev/articles/audio-scheduling) was not enough:
+// while notes are being added, or on a packed grid, the per-step visuals kept the main
+// thread so busy that on a slower device ticks ran up to ~500 ms late (headless Chrome
+// at 4x CPU slowdown: 11-36 steps dropped in 6 s). That is the "jumping like a CD"
+// heard when adding lots of notes. The visuals were made cheaper (pulseNoteBlock, the
+// beat flash) and 300 ms absorbs most of what's left. The cost: a note placed less
+// than 300 ms ahead of the playhead waits for the next pass. Lessons keep 100 ms —
+// their play-once stop and narration are timed against the last note.
+const SCHED_START_S = 0.100;
+const SCHED_LEAD_S = LESSON ? SCHED_START_S : 0.300;
 // While tick() schedules a step: the audio time that step must sound at. Every play*
 // voice reads it through _audioNow(). Null outside a tick (lesson demos, previews),
 // where voices keep the old "as soon as possible" placement.
@@ -4585,6 +4602,61 @@ function setBlockPulseVars(el){
   }
 }
 
+/* The swell a note block gives when the playhead plays it.
+
+   The CSS `swell` it replaces scaled by `var(--sx)`, and keyframes that read custom
+   properties can't run on the compositor — so every frame of every swell was
+   main-thread work, plus two forced layouts and four property writes per sounding
+   note to set it up. A packed grid swells up to 8 blocks a step; on a slower device
+   that kept the main thread so busy the timer that schedules the audio fell behind
+   and steps played late or were dropped (it sounds like a CD skipping). The scale
+   depends only on the note's length and the stage's scale, so the keyframes are
+   worked out once, with literal values, and started with the Web Animations API —
+   no class toggling, no layout read. With `.noteBlock { will-change: transform }`
+   the swell then runs on the compositor. Same values (checked to 4 dp) and the same
+   per-segment ease-out as the CSS version. */
+function _pulseScaleNow(){
+  if(!_pulseScale){
+    // One layout read, only after a layout pass has (re)built the grid or resized the stage.
+    const w = sequencerEl.offsetWidth;
+    const s = w ? sequencerEl.getBoundingClientRect().width / w : 1;
+    _pulseScale = s > 0 ? s : 1;
+    _pulseKF = {};
+  }
+  return _pulseScale;
+}
+function _pulseKeyframes(len){
+  const s = _pulseScaleNow();
+  let kf = _pulseKF[len];
+  if(!kf){
+    const w = Math.max(1, (len * CELL + (len - 1) * GAP) * s);   // on-screen size, as getBoundingClientRect gave
+    const h = Math.max(1, CELL * s);
+    const delta = 4;                                             // px added per side
+    const sx = Math.min(1.12, Math.max(1.0, (w + delta*2) / w));
+    const sy = Math.min(1.18, Math.max(1.0, (h + delta*2) / h));
+    const sx2 = 1 + (sx - 1) * 0.35, sy2 = 1 + (sy - 1) * 0.35;
+    kf = _pulseKF[len] = [
+      { transform: "scale(1,1)",         offset: 0,   easing: "ease-out" },
+      { transform: `scale(${sx},${sy})`, offset: 0.4, easing: "ease-out" },
+      { transform: `scale(${sx2},${sy2})`, offset: 0.7, easing: "ease-out" },
+      { transform: "scale(1,1)",         offset: 1 }
+    ];
+  }
+  return kf;
+}
+function pulseNoteBlock(block, len){
+  if(!block.animate){
+    // Browsers without Web Animations keep the original class-driven swell.
+    setBlockPulseVars(block);
+    block.classList.remove("playing");
+    void block.offsetWidth;
+    block.classList.add("playing");
+    return;
+  }
+  if(block._swell) block._swell.cancel();
+  block._swell = block.animate(_pulseKeyframes(len), { duration: 260 });
+}
+
 function startSequencer(){
   let firstTick = true;
   // Self-correcting timer: schedule each tick at an absolute time relative to a
@@ -4606,6 +4678,7 @@ function startSequencer(){
   let slotCtx = null;                   // the context those slots belong to
   let clockA = -1, clockMovedW = 0;     // last currentTime seen, and when it last moved
   let reanchored = false;               // set when the grid restarts; the timer resyncs with it
+  let statsFromW = 0;                   // debug stats skip the timer's deliberate catch-up after a restart
   function slotForStep(nowW, lateMs){
     // A context that isn't running (iOS interruption, not yet unlocked), or whose clock
     // has stopped, would pile every step onto one instant and fire them all together
@@ -4620,16 +4693,18 @@ function startSequencer(){
 
     const stepDur = stepDurationSec();
     let lead = nextAudioAt === null ? NaN : nextAudioAt - nowA;
-    // First step, or more than two steps behind (a stall): restart the grid one lead
-    // ahead, and have the timer resync with it (see `reanchored` below) — otherwise its
-    // catch-up ticks would be judged against the new grid and mis-scheduled. Two steps,
-    // not more: this must always trip before the timer's own 4-step freeze guard, or
-    // the timer could jump ahead while the grid stays behind and every step after it
-    // would be dropped.
-    if(!(lead >= -2 * stepDur)){
-      nextAudioAt = nowA + SCHED_LEAD_S;
-      lead = SCHED_LEAD_S;
+    // First step, or more than two steps behind (a stall): restart the grid
+    // SCHED_START_S ahead, and have the timer resync with it (see `reanchored` below) —
+    // otherwise its catch-up ticks would be judged against the new grid and
+    // mis-scheduled. Two steps, not more: this must always trip before the timer's own
+    // 4-step freeze guard, or the timer could jump ahead while the grid stays behind and
+    // every step after it would be dropped.
+    const restart = !(lead >= -2 * stepDur);
+    if(restart){
+      nextAudioAt = nowA + SCHED_START_S;
+      lead = SCHED_START_S;
       reanchored = true;
+      statsFromW = nowW + (SCHED_LEAD_S - SCHED_START_S) * 1000;
     }
     // Far AHEAD of the audio clock means the clock is crawling (the audio thread is
     // overloaded) — never happens in normal play, where the lead sits near
@@ -4641,12 +4716,13 @@ function startSequencer(){
     // clock. The tick's own lateness is added back so a busy main thread isn't
     // mistaken for drift. Deliberately slow (1% a step, capped at 1 ms): currentTime
     // only moves in whole audio-buffer jumps, so each reading is noisy, and real
-    // drift is a few ms per minute at most.
-    const drift = lead >= AUDIO_AHEAD_S
+    // drift is a few ms per minute at most. Not on a restart: the timer hasn't caught
+    // up to SCHED_LEAD_S yet, and that gap is deliberate, not drift.
+    const drift = !restart && lead >= AUDIO_AHEAD_S
       ? Math.max(-0.001, Math.min(0.001, (SCHED_LEAD_S - (lead + lateMs / 1000)) * 0.01))
       : 0;
     nextAudioAt = slot + stepDur + drift;
-    if(lead < _schedMinLead) _schedMinLead = lead;
+    if(nowW >= statsFromW && lead < _schedMinLead) _schedMinLead = lead;
     if(lead >= AUDIO_AHEAD_S) return slot;                                  // on time: its exact slot
     if(lead > -stepDur / 2){ _schedLate++; return nowA + AUDIO_AHEAD_S; }   // just missed: right away
     _schedDropped++; return null;                                           // long gone: skip, don't burst
@@ -4668,7 +4744,7 @@ function startSequencer(){
 
     const nowW = performance.now();
     const lateMs = _tickDue ? Math.max(0, nowW - _tickDue) : 0;   // how far behind its due time this tick runs
-    if(lateMs > _tickMaxLate) _tickMaxLate = lateMs;
+    if(nowW >= statsFromW && lateMs > _tickMaxLate) _tickMaxLate = lateMs;
     const at = slotForStep(nowW, lateMs);                          // null = this step stays silent
 
     // Only rows the current view SHOWS are collected. stepNotes is the sole source
@@ -4770,10 +4846,7 @@ function startSequencer(){
       for(const { r, note } of pulse){
         const block = noteLayerEls[r]?.querySelector(`.noteBlock[data-id="${note.id}"]`);
         if(!block) continue;
-        setBlockPulseVars(block);
-        block.classList.remove("playing");
-        void block.offsetWidth;
-        block.classList.add("playing");
+        pulseNoteBlock(block, note.len);
       }
 
       // Lesson heartbeat row: pulse the heart under the current beat (macrobeat
@@ -4809,11 +4882,22 @@ function startSequencer(){
     // Back from a long freeze (iPad locked or app switched mid-play: iOS stops timers
     // in the background), every missed step would run back-to-back as a catch-up
     // burst. Move the origin forward instead, so the next tick is one interval from
-    // now. Same when slotForStep has just restarted the audio grid. stepCount is kept
-    // — lesson playOnce counts it. A stall of a step or two still catches up
-    // (slotForStep plays or drops the steps whose sound is already late).
+    // now. stepCount is kept — lesson playOnce counts it. A stall of a step or two
+    // still catches up (slotForStep plays or drops the steps whose sound is already late).
+    //
+    // When slotForStep has just restarted the audio grid (Play, or after a stall), this
+    // step sounds SCHED_START_S after nowW and the next one an interval later. Its tick
+    // is set (SCHED_LEAD_S - SCHED_START_S) EARLY, so the next few ticks run back to back
+    // until SCHED_LEAD_S of audio is queued — then the self-correcting timer holds that.
+    // Measured from nowW (when the grid was placed), not from the end of this tick:
+    // the time spent creating this step's voices would otherwise become a standing
+    // offset that the drift correction then spends ~100 steps creeping out.
     const behind = performance.now() - nextAt;
-    if(behind > 4 * intervalMs || (reanchored && behind > -intervalMs)){
+    if(reanchored){
+      const shift = (nowW + intervalMs - (SCHED_LEAD_S - SCHED_START_S) * 1000) - nextAt;
+      seqStartTime += shift;
+      nextAt += shift;
+    } else if(behind > 4 * intervalMs){
       seqStartTime += behind + intervalMs;
       nextAt += behind + intervalMs;
     }
