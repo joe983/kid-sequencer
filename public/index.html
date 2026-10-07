@@ -2261,13 +2261,20 @@ document.addEventListener("visibilitychange", () => {
 /* ?audiodebug=1 — on-screen audio health panel (sticky via localStorage). Off by
    default and behaviour-neutral. The iPad is the machine that fails, so the panel
    has to live on the page: state / is the clock moving / contexts created / resets /
-   live nodes / worst tick lateness / recent events. */
+   live nodes / worst tick lateness / recent events.
+   Sticky for AUDIO_DEBUG_TTL_MS only: the stored value is an expiry time, so a flag
+   left on a family iPad can't keep a green panel over a child's screen for good.
+   The old stored value "1" reads as long expired and is cleared. */
+const AUDIO_DEBUG_TTL_MS = 6 * 60 * 60 * 1000;
 const AUDIO_DEBUG = (() => {
   try{
     const q = new URLSearchParams(location.search).get("audiodebug");
-    if(q === "1") localStorage.setItem("kidseq_audiodebug","1");
+    if(q === "1") localStorage.setItem("kidseq_audiodebug", String(Date.now() + AUDIO_DEBUG_TTL_MS));
     if(q === "0") localStorage.removeItem("kidseq_audiodebug");
-    return localStorage.getItem("kidseq_audiodebug") === "1";
+    const until = Number(localStorage.getItem("kidseq_audiodebug"));
+    if(until > Date.now()) return true;
+    localStorage.removeItem("kidseq_audiodebug");
+    return false;
   }catch(e){ return false; }
 })();
 const _adbgLog = [];
@@ -4614,7 +4621,9 @@ function setBlockPulseVars(el){
    worked out once, with literal values, and started with the Web Animations API —
    no class toggling, no layout read. With `.noteBlock { will-change: transform }`
    the swell then runs on the compositor. Same values (checked to 4 dp) and the same
-   per-segment ease-out as the CSS version. */
+   per-segment ease-out as the CSS version.
+   _pulseScale/_pulseKF are declared up by _triggeredNotes, NOT here: buildGrid()
+   resets _pulseScale before this part of the script has run (TDZ). Don't move them. */
 function _pulseScaleNow(){
   if(!_pulseScale){
     // One layout read, only after a layout pass has (re)built the grid or resized the stage.
