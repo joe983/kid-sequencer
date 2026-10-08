@@ -2365,6 +2365,39 @@ function _adbg(msg){
   _adbgLog.unshift((performance.now()/1000).toFixed(1) + "s " + msg);
   if(_adbgLog.length > 10) _adbgLog.pop();
 }
+/* Level meter taps (debug only). Each is an AnalyserNode hung off one point of the
+   chain, never connected onward, so it can't change what's heard. _adbgMeter() reads
+   the last ~43 ms: peak in dB, or "NaN" if any sample is not a finite number. */
+let _adbgTaps = null;
+function _adbgTapChain(points){
+  _adbgTaps = {};
+  for(const k in points){
+    try{
+      const a = audioCtx.createAnalyser();
+      a.fftSize = 2048;
+      points[k].connect(a);
+      _adbgTaps[k] = { a, buf: new Float32Array(a.fftSize) };
+    }catch(e){}
+  }
+}
+function _adbgMeter(){
+  const res = {};
+  if(!_adbgTaps) return res;
+  for(const k in _adbgTaps){
+    const { a, buf } = _adbgTaps[k];
+    a.getFloatTimeDomainData(buf);
+    let peak = 0, bad = false;
+    for(let i = 0; i < buf.length; i++){
+      const v = buf[i];
+      if(!Number.isFinite(v)){ bad = true; break; }
+      const m = v < 0 ? -v : v;
+      if(m > peak) peak = m;
+    }
+    res[k] = bad ? "NaN" : peak < 1e-5 ? "silent" : (20 * Math.log10(peak)).toFixed(0) + "dB";
+  }
+  return res;
+}
+if(AUDIO_DEBUG) window.__kidseqAudioMeter = () => _adbgMeter();
 if(AUDIO_DEBUG){
   window.addEventListener("DOMContentLoaded", () => {
     const pre = document.createElement("pre");
@@ -2376,8 +2409,19 @@ if(AUDIO_DEBUG){
     // iPadOS Safari reports a Mac user agent, so the silent-video hack (keyed on
     // "iPad" in the UA) doesn't run there — say so rather than show "PAUSED".
     const videoHack = /iP(hone|ad|od)/.test(ua);
-    let lastT = -1, moving = "?";
+    let lastT = -1, moving = "?", quietReads = 0;
+    const nanSeen = {};
     setInterval(() => {
+      // Meters + two one-shot events: a tap going NaN, and the output staying silent
+      // for 1.5 s while notes are playing (live nodes > 0) — the "it just cut out" case.
+      const m = _adbgMeter();
+      for(const k in m){
+        if(m[k] === "NaN" && !nanSeen[k]){ nanSeen[k] = true; _adbg("NaN at " + k); }
+      }
+      if(timer && liveNodes.size > 0 && (m.out === "silent" || m.out === "NaN")){
+        if(++quietReads === 3) _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m));
+      } else quietReads = 0;
+      const meter = Object.keys(m).map(k => k + " " + m[k]).join("  ");
       const t = audioCtx ? audioCtx.currentTime : -1;
       moving = audioCtx ? (t > lastT ? "yes" : "NO") : "-";
       lastT = t;
@@ -2390,6 +2434,7 @@ if(AUDIO_DEBUG){
         `contexts ${_audioCtxCount}  rebuilds ${_audioResetCount}  live nodes ${liveNodes.size}  video ${video}\n` +
         `this run: worst tick late ${_tickMaxLate.toFixed(0)}ms  min lead ${lead}  ` +
         `late steps ${_schedLate}  dropped ${_schedDropped}\n` +
+        `levels: ${meter || "-"}\n` +
         _adbgLog.join("\n");
     }, 500);
   });
@@ -3280,6 +3325,11 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     drumRoomIR.buffer = makeHallImpulse(audioCtx, 0.35, 3.0);
     drumRoomSend.connect(drumRoomIR);
     drumRoomIR.connect(drumGlue);
+
+    // ?audiodebug=1 only: level/NaN taps along the chain. A NaN that gets into the
+    // echo's feedback loop or a compressor's level detector stays there, silencing
+    // everything after it until the engine is rebuilt (a refresh) — these say where.
+    if(AUDIO_DEBUG) _adbgTapChain({ mel: moogSaturator, echo: delayNode, drums: drumGlue, out: masterComp });
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);
