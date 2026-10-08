@@ -13,13 +13,7 @@ kid-sequencer/
 │   └── styles.css          ← All styles (layout, grid, buttons, modals, debug, animations)
 ├── js/
 │   ├── sequencer.js        ← Main app logic (see Table of Contents below)
-│   ├── volume-fader.js     ← Shadow-DOM master volume fader web component
-│   ├── tap-feedback.js     ← Tap ripple/pulse animations for action buttons
-│   ├── drag-pan.js         ← Drag-to-pan on the scrollable viewport
-│   ├── debug.js            ← ?debug=1 overlay (element outlines + overflow highlight)
-│   ├── firebase-auth.js    ← Firebase auth watcher (ES module, optional)
-│   ├── layout-logger.js    ← Firestore layout debug logger (optional)
-│   └── legacy-cleanup.js   ← Removes old cached layout overlays
+│   └── firebase-auth.js    ← Firebase auth watcher (ES module, optional)
 └── README.md
 ```
 
@@ -59,13 +53,7 @@ The main app is one IIFE with clearly marked sections. Use your editor's **searc
 
 These are self-contained IIFEs or ES modules — they don't share state with `sequencer.js` except via `window.*`.
 
-- **`volume-fader.js`** — Defines the `<seq-volume-fader>` custom element (Shadow DOM). Communicates with the audio engine via `window.masterGain`.
-- **`tap-feedback.js`** — Watches for pointer events on `.iconBtn` elements and adds a CSS animation class.
-- **`drag-pan.js`** — Enables click-drag panning on `#viewport`. Avoids interactive elements.
-- **`debug.js`** — Activated with `?debug=1` in the URL. Adds element outlines and overflow highlights.
 - **`firebase-auth.js`** — ES module. Watches Firebase auth state. Imports `./js/firebase-init.js` (not included — add your own).
-- **`layout-logger.js`** — Logs layout events (resize, pan, scroll, orientation) to Firestore for debugging on real devices.
-- **`legacy-cleanup.js`** — Removes any stale rotate/overlay prompts from old cached HTML.
 
 ---
 
@@ -76,4 +64,3 @@ These are self-contained IIFEs or ES modules — they don't share state with `se
 - **Changing layout/sizing?** → Edit `css/styles.css` (CSS variables at the top) and `§ LAYOUT-FIT`
 - **Changing note-length tools?** → Edit `toolSteps` array in `§ CONFIG`
 - **Changing colors?** → Edit `rowColors` in `§ CONFIG`
-- **Changing the volume slider?** → Edit `volume-fader.js`
