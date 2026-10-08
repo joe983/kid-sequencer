@@ -7187,7 +7187,13 @@ function camImport(){
   setTimeout(__reveal, 900);
 
   function applyStageFit(){
-    const { vw, vh, offX, offY } = __ksViewport();
+    // The stage is positioned INSIDE #viewport, and __ksSyncViewportVars has
+    // already moved #viewport onto the visual viewport (top/left = its offset).
+    // So the visual-viewport offset must NOT be added again here. It used to be:
+    // any time iOS reported an offset (page zoomed and panned, keyboard up), the
+    // stage landed that far off the visible area — half off the screen on iPad.
+    const { vw, vh } = __ksViewport();
+    const offX = 0, offY = 0;
     const { stageW, stageH } = __ksStageSize();
 
     // In scaled mode we respect safe-area padding on #viewport (iPhone notch / home bar).
@@ -7321,6 +7327,15 @@ root.classList.add('stageScaled');
   window.addEventListener('orientationchange', () => setTimeout(trigger, 60), {passive:true});
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', trigger, {passive:true});
+    // Panning a zoomed page (or iOS sliding it to show a text box) moves the
+    // visual viewport WITHOUT a resize. Without this, #viewport stayed where the
+    // last resize put it and the stage was stranded until a page refresh. Only
+    // #viewport has to follow (the stage sits inside it, independent of the
+    // offset — see applyStageFit), so this is the cheap sync, not a full layout
+    // pass: a pan fires this many times a second and a layout pass rebuilds the grid.
+    window.visualViewport.addEventListener('scroll', () => {
+      try{ __ksSyncViewportVars(); }catch(e){}
+    }, {passive:true});
   }
   window.addEventListener('load', trigger, {once:true});
 
@@ -7353,14 +7368,28 @@ root.classList.add('stageScaled');
     _touchInScrollable = !!(t && t.nodeType === 1 && _startsInScrollable(t));
   }, { passive: true });
 
+  // Buttons are NOT exempt (they used to be). The stage is mostly buttons, and on
+  // iPad Safari this handler is the only thing that holds the page still — so a
+  // child's drag or two-finger pinch that started on a button got through, Safari
+  // slid or zoomed the page, and the stage was left half off the screen until a
+  // refresh. Cancelling the move costs a button nothing: a tap still clicks.
+  // Text fields stay exempt so a caret can be dragged.
   document.addEventListener('touchmove', (e) => {
     if(!root.classList.contains('stageScaled')) return;
+    // Never a pinch: there is nothing to zoom on a stage that is already fitted.
+    if(e.touches && e.touches.length > 1){ e.preventDefault(); return; }
     if(_touchInScrollable) return;
-    // Allow native interaction on form controls if any.
     const t = e.target;
-    if(t && (t.closest && t.closest('input, textarea, select, option, button'))) return;
+    if(t && (t.closest && t.closest('input, textarea, select'))) return;
     e.preventDefault();
   }, { passive: false });
+  // Safari's own pinch events: cancelling these is what actually stops a pinch
+  // from zooming the page on iOS (it ignores user-scalable=no).
+  for(const type of ['gesturestart', 'gesturechange']){
+    document.addEventListener(type, (e) => {
+      if(root.classList.contains('stageScaled')) e.preventDefault();
+    }, { passive: false });
+  }
 })();
 
 
