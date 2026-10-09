@@ -2361,6 +2361,87 @@ const AUDIO_DEBUG = (() => {
 })();
 // Recent audio events. Always kept (a few short strings) because the self-report
 // below sends them; the ?audiodebug panel just displays them.
+/* ---- Audio load control (2026-10-09) ----
+   School-iPad glitch reports: once 22-53 notes overlap (34-96 sounds), the iPad's
+   audio thread can't render in real time — the audio clock loses 150-380 ms every
+   second and the scheduler skips steps: the "skipping CD". Two remedies:
+   - a cap on overlapping melodic sample voices, everywhere: past _voiceCap the
+     oldest (nearly always a decaying tail) gets a 12 ms fade instead of piling up;
+   - LIGHT MODE, entered automatically on a device that falls behind (2 audioslow /
+     crawl events in one play session) and remembered 7 days per device: the six
+     instrument reverbs and the drum room are switched off (input disconnected, so
+     the convolvers go idle), the saturators drop 2x oversampling and the voice cap
+     halves. Notes keep playing — just drier — instead of skipping.
+   Reports carry lite / liteAtSec so the data shows whether it cured the skipping. */
+const AUDIO_LITE_KEY = "kidseq_audiolite";
+const VOICE_CAP_FULL = 32, VOICE_CAP_LITE = 16;
+let _audioLite = false, _liteAtW = 0, _voiceCap = VOICE_CAP_FULL, _drumSat = null;
+let _melVoices = [];                      // {src, g, end} melodic sample voices, in start order
+function _liteStored(){
+  try{ return Number(localStorage.getItem(AUDIO_LITE_KEY)) > Date.now(); }catch(e){ return false; }
+}
+function _applyAudioLite(){
+  if(!audioCtx) return;
+  if(bus){
+    for(const k in bus){
+      const b = bus[k];
+      if(!b || !b.conv || b.liteDone) continue;
+      try{ b.input.disconnect(b.conv); }
+      catch(e){                           // old WebKit without disconnect(node): rewire by hand
+        try{ b.input.disconnect(); b.input.connect(b.dry); if(delaySend) b.input.connect(delaySend); }catch(e2){}
+      }
+      b.liteDone = true;
+    }
+  }
+  try{ if(drumRoomSend) drumRoomSend.disconnect(); }catch(e){}
+  try{ if(moogSaturator) moogSaturator.oversample = "none"; }catch(e){}
+  try{ if(_drumSat) _drumSat.oversample = "none"; }catch(e){}
+}
+function _enterAudioLite(reason){
+  if(_audioLite) return;
+  _audioLite = true;
+  _liteAtW = performance.now();
+  _voiceCap = VOICE_CAP_LITE;
+  try{ localStorage.setItem(AUDIO_LITE_KEY, String(Date.now() + 7 * 24 * 3600 * 1000)); }catch(e){}
+  _applyAudioLite();
+  _adbg("LIGHT MODE on (" + reason + ")");
+}
+// Fade a playing voice out from `at`, stop it, and unplug it once the fade is done:
+// stop() may refuse (it was already called once), and an unconnected source isn't
+// rendered — which is the point, since the iPad's audio thread is what runs out.
+function _stealVoice(src, g, at, tc){
+  try{
+    g.gain.cancelScheduledValues(at);
+    g.gain.setTargetAtTime(0, at, tc);
+  }catch(e){}
+  try{ src.stop(at + tc * 6); }catch(e){}
+  const ms = Math.max(0, (at - audioCtx.currentTime) * 1000) + tc * 6000 + 10;
+  setTimeout(() => { try{ g.disconnect(); }catch(e){} }, ms);
+}
+// Called for every new melodic sample voice, with the time it starts.
+function _capMelVoices(now){
+  _melVoices = _melVoices.filter(v => v.end > now);
+  while(_melVoices.length > _voiceCap){
+    const v = _melVoices.shift();
+    _stealVoice(v.src, v.g, now, 0.012);
+  }
+}
+// Drum choke: a drum hit again cuts its own older hits beyond DRUM_PER_VOICE, like a
+// drum machine's hat choke. Hits without a trim otherwise ring for the whole sample
+// (cymbals, 808 tails) and pile up — most of the 34-96 live sounds in the reports.
+const DRUM_PER_VOICE_FULL = 2, DRUM_PER_VOICE_LITE = 1;
+const _drumHits = new Map();              // layers array (one per drum voice) -> [{parts, end}]
+function _chokeDrum(layers, hit, at){
+  const cap = _audioLite ? DRUM_PER_VOICE_LITE : DRUM_PER_VOICE_FULL;
+  const list = (_drumHits.get(layers) || []).filter(h => h.end > at);
+  list.push(hit);
+  while(list.length > cap){
+    const old = list.shift();
+    for(const pt of old.parts) _stealVoice(pt.src, pt.g, at, 0.008);
+  }
+  _drumHits.set(layers, list);
+}
+
 const _adbgLog = [];
 function _adbg(msg){
   _adbgLog.unshift((performance.now()/1000).toFixed(1) + "s " + msg);
@@ -2468,7 +2549,7 @@ function _ahSample(){
       state: audioCtx.state, moving: _ahMoving, ctxTime: +t.toFixed(2),
       contexts: _audioCtxCount, rebuilds: _audioResetCount, liveNodes: liveNodes.size,
       worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
-      events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts,
+      events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts, lite: _audioLite,
       fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
       masterGain: masterGain ? +masterGain.gain.value.toFixed(4) : null,
     }));
@@ -2544,6 +2625,7 @@ function _glEvent(k, v){ try{ _glEventInner(k, v); }catch(e){} }   // must never
 function _glEventInner(k, v){
   _glTotal++;
   _glCounts[k] = (_glCounts[k] || 0) + 1;
+  if(!_audioLite && ((_glCounts.audioslow || 0) + (_glCounts.crawl || 0)) >= 2) _enterAudioLite(k);
   if(_glEvents.length < 70){
     const now = performance.now();
     let taps = 0;
@@ -2551,7 +2633,7 @@ function _glEventInner(k, v){
     _glEvents.push({ t: +((now - _glStartW) / 1000).toFixed(2), k, v: Math.round(v || 0), taps,
       n: _glNotes(), bpm: Math.round(tempo), live: liveNodes.size, hid: document.hidden ? 1 : 0 });
   }
-  if(_glTotal === 12) _glSend("during-play");
+  if(_glTotal === 30) _glSend("during-play");   // late enough to show whether light mode helped
 }
 function _glSend(trigger){
   if(_glSent || _glTotal < 3) return;
@@ -2575,6 +2657,7 @@ function _glSend(trigger){
     fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
     clockSpeed: _glSumW ? +(_glSumA / _glSumW).toFixed(4) : null,          // audio clock vs real time, whole session
     clockSpeedMin: Number.isFinite(_glMinRatio) ? +_glMinRatio.toFixed(4) : null,   // slowest 1 s
+    lite: _audioLite, liteAtSec: _liteAtW ? Math.round((_liteAtW - _glStartW) / 1000) : null, voiceCap: _voiceCap,
     counts: _glCounts, events: _glEvents,
   }), "glitch");
 }
@@ -2693,7 +2776,7 @@ function playKick(at, vel=1){
 
   // Mild saturation to make it feel punchier
   const shaper = ctx.createWaveShaper();
-  shaper.oversample = "2x";
+  shaper.oversample = _audioLite ? "none" : "2x";
   const N = 256;
   const curve = new Float32Array(N);
   const amt = 2.0;
@@ -3125,6 +3208,7 @@ async function _loadDrumFolder(){
 }
 
 function playDrumSample(layers, at, vel){
+  const hit = { parts: [], end: at };
   for(const l of layers){
     const src = audioCtx.createBufferSource();
     src.buffer = l.buffer;
@@ -3144,7 +3228,10 @@ function playDrumSample(layers, at, vel){
     }
     trackNode(src);
     src.start(at);
+    hit.parts.push({ src, g });
+    hit.end = Math.max(hit.end, at + (l.trimMs ? l.trimMs / 1000 + 0.005 : l.buffer.duration));
   }
+  _chokeDrum(layers, hit, at);
 }
 
 // ---- Melodic instrument sample kits (pitched multisamples) --------------
@@ -3277,6 +3364,8 @@ function playMelodicSample(instrument, freq, steps){
   trackNode(src);
   src.start(now, zone.off || 0);   // skip MP3 encoder-delay silence (pack zones)
   try{ src.stop(now + hold + rel + 0.02); }catch(e){}
+  _melVoices.push({ src, g, end: now + hold + rel + 0.02 });
+  _capMelVoices(now);
   return true;
 }
 
@@ -3344,7 +3433,7 @@ function makeInstrumentBuses(ctx, masterOut){
     dry.connect(masterOut);
     wet.connect(masterOut);
 
-    return { input };
+    return { input, conv, dry };            // conv/dry: light mode turns the reverb off
   }
 
   return {
@@ -3493,6 +3582,7 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     const drumSat = audioCtx.createWaveShaper();
     drumSat.curve = satC;
     drumSat.oversample = "2x";
+    _drumSat = drumSat;
 
     const drumGlue = audioCtx.createDynamicsCompressor();
     drumGlue.threshold.setValueAtTime(-14, audioCtx.currentTime);
@@ -3528,6 +3618,8 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     // synth until each kit's buffers are decoded.
     loadDrumSampleKits();
     loadMelodicSampleKits();
+
+    if(_audioLite || _liteStored()){ _audioLite = true; _voiceCap = VOICE_CAP_LITE; _applyAudioLite(); _adbg("LIGHT MODE (remembered)"); }
 
     warmUpAudio(2);
   }
@@ -4837,7 +4929,7 @@ function playBass(freq, steps){
 
   // Mild tanh saturation for growl
   const shaper = audioCtx.createWaveShaper();
-  shaper.oversample = "2x";
+  shaper.oversample = _audioLite ? "none" : "2x";
   const N = 256, curve = new Float32Array(N), amt = 1.6;
   for(let i=0;i<N;i++){
     const x = (i / (N - 1)) * 2 - 1;
