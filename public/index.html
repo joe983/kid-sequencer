@@ -2327,15 +2327,36 @@ function positionRobotLogo(){
 /* -------------------- AUDIO -------------------- */
 // iOS reports a context stopped by a call/Siri/lock/another app as "interrupted",
 // not "suspended" — resume on ANY non-running state or it stays silent forever.
-function ensureAudioRunning(){
+/* Live report 2026-10-09: iOS interrupted a school iPad's audio and it STAYED
+   "interrupted" (clock stopped) until a refresh — resume() on tap kept being refused.
+   A refresh works because it builds a new AudioContext. So: when two taps at least
+   1 s apart have both failed to resume it, the next tap rebuilds the engine — inside
+   the gesture, where iOS lets a new context start. Taps only (not the visibility
+   retry), so coming back from the background still just resumes on the first tap. */
+let _ctxStuckSince = 0, _gestureResumeTries = 0, _lastGestureResume = 0;
+function _noteCtxState(state){
+  if(state === "running"){ _ctxStuckSince = 0; _gestureResumeTries = 0; }
+  else if(!_ctxStuckSince) _ctxStuckSince = performance.now();
+}
+function ensureAudioRunning(fromGesture){
   iosStartSilentVideo();                 // restarts the keep-alive video if iOS paused it
   if (!audioCtx) return;
-  if (audioCtx.state !== "running") audioCtx.resume().catch(()=>{});
+  if (audioCtx.state === "running") return;
+  const now = performance.now();
+  if(fromGesture && _gestureResumeTries >= 2 && now - _lastGestureResume > 1000 &&
+     _ctxStuckSince && now - _ctxStuckSince > 4000 && _audioResetCount < MAX_AUDIO_REBUILDS){
+    _adbg("audio stuck " + audioCtx.state + " after " + _gestureResumeTries + " taps -> rebuilding engine");
+    try{ hardResetAudioEngine("stuck " + audioCtx.state); }catch(e){}
+    _gestureResumeTries = 0;
+    return;
+  }
+  if(fromGesture){ _gestureResumeTries++; _lastGestureResume = now; }
+  audioCtx.resume().catch(()=>{});
 }
 // iOS only lets resume() succeed inside a gesture, so retry on every touch, and
 // when the page comes back to the foreground.
 ["pointerdown","touchend"].forEach(ev =>
-  document.addEventListener(ev, () => { if(audioCtx) ensureAudioRunning(); }, { capture:true, passive:true }));
+  document.addEventListener(ev, () => { if(audioCtx) ensureAudioRunning(true); }, { capture:true, passive:true }));
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible") ensureAudioRunning();
 });
@@ -2844,6 +2865,7 @@ if(AUDIO_DEBUG){
 }
 
 function trackNode(node){
+  if(_renderingOffline) return;           // rendering a synth drum into a sample, not playing
   _ahStarts++;
   const k = _tk;
   _liveKind[k] = (_liveKind[k] || 0) + 1;
@@ -3473,6 +3495,53 @@ const MELODIC_RELEASE_S = { piano: 0.10, trumpet: 0.15, strings: 0.30, synth: 0.
    same voice (playBass's recipe, held at sustain) into 5 zones across the bass range,
    and then played like any sampled instrument. playBass stays as the fallback until the
    render is done (or if OfflineAudioContext is missing). */
+/* ---- Synth drums rendered into samples (live data 2026-10-09) ----
+   School iPad, Safari 18.7.6, both light-mode stages on, piano + tech house 145 bpm:
+   still skipping (clock down to 0.62) with only ~30 sounds live — 7-10 of them SYNTH
+   drums (tech house's kick + sub are synth by design; any voice a kit lacks falls back
+   to synth). Same cure as the bass: each synth drum is rendered once, offline, by its
+   own unchanged play* function (audioCtx/drumBus pointed at an OfflineAudioContext for
+   the length of that one synchronous call), then played as a sample through
+   playDrumSample — choke and room logic included. Synth stays the fallback. */
+let _synthDrumKit = null, _renderingOffline = false;
+async function renderSynthDrumKit(){
+  if(_synthDrumKit || !audioCtx) return;
+  _synthDrumKit = {};                       // only attempt once
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OAC) return;
+  const FNS = { kick: playKick, sub: playSub, snare: playSnare, clap: playClap, hatC: playHatClosed,
+                hatO: playHatOpen, rim: playRim, cowbell: playCowbell, shaker: playShaker };
+  const rate = audioCtx.sampleRate, kit = {};
+  try{
+    for(const voice in FNS){
+      const oc = new OAC(2, Math.ceil(rate * 0.75), rate);
+      const out = oc.createGain(); out.connect(oc.destination);
+      const sCtx = audioCtx, sBus = drumBus, sLite = _audioLite;
+      _renderingOffline = true; audioCtx = oc; drumBus = out; _audioLite = false;
+      try{ FNS[voice](0, 1); }
+      finally{ audioCtx = sCtx; drumBus = sBus; _audioLite = sLite; _renderingOffline = false; }
+      const full = await new Promise((res, rej) => {
+        const r = oc.startRendering();
+        if(r && r.then) r.then(res, rej); else oc.oncomplete = e => res(e.renderedBuffer);
+      });
+      // Trim the silent tail so a playing hit holds no longer than it sounds.
+      let last = 0;
+      for(let c = 0; c < full.numberOfChannels; c++){
+        const d = full.getChannelData(c);
+        for(let i = d.length - 1; i > last; i--) if(Math.abs(d[i]) > 1e-4){ last = i; break; }
+      }
+      const n = Math.max(64, last + 64);
+      const buf = audioCtx.createBuffer(full.numberOfChannels, Math.min(n, full.length), rate);
+      for(let c = 0; c < full.numberOfChannels; c++) buf.copyToChannel(full.getChannelData(c).subarray(0, buf.length), c);
+      kit[voice] = [{ buffer: buf, g: 1 }];
+    }
+    _synthDrumKit = kit;
+    _adbg("synth drums rendered (" + Object.keys(kit).length + ")");
+  }catch(e){
+    _synthDrumKit = {};
+    _adbg("synth drum render failed: " + (e && e.message));
+  }
+}
 let _bassKit = null;
 async function renderBassKit(){
   if(_bassKit || !audioCtx) return;
@@ -3583,6 +3652,7 @@ function playDrumsAtStep(s){
     const v = pat[voice] && pat[voice][s];
     if(!v) return;
     if(kit && kit[voice]){ _tk = "drumS"; playDrumSample(kit[voice], t, v); }
+    else if(_synthDrumKit && _synthDrumKit[voice]){ _tk = "drumR"; playDrumSample(_synthDrumKit[voice], t, v); }   // rendered synth
     else { _tk = "drumY"; synthFn(t, v); }
     _tk = "melY";
   };
@@ -3685,7 +3755,10 @@ function getAudio(){
     _audioCtxCount++;
     _adbg("context #" + _audioCtxCount + " created");
     const _c = audioCtx;
-    _c.onstatechange = () => _adbg("ctx#" + _audioCtxCount + (_c === audioCtx ? "" : " (old)") + " state -> " + _c.state);
+    _c.onstatechange = () => {
+      _adbg("ctx#" + _audioCtxCount + (_c === audioCtx ? "" : " (old)") + " state -> " + _c.state);
+      if(_c === audioCtx) _noteCtxState(_c.state);
+    };
 
     window.audioCtx = audioCtx;
 masterGain = audioCtx.createGain();
@@ -3809,7 +3882,7 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     // synth until each kit's buffers are decoded.
     loadDrumSampleKits();
     loadMelodicSampleKits();
-    setTimeout(() => { renderBassKit(); }, 800);
+    setTimeout(() => { renderBassKit().then(() => renderSynthDrumKit()); }, 800);
 
     if(_audioLite || _liteStored()){ _audioLite = true; _voiceCap = VOICE_CAP_LITE; _applyAudioLite(); _adbg("LIGHT MODE (remembered)"); }
 
