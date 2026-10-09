@@ -2377,6 +2377,28 @@ const AUDIO_LITE_KEY = "kidseq_audiolite";
 const VOICE_CAP_FULL = 32, VOICE_CAP_LITE = 16;
 let _audioLite = false, _liteAtW = 0, _voiceCap = VOICE_CAP_FULL, _drumSat = null;
 let _melVoices = [];                      // {src, g, end} melodic sample voices, in start order
+let _tk = "melY";                         // what trackNode() is tagging right now
+const _liveKind = {};                     // live sources by kind (drumS/drumY/melS/melY)
+let _audioLite2 = false, _lite2AtW = 0;
+/* Light mode stage 2 — the live data showed stage 1 (reverbs off) isn't enough on the
+   worst iPads: still falling behind after it, mostly with the synth BASS + drums.
+   Entered after 4 more audioslow/crawl events once stage 1 is on: voice caps drop to
+   8 (sample) / 6 (synth notes), every drum hit plays only its first layer, and the
+   melodic Moog filter chain is bypassed (melodicMaster straight to masterGain). */
+function _enterAudioLite2(reason){
+  if(_audioLite2) return;
+  _audioLite2 = true;
+  _lite2AtW = performance.now();
+  _voiceCap = 8;
+  try{
+    if(melodicMaster && masterGain){
+      try{ melodicMaster.disconnect(moogFilter1); }catch(e){ melodicMaster.disconnect(); }
+      melodicMaster.connect(masterGain);
+    }
+  }catch(e){}
+  _adbg("LIGHT MODE 2 on (" + reason + ")");
+}
+
 function _liteStored(){
   try{ return Number(localStorage.getItem(AUDIO_LITE_KEY)) > Date.now(); }catch(e){ return false; }
 }
@@ -2586,7 +2608,7 @@ function _ahSample(){
       worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
       events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts, lite: _audioLite, heals: _ahHeals,
       drumKit: !!(drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle]),
-      melKit: !!(melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length),
+      melKit: !!((melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length) || (instrument === "bass" && _bassKit && _bassKit.length)),
       fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
       masterGain: masterGain ? +masterGain.gain.value.toFixed(4) : null,
     }));
@@ -2646,6 +2668,7 @@ function _ahSend(report, label){
    playing is reported straight away (left playing, never stopped). Max one glitch
    report per 10 min per device (shared school iPads: per device, not per child). */
 const GLITCH_SENT_KEY = "kidseq_glitchreport_sent";
+let _liteBehind0 = 0;
 let _glEvents = [], _glCounts = {}, _glTotal = 0, _glSent = false, _glStartW = 0, _glStarts0 = 0;
 let _glBeat = 0, _glA = -1, _glAW = 0, _glSumA = 0, _glSumW = 0, _glMinRatio = Infinity;
 const _glTaps = [];
@@ -2662,13 +2685,16 @@ function _glEvent(k, v){ try{ _glEventInner(k, v); }catch(e){} }   // must never
 function _glEventInner(k, v){
   _glTotal++;
   _glCounts[k] = (_glCounts[k] || 0) + 1;
-  if(!_audioLite && ((_glCounts.audioslow || 0) + (_glCounts.crawl || 0)) >= 2) _enterAudioLite(k);
+  const behind = (_glCounts.audioslow || 0) + (_glCounts.crawl || 0);
+  if(!_audioLite && behind >= 2){ _enterAudioLite(k); _liteBehind0 = behind; }
+  else if(_audioLite && !_audioLite2 && (k === "audioslow" || k === "crawl") && behind - _liteBehind0 >= 4) _enterAudioLite2(k);
   if(_glEvents.length < 70){
     const now = performance.now();
     let taps = 0;
     for(const t of _glTaps) if(now - t < 2000) taps++;
     _glEvents.push({ t: +((now - _glStartW) / 1000).toFixed(2), k, v: Math.round(v || 0), taps,
-      n: _glNotes(), bpm: Math.round(tempo), live: liveNodes.size, hid: document.hidden ? 1 : 0 });
+      n: _glNotes(), bpm: Math.round(tempo), live: liveNodes.size, hid: document.hidden ? 1 : 0,
+      lk: Object.assign({}, _liveKind), inst: instrument });
   }
   if(_glTotal === 30) _glSend("during-play");   // late enough to show whether light mode helped
 }
@@ -2695,8 +2721,9 @@ function _glSend(trigger){
     clockSpeed: _glSumW ? +(_glSumA / _glSumW).toFixed(4) : null,          // audio clock vs real time, whole session
     clockSpeedMin: Number.isFinite(_glMinRatio) ? +_glMinRatio.toFixed(4) : null,   // slowest 1 s
     drumKit: !!(drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle]),
-    melKit: !!(melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length),
+    melKit: !!((melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length) || (instrument === "bass" && _bassKit && _bassKit.length)),
     startsPerSec: +((_ahStarts - _glStarts0) / Math.max(1, (performance.now() - _glStartW) / 1000)).toFixed(1),
+    lite2: _audioLite2, lite2AtSec: _lite2AtW ? Math.round((_lite2AtW - _glStartW) / 1000) : null,
     lite: _audioLite, liteAtSec: _liteAtW ? Math.round((_liteAtW - _glStartW) / 1000) : null, voiceCap: _voiceCap,
     counts: _glCounts, events: _glEvents,
   }), "glitch");
@@ -2754,6 +2781,9 @@ if(AUDIO_DEBUG){
 
 function trackNode(node){
   _ahStarts++;
+  const k = _tk;
+  _liveKind[k] = (_liveKind[k] || 0) + 1;
+  node.addEventListener("ended", () => { _liveKind[k]--; });
   liveNodes.add(node);
   node.onended = () => liveNodes.delete(node);
 }
@@ -3249,7 +3279,7 @@ async function _loadDrumFolder(){
 
 function playDrumSample(layers, at, vel){
   const hit = { parts: [], end: at };
-  for(const l of layers){
+  for(const l of (_audioLite2 ? layers.slice(0, 1) : layers)){   // light mode 2: first layer only (layers stays the choke key)
     const src = audioCtx.createBufferSource();
     src.buffer = l.buffer;
     const g = audioCtx.createGain();
@@ -3370,8 +3400,64 @@ const MELODIC_SAMPLE_LEVEL = { piano: 0.62, trumpet: 0.55, strings: 0.42, synth:
 // "bells" = the rave pad when sampled: slow bloom in the render, gentle release here.
 const MELODIC_RELEASE_S = { piano: 0.10, trumpet: 0.15, strings: 0.30, synth: 0.10, bass: 0.10, bells: 0.35 };
 
+/* ---- Pre-rendered bass (live data 2026-10-09) ----
+   School iPad, Safari 17.6: drums alone (samples) ran the audio clock at 0.99 of real
+   time; the moment ~16 synth BASS notes joined it collapsed to 0.23 — light mode on,
+   only ~35 sounds live. Bass was the one instrument with no samples, and every bass
+   note built a live saw + sub + resonant swept filter + waveshaper; sample playback is
+   what these iPads handle well. So the bass is rendered ONCE, offline, from the very
+   same voice (playBass's recipe, held at sustain) into 5 zones across the bass range,
+   and then played like any sampled instrument. playBass stays as the fallback until the
+   render is done (or if OfflineAudioContext is missing). */
+let _bassKit = null;
+async function renderBassKit(){
+  if(_bassKit || !audioCtx) return;
+  _bassKit = [];                              // only attempt once
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if(!OAC) return;
+  const rate = audioCtx.sampleRate, dur = 6.3;   // a whole note at tempo 40 holds 6 s
+  const roots = [55.00, 73.42, 98.00, 130.81, 174.61];   // A1 D2 G2 C3 F3 — repitch ≤ ±2.5 st
+  const zones = [];
+  try{
+    for(const freq of roots){
+      const oc = new OAC(1, Math.ceil(rate * dur), rate);
+      const env = oc.createGain();
+      env.gain.setValueAtTime(0.0001, 0);
+      env.gain.exponentialRampToValueAtTime(0.85, 0.005);
+      env.gain.exponentialRampToValueAtTime(0.58, 0.045);
+      const o1 = oc.createOscillator(); o1.type = "sawtooth"; o1.frequency.value = freq;
+      const sub = oc.createOscillator(); sub.type = "triangle"; sub.frequency.value = freq * 0.5;
+      const g1 = oc.createGain(); g1.gain.value = 0.55;
+      const gs = oc.createGain(); gs.gain.value = 0.34;
+      const lp = oc.createBiquadFilter(); lp.type = "lowpass";
+      lp.frequency.setValueAtTime(Math.min(2800, Math.max(600, freq * 9)), 0);
+      lp.frequency.exponentialRampToValueAtTime(Math.max(180, freq * 2.4), 0.18);
+      lp.Q.value = 4.5;
+      const shaper = oc.createWaveShaper();
+      const N = 256, curve = new Float32Array(N);
+      for(let i = 0; i < N; i++){ const x = (i / (N - 1)) * 2 - 1; curve[i] = Math.tanh(1.6 * x); }
+      shaper.curve = curve;
+      o1.connect(g1); sub.connect(gs); g1.connect(lp); gs.connect(lp);
+      lp.connect(shaper); shaper.connect(env); env.connect(oc.destination);
+      o1.start(0); sub.start(0);
+      const buffer = await new Promise((res, rej) => {
+        const r = oc.startRendering();
+        if(r && r.then) r.then(res, rej); else oc.oncomplete = e => res(e.renderedBuffer);
+      });
+      // playMelodicSample multiplies by MELODIC_SAMPLE_LEVEL.bass; land on LEVEL.bass like playBass.
+      zones.push({ buffer, root: freq, g: LEVEL.bass / MELODIC_SAMPLE_LEVEL.bass, off: 0 });
+    }
+    _bassKit = zones;
+    _adbg("bass kit rendered (" + zones.length + " zones)");
+  }catch(e){
+    _bassKit = [];
+    _adbg("bass kit render failed: " + (e && e.message));
+  }
+}
+
 function playMelodicSample(instrument, freq, steps){
-  const zones = melodicSampleKits[instrument];
+  const zones = (melodicSampleKits && melodicSampleKits[instrument]) ||
+                (instrument === "bass" && _bassKit && _bassKit.length ? _bassKit : null);
   if(!zones || !zones.length) return false;
 
   // nearest zone in log-pitch space (minimizes the pitch-shift ratio)
@@ -3432,8 +3518,9 @@ function playDrumsAtStep(s){
   const hit = (voice, synthFn) => {
     const v = pat[voice] && pat[voice][s];
     if(!v) return;
-    if(kit && kit[voice]) playDrumSample(kit[voice], t, v);
-    else synthFn(t, v);
+    if(kit && kit[voice]){ _tk = "drumS"; playDrumSample(kit[voice], t, v); }
+    else { _tk = "drumY"; synthFn(t, v); }
+    _tk = "melY";
   };
   hit('kick', playKick);
   hit('sub', playSub);
@@ -3658,6 +3745,7 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     // synth until each kit's buffers are decoded.
     loadDrumSampleKits();
     loadMelodicSampleKits();
+    setTimeout(() => { renderBassKit(); }, 800);
 
     if(_audioLite || _liteStored()){ _audioLite = true; _voiceCap = VOICE_CAP_LITE; _applyAudioLite(); _adbg("LIGHT MODE (remembered)"); }
 
@@ -5039,13 +5127,16 @@ function playInstrument(freq, steps){
   // its sample kit is loaded (plays at grid pitch); the synth fallback is still
   // the old glockenspiel 2 octaves up. Internal key stays "bells" so old saved
   // sequences load (same backward-compat pattern as the garage drum key alias).
-  const hasKit = melodicSampleKits && melodicSampleKits[instrument];
+  const hasKit = (melodicSampleKits && melodicSampleKits[instrument]) ||
+                 (instrument === "bass" && _bassKit && _bassKit.length);
   const f = instrument === "bass"  ? freq * 0.25          // 2 octaves down -> C2-C3
           : instrument === "bells" ? (hasKit ? freq : freq * 4)
           : freq;
 
   // Prefer a loaded pitched sample kit; fall back to the synth voice.
+  _tk = "melS";
   if(hasKit && playMelodicSample(instrument, f, steps)) return;
+  _tk = "melY";
 
   if(instrument === "trumpet") return playTrumpet(f, steps);
   if(instrument === "strings") return playStrings(f, steps);
