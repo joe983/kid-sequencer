@@ -2741,6 +2741,28 @@ function _ahSendNow(reason){
   _adbg("sending report now: " + reason);
   _ahSend(JSON.stringify(rec), "now:" + reason);
 }
+/* Session summaries (owner 2026-10-09: kids using the iPads right now, cut-outs "keep
+   happening", yet nothing is reported — every report above only fires when something
+   LOOKS wrong). A short summary of every play session: on Stop after >= 20 s of play,
+   and every 5 min while it keeps playing. Gives the denominator (healthy sessions) and
+   the state at a cut-out, since a child who loses sound presses Stop. Max one per tab
+   per 2 min. */
+let _ahSummaryAt = 0;
+function _ahSendSummary(reason){
+  const now = Date.now();
+  if(now - _ahSummaryAt < 120000) return;
+  _ahSummaryAt = now;
+  try{ _ahSample(); }catch(e){}
+  const rec = Object.assign({}, _ahLastRec || {}, {
+    trigger: "summary:" + reason, loads15m: _loadsRecent, sinceLoadSec: Math.round(performance.now() / 1000),
+    playedSec: Math.round((performance.now() - _glStartW) / 1000), glitches: _glCounts,
+    instrument, drumStyle, drumsOn: !drumsMuted, notes: _glNotes(), bpm: Math.round(tempo),
+    state: audioCtx ? audioCtx.state : "none", ua: navigator.userAgent, otherTabs: _otherTabsAlive(),
+  });
+  _ahSend(JSON.stringify(rec), "summary:" + reason);
+}
+setInterval(() => { if(timer && !document.hidden && performance.now() - _glStartW > 290000) _ahSendSummary("playing"); }, 300000);
+
 // Called 4 s after Play: did the audio actually start?
 function _ahCheckStarted(){
   if(!timer) return;                         // stopped again — nothing to judge
@@ -5725,6 +5747,7 @@ function startSequencer(){
 
 function stop(){
   if(timer){ try{ _glSend("stop"); }catch(e){} }
+  if(timer && performance.now() - _glStartW > 20000){ try{ _ahSendSummary("stop"); }catch(e){} }
   // A manual stop cancels any pending lesson playOnce limit + callback.
   if(LESSON){ _lessonPlayLimit = null; _lessonPlayDone = null; }
   _triggeredNotes.clear();
