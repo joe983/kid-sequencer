@@ -2525,6 +2525,46 @@ if(AUDIO_DEBUG) window.__kidseqAudioMeter = () => _adbgMeter();
    no user id, audio state + device string only). At most one report per 10 min per
    device. Read them with tools/read-audio-reports.js. */
 const AUDIO_HEALTH_KEY = "kidseq_audiohealth";
+/* ---- Tabs (live report 2026-10-09) ----
+   A student opened the app from the QR code in a NEW tab: no sound until a refresh.
+   That iPad still had an old tab of the app open and playing (58 min old) — iOS lets
+   one page hold the audio — and both tabs wrote their health record to ONE key, so the
+   new tab's record was overwritten. Now: each tab has its own id (sessionStorage, so it
+   survives a reload of that tab) and its own record key; records say how many other
+   tabs of the app are alive; and pressing Play in one tab tells the others (via
+   BroadcastChannel) to stop and release the audio. */
+const _tabId = (() => {
+  try{
+    let id = sessionStorage.getItem("kidseq_tab");
+    if(!id){ id = Math.random().toString(36).slice(2, 10); sessionStorage.setItem("kidseq_tab", id); }
+    return id;
+  }catch(e){ return Math.random().toString(36).slice(2, 10); }
+})();
+const _healthKey = AUDIO_HEALTH_KEY + ":" + _tabId;
+let _tabChan = null, _otherTabStops = 0;
+try{ _tabChan = new BroadcastChannel("kidseq-audio"); }catch(e){}
+function _announcePlay(){ try{ if(_tabChan) _tabChan.postMessage({ play: _tabId }); }catch(e){} }
+if(_tabChan) _tabChan.onmessage = (e) => {
+  if(!e.data || !e.data.play || e.data.play === _tabId) return;
+  _otherTabStops++;
+  _adbg("another tab pressed Play: stopping here and releasing the audio");
+  try{ if(timer) stop(); }catch(_){}
+  try{ if(audioCtx && audioCtx.state === "running") audioCtx.suspend(); }catch(_){}
+};
+// Other tabs of the app whose record was written in the last 3 s = alive right now.
+function _otherTabsAlive(){
+  let n = 0;
+  try{
+    const now = Date.now();
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || k.indexOf(AUDIO_HEALTH_KEY + ":") !== 0 || k === _healthKey) continue;
+      const r = JSON.parse(localStorage.getItem(k) || "null");
+      if(r && now - r.t < 3000) n++;
+    }
+  }catch(e){}
+  return n;
+}
 const AUDIO_REPORT_SENT_KEY = "kidseq_audioreport_sent";
 const _ahSid = Math.random().toString(36).slice(2, 10);
 const _ahHist = [];                  // last 30 s of compact samples
@@ -2599,8 +2639,9 @@ function _ahSample(){
     mg: masterGain ? +masterGain.gain.value.toFixed(4) : null, cr });   // mg: the volume the engine is really using
   if(_ahHist.length > 30) _ahHist.shift();
   try{
-    localStorage.setItem(AUDIO_HEALTH_KEY, JSON.stringify({
-      sid: _ahSid, t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
+    localStorage.setItem(_healthKey, JSON.stringify({
+      sid: _ahSid, tab: _tabId, otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
+      t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
       path: location.pathname + location.search, ua: navigator.userAgent,
       touch: navigator.maxTouchPoints || 0, rate: audioCtx.sampleRate,
       state: audioCtx.state, moving: _ahMoving, ctxTime: +t.toFixed(2),
@@ -2618,9 +2659,23 @@ setInterval(_ahSample, 1000);
 
 // Previous load's record → send it if that load ended in trouble or was refreshed mid-play.
 (function _ahReportPrevious(){
-  let prev = null, navType = "?";
-  try{ prev = JSON.parse(localStorage.getItem(AUDIO_HEALTH_KEY) || "null"); }catch(e){}
-  try{ localStorage.removeItem(AUDIO_HEALTH_KEY); }catch(e){}
+  let prev = null, navType = "?", prevKey = null;
+  try{
+    localStorage.removeItem(AUDIO_HEALTH_KEY);          // the old single-key record
+    const now0 = Date.now(), stale = [];
+    let best = null, bestKey = null;
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || k.indexOf(AUDIO_HEALTH_KEY + ":") !== 0) continue;
+      let r = null; try{ r = JSON.parse(localStorage.getItem(k) || "null"); }catch(e){}
+      if(!r || !r.t || now0 - r.t > 15 * 60000){ stale.push(k); continue; }
+      if(k === _healthKey){ prev = r; prevKey = k; }              // this tab, reloaded
+      else if(now0 - r.t > 3000 && (!best || r.t > best.t)){ best = r; bestKey = k; }   // a tab that's gone
+    }
+    if(!prev && best){ prev = best; prevKey = bestKey; }
+    for(const k of stale) localStorage.removeItem(k);
+    if(prevKey) localStorage.removeItem(prevKey);
+  }catch(e){}
   if(!prev || !prev.t) return;
   try{ navType = (performance.getEntriesByType("navigation")[0] || {}).type || "?"; }catch(e){}
   const now = Date.now();
@@ -2638,6 +2693,7 @@ setInterval(_ahSample, 1000);
   }catch(e){}
   const report = JSON.stringify(Object.assign({}, prev, {
     trigger: prev.bad ? "bad" : "refresh", navType, gapMs: now - prev.t,
+    sameTab: prev.tab === _tabId, otherTabsNow: _otherTabsAlive(),
   })).slice(0, 9000);
   _ahSend(report, prev.bad ? "bad" : "refresh");
 })();
@@ -2730,6 +2786,7 @@ function _glSend(trigger){
     drumKit: !!(drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle]),
     melKit: !!((melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length) || (instrument === "bass" && _bassKit && _bassKit.length)),
     startsPerSec: +((_ahStarts - _glStarts0) / Math.max(1, (performance.now() - _glStartW) / 1000)).toFixed(1),
+    otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
     lite2: _audioLite2, lite2AtSec: _lite2AtW ? Math.round((_lite2AtW - _glStartW) / 1000) : null,
     lite: _audioLite, liteAtSec: _liteAtW ? Math.round((_liteAtW - _glStartW) / 1000) : null, voiceCap: _voiceCap,
     counts: _glCounts, events: _glEvents,
@@ -5155,6 +5212,7 @@ function playInstrument(freq, steps){
 
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
+  _announcePlay();
   iosStartSilentVideo();
   await ensureAudioReady();
 
