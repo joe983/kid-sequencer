@@ -2359,15 +2359,17 @@ const AUDIO_DEBUG = (() => {
     return false;
   }catch(e){ return false; }
 })();
+// Recent audio events. Always kept (a few short strings) because the self-report
+// below sends them; the ?audiodebug panel just displays them.
 const _adbgLog = [];
 function _adbg(msg){
-  if(!AUDIO_DEBUG) return;
   _adbgLog.unshift((performance.now()/1000).toFixed(1) + "s " + msg);
   if(_adbgLog.length > 10) _adbgLog.pop();
 }
-/* Level meter taps (debug only). Each is an AnalyserNode hung off one point of the
-   chain, never connected onward, so it can't change what's heard. _adbgMeter() reads
-   the last ~43 ms: peak in dB, or "NaN" if any sample is not a finite number. */
+/* Level meter taps. Each is an AnalyserNode hung off one point of the chain, never
+   connected onward, so it can't change what's heard. _adbgMeter() reads the last
+   ~43 ms: peak in dB, or "NaN" if any sample is not a finite number. Always on —
+   the audio self-report needs them on the devices where the sound cuts out. */
 let _adbgTaps = null;
 function _adbgTapChain(points){
   _adbgTaps = {};
@@ -2398,6 +2400,87 @@ function _adbgMeter(){
   return res;
 }
 if(AUDIO_DEBUG) window.__kidseqAudioMeter = () => _adbgMeter();
+
+/* ---- Audio self-report (owner, 2026-10-09: "the app should collect this itself") ----
+   Report: iPad sound "cuts out occasionally, a refresh fixes it". Nobody should have to
+   photograph a debug panel, so every page load keeps a rolling health record in
+   localStorage (once a second while there is an audio context): context state, is the
+   clock moving, the four meter levels, NaN / dead-output events, scheduler stats.
+   The REFRESH is the signal: if this load is a reload and the previous load was
+   playing within the last 2 min of its record — or the previous load logged a NaN or
+   dead output at all — that record is sent to Firestore `audioReports` (create-only,
+   no user id, audio state + device string only). At most one report per 10 min per
+   device. Read them with tools/read-audio-reports.js. */
+const AUDIO_HEALTH_KEY = "kidseq_audiohealth";
+const AUDIO_REPORT_SENT_KEY = "kidseq_audioreport_sent";
+const _ahSid = Math.random().toString(36).slice(2, 10);
+const _ahHist = [];                  // last 30 s of compact samples
+let _ahLastPlayAt = 0, _ahLastT = -1, _ahQuiet = 0, _ahBad = false;
+const _ahNanSeen = {};
+let _ahMeterNow = {}, _ahMoving = "-";
+function _ahSample(){
+  if(!audioCtx) return;
+  const m = _adbgMeter();
+  _ahMeterNow = m;
+  for(const k in m){
+    if(m[k] === "NaN" && !_ahNanSeen[k]){ _ahNanSeen[k] = true; _ahBad = true; _adbg("NaN at " + k); }
+  }
+  // Output silent/NaN for 2 s while notes are sounding = "it just cut out".
+  if(timer && liveNodes.size > 0 && (m.out === "silent" || m.out === "NaN")){
+    if(++_ahQuiet === 2){ _ahBad = true; _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m)); }
+  } else _ahQuiet = 0;
+  const t = audioCtx.currentTime;
+  _ahMoving = t > _ahLastT ? "yes" : "NO";
+  _ahLastT = t;
+  if(timer) _ahLastPlayAt = Date.now();
+  _ahHist.push({ t: Date.now(), st: audioCtx.state, mv: _ahMoving, p: timer ? 1 : 0, hid: document.hidden ? 1 : 0, lv: m });
+  if(_ahHist.length > 30) _ahHist.shift();
+  try{
+    localStorage.setItem(AUDIO_HEALTH_KEY, JSON.stringify({
+      sid: _ahSid, t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
+      path: location.pathname + location.search, ua: navigator.userAgent,
+      touch: navigator.maxTouchPoints || 0, rate: audioCtx.sampleRate,
+      state: audioCtx.state, moving: _ahMoving, ctxTime: +t.toFixed(2),
+      contexts: _audioCtxCount, rebuilds: _audioResetCount, liveNodes: liveNodes.size,
+      worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
+      events: _adbgLog.slice(), hist: _ahHist,
+    }));
+  }catch(e){}
+}
+setInterval(_ahSample, 1000);
+
+// Previous load's record → send it if that load ended in trouble or was refreshed mid-play.
+(function _ahReportPrevious(){
+  let prev = null, navType = "?";
+  try{ prev = JSON.parse(localStorage.getItem(AUDIO_HEALTH_KEY) || "null"); }catch(e){}
+  try{ localStorage.removeItem(AUDIO_HEALTH_KEY); }catch(e){}
+  if(!prev || !prev.t) return;
+  try{ navType = (performance.getEntriesByType("navigation")[0] || {}).type || "?"; }catch(e){}
+  const now = Date.now();
+  const refreshedMidPlay = navType === "reload" && prev.lastPlayAt > 0 &&
+    prev.t - prev.lastPlayAt < 120000 && now - prev.t < 10 * 60000;
+  if(!refreshedMidPlay && !prev.bad) return;
+  try{
+    const last = Number(localStorage.getItem(AUDIO_REPORT_SENT_KEY));
+    if(last && now - last < 10 * 60000) return;
+    localStorage.setItem(AUDIO_REPORT_SENT_KEY, String(now));
+  }catch(e){}
+  const report = JSON.stringify(Object.assign({}, prev, {
+    trigger: prev.bad ? "bad" : "refresh", navType, gapMs: now - prev.t,
+  })).slice(0, 9000);
+  (async () => {
+    try{
+      const { db } = await import("./js/firebase-init.js");
+      const { collection, addDoc, serverTimestamp } =
+        await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+      await addDoc(collection(db, "audioReports"), { v: 1, report, createdAt: serverTimestamp() });
+      _adbg("sent audio report (" + (prev.bad ? "bad" : "refresh") + ")");
+    }catch(e){
+      _adbg("audio report failed: " + (e && e.code || e));
+    }
+  })();
+})();
+
 if(AUDIO_DEBUG){
   window.addEventListener("DOMContentLoaded", () => {
     const pre = document.createElement("pre");
@@ -2409,22 +2492,13 @@ if(AUDIO_DEBUG){
     // iPadOS Safari reports a Mac user agent, so the silent-video hack (keyed on
     // "iPad" in the UA) doesn't run there — say so rather than show "PAUSED".
     const videoHack = /iP(hone|ad|od)/.test(ua);
-    let lastT = -1, moving = "?", quietReads = 0;
-    const nanSeen = {};
     setInterval(() => {
-      // Meters + two one-shot events: a tap going NaN, and the output staying silent
-      // for 1.5 s while notes are playing (live nodes > 0) — the "it just cut out" case.
-      const m = _adbgMeter();
-      for(const k in m){
-        if(m[k] === "NaN" && !nanSeen[k]){ nanSeen[k] = true; _adbg("NaN at " + k); }
-      }
-      if(timer && liveNodes.size > 0 && (m.out === "silent" || m.out === "NaN")){
-        if(++quietReads === 3) _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m));
-      } else quietReads = 0;
+      // Meters, clock and the NaN / dead-output events come from the self-report
+      // sampler (_ahSample, once a second); the panel only displays them.
+      const m = _ahMeterNow;
       const meter = Object.keys(m).map(k => k + " " + m[k]).join("  ");
       const t = audioCtx ? audioCtx.currentTime : -1;
-      moving = audioCtx ? (t > lastT ? "yes" : "NO") : "-";
-      lastT = t;
+      const moving = audioCtx ? _ahMoving : "-";
       const v = document.getElementById("iosSilentVideo");
       const video = !videoHack ? "n/a" : v ? (v.paused ? "PAUSED" : "playing") : "-";
       const lead = Number.isFinite(_schedMinLead) ? (_schedMinLead * 1000).toFixed(0) + "ms" : "-";
@@ -3326,10 +3400,10 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     drumRoomSend.connect(drumRoomIR);
     drumRoomIR.connect(drumGlue);
 
-    // ?audiodebug=1 only: level/NaN taps along the chain. A NaN that gets into the
-    // echo's feedback loop or a compressor's level detector stays there, silencing
+    // Level/NaN taps along the chain (feed the audio self-report). A NaN that gets into
+    // the echo's feedback loop or a compressor's level detector stays there, silencing
     // everything after it until the engine is rebuilt (a refresh) — these say where.
-    if(AUDIO_DEBUG) _adbgTapChain({ mel: moogSaturator, echo: delayNode, drums: drumGlue, out: masterComp });
+    _adbgTapChain({ mel: moogSaturator, echo: delayNode, drums: drumGlue, out: masterComp });
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);

@@ -21,6 +21,23 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------------
+    // Audio self-reports (index.html `_ahReportPrevious`, added 2026-10-09):
+    // the app sends its own audio-health record after a refresh mid-play or a
+    // detected dead output. Anyone may CREATE a well-formed one (guests too —
+    // the bug isn't tier-specific); nobody may read, edit or delete from a
+    // client. Contains audio state + the device string only, no user id.
+    // Read with tools/read-audio-reports.js (Admin SDK).
+    // ---------------------------------------------------------------
+    match /audioReports/{reportId} {
+      allow create: if request.resource.data.keys().hasOnly(['v', 'report', 'createdAt'])
+        && request.resource.data.v == 1
+        && request.resource.data.report is string
+        && request.resource.data.report.size() <= 9000
+        && request.resource.data.createdAt == request.time;
+      allow read, update, delete: if false;
+    }
+
+    // ---------------------------------------------------------------
     // Public leaderboard for the "Late for Music Class" runner game
     // (school-brand-game-app). Isolated from /users — anyone may READ
     // the board; CREATE is allowed only for well-formed rows; no client
