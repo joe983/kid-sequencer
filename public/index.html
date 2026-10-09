@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=93">
+<link rel="stylesheet" href="css/styles.css?v=94">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -1330,13 +1330,14 @@ function applyLockState(){
   if(keyBtnEl) keyBtnEl.style.display = (isPaid && !LEARN_LEVEL) ? "" : "none";
   if(!(isPaid && !LEARN_LEVEL)) closeKeyMenu(); // close picker if tier drops mid-open
 
-  // AI song button: hidden for guests + in learning mode; greyed (.locked) for
-  // free Members (tap pitches Pro); fully active for Pro. Gated by presence, not
-  // a striped overlay — the click handler (handleAiBtn) decides upsell vs run.
+  // AI song button: greyed (.locked) for guests (tap opens free sign-up — owner
+  // 2026-10-09: show it on the guest landing page) and for free Members (tap
+  // pitches Pro); fully active for Pro; hidden in learning mode. Gated by presence,
+  // not a striped overlay — the click handler (handleAiBtn) decides upsell vs run.
   const aiBtnEl = document.getElementById("aiBtn");
   if(aiBtnEl){
     // The AI track engine builds 4/4 songs only, so there is no AI song in 3/4 or 6/8.
-    const showAi = isLoggedIn && !LEARN_LEVEL && TIME_SIG === "4/4";
+    const showAi = !LEARN_LEVEL && TIME_SIG === "4/4";
     aiBtnEl.style.display = showAi ? "" : "none";
     aiBtnEl.classList.toggle("locked", !isPaid);
   }
@@ -1394,7 +1395,7 @@ function openUpgradeModal(path){
   const modal = document.getElementById('upgradeModal');
   if(!modal) return;
   _markCurrentTierCard();
-  if(path === 'member' && !isLoggedIn){
+  if((path === 'member' || path === 'ai') && !isLoggedIn){
     document.getElementById('tierCardMember')?.classList.add('tierCard-highlight');
   } else if(isLoggedIn && !isPaid){
     _highlightProCard();
@@ -1404,6 +1405,7 @@ function openUpgradeModal(path){
   if(titleEl){
     const titles = {
       member: 'Unlock more sounds',
+      ai:     'Sign up to make AI songs',
       print:  'Print your tune',
       save:   'Save your tune',
       load:   'Load a saved tune',
@@ -1520,7 +1522,8 @@ async function _startStripeCheckout(){
 
 /* -------------------- AI SONG FLOW -------------------- */
 function handleAiBtn(){
-  // Guests never see the button; members see it greyed → pitch Pro; paid → generate.
+  // Guests: greyed → free sign-up. Members: greyed → pitch Pro. Paid → generate.
+  if(!isLoggedIn){ openUpgradeModal('ai'); return; }
   if(!isPaid){ openUpgradeModal('subscribe'); return; }
   openAiModal();
 }
@@ -5806,7 +5809,8 @@ function clearGrid(){
    palette, so the bars in the icon are the bars on the screen you're going to.
    Written out rather than read from `rowColors`, which is already narrowed to
    the current view's rows and so can't describe the other two. */
-const _VIEW_ICON_COLORS = ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+// Owner 2026-10-09: black and white, not the row colours.
+const _VIEW_ICON_COLORS = Array(8).fill("#1d1d1d");
 // n bars evenly filling y 3..29, so every icon has the same ink extent.
 function _viewIcon(n){
   const colors = _VIEW_ICON_COLORS.slice(-n);

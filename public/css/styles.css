@@ -3251,7 +3251,7 @@ html:not(.learning-mode) #toolsList{ align-items: center; }
 #viewToggleBtn svg{ width: 34px; height: 34px; display: block; }
 #viewToggleBtn:hover{ transform: translateY(-1px); box-shadow: 0 9px 0 rgba(0,0,0,0.08); }
 #viewToggleBtn:active{ transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,0.07); }
-#viewToggleBtn.active{ background: #ffe14d; }
+#viewToggleBtn.active{ background: #ffffff; }   /* black and white only (owner 2026-10-09) */
 /* Learning levels and lessons have their own fixed layout and no 8-row model. */
 .learning-mode #viewToggleBtn,
 .lesson-mode #viewToggleBtn{ display: none; }
