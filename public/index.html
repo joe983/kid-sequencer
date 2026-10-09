@@ -2371,6 +2371,7 @@ function _adbg(msg){
    ~43 ms: peak in dB, or "NaN" if any sample is not a finite number. Always on —
    the audio self-report needs them on the devices where the sound cuts out. */
 let _adbgTaps = null;
+const _adbgFrozen = {};
 function _adbgTapChain(points){
   _adbgTaps = {};
   for(const k in points){
@@ -2395,7 +2396,16 @@ function _adbgMeter(){
       const m = v < 0 ? -v : v;
       if(m > peak) peak = m;
     }
-    res[k] = bad ? "NaN" : peak < 1e-5 ? "silent" : (20 * Math.log10(peak)).toFixed(0) + "dB";
+    // Frozen = the analyser handed back the very same samples as last read. Old
+    // Safari (iPadOS 15) stops updating analysers while nothing plays, so a dead
+    // output there may read as stale numbers rather than "silent"; the caller only
+    // treats it as a fault when new notes were started meanwhile. Marked "*".
+    let fp = "";
+    for(let i = 0; i < buf.length; i += 256) fp += buf[i] + ",";
+    const frozen = !bad && peak >= 1e-5 && fp === _adbgTaps[k].fp;
+    _adbgTaps[k].fp = fp;
+    _adbgFrozen[k] = frozen;
+    res[k] = bad ? "NaN" : peak < 1e-5 ? "silent" : (20 * Math.log10(peak)).toFixed(0) + "dB" + (frozen ? "*" : "");
   }
   return res;
 }
@@ -2416,6 +2426,7 @@ const AUDIO_REPORT_SENT_KEY = "kidseq_audioreport_sent";
 const _ahSid = Math.random().toString(36).slice(2, 10);
 const _ahHist = [];                  // last 30 s of compact samples
 let _ahLastPlayAt = 0, _ahLastT = -1, _ahQuiet = 0, _ahBad = false;
+let _ahStarts = 0, _ahFrozenSince = 0, _ahFrozenStarts = 0, _ahFrozenLogged = false;   // _ahStarts: trackNode()
 const _ahNanSeen = {};
 let _ahMeterNow = {}, _ahMoving = "-";
 function _ahSample(){
@@ -2429,6 +2440,15 @@ function _ahSample(){
   if(timer && liveNodes.size > 0 && (m.out === "silent" || m.out === "NaN")){
     if(++_ahQuiet === 2){ _ahBad = true; _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m)); }
   } else _ahQuiet = 0;
+  // Output meter frozen for 3 s while playing AND at least 2 new sounds were started
+  // in that time = the graph stopped rendering (the Safari-15 way of "dead").
+  if(timer && _adbgFrozen.out){
+    if(!_ahFrozenSince){ _ahFrozenSince = Date.now(); _ahFrozenStarts = _ahStarts; }
+    else if(!_ahFrozenLogged && Date.now() - _ahFrozenSince >= 3000 && _ahStarts - _ahFrozenStarts >= 2){
+      _ahFrozenLogged = true; _ahBad = true;
+      _adbg("OUTPUT FROZEN while playing (" + (_ahStarts - _ahFrozenStarts) + " sounds started): " + JSON.stringify(m));
+    }
+  } else _ahFrozenSince = 0;
   const t = audioCtx.currentTime;
   _ahMoving = t > _ahLastT ? "yes" : "NO";
   _ahLastT = t;
@@ -2515,6 +2535,7 @@ if(AUDIO_DEBUG){
 }
 
 function trackNode(node){
+  _ahStarts++;
   liveNodes.add(node);
   node.onended = () => liveNodes.delete(node);
 }
