@@ -2425,6 +2425,7 @@ const AUDIO_HEALTH_KEY = "kidseq_audiohealth";
 const AUDIO_REPORT_SENT_KEY = "kidseq_audioreport_sent";
 const _ahSid = Math.random().toString(36).slice(2, 10);
 const _ahHist = [];                  // last 30 s of compact samples
+let _ahLastTW = 0;
 let _ahLastPlayAt = 0, _ahLastT = -1, _ahQuiet = 0, _ahBad = false;
 let _ahStarts = 0, _ahFrozenSince = 0, _ahFrozenStarts = 0, _ahFrozenLogged = false;   // _ahStarts: trackNode()
 const _ahNanSeen = {};
@@ -2449,12 +2450,15 @@ function _ahSample(){
       _adbg("OUTPUT FROZEN while playing (" + (_ahStarts - _ahFrozenStarts) + " sounds started): " + JSON.stringify(m));
     }
   } else _ahFrozenSince = 0;
-  const t = audioCtx.currentTime;
+  const t = audioCtx.currentTime, tw = performance.now();
+  // cr: audio-clock speed over the last second (1.000 = real time). A clock running
+  // slow makes the scheduler skip steps ("crawl") — the skipping-CD suspect.
+  const cr = _ahLastT >= 0 && tw > _ahLastTW ? +((t - _ahLastT) / ((tw - _ahLastTW) / 1000)).toFixed(3) : null;
   _ahMoving = t > _ahLastT ? "yes" : "NO";
-  _ahLastT = t;
+  _ahLastT = t; _ahLastTW = tw;
   if(timer) _ahLastPlayAt = Date.now();
   _ahHist.push({ t: Date.now(), st: audioCtx.state, mv: _ahMoving, p: timer ? 1 : 0, hid: document.hidden ? 1 : 0, lv: m,
-    mg: masterGain ? +masterGain.gain.value.toFixed(4) : null });   // mg: the volume the engine is really using
+    mg: masterGain ? +masterGain.gain.value.toFixed(4) : null, cr });   // mg: the volume the engine is really using
   if(_ahHist.length > 30) _ahHist.shift();
   try{
     localStorage.setItem(AUDIO_HEALTH_KEY, JSON.stringify({
@@ -2525,7 +2529,7 @@ function _ahSend(report, label){
    report per 10 min per device (shared school iPads: per device, not per child). */
 const GLITCH_SENT_KEY = "kidseq_glitchreport_sent";
 let _glEvents = [], _glCounts = {}, _glTotal = 0, _glSent = false, _glStartW = 0;
-let _glBeat = 0, _glA = -1, _glAW = 0;
+let _glBeat = 0, _glA = -1, _glAW = 0, _glSumA = 0, _glSumW = 0, _glMinRatio = Infinity;
 const _glTaps = [];
 document.addEventListener("pointerdown", () => {
   _glTaps.push(performance.now());
@@ -2534,7 +2538,7 @@ document.addEventListener("pointerdown", () => {
 function _glNotes(){ let n = 0; for(const row of notesByRow) n += row.length; return n; }
 function _glStart(){
   _glEvents = []; _glCounts = {}; _glTotal = 0; _glSent = false;
-  _glStartW = performance.now(); _glBeat = 0; _glA = -1;
+  _glStartW = performance.now(); _glBeat = 0; _glA = -1; _glSumA = 0; _glSumW = 0; _glMinRatio = Infinity;
 }
 function _glEvent(k, v){ try{ _glEventInner(k, v); }catch(e){} }   // must never break the scheduler
 function _glEventInner(k, v){
@@ -2569,6 +2573,8 @@ function _glSend(trigger){
     worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
     minLeadMs: Number.isFinite(_schedMinLead) ? Math.round(_schedMinLead * 1000) : null,
     fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
+    clockSpeed: _glSumW ? +(_glSumA / _glSumW).toFixed(4) : null,          // audio clock vs real time, whole session
+    clockSpeedMin: Number.isFinite(_glMinRatio) ? +_glMinRatio.toFixed(4) : null,   // slowest 1 s
     counts: _glCounts, events: _glEvents,
   }), "glitch");
 }
@@ -2584,6 +2590,8 @@ setInterval(() => {
   if(now - _glAW >= 1000){
     const dW = (now - _glAW) / 1000, dA = a - _glA;
     if(dA < dW * 0.9) _glEvent("audioslow", (dW - dA) * 1000);
+    _glSumA += dA; _glSumW += dW;
+    if(dA / dW < _glMinRatio) _glMinRatio = dA / dW;
     _glA = a; _glAW = now;
   }
 }, 100);

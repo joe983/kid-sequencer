@@ -11,6 +11,7 @@ const path = require("path");
 const PROJECT = "kid-sequencer";
 const limit = Number(process.argv[2]) || 20;
 const full = process.argv.includes("--full");
+const asJson = process.argv.includes("--json");   // one JSON array of every record, for scripts
 
 async function accessToken(){
   const root = execSync("npm root -g", { encoding: "utf8" }).trim();
@@ -36,6 +37,13 @@ async function accessToken(){
     });
   if(!res.ok){ console.error("Firestore", res.status, (await res.text()).slice(0, 400)); process.exit(1); }
   const rows = (await res.json()).filter(r => r.document);
+  if(asJson){
+    console.log(JSON.stringify(rows.map(({ document: d }) => {
+      let r; try{ r = JSON.parse(d.fields.report.stringValue); }catch(e){ r = {}; }
+      return { at: d.fields.createdAt && d.fields.createdAt.timestampValue, id: d.name.split("/").pop(), ...r };
+    })));
+    return;
+  }
   if(!rows.length){ console.log("No audio reports yet."); return; }
   for(const { document: d } of rows){
     const at = d.fields.createdAt && d.fields.createdAt.timestampValue;
@@ -46,7 +54,7 @@ async function accessToken(){
     if(r.kind === "glitch"){
       console.log(`\n${at}  GLITCH (${r.trigger})  ${dev} Safari ${safari}  ${r.path}`);
       console.log(`  played ${r.playedSec}s  ${r.instrument}  drums ${r.drumsOn ? r.drumStyle : "off"}  ${r.bpm} bpm  ${r.notes} notes  latency base ${r.baseLatency} out ${r.outputLatency}`);
-      console.log(`  counts ${JSON.stringify(r.counts)}  worst tick ${r.worstTickLateMs}ms  min lead ${r.minLeadMs}ms  contexts ${r.contexts}  fader ${r.fader}`);
+      console.log(`  counts ${JSON.stringify(r.counts)}  worst tick ${r.worstTickLateMs}ms  min lead ${r.minLeadMs}ms  contexts ${r.contexts}  fader ${r.fader}  clock speed ${r.clockSpeed} (slowest 1 s ${r.clockSpeedMin})`);
       for(const e of (r.events || []).slice(0, 25))
         console.log(`    ${String(e.t).padStart(7)}s  ${e.k.padEnd(10)} ${String(e.v).padStart(5)}ms  taps ${e.taps}  notes ${e.n}  ${e.bpm}bpm  live ${e.live}${e.hid ? "  HIDDEN" : ""}`);
       if((r.events || []).length > 25) console.log(`    … ${r.events.length - 25} more (--full)`);
