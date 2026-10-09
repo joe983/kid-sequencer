@@ -43,10 +43,20 @@ async function accessToken(){
     if(full){ console.log(JSON.stringify({ at, ...r }, null, 1)); continue; }
     const dev = /iPad|Macintosh/.test(r.ua || "") && r.touch > 1 ? "iPad" : /iPhone/.test(r.ua || "") ? "iPhone" : (r.ua || "?").slice(0, 40);
     const safari = ((r.ua || "").match(/Version\/([\d.]+)/) || [])[1] || "-";
+    if(r.kind === "glitch"){
+      console.log(`\n${at}  GLITCH (${r.trigger})  ${dev} Safari ${safari}  ${r.path}`);
+      console.log(`  played ${r.playedSec}s  ${r.instrument}  drums ${r.drumsOn ? r.drumStyle : "off"}  ${r.bpm} bpm  ${r.notes} notes  latency base ${r.baseLatency} out ${r.outputLatency}`);
+      console.log(`  counts ${JSON.stringify(r.counts)}  worst tick ${r.worstTickLateMs}ms  min lead ${r.minLeadMs}ms  contexts ${r.contexts}  fader ${r.fader}`);
+      for(const e of (r.events || []).slice(0, 25))
+        console.log(`    ${String(e.t).padStart(7)}s  ${e.k.padEnd(10)} ${String(e.v).padStart(5)}ms  taps ${e.taps}  notes ${e.n}  ${e.bpm}bpm  live ${e.live}${e.hid ? "  HIDDEN" : ""}`);
+      if((r.events || []).length > 25) console.log(`    … ${r.events.length - 25} more (--full)`);
+      continue;
+    }
     const last = (r.hist || []).slice(-1)[0] || {};
     console.log(`\n${at}  ${r.trigger}  ${dev} Safari ${safari}  ${r.path}`);
+    if(r.glitches && Object.keys(r.glitches).length) console.log(`  glitches this session: ${JSON.stringify(r.glitches)}`);
     console.log(`  state ${r.state}  clock moving ${r.moving}  contexts ${r.contexts}  rebuilds ${r.rebuilds}  live ${r.liveNodes}`);
-    console.log(`  levels ${JSON.stringify(last.lv || {})}  late ${r.lateSteps} dropped ${r.dropped} worst ${r.worstTickLateMs}ms  gap ${r.gapMs}ms`);
+    console.log(`  levels ${JSON.stringify(last.lv || {})}  late ${r.lateSteps} dropped ${r.dropped} worst ${r.worstTickLateMs}ms  gap ${r.gapMs}ms  fader ${r.fader} engine volume ${r.masterGain}`);
     if(r.events && r.events.length) console.log("  events: " + r.events.join(" | "));
   }
 })().catch(e => { console.error(e.message || e); process.exit(1); });

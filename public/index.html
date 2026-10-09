@@ -2453,7 +2453,8 @@ function _ahSample(){
   _ahMoving = t > _ahLastT ? "yes" : "NO";
   _ahLastT = t;
   if(timer) _ahLastPlayAt = Date.now();
-  _ahHist.push({ t: Date.now(), st: audioCtx.state, mv: _ahMoving, p: timer ? 1 : 0, hid: document.hidden ? 1 : 0, lv: m });
+  _ahHist.push({ t: Date.now(), st: audioCtx.state, mv: _ahMoving, p: timer ? 1 : 0, hid: document.hidden ? 1 : 0, lv: m,
+    mg: masterGain ? +masterGain.gain.value.toFixed(4) : null });   // mg: the volume the engine is really using
   if(_ahHist.length > 30) _ahHist.shift();
   try{
     localStorage.setItem(AUDIO_HEALTH_KEY, JSON.stringify({
@@ -2463,7 +2464,9 @@ function _ahSample(){
       state: audioCtx.state, moving: _ahMoving, ctxTime: +t.toFixed(2),
       contexts: _audioCtxCount, rebuilds: _audioResetCount, liveNodes: liveNodes.size,
       worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
-      events: _adbgLog.slice(), hist: _ahHist,
+      events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts,
+      fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
+      masterGain: masterGain ? +masterGain.gain.value.toFixed(4) : null,
     }));
   }catch(e){}
 }
@@ -2488,18 +2491,102 @@ setInterval(_ahSample, 1000);
   const report = JSON.stringify(Object.assign({}, prev, {
     trigger: prev.bad ? "bad" : "refresh", navType, gapMs: now - prev.t,
   })).slice(0, 9000);
+  _ahSend(report, prev.bad ? "bad" : "refresh");
+})();
+
+// Write one report (a JSON string, ≤ 9000 chars — the Firestore rule's limit).
+function _ahSend(report, label){
   (async () => {
     try{
       const { db } = await import("./js/firebase-init.js");
       const { collection, addDoc, serverTimestamp } =
         await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-      await addDoc(collection(db, "audioReports"), { v: 1, report, createdAt: serverTimestamp() });
-      _adbg("sent audio report (" + (prev.bad ? "bad" : "refresh") + ")");
+      await addDoc(collection(db, "audioReports"), { v: 1, report: report.slice(0, 9000), createdAt: serverTimestamp() });
+      _adbg("sent audio report (" + label + ")");
     }catch(e){
       _adbg("audio report failed: " + (e && e.code || e));
     }
   })();
-})();
+}
+
+/* ---- Glitch recorder (owner 2026-10-09: "the music keeps playing, but like a skipping
+   CD, glitchy, cutting in and out" — every now and again, school iPads, Safari 15) ----
+   Every play session logs each scheduling problem with a timestamp and what was going
+   on at that moment (taps in the last 2 s, notes on the grid, tempo, sounds live):
+     late / drop   a step played late, or skipped because its slot was long gone
+     restart       the grid restarted after falling > 2 steps behind
+     crawl         a step skipped because the audio clock is crawling (audio thread overloaded)
+     clockstall    audio clock stopped moving > 150 ms mid-play
+     notrunning    context left "running" mid-play (iOS interruption)
+     stall         the main thread was blocked: a 100 ms heartbeat came back > 300 ms late
+     audioslow     audio clock advanced < 90% of wall time over ~1 s (render underruns)
+   A session with ≥ 3 events is reported on Stop; one that reaches 12 while still
+   playing is reported straight away (left playing, never stopped). Max one glitch
+   report per 10 min per device (shared school iPads: per device, not per child). */
+const GLITCH_SENT_KEY = "kidseq_glitchreport_sent";
+let _glEvents = [], _glCounts = {}, _glTotal = 0, _glSent = false, _glStartW = 0;
+let _glBeat = 0, _glA = -1, _glAW = 0;
+const _glTaps = [];
+document.addEventListener("pointerdown", () => {
+  _glTaps.push(performance.now());
+  if(_glTaps.length > 30) _glTaps.shift();
+}, { capture: true, passive: true });
+function _glNotes(){ let n = 0; for(const row of notesByRow) n += row.length; return n; }
+function _glStart(){
+  _glEvents = []; _glCounts = {}; _glTotal = 0; _glSent = false;
+  _glStartW = performance.now(); _glBeat = 0; _glA = -1;
+}
+function _glEvent(k, v){ try{ _glEventInner(k, v); }catch(e){} }   // must never break the scheduler
+function _glEventInner(k, v){
+  _glTotal++;
+  _glCounts[k] = (_glCounts[k] || 0) + 1;
+  if(_glEvents.length < 70){
+    const now = performance.now();
+    let taps = 0;
+    for(const t of _glTaps) if(now - t < 2000) taps++;
+    _glEvents.push({ t: +((now - _glStartW) / 1000).toFixed(2), k, v: Math.round(v || 0), taps,
+      n: _glNotes(), bpm: Math.round(tempo), live: liveNodes.size, hid: document.hidden ? 1 : 0 });
+  }
+  if(_glTotal === 12) _glSend("during-play");
+}
+function _glSend(trigger){
+  if(_glSent || _glTotal < 3) return;
+  _glSent = true;
+  try{
+    const last = Number(localStorage.getItem(GLITCH_SENT_KEY));
+    if(last && Date.now() - last < 10 * 60000) return;
+    localStorage.setItem(GLITCH_SENT_KEY, String(Date.now()));
+  }catch(e){}
+  _adbg("glitch report: " + JSON.stringify(_glCounts));
+  _ahSend(JSON.stringify({
+    kind: "glitch", trigger, ua: navigator.userAgent, path: location.pathname + location.search,
+    touch: navigator.maxTouchPoints || 0,
+    rate: audioCtx && audioCtx.sampleRate, baseLatency: audioCtx && audioCtx.baseLatency,
+    outputLatency: audioCtx && audioCtx.outputLatency,
+    playedSec: Math.round((performance.now() - _glStartW) / 1000),
+    instrument, drumStyle, drumsOn: !drumsMuted, bpm: Math.round(tempo), notes: _glNotes(),
+    contexts: _audioCtxCount, rebuilds: _audioResetCount,
+    worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
+    minLeadMs: Number.isFinite(_schedMinLead) ? Math.round(_schedMinLead * 1000) : null,
+    fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
+    counts: _glCounts, events: _glEvents,
+  }), "glitch");
+}
+// Main-thread stalls and a slow audio clock, sampled only while playing.
+setInterval(() => {
+  if(!timer){ _glBeat = 0; return; }
+  const now = performance.now();
+  if(_glBeat && now - _glBeat > 300) _glEvent("stall", now - _glBeat);
+  _glBeat = now;
+  if(!audioCtx || audioCtx.state !== "running"){ _glA = -1; return; }
+  const a = audioCtx.currentTime;
+  if(_glA < 0){ _glA = a; _glAW = now; return; }
+  if(now - _glAW >= 1000){
+    const dW = (now - _glAW) / 1000, dA = a - _glA;
+    if(dA < dW * 0.9) _glEvent("audioslow", (dW - dA) * 1000);
+    _glA = a; _glAW = now;
+  }
+}, 100);
 
 if(AUDIO_DEBUG){
   window.addEventListener("DOMContentLoaded", () => {
@@ -3424,7 +3511,7 @@ masterGain.gain.setValueAtTime(_masterLevel(), audioCtx.currentTime);
     // Level/NaN taps along the chain (feed the audio self-report). A NaN that gets into
     // the echo's feedback loop or a compressor's level detector stays there, silencing
     // everything after it until the engine is rebuilt (a refresh) — these say where.
-    _adbgTapChain({ mel: moogSaturator, echo: delayNode, drums: drumGlue, out: masterComp });
+    _adbgTapChain({ mel: moogSaturator, echo: delayNode, drums: drumGlue, pre: masterGain, out: masterComp });   // pre = after the volume, before the compressor
 
     // Shared noise buffer for hats/snare/claps
     drumNoise = makeNoiseBuffer(audioCtx);
@@ -4955,6 +5042,7 @@ function startSequencer(){
   let stepCount = 0;
   _tickDue = 0;
   _tickMaxLate = 0; _schedLate = 0; _schedDropped = 0; _schedMinLead = Infinity;
+  _glStart();
 
   // Audio-clock slot for the step tick() is about to play. The setTimeout timer is
   // only a wake-up: it fires late whenever the main thread is busy, and currentTime
@@ -4971,13 +5059,19 @@ function startSequencer(){
     // A context that isn't running (iOS interruption, not yet unlocked), or whose clock
     // has stopped, would pile every step onto one instant and fire them all together
     // when it starts again. Keep those steps silent and re-anchor afterwards.
-    if(!audioCtx || audioCtx.state !== "running"){ nextAudioAt = null; return null; }
+    if(!audioCtx || audioCtx.state !== "running"){
+      if(nextAudioAt !== null) _glEvent("notrunning", 0);
+      nextAudioAt = null; return null;
+    }
     const nowA = audioCtx.currentTime;
     if(audioCtx !== slotCtx || nowA < clockA){    // rebuilt context, or its clock went back
       slotCtx = audioCtx; nextAudioAt = null; clockA = -1;
     }
     if(nowA !== clockA){ clockA = nowA; clockMovedW = nowW; }
-    else if(nowW - clockMovedW > 150){ nextAudioAt = null; return null; }
+    else if(nowW - clockMovedW > 150){
+      if(nextAudioAt !== null) _glEvent("clockstall", nowW - clockMovedW);
+      nextAudioAt = null; return null;
+    }
 
     const stepDur = stepDurationSec();
     let lead = nextAudioAt === null ? NaN : nextAudioAt - nowA;
@@ -4989,6 +5083,7 @@ function startSequencer(){
     // every step after it would be dropped.
     const restart = !(lead >= -2 * stepDur);
     if(restart){
+      if(!Number.isNaN(lead)) _glEvent("restart", -lead * 1000);   // NaN = first step, not a glitch
       nextAudioAt = nowA + SCHED_START_S;
       lead = SCHED_START_S;
       reanchored = true;
@@ -4998,7 +5093,7 @@ function startSequencer(){
     // overloaded) — never happens in normal play, where the lead sits near
     // SCHED_LEAD_S. Skip the step and don't advance the grid, so it waits for the
     // clock rather than stacking ever more future notes.
-    if(lead > 3 * SCHED_LEAD_S + stepDur){ _schedDropped++; return null; }
+    if(lead > 3 * SCHED_LEAD_S + stepDur){ _schedDropped++; _glEvent("crawl", lead * 1000); return null; }
     const slot = nextAudioAt;
     // Hold the lead steady against slow drift between the timer's clock and the audio
     // clock. The tick's own lateness is added back so a busy main thread isn't
@@ -5012,8 +5107,8 @@ function startSequencer(){
     nextAudioAt = slot + stepDur + drift;
     if(nowW >= statsFromW && lead < _schedMinLead) _schedMinLead = lead;
     if(lead >= AUDIO_AHEAD_S) return slot;                                  // on time: its exact slot
-    if(lead > -stepDur / 2){ _schedLate++; return nowA + AUDIO_AHEAD_S; }   // just missed: right away
-    _schedDropped++; return null;                                           // long gone: skip, don't burst
+    if(lead > -stepDur / 2){ _schedLate++; _glEvent("late", -lead * 1000); return nowA + AUDIO_AHEAD_S; }   // just missed: right away
+    _schedDropped++; _glEvent("drop", -lead * 1000); return null;                                           // long gone: skip, don't burst
   }
 
   function tick(){
@@ -5180,6 +5275,7 @@ function startSequencer(){
 }
 
 function stop(){
+  if(timer){ try{ _glSend("stop"); }catch(e){} }
   // A manual stop cancels any pending lesson playOnce limit + callback.
   if(LESSON){ _lessonPlayLimit = null; _lessonPlayDone = null; }
   _triggeredNotes.clear();
