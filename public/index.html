@@ -2624,12 +2624,16 @@ setInterval(_ahSample, 1000);
   if(!prev || !prev.t) return;
   try{ navType = (performance.getEntriesByType("navigation")[0] || {}).type || "?"; }catch(e){}
   const now = Date.now();
-  const refreshedMidPlay = navType === "reload" && prev.lastPlayAt > 0 &&
-    prev.t - prev.lastPlayAt < 120000 && now - prev.t < 10 * 60000;
+  // A reopen soon after playing counts as a refresh however it was done: a live
+  // cut-out on 2026-10-09 was "fixed by refresh" yet sent nothing — iOS doesn't mark
+  // every reopen (address bar, icon) as navigation type "reload".
+  const playedRecently = prev.lastPlayAt > 0 && prev.t - prev.lastPlayAt < 120000;
+  const refreshedMidPlay = playedRecently &&
+    ((navType === "reload" && now - prev.t < 10 * 60000) || now - prev.t < 3 * 60000);
   if(!refreshedMidPlay && !prev.bad) return;
   try{
     const last = Number(localStorage.getItem(AUDIO_REPORT_SENT_KEY));
-    if(last && now - last < 10 * 60000) return;
+    if(last && now - last < 3 * 60000) return;      // shared school iPads: keep it short
     localStorage.setItem(AUDIO_REPORT_SENT_KEY, String(now));
   }catch(e){}
   const report = JSON.stringify(Object.assign({}, prev, {
