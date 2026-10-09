@@ -2670,7 +2670,10 @@ function _ahSample(){
     if(o && typeof o.contextTime === "number"){
       ot = +o.contextTime.toFixed(3);
       om = _ahLastOT === null ? "?" : (ot > _ahLastOT ? "yes" : "NO");
-      if(om === "yes") _ahOTWorks = true;     // only judge a device whose timestamp has ever moved
+      // Safari reports this timestamp stuck near 0 (0.000-0.002) even when healthy — two
+      // false "output-stalled" alarms on 2026-10-09 — so only a device whose output
+      // timestamp genuinely runs (past 1 s) is ever judged.
+      if(ot > 1) _ahOTWorks = true;
       _ahLastOT = ot;
     }
   }catch(e){}
@@ -2685,7 +2688,9 @@ function _ahSample(){
   if(_ahHist.length > 30) _ahHist.shift();
   try{
     _ahLastRec = {
-      sid: _ahSid, tab: _tabId, loads15m: _loadsRecent, sinceLoadSec: Math.round(performance.now() / 1000),
+      sid: _ahSid, tab: _tabId, loads15m: _loadsRecent,
+      session: navigator.audioSession ? navigator.audioSession.type : "n/a",
+      silentVideo: (() => { const v = document.getElementById("iosSilentVideo"); return !_isIOSDevice() ? "n/a" : !v ? "none" : v.paused ? "paused" : "playing"; })(), sinceLoadSec: Math.round(performance.now() / 1000),
       outputLatency: audioCtx.outputLatency, baseLatency: audioCtx.baseLatency, otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
       t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
       path: location.pathname + location.search, ua: navigator.userAgent,
@@ -2942,7 +2947,7 @@ if(AUDIO_DEBUG){
     const safari = (ua.match(/Version\/([\d.]+)/) || [])[1] || "?";
     // iPadOS Safari reports a Mac user agent, so the silent-video hack (keyed on
     // "iPad" in the UA) doesn't run there — say so rather than show "PAUSED".
-    const videoHack = /iP(hone|ad|od)/.test(ua);
+    const videoHack = _isIOSDevice();
     setInterval(() => {
       // Meters, clock and the NaN / dead-output events come from the self-report
       // sampler (_ahSample, once a second); the panel only displays them.
@@ -3813,9 +3818,26 @@ function makeInstrumentBuses(ctx, masterOut){
 // Workaround: start a looping *silent video* from a user gesture and keep it playing.
 // Requires `silent.mp4` deployed next to this HTML.
 let __iosSilentVideoStarted = false;
-function iosStartSilentVideo(){
+/* Live data 2026-10-09: on school iPads the app kept producing sound internally (engine
+   running, clock real-time, output meter -7 dB) while students heard nothing and kept
+   refreshing — refresh didn't help, a reboot did. iOS treats web audio as "ambient" by
+   default: silenced by the iPad's mute setting and pre-empted by other audio. This
+   workaround was meant to fix that but was keyed on "iPad" in the user agent, and iPadOS
+   reports itself as a Mac, so it NEVER ran on an iPad. Now: Safari 16.4+ is told the
+   page is media playback (navigator.audioSession), and the silent-video session keeper
+   also runs on iPads (Mac UA + touch). */
+function _isIOSDevice(){
   const ua = navigator.userAgent || "";
-  const isIOS = /iP(hone|ad|od)/.test(ua);
+  return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+}
+function _setAudioSessionPlayback(){
+  try{
+    if(navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
+  }catch(e){}
+}
+function iosStartSilentVideo(){
+  _setAudioSessionPlayback();
+  const isIOS = _isIOSDevice();
   if(!isIOS) return;
 
   const v = document.getElementById("iosSilentVideo");
