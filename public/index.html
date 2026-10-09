@@ -2592,7 +2592,8 @@ function _otherTabsAlive(){
 const AUDIO_REPORT_SENT_KEY = "kidseq_audioreport_sent";
 const _ahSid = Math.random().toString(36).slice(2, 10);
 const _ahHist = [];                  // last 30 s of compact samples
-let _ahLastTW = 0;
+let _ahOTWorks = false;
+let _ahLastTW = 0, _ahLastOT = null, _ahOutStall = 0, _ahStuckSecs = 0, _ahLastRec = null;
 let _ahLastPlayAt = 0, _ahLastT = -1, _ahQuiet = 0, _ahBad = false;
 /* Self-repair for the dead output (live reports 2026-10-09, school iPads after an iOS
    suspend/resume): instruments and drums sounding, but the meter right after the master
@@ -2623,6 +2624,7 @@ function _ahHealVerify(m){
   let gv = null;
   try{ gv = +masterGain.gain.value.toFixed(5); }catch(e){}
   _adbg("HEAL check: output " + (ok ? "BACK" : "still dead") + " " + JSON.stringify(m) + " gain " + gv);
+  setTimeout(() => _ahSendNow(ok ? "dead-healed" : "dead-not-healed"), ok ? 0 : 3000);   // after any rebuild settles
   if(!ok && timer && _audioResetCount < MAX_AUDIO_REBUILDS){
     _adbg("HEAL: rebuilding audio engine");
     try{ hardResetAudioEngine("output dead after gain reset"); }catch(e){ _adbg("HEAL rebuild threw: " + (e && e.message)); }
@@ -2659,12 +2661,32 @@ function _ahSample(){
   _ahMoving = t > _ahLastT ? "yes" : "NO";
   _ahLastT = t; _ahLastTW = tw;
   if(timer) _ahLastPlayAt = Date.now();
+  // Is the iPad's audio OUTPUT still consuming what we render? getOutputTimestamp's
+  // contextTime is the moment actually reaching the speaker; if it stops while
+  // currentTime runs on, the device output is stuck below the page (om "NO").
+  let ot = null, om = "-";
+  try{
+    const o = audioCtx.getOutputTimestamp && audioCtx.getOutputTimestamp();
+    if(o && typeof o.contextTime === "number"){
+      ot = +o.contextTime.toFixed(3);
+      om = _ahLastOT === null ? "?" : (ot > _ahLastOT ? "yes" : "NO");
+      if(om === "yes") _ahOTWorks = true;     // only judge a device whose timestamp has ever moved
+      _ahLastOT = ot;
+    }
+  }catch(e){}
+  if(_ahOTWorks && timer && audioCtx.state === "running" && _ahMoving === "yes" && om === "NO"){
+    if(++_ahOutStall === 3) _ahSendNow("output-stalled");
+  } else _ahOutStall = 0;
+  // Playing, but the context hasn't been running for 8 s: stuck (interrupted/suspended).
+  if(timer && audioCtx.state !== "running"){ if(++_ahStuckSecs === 8) _ahSendNow("stuck-" + audioCtx.state); }
+  else _ahStuckSecs = 0;
   _ahHist.push({ t: Date.now(), st: audioCtx.state, mv: _ahMoving, p: timer ? 1 : 0, hid: document.hidden ? 1 : 0, lv: m,
-    mg: masterGain ? +masterGain.gain.value.toFixed(4) : null, cr });   // mg: the volume the engine is really using
+    mg: masterGain ? +masterGain.gain.value.toFixed(4) : null, cr, ot, om });   // mg: the volume the engine is really using
   if(_ahHist.length > 30) _ahHist.shift();
   try{
-    localStorage.setItem(_healthKey, JSON.stringify({
-      sid: _ahSid, tab: _tabId, otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
+    _ahLastRec = {
+      sid: _ahSid, tab: _tabId, loads15m: _loadsRecent, sinceLoadSec: Math.round(performance.now() / 1000),
+      outputLatency: audioCtx.outputLatency, baseLatency: audioCtx.baseLatency, otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
       t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
       path: location.pathname + location.search, ua: navigator.userAgent,
       touch: navigator.maxTouchPoints || 0, rate: audioCtx.sampleRate,
@@ -2676,10 +2698,60 @@ function _ahSample(){
       melKit: !!((melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length) || (instrument === "bass" && _bassKit && _bassKit.length)),
       fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
       masterGain: masterGain ? +masterGain.gain.value.toFixed(4) : null,
-    }));
+    };
+    localStorage.setItem(_healthKey, JSON.stringify(_ahLastRec));
   }catch(e){}
 }
 setInterval(_ahSample, 1000);
+
+/* ---- Reports sent RIGHT AWAY from the failing page (owner 2026-10-09: "the sound
+   still cuts out and requires a reboot of the iPad, not just a refresh") ----
+   A page whose audio is dead used to report only on the NEXT reopen — useless when
+   the cure is a reboot. Now it sends its own record at once when: Play was pressed
+   but 4 s later the context isn't running / its clock isn't moving ("nostart");
+   the output went dead (after the self-repair, with its outcome); the context stayed
+   non-running 8 s while playing ("stuck-…"); or the device output stopped consuming
+   audio while the clock ran ("output-stalled"). loads15m = page loads on this device
+   in the last 15 min: "refreshed 5 times and still dead" is the reboot case. Once per
+   reason per page; at most one a minute per device. */
+const _loadsRecent = (() => {
+  try{
+    const k = "kidseq_loads", now = Date.now();
+    const a = JSON.parse(localStorage.getItem(k) || "[]").filter(t => now - t < 15 * 60000);
+    a.push(now);
+    localStorage.setItem(k, JSON.stringify(a.slice(-40)));
+    return a.length;
+  }catch(e){ return null; }
+})();
+const _ahSentNow = {};
+function _ahSendNow(reason){
+  try{
+    if(_ahSentNow[reason]) return;
+    _ahSentNow[reason] = true;
+    const last = Number(localStorage.getItem("kidseq_audionow_sent"));
+    if(last && Date.now() - last < 60000) return;
+    localStorage.setItem("kidseq_audionow_sent", String(Date.now()));
+  }catch(e){}
+  try{ _ahSample(); }catch(e){}            // freshest record
+  const rec = Object.assign({}, _ahLastRec || {}, {
+    trigger: "now:" + reason, loads15m: _loadsRecent, sinceLoadSec: Math.round(performance.now() / 1000),
+    state: audioCtx ? audioCtx.state : "none", contexts: _audioCtxCount, rebuilds: _audioResetCount,
+    ua: navigator.userAgent, path: location.pathname + location.search, otherTabs: _otherTabsAlive(),
+  });
+  _adbg("sending report now: " + reason);
+  _ahSend(JSON.stringify(rec), "now:" + reason);
+}
+// Called 4 s after Play: did the audio actually start?
+function _ahCheckStarted(){
+  if(!timer) return;                         // stopped again — nothing to judge
+  if(!audioCtx){ _ahSendNow("nostart-no-context"); return; }
+  if(audioCtx.state !== "running"){ _ahSendNow("nostart-" + audioCtx.state); return; }
+  const t1 = audioCtx.currentTime;
+  setTimeout(() => {
+    if(!timer || !audioCtx) return;
+    if(audioCtx.currentTime <= t1) _ahSendNow("nostart-clock-stopped");
+  }, 400);
+}
 
 // Previous load's record → send it if that load ended in trouble or was refreshed mid-play.
 (function _ahReportPrevious(){
@@ -5318,6 +5390,7 @@ async function play(){
     startTimeout = null;
     startSequencer();
     hasEverStartedPlayback = true;
+    setTimeout(_ahCheckStarted, 4000);
   }, delayMs);
 }
 
