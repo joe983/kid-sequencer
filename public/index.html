@@ -2508,6 +2508,40 @@ const _ahSid = Math.random().toString(36).slice(2, 10);
 const _ahHist = [];                  // last 30 s of compact samples
 let _ahLastTW = 0;
 let _ahLastPlayAt = 0, _ahLastT = -1, _ahQuiet = 0, _ahBad = false;
+/* Self-repair for the dead output (live reports 2026-10-09, school iPads after an iOS
+   suspend/resume): instruments and drums sounding, but the meter right after the master
+   volume ("pre") silent while the fader still says full — the master gain is stuck at
+   ~0 (a lost scheduled restore after Stop's click-free duck is the suspect). Step 1:
+   log the real gain value, then set it straight back to the fader level. Step 2, 2 s
+   later: if the output is still silent, rebuild the audio engine (what a refresh does,
+   within MAX_AUDIO_REBUILDS). Every step lands in the report. */
+let _ahHealCheckAt = 0, _ahHeals = 0;
+function _ahHealOutput(m){
+  if(!audioCtx || !masterGain || _ahHeals >= 5) return;
+  if(_masterLevel() < 0.01){ _adbg("output silent: fader is at zero (not a fault)"); return; }
+  _ahHeals++;
+  let gv = null;
+  try{ gv = +masterGain.gain.value.toFixed(5); }catch(e){}
+  _adbg("HEAL #" + _ahHeals + ": master gain was " + gv + ", fader " + _masterLevel().toFixed(3) + ", state " + audioCtx.state + " -> reset gain");
+  try{
+    const now = audioCtx.currentTime;
+    masterGain.gain.cancelScheduledValues(0);
+    masterGain.gain.value = _masterLevel();
+    masterGain.gain.setValueAtTime(_masterLevel(), now);
+  }catch(e){ _adbg("HEAL gain reset threw: " + (e && e.message)); }
+  _ahHealCheckAt = Date.now() + 2000;
+}
+function _ahHealVerify(m){
+  _ahHealCheckAt = 0;
+  const ok = m.out !== "silent" && m.out !== "NaN";
+  let gv = null;
+  try{ gv = +masterGain.gain.value.toFixed(5); }catch(e){}
+  _adbg("HEAL check: output " + (ok ? "BACK" : "still dead") + " " + JSON.stringify(m) + " gain " + gv);
+  if(!ok && timer && _audioResetCount < MAX_AUDIO_REBUILDS){
+    _adbg("HEAL: rebuilding audio engine");
+    try{ hardResetAudioEngine("output dead after gain reset"); }catch(e){ _adbg("HEAL rebuild threw: " + (e && e.message)); }
+  }
+}
 let _ahStarts = 0, _ahFrozenSince = 0, _ahFrozenStarts = 0, _ahFrozenLogged = false;   // _ahStarts: trackNode()
 const _ahNanSeen = {};
 let _ahMeterNow = {}, _ahMoving = "-";
@@ -2520,8 +2554,9 @@ function _ahSample(){
   }
   // Output silent/NaN for 2 s while notes are sounding = "it just cut out".
   if(timer && liveNodes.size > 0 && (m.out === "silent" || m.out === "NaN")){
-    if(++_ahQuiet === 2){ _ahBad = true; _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m)); }
+    if(++_ahQuiet === 2){ _ahBad = true; _adbg("OUTPUT DEAD while playing: " + JSON.stringify(m)); _ahHealOutput(m); }
   } else _ahQuiet = 0;
+  if(_ahHealCheckAt && Date.now() >= _ahHealCheckAt) _ahHealVerify(m);
   // Output meter frozen for 3 s while playing AND at least 2 new sounds were started
   // in that time = the graph stopped rendering (the Safari-15 way of "dead").
   if(timer && _adbgFrozen.out){
@@ -2549,7 +2584,9 @@ function _ahSample(){
       state: audioCtx.state, moving: _ahMoving, ctxTime: +t.toFixed(2),
       contexts: _audioCtxCount, rebuilds: _audioResetCount, liveNodes: liveNodes.size,
       worstTickLateMs: Math.round(_tickMaxLate), lateSteps: _schedLate, dropped: _schedDropped,
-      events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts, lite: _audioLite,
+      events: _adbgLog.slice(), hist: _ahHist, glitches: _glCounts, lite: _audioLite, heals: _ahHeals,
+      drumKit: !!(drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle]),
+      melKit: !!(melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length),
       fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
       masterGain: masterGain ? +masterGain.gain.value.toFixed(4) : null,
     }));
@@ -2609,7 +2646,7 @@ function _ahSend(report, label){
    playing is reported straight away (left playing, never stopped). Max one glitch
    report per 10 min per device (shared school iPads: per device, not per child). */
 const GLITCH_SENT_KEY = "kidseq_glitchreport_sent";
-let _glEvents = [], _glCounts = {}, _glTotal = 0, _glSent = false, _glStartW = 0;
+let _glEvents = [], _glCounts = {}, _glTotal = 0, _glSent = false, _glStartW = 0, _glStarts0 = 0;
 let _glBeat = 0, _glA = -1, _glAW = 0, _glSumA = 0, _glSumW = 0, _glMinRatio = Infinity;
 const _glTaps = [];
 document.addEventListener("pointerdown", () => {
@@ -2618,7 +2655,7 @@ document.addEventListener("pointerdown", () => {
 }, { capture: true, passive: true });
 function _glNotes(){ let n = 0; for(const row of notesByRow) n += row.length; return n; }
 function _glStart(){
-  _glEvents = []; _glCounts = {}; _glTotal = 0; _glSent = false;
+  _glEvents = []; _glCounts = {}; _glTotal = 0; _glSent = false; _glStarts0 = _ahStarts;
   _glStartW = performance.now(); _glBeat = 0; _glA = -1; _glSumA = 0; _glSumW = 0; _glMinRatio = Infinity;
 }
 function _glEvent(k, v){ try{ _glEventInner(k, v); }catch(e){} }   // must never break the scheduler
@@ -2657,6 +2694,9 @@ function _glSend(trigger){
     fader: typeof window.__kidseqMasterLevel === "number" ? +window.__kidseqMasterLevel.toFixed(3) : null,
     clockSpeed: _glSumW ? +(_glSumA / _glSumW).toFixed(4) : null,          // audio clock vs real time, whole session
     clockSpeedMin: Number.isFinite(_glMinRatio) ? +_glMinRatio.toFixed(4) : null,   // slowest 1 s
+    drumKit: !!(drumSampleKits && drumSampleKits[DRUM_KIT_ALIAS[drumStyle] || drumStyle]),
+    melKit: !!(melodicSampleKits && melodicSampleKits[instrument] && melodicSampleKits[instrument].length),
+    startsPerSec: +((_ahStarts - _glStarts0) / Math.max(1, (performance.now() - _glStartW) / 1000)).toFixed(1),
     lite: _audioLite, liteAtSec: _liteAtW ? Math.round((_liteAtW - _glStartW) / 1000) : null, voiceCap: _voiceCap,
     counts: _glCounts, events: _glEvents,
   }), "glitch");
