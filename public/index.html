@@ -2744,6 +2744,10 @@ function _ahSendNow(reason){
 // Called 4 s after Play: did the audio actually start?
 function _ahCheckStarted(){
   if(!timer) return;                         // stopped again — nothing to judge
+  // Loaded 3+ times in 15 min = someone keeps refreshing because something is wrong,
+  // even if every check here says the audio is fine (the reboot-only case: iOS stops
+  // passing audio to the speaker while Safari reports "running"). Send the record anyway.
+  if(_loadsRecent >= 3) setTimeout(() => { if(timer) _ahSendNow("repeat-loads"); }, 1000);
   if(!audioCtx){ _ahSendNow("nostart-no-context"); return; }
   if(audioCtx.state !== "running"){ _ahSendNow("nostart-" + audioCtx.state); return; }
   const t1 = audioCtx.currentTime;
