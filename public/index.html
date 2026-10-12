@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=95">
+<link rel="stylesheet" href="css/styles.css?v=96">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -296,6 +296,7 @@
       </div>
       <div class="upgradeFooter" id="upgradeMarketingFooter">
         Grown-up with an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
+        · <a class="upgradeTextBtn" href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
       </div>
     </div>
 
@@ -343,7 +344,7 @@
       <div class="authForm">
         <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
         <input id="registerPassword" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
-        <label class="adultDeclare"><input id="registerAdult" type="checkbox" /> <span>I am 18 or over (a parent, carer or teacher) and this account is for me, not for a child.</span></label>
+        <label class="adultDeclare"><input id="registerAdult" type="checkbox" /> <span>I am 18 or over (a parent, carer or teacher) and this account is for me, not for a child. <a href="/privacy.html" target="_blank" rel="noopener">Privacy notice</a></span></label>
         <div class="authStatus" id="registerStatus"></div>
         <button class="authSubmit" id="registerSubmit" onclick="doRegister()">Create account</button>
       </div>
@@ -363,7 +364,7 @@
       <button aria-label="Close" class="modalClose" onclick="closeSaveNameModal()">×</button>
     </div>
     <div class="saveNameBody">
-      <input autocomplete="off" autocorrect="off" class="saveNameInput" id="saveNameInput" maxlength="30" placeholder="My Tune" spellcheck="false" type="text"/>
+      <input autocomplete="off" autocorrect="off" class="saveNameInput" id="saveNameInput" maxlength="30" placeholder="My Tune (no real names)" spellcheck="false" type="text"/>
     </div>
     <div class="modalBtns">
       <button class="bigBtn" onclick="closeSaveNameModal()">Cancel</button>
@@ -1855,7 +1856,8 @@ async function _renderAccount(){
 
   html += `<div class="acctSeqTitle">My library</div>`;
   html += `<div class="acctSeqList" id="acctSeqList"></div>`;
-  html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button></div>`;
+  html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button> <button class="acctDelete" id="acctDeleteBtn">Delete my account and data</button> <a class="acctPrivacy" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>`;
+  html += `<div class="acctManageMsg" id="acctDeleteMsg"></div>`;
 
   body.innerHTML = html;
 
@@ -1863,8 +1865,37 @@ async function _renderAccount(){
   document.getElementById('acctManageBtn')?.addEventListener('click', openBillingPortal);
   document.getElementById('acctUpgradeBtn')?.addEventListener('click', ()=>{ closeAccountModal(); openUpgradeModal('subscribe'); });
   document.getElementById('acctLogoutBtn')?.addEventListener('click', ()=>{ logout(); closeAccountModal(); });
+  document.getElementById('acctDeleteBtn')?.addEventListener('click', () => deleteMyAccount(isPro));
 
   _renderLibrary(document.getElementById('acctSeqList'), seqs, closeAccountModal);
+}
+
+// "Delete my account and data": cancels any subscription, then erases the profile,
+// saved tunes, tracks and the sign-in itself (server side: functions deleteMyAccount).
+// Two explicit confirmations because it cannot be undone.
+async function deleteMyAccount(isPro){
+  const msg = document.getElementById('acctDeleteMsg');
+  const btn = document.getElementById('acctDeleteBtn');
+  if(!confirm('Delete your account and everything saved in it?' + (isPro ? ' Your Pro subscription will be cancelled.' : '') + ' This cannot be undone.')) return;
+  const typed = prompt('To confirm, type DELETE');
+  if(!typed || typed.trim().toUpperCase() !== 'DELETE') return;
+  if(btn) btn.disabled = true;
+  if(msg) msg.textContent = 'Deleting…';
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    await httpsCallable(getFunctions(app, 'europe-west1'), 'deleteMyAccount')({});
+    try{ sessionStorage.removeItem('kidseq_logged_in'); sessionStorage.removeItem('kidseq_tier'); }catch(e){}
+    try{ const { auth } = await import("./js/firebase-init.js"); const { signOut } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"); await signOut(auth); }catch(e){}
+    isLoggedIn = false; isPaid = false;
+    applyLockState();
+    closeAccountModal();
+    alert('Your account and data have been deleted.');
+  }catch(e){
+    console.error('[deleteMyAccount]', e);
+    if(msg) msg.textContent = (e && e.message) ? e.message : 'Couldn\'t delete your account - please try again.';
+    if(btn) btn.disabled = false;
+  }
 }
 
 // Pro: open the Stripe billing portal to manage/cancel the subscription.

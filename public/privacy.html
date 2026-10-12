@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Privacy – Kid Sequencer</title>
+<style>
+  :root { --ink:#1d1d1d; --soft:#555; --line:#e2e2e2; --card:#fff; --bg:#f6f4ee; --accent:#ffe45c; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#f1f1f1; --soft:#b5b5b5; --line:#333; --card:#1f1f1f; --bg:#141414; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:28px; margin:8px 0 4px; }
+  h2 { font-size:20px; margin:32px 0 8px; }
+  p, li { margin:8px 0; }
+  .lead { color:var(--soft); margin-top:0; }
+  .box { background:var(--card); border:2px solid var(--ink); border-radius:14px; padding:14px 16px; margin:16px 0; }
+  .box strong { background:var(--accent); color:#1d1d1d; padding:0 4px; border-radius:4px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:15px; }
+  th, td { text-align:left; vertical-align:top; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--soft); }
+  a { color:inherit; }
+  .back { display:inline-block; margin-bottom:8px; font-weight:700; }
+  .todo { background:#fff3cd; color:#1d1d1d; padding:0 4px; border-radius:4px; }
+  @media (max-width:560px){ table, thead, tbody, tr, th, td { display:block; } thead { display:none; } td { border:0; padding:2px 0; } tr { border-bottom:1px solid var(--line); padding:8px 0; } td:first-child { font-weight:700; } }
+</style>
+</head>
+<body>
+<main>
+  <a class="back" href="/">← Back to Kid Sequencer</a>
+  <h1>Privacy</h1>
+  <p class="lead">Last updated: <span class="todo">[DATE]</span></p>
+
+  <div class="box">
+    <p><strong>The short version.</strong> Children can play, make music, scan and print worksheets without an account and without giving us any personal information. Accounts and purchases are for grown-ups only. We don't run adverts, we don't track children, and we don't sell data.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>Kid Sequencer is run by <span class="todo">[OPERATOR NAME / TRADING ADDRESS]</span> (“we”). For anything in this notice, including exercising your rights, contact <span class="todo">[CONTACT EMAIL]</span>.</p>
+
+  <h2>If you are a child using the app</h2>
+  <p>You don't need an account and we don't ask for your name, email or age. Nothing you make is sent to us. If you ever see a screen asking you to sign up or buy something, ask a grown-up – those parts are only for parents, carers and teachers.</p>
+
+  <h2>What we collect</h2>
+  <table>
+    <thead><tr><th>Who</th><th>What</th><th>Why</th><th>How long</th></tr></thead>
+    <tbody>
+      <tr><td>Everyone using the app</td>
+          <td>Anonymous audio diagnostics: your browser and device description, whether sound was playing or stopped, a few audio timing numbers, and the page address. No name, no account, no location.</td>
+          <td>To find and fix sound problems on school iPads and other devices (our legitimate interest in keeping the app working).</td>
+          <td>30 days, then automatically deleted.</td></tr>
+      <tr><td>Everyone using the app</td>
+          <td>Things stored on your own device (not sent to us): your settings, lesson progress, and the last diagnostics record.</td>
+          <td>So the app remembers where you were.</td>
+          <td>Until you clear the site's data.</td></tr>
+      <tr><td>Grown-up account holders</td>
+          <td>Email address and password (stored securely by Google Firebase Authentication), your plan, your AI-track and save-slot counts, the tunes you save (including the names you give them) and AI tracks you generate.</td>
+          <td>To run your account and the features you pay for (contract).</td>
+          <td>Until you delete your account, or after 2 years without signing in for free accounts.</td></tr>
+      <tr><td>Grown-ups who subscribe</td>
+          <td>Payment is handled by Stripe, who is the seller and holds your card details. We receive your Stripe customer reference and your subscription status. We never see your card number.</td>
+          <td>To take payment and keep a record of it.</td>
+          <td>Stripe keeps payment records as the law requires (typically 6 years). We keep only the customer reference.</td></tr>
+      <tr><td>Grown-ups who make AI songs</td>
+          <td>The note pattern (pitches, lengths, tempo, style) is sent to our music engine, hosted with Modal, which returns an MP3. Your name and email are not sent.</td>
+          <td>To make the song.</td>
+          <td>The pattern is used only to make that song. The MP3 stays in your account until you delete it.</td></tr>
+      <tr><td>Anyone who sends a scanner debug report</td>
+          <td>Only if someone chooses to turn on scanner debugging and press Send: a log and up to two photos of a worksheet, linked to their account.</td>
+          <td>To fix worksheet scanning.</td>
+          <td>30 days, then automatically deleted.</td></tr>
+    </tbody>
+  </table>
+  <p>We don't use advertising or analytics cookies and we don't build profiles. When a page loads, files are served by Google (Firebase Hosting and its code libraries), so Google's servers see the visitor's IP address as with any website.</p>
+
+  <h2>The game</h2>
+  <p>The free “Late for Music Class” game keeps its high-score table on the device you play on. Nothing you type there (such as a player name) is sent to us.</p>
+
+  <h2>Accounts are for grown-ups only</h2>
+  <p>You must be 18 or over to create an account or subscribe, and you confirm this when you sign up. We don't knowingly hold accounts for children. If you think a child has made an account, email us and we will delete it.</p>
+
+  <h2>Where your data is</h2>
+  <p>Account data is stored in Google Cloud in Europe (Firestore in the EU multi-region, files in London, server functions in Belgium). Some of our providers (Google, Stripe, Modal) may also process data elsewhere, under their standard data-protection terms.</p>
+
+  <h2>Your rights</h2>
+  <ul>
+    <li><strong>Delete everything:</strong> in the app, open Account → “Delete my account and data”. This also cancels any subscription.</li>
+    <li>Ask us for a copy of your data, to correct it, to restrict or object to how we use it.</li>
+    <li>Complain to the data-protection regulator (in the UK, the Information Commissioner's Office, ico.org.uk) – though we'd like the chance to fix it first.</li>
+  </ul>
+
+  <h2>Schools</h2>
+  <p>Pupils can use the free version of Kid Sequencer with no accounts, so no pupil personal data is collected. The anonymous diagnostics above are the only thing the app sends. If your school wants a short data sheet for its records, contact us.</p>
+
+  <h2>Changes</h2>
+  <p>If we change this notice in a way that matters, we'll update the date at the top.</p>
+</main>
+</body>
+</html>

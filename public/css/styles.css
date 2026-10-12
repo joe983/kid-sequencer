@@ -3397,3 +3397,8 @@ html:not(.fiveNote) .noteGroupGlyph{ display: none !important; }
 .gateText { margin: 0; font-size: 14px; font-weight: 800; color: #444; text-align: center; }
 .gateQ { font-size: 34px; font-weight: 900; text-align: center; letter-spacing: 1px; color: #1d1d1d; }
 @media (max-width:500px),(max-height:520px){ .upgradeGrownups{ font-size:12px; margin-bottom:8px; } .gateQ{ font-size:26px; } }
+
+/* Account modal: delete + privacy (2026-10-12) */
+.acctDelete { background:none; border:none; padding:0 4px; margin-left:10px; font:inherit; font-size:12px; font-weight:800; color:#b3261e; text-decoration:underline; cursor:pointer; }
+.acctDelete:disabled { opacity:.5; cursor:default; }
+.acctPrivacy { margin-left:10px; font-size:12px; font-weight:800; color:#555; }
