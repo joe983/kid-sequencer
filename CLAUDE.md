@@ -42,7 +42,8 @@ tools/
                         synth kits (hoover/ravepad/reese). Build takes >2 min —
                         run with a long Bash timeout
 functions/
-  index.js            ← Cloud Functions: createCheckoutSession, createTopupCheckout, generateAiTrack, stripeWebhook
+  index.js            ← Cloud Functions: createCheckoutSession, createTopupCheckout, generateAiTrack, stripeWebhook,
+                        deleteMyAccount, purgeOldData (daily; retention). account-data.js = pure retention rules (+ test)
   scripts/setup-stripe-products.js ← one-off: create products/prices (npm run setup:stripe)
   .env.kid-sequencer  ← committed non-secret price IDs (defineString overrides)
   .env.example        ← template for live-mode price-ID overrides
@@ -51,6 +52,9 @@ firebase.json         ← hosting + functions + storage config
 firestore.rules       ← Firestore security rules
 storage.rules         ← Storage rules (seeds client-write, tracks admin-only)
 STRIPE_SETUP.md       ← Stripe Managed Payments setup steps
+docs/DPIA.md          ← Data Protection Impact Assessment (DRAFT, owner to sign; re-assess before the §7 changes)
+public/privacy.html   ← privacy notice (retention figures MUST match functions/account-data.js)
+public/fonts/         ← self-hosted game fonts (Bungee, Outfit; latin, OFL) — no Google Fonts anywhere
 serve.js              ← local static server (node serve.js → localhost:3000)
 ```
 
@@ -66,11 +70,15 @@ A second, **unrelated** app rides along on this Firebase hosting project to
 avoid paying for a second site: "Late for Music Class", a self-contained
 HTML5-canvas school music platformer. Live at
 https://kid-sequencer.web.app/school-music-run/. Two files: `index.html`
-(~128KB, no build step) + `assets/dlts-logo.svg`. Pulls Google Fonts from a
-CDN and nothing else — no API keys, no Firebase SDK, no network calls. Its
-leaderboard is `localStorage` only (per-device, NOT wired into this project's
-Firestore/auth), and shows character portraits that make it look shared —
-it isn't; that's a known, unfixed gap.
+(~128KB, no build step) + `assets/dlts-logo.svg`. Fonts are self-hosted
+(`public/fonts`) — the game makes **no third-party requests** (2026-10-12). Its
+leaderboard is `localStorage` only (per-device). A public Firebase leaderboard
+(free-text child names shown to everyone) existed in this vendored copy and was
+**removed 2026-10-12** with its `runnerScores` Firestore rules — do not restore it
+without a moderation story (preset names only). ⚠️ The vendored copy now differs from
+the source repo in this respect (the source never had the cloud board), so a re-sync
+from the source repo would NOT reintroduce it — but it would re-add Google Fonts links
+unless the source repo is changed too.
 
 **Deliberately unlisted, not private.** Nothing in the sequencer links to it,
 `public/robots.txt` disallows `/school-music-run/`, and the game's `<head>`
@@ -154,9 +162,8 @@ seed `Math.random` in a `<head>` script *before* the game script if you need to
 diff runs, and shim `requestAnimationFrame` there too if you want to drive the
 loop at a chosen frame rate with fabricated timestamps.
 
-**Known issues, unfixed:** leaderboard is per-device (`localStorage`) despite
-looking shared — making it genuinely shared needs a backend, which this
-project already has (Firestore) if ever asked to build it. Also: on a narrow
+**Known issues, unfixed:** leaderboard is per-device (`localStorage`), by design
+now (see above). Also: on a narrow
 landscape phone (~740px wide) the title screen's fixed 800px stage clips the
 right-hand leaderboard — predates the current leaderboard work (the previous
 version clips identically at the same viewport).
@@ -208,25 +215,28 @@ users/{uid}/
 
 ---
 
-## Tier system (redesigned 2026-05-17)
+## Tier system (rebuilt 2026-10-12 — safeguarding / data-protection rules)
 
-| Feature | Guest (not logged in) | Member (free, logged in) | Pro (£4.99/mo) |
-|---|---|---|---|
-| Tempo, play, sequencer | ✅ | ✅ | ✅ |
-| Piano, Trumpet, Synth, Bass | ✅ | ✅ | ✅ |
-| Strings, Bells (positions 5–6) | 🔒 (?) | ✅ | ✅ |
-| Camera scan (unlimited, no cap) | ✅ | ✅ | ✅ |
-| Techno, DnB, UK Garage, Reggaeton | ✅ | ✅ | ✅ |
-| UK Drill, Hip Hop (positions 5–6) | 🔒 (?) | ✅ | ✅ |
-| Print | 🔒 | ✅ | ✅ |
-| Save / Load (cloud) | 🔒 | 🔒 | ✅ (20 slots + top-ups) |
-| AI song (riff-anchored engine) | 🔒 | 🔒 (greyed AI btn) | ✅ 10/mo + top-ups |
+**Children never have accounts. Accounts are adult-only (parents, carers, teachers); the Member tier is gone.** Schools use the free guest mode (collects nothing). Audience decision: parents at home. Schools stay free; no teacher/school sign-up (deferred on purpose — it would need pupil data, a DPA, rosters). See `docs/DPIA.md` and `public/privacy.html`.
+
+| Feature | Free (no account) | Pro (£4.99/mo, adult account) |
+|---|---|---|
+| Tempo, play, sequencer | ✅ | ✅ |
+| Instruments | Piano, Bass | + Trumpet, Synth, Strings, Pad |
+| Rhythms | Techno, UK Drill | + DnB, UK Garage, Reggaeton, Hip Hop |
+| Camera scan, Print | ✅ | ✅ |
+| Save / Load (cloud) | 🔒 | ✅ (20 slots + top-ups) |
+| AI song (riff-anchored engine) | 🔒 | ✅ 10/mo + top-ups |
+
+Free sounds sit LEFTMOST (button order: Piano, Bass, Trumpet, Synth, Strings, Pad · Techno, Drill, DnB, Garage, Reggaeton, Hip Hop). Locked ones get the striped `?` (`.locked-member`, toggled in `applyLockState()` on `!isPaid` for `btnTrumpet/btnSynth/btnStrings/btnBells/drumStyleDnB/drumStyleGarage/drumStyleReggaeton/drumStyleHipHop`); their click handlers call `openUpgradeModal('subscribe')`. **Print is free** (no login check; `printSheet` and `bindLockedNudge` no longer involve it).
+
+**Adult gate** (`_requireAdult`/`checkAdultGate`, index.html near `showUpgradeView`): a random multiplication question shown before ANY account creation (`showUpgradeView('register')` is gated centrally, incl. the Login view's "Create account" link) and before Stripe checkout (even for a logged-in parent's device). It is a speed bump, NOT identity verification; the register form also needs an explicit "I am 18 or over" tick (`#registerAdult`). Passed once per modal opening (`_adultPassed` resets in `closeUpgradeModal`).
+
+**Account erasure + retention:** Account modal → "Delete my account and data" (double confirm) → callable `deleteMyAccount` (cancels Stripe subscription FIRST and aborts if that fails, then recursive-deletes `users/{uid}`, Storage `users/{uid}/`, then the Auth user; the Stripe customer record is kept for tax law). Daily `purgeOldData`: `audioReports` + `scanlogs` older than 30 days, FREE accounts with no sign-in for 2 years (never a paying one). The numbers live in `functions/account-data.js` and are promised in `privacy.html` — change them together. Diagnostics (`audioReports`) are sent automatically by every visitor, anonymously (user-agent, audio state, path); disclosed in the notice.
 
 Tier is stored in Firestore `users/{uid}.tier` (`free` | `paid`) and mirrored to `sessionStorage['kidseq_tier']` by the auth module.
 
-**Scan cap removed** — camera is unlimited for all tiers. Old localStorage keys `kidseq_scans_*` are stale, can be cleared.
-
-**Member-locked instrument/rhythm buttons** show a striped `?` overlay (see `.locked-member` CSS class). `applyLockState()` toggles `locked-member` onto `btnStrings`, `btnBells`, `drumStyleDrill`, `drumStyleHipHop` when `!isLoggedIn`. Click handlers on locked buttons call `openUpgradeModal('member')`.
+**Scan cap removed** — camera is unlimited for all. Old localStorage keys `kidseq_scans_*` are stale, can be cleared.
 
 ---
 
@@ -368,11 +378,13 @@ node serve.js   # → http://localhost:3000
 
 ---
 
+64. **Safeguarding / data-protection rebuild (2026-10-12, LIVE `?v=97`)** — children signing up with their own emails can't work under UK GDPR Art 8 / the Children's Code, so the model changed (full reasoning in the conversation → `docs/DPIA.md`). **(A)** Free = Piano+Bass, Techno+Drill, no account; Print free; everything else Pro-only (see Tier system). **(B)** Upgrade modal = Free vs Pro + adult-only copy; adult declaration + arithmetic parent gate before sign-up and checkout. **(C)** `deleteMyAccount` + daily `purgeOldData` (deployed manually: `firebase deploy --only functions:deleteMyAccount,functions:purgeOldData,firestore:rules,storage` — the GitHub Action deploys HOSTING ONLY, so function/rules changes need this separate command, and Claude Code's auto-mode classifier blocks Claude from running `firebase deploy` unless a permission rule allows it). **(D)** `public/privacy.html` (Malaclypse Applications, admin@kid-sequencer.com). **(E)** Game: public Firebase leaderboard + `runnerScores` rules removed; fonts self-hosted; `storage.rules` seed writes closed (the engine no longer reads seeds). **(F)** The `@import` for Google Fonts in styles.css was in an invalid position (after rules) so browsers ignored it — removed; the main app has never loaded Fredoka from Google (it renders the Comic Sans fallback; self-hosting Fredoka would CHANGE the whole look, owner not asked). **Audit 2026-10-12:** 10 Auth accounts (7 new in Oct), 5 at `@denlaschool.ac.th` (owner: keep; none paid — free, no profile doc); the only 2 paid accounts are the owner's. School may be in Thailand → Thai PDPA may also apply. **Open (see DPIA §6):** confirm the 5 school accounts are adults; raise the 6-char password minimum + add email verification; confirm Modal's terms/region and Google/Stripe transfer terms; ICO fee check; delete 2 leftover `runnerScores` rows in the console; send the notice to the school. **Deferred:** retune Trumpet/Synth/Strings/Pad sounds ("not cutting the mustard" — ask which voices + what's wrong first).
+
 ## Key UX patterns in the codebase
 
-- **Locked button nudge:** `.locked` class on buttons; `bindLockedNudge()` adds a wiggle + opens upgrade modal on tap. Applied to print/save/load buttons.
-- **Member-locked overlay:** `.locked-member` class on guest-gated instrument/rhythm buttons. Uses `::before` (striped cover) + `::after` ("?") — see gotcha below about text-node visibility.
-- **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'login'|'subscribe'`. Path determines which CTA is highlighted and where the post-register flow continues to. **As shipped in prod (`v=44`):** the modal always opens on the **marketing/tier view** EXCEPT `path === 'login'` (the top-bar account button, via `handleLoginBtn`), which opens the **login form directly**. On phones the modal is compacted/lightened via `@media (max-width:500px),(max-height:520px)` (smaller fonts/borders; inputs stay 16px so iOS doesn't auto-zoom).
+- **Locked button nudge:** `.locked` class on buttons; `bindLockedNudge()` adds a wiggle + opens upgrade modal on tap. Applied to save/load (Print is free as of 2026-10-12).
+- **Pro-locked overlay (class name is legacy):** `.locked-member` on the 4 Pro-only instruments + 4 Pro-only rhythms (the Member tier no longer exists). Uses `::before` (striped cover) + `::after` ("?") — see gotcha below about text-node visibility.
+- **Inline upgrade modal:** any locked-control click calls `openUpgradeModal(path)` where path is `'print'|'save'|'load'|'member'|'ai'|'login'|'subscribe'` (the modal is now **Free vs Pro** only — two cards; `'member'`/`'ai'`/`'subscribe'` just change the title). Path determines which CTA is highlighted and where the post-register flow continues to. **As shipped in prod (`v=44`):** the modal always opens on the **marketing/tier view** EXCEPT `path === 'login'` (the top-bar account button, via `handleLoginBtn`), which opens the **login form directly**. On phones the modal is compacted/lightened via `@media (max-width:500px),(max-height:520px)` (smaller fonts/borders; inputs stay 16px so iOS doesn't auto-zoom).
 - **Locked tap → full tier modal is the INTENDED design — do not re-raise it as a problem.** The owner confirmed this explicitly on 2026-08-04 ("This is how I wanted it") after rolling back a redesign that changed it. Locked controls ARE the discovery surface, and the route is complete: Print/Save/Load open the modal via `bindLockedNudge`, and the AI button calls `openUpgradeModal('subscribe')` directly when `!isPaid` ([index.html](public/index.html):1303) — so a logged-in free Member reaches the tier comparison from any Pro feature they actually reach for, at the moment they want it, rather than via a standing upsell. An earlier note here claimed Members "have no path to discover Pro"; that was **wrong**, and it survived in this file long enough to be repeated back to the owner as a priority. The alternative redesign (account button → tier comparison; focused per-feature prompts w/ "See all plans"; persistent "Go Pro" pill; compacted cards) was built, verified and deployed to a preview channel, then **rolled back** — the plan is parked at `~/.claude/plans/this-feels-disjointed-and-joyful-wadler.md` and should only be revisited if the owner raises it. The separate *correctness* bugs in this modal were fixed 2026-08-04 (see #59).
 - **Slide-up sheet:** `transform: translateY(100%)` → `translateY(0)` with `cubic-bezier(0.32,0.72,0,1)`
 - **Toast notifications:** `showSaveToast(state)` — state keys: `saving`, `saved`, `error`, `upgrade`, `loading`, `loaded`, `empty`, `proactivated`. Auto-dismiss after 2.4s. (A `qr` state's CSS survives in styles.css but nothing calls it — see the camera-modal dead-CSS note.)
