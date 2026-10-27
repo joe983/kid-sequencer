@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=95">
+<link rel="stylesheet" href="css/styles.css?v=98">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -130,6 +130,13 @@
   <circle cx="12" cy="6.5" r="1.4" fill="#ffffff"/>
 </svg>
 </button>
+<button aria-label="UK Drill" aria-pressed="false" class="drumStyleBtn" id="drumStyleDrill">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="UK Drill">  <rect x="9" y="2.5" width="6" height="2.4" fill="#1d1d1d"/>
+  <rect x="8" y="5.4" width="8" height="2.2" fill="#1d1d1d"/>
+  <rect x="9" y="8.1" width="6" height="2.2" fill="#1d1d1d"/>
+  <polygon points="9,10.8 15,10.8 12,22" fill="#1d1d1d"/>
+</svg>
+</button>
 <button aria-label="Drum n Bass" aria-pressed="false" class="drumStyleBtn" id="drumStyleDnB">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="Drum n Bass">
   <path d="M 4.5 13 a 7.5 7.5 0 0 1 15 0" stroke="#1d1d1d" stroke-width="2" fill="none" stroke-linecap="round"/>
@@ -150,13 +157,6 @@
   <circle cx="12" cy="11" r="0.9" fill="#1d1d1d"/>
 </svg>
 </button>
-<button aria-label="UK Drill" aria-pressed="false" class="drumStyleBtn" id="drumStyleDrill">
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="UK Drill">  <rect x="9" y="2.5" width="6" height="2.4" fill="#1d1d1d"/>
-  <rect x="8" y="5.4" width="8" height="2.2" fill="#1d1d1d"/>
-  <rect x="9" y="8.1" width="6" height="2.2" fill="#1d1d1d"/>
-  <polygon points="9,10.8 15,10.8 12,22" fill="#1d1d1d"/>
-</svg>
-</button>
 <button aria-label="Hip Hop" aria-pressed="false" class="drumStyleBtn" id="drumStyleHipHop">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="drumIcon" role="img" aria-label="Hip Hop">  <rect x="9" y="2.4" width="6" height="10.4" rx="3" fill="#1d1d1d"/>
   <path d="M5 11.5 a7 7 0 0 0 14 0" stroke="#1d1d1d" stroke-width="1.6" fill="none" stroke-linecap="round"/>
@@ -170,11 +170,11 @@
 <div class="drumBox soundsBox">
 <div id="instButtons">
 <div class="instBtn" id="btnPiano" title="Piano / Organ">🎹</div>
+<div class="instBtn" id="btnBass" aria-label="Bass">🎸</div>
 <div class="instBtn" id="btnTrumpet" title="Trumpet">🎺</div>
 <div class="instBtn" id="btnSynth" title="Synth"><svg aria-hidden="true" class="waveIcon" viewbox="0 0 120 70">
 <polyline fill="none" points="5,55 25,15 25,55 45,15 45,55 65,15 65,55 85,15 85,55 105,15 105,55 115,40" stroke="#1f6bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"></polyline>
 </svg></div>
-<div class="instBtn" id="btnBass" aria-label="Bass">🎸</div>
 <div class="instBtn" id="btnStrings" title="Strings">🎻</div>
 <div class="instBtn" id="btnBells" aria-label="Pad">🌌</div>
 </div>
@@ -265,30 +265,19 @@
         <h2 id="upgradeModalTitle" class="upgradeTitle">Make Music</h2>
         <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
       </div>
+      <p class="upgradeGrownups">Accounts and purchases are for grown-ups (parents, carers and teachers). Children can play and print for free without an account.</p>
       <div class="tierGrid">
         <div class="tierCard" id="tierCardGuest">
-          <div class="tierName">Guest</div>
-          <div class="tierPrice">Free</div>
+          <div class="tierName">Free</div>
+          <div class="tierPrice">£0</div>
           <ul class="tierFeatures">
-            <li class="feat-yes">4 instruments</li>
-            <li class="feat-yes">4 rhythm styles</li>
-            <li class="feat-yes">Camera scan</li>
-            <li class="feat-no">Print</li>
-            <li class="feat-no">Save &amp; Load</li>
-          </ul>
-          <div class="tierCta tierCta-ghost">You're here</div>
-        </div>
-        <div class="tierCard" id="tierCardMember">
-          <div class="tierName">Member</div>
-          <div class="tierPrice">Free</div>
-          <ul class="tierFeatures">
-            <li class="feat-yes">All 6 instruments</li>
-            <li class="feat-yes">All 6 rhythms</li>
+            <li class="feat-yes">Piano &amp; Bass</li>
+            <li class="feat-yes">Techno &amp; Drill beats</li>
             <li class="feat-yes">Camera scan</li>
             <li class="feat-yes">Print</li>
             <li class="feat-no">Save &amp; Load</li>
           </ul>
-          <button class="tierCta tierCta-member" onclick="showUpgradeView('register')">Sign up free</button>
+          <div class="tierCta tierCta-ghost">No account needed</div>
         </div>
         <div class="tierCard tierCard-pro" id="tierCardPro">
           <div class="tierBadge">Best</div>
@@ -302,11 +291,28 @@
             <li class="feat-yes">Print + Camera scan</li>
           </ul>
           <button class="tierCta tierCta-pro" id="subscribeBtn" onclick="handleSubscribeCta()">Subscribe</button>
-          <div class="stripeNote">🔒 Secure checkout · powered by Stripe — opens in a new tab</div>
+          <div class="stripeNote">🔒 Grown-ups only · secure checkout by Stripe — opens in a new tab</div>
         </div>
       </div>
       <div class="upgradeFooter" id="upgradeMarketingFooter">
-        Already have an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
+        Grown-up with an account? <button class="upgradeTextBtn" onclick="showUpgradeView('login')">Log in</button>
+        · <a class="upgradeTextBtn" href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
+      </div>
+    </div>
+
+    <!-- View: Grown-up check (before creating an account or buying) -->
+    <div class="upgradeView upgradeView-hidden" id="upgradeGateView">
+      <div class="upgradeHeader">
+        <button class="upgradeBack" aria-label="Back" onclick="showUpgradeView('marketing')">←</button>
+        <h2 class="upgradeTitle">Ask a grown-up</h2>
+        <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
+      </div>
+      <div class="authForm">
+        <p class="gateText">This part is for parents and carers. To carry on, answer this:</p>
+        <div class="gateQ" id="gateQuestion" aria-live="polite"></div>
+        <input id="gateAnswer" type="number" inputmode="numeric" placeholder="Answer" autocomplete="off" onkeydown="if(event.key==='Enter'){ event.preventDefault(); checkAdultGate(); }" />
+        <div class="authStatus" id="gateStatus"></div>
+        <button class="authSubmit" onclick="checkAdultGate()">Continue</button>
       </div>
     </div>
 
@@ -324,7 +330,7 @@
         <button class="authSubmit" id="loginSubmit" onclick="doLogin()">Log in</button>
       </div>
       <div class="upgradeFooter">
-        New here? <button class="upgradeTextBtn" onclick="showUpgradeView('register')">Create account</button>
+        New here? <button class="upgradeTextBtn" onclick="showUpgradeView('register')">Create a grown-up account</button>
       </div>
     </div>
 
@@ -332,12 +338,13 @@
     <div class="upgradeView upgradeView-hidden" id="upgradeRegisterView">
       <div class="upgradeHeader">
         <button class="upgradeBack" aria-label="Back" onclick="showUpgradeView('marketing')">←</button>
-        <h2 class="upgradeTitle">Create account</h2>
+        <h2 class="upgradeTitle">Grown-up account</h2>
         <button class="upgradeClose" aria-label="Close" onclick="closeUpgradeModal()">×</button>
       </div>
       <div class="authForm">
         <input id="registerEmail" type="email" placeholder="Email" autocomplete="email" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
         <input id="registerPassword" type="password" placeholder="Password (min 6 chars)" autocomplete="new-password" onkeydown="if(event.key==='Enter'){ event.preventDefault(); doRegister(); }" />
+        <label class="adultDeclare"><input id="registerAdult" type="checkbox" /> <span>I am 18 or over (a parent, carer or teacher) and this account is for me, not for a child. <a href="/privacy.html" target="_blank" rel="noopener">Privacy notice</a></span></label>
         <div class="authStatus" id="registerStatus"></div>
         <button class="authSubmit" id="registerSubmit" onclick="doRegister()">Create account</button>
       </div>
@@ -357,7 +364,7 @@
       <button aria-label="Close" class="modalClose" onclick="closeSaveNameModal()">×</button>
     </div>
     <div class="saveNameBody">
-      <input autocomplete="off" autocorrect="off" class="saveNameInput" id="saveNameInput" maxlength="30" placeholder="My Tune" spellcheck="false" type="text"/>
+      <input autocomplete="off" autocorrect="off" class="saveNameInput" id="saveNameInput" maxlength="30" placeholder="My Tune (no real names)" spellcheck="false" type="text"/>
     </div>
     <div class="modalBtns">
       <button class="bigBtn" onclick="closeSaveNameModal()">Cancel</button>
@@ -1144,11 +1151,11 @@ const DRUM_STYLE_BUTTONS = () => ({
 });
 
 btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
-btnTrumpet.onclick = () => { ensureAudioRunning(); setInstrument("trumpet"); };
-btnStrings.onclick = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } ensureAudioRunning(); setInstrument("strings"); };
-btnSynth.onclick   = () => { ensureAudioRunning(); setInstrument("synth"); };
+btnTrumpet.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("trumpet"); };
+btnStrings.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("synth"); };
 if(btnBass)  btnBass.onclick  = () => { ensureAudioRunning(); setInstrument("bass"); };
-if(btnBells) btnBells.onclick = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } ensureAudioRunning(); setInstrument("bells"); };
+if(btnBells) btnBells.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("bells"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -1229,11 +1236,11 @@ function handleDrumClick(clickedStyle){
 }
 
 if(drumStyleTechEl)      drumStyleTechEl.onclick      = () => handleDrumClick("techno");
-if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => handleDrumClick("dnb");
-if(drumStyleGarageEl)    drumStyleGarageEl.onclick    = () => handleDrumClick("garage");
-if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("drill"); };
-if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!isLoggedIn){ openUpgradeModal('member'); return; } handleDrumClick("hiphop"); };
-if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => handleDrumClick("reggaeton");
+if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("dnb"); };
+if(drumStyleGarageEl)    drumStyleGarageEl.onclick    = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("garage"); };
+if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => handleDrumClick("drill");
+if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("hiphop"); };
+if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("reggaeton"); };
 
 // Init: Techno selected by default (unmuted state), but actual sound will only start after first user gesture.
 syncAudioAndUI();
@@ -1319,7 +1326,7 @@ function applyLockState(){
   }
 
   const printBtnEl = document.getElementById("printBtn");
-  if(printBtnEl) printBtnEl.classList.toggle("locked", !isLoggedIn);
+  if(printBtnEl) printBtnEl.classList.remove("locked");   // Print is free for everyone (2026-10-12)
   const saveBtnEl = document.getElementById("saveBtn");
   if(saveBtnEl) saveBtnEl.classList.toggle("locked", !isPaid);
   const loadBtnEl = document.getElementById("loadBtn");
@@ -1343,15 +1350,17 @@ function applyLockState(){
   }
   if(!isPaid){ try{ closeAiModal(); }catch(e){} }
 
-  // Member-tier locks: 2 instruments (Strings, Bells) + 2 rhythms (Drill, Hip Hop)
-  // show as "?" placeholders until the user registers.
-  const memberLocked = !isLoggedIn;
+  // Pro-locked sounds (owner 2026-10-12, safeguarding rebuild): the free set is
+  // Piano + Bass and Techno + Drill, no account needed; everything else shows the
+  // "?" placeholder until the (adult) account is Pro. Free ones sit on the left.
+  const soundsLocked = !isPaid;
   [
-    document.getElementById("btnStrings"),
-    document.getElementById("btnBells"),
-    document.getElementById("drumStyleDrill"),
-    document.getElementById("drumStyleHipHop"),
-  ].forEach(el => { if(el) el.classList.toggle("locked-member", memberLocked); });
+    "btnTrumpet", "btnSynth", "btnStrings", "btnBells",
+    "drumStyleDnB", "drumStyleGarage", "drumStyleReggaeton", "drumStyleHipHop",
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.classList.toggle("locked-member", soundsLocked);
+  });
 
   // Scaffolding-level entitlement (dormant unless a level sets requiresTier).
   enforceLevelEntitlement();
@@ -1385,7 +1394,7 @@ function logout(){
 }
 /* Bind hover nudges for locked groups */
 
-[document.getElementById("saveBtn"), document.getElementById("loadBtn"), document.getElementById("printBtn")].forEach(bindLockedNudge);
+[document.getElementById("saveBtn"), document.getElementById("loadBtn")].forEach(bindLockedNudge);
 
 /* -------- UPGRADE MODAL -------- */
 let _upgradePath = null;
@@ -1395,17 +1404,14 @@ function openUpgradeModal(path){
   const modal = document.getElementById('upgradeModal');
   if(!modal) return;
   _markCurrentTierCard();
-  if((path === 'member' || path === 'ai') && !isLoggedIn){
-    document.getElementById('tierCardMember')?.classList.add('tierCard-highlight');
-  } else if(isLoggedIn && !isPaid){
-    _highlightProCard();
-  }
+  if(!isPaid) _highlightProCard();
   // Contextual title based on what triggered the modal
   const titleEl = document.getElementById('upgradeModalTitle');
   if(titleEl){
     const titles = {
       member: 'Unlock more sounds',
-      ai:     'Sign up to make AI songs',
+      subscribe: 'Unlock more sounds',
+      ai:     'AI songs are part of Pro',
       print:  'Print your tune',
       save:   'Save your tune',
       load:   'Load a saved tune',
@@ -1426,23 +1432,52 @@ function closeUpgradeModal(){
   if(!modal) return;
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden','true');
-  _upgradePath = null;
-  ['tierCardGuest','tierCardMember','tierCardPro'].forEach(id => {
+  _upgradePath = null; _adultPassed = false; _gateNext = null;
+  ['tierCardGuest','tierCardPro'].forEach(id => {
     document.getElementById(id)?.classList.remove('tierCard-highlight');
   });
-  ['loginEmail','loginPassword','registerEmail','registerPassword'].forEach(id => {
+  ['loginEmail','loginPassword','registerEmail','registerPassword','gateAnswer'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
   ['loginStatus','registerStatus'].forEach(id => {
     const el = document.getElementById(id); if(el) el.textContent = '';
   });
+  const adultCb = document.getElementById('registerAdult'); if(adultCb) adultCb.checked = false;
   const sub = document.getElementById('subscribeBtn');
   if(sub){ sub.disabled = false; sub.textContent = 'Subscribe'; }
 }
 window.closeUpgradeModal = closeUpgradeModal;
 
+/* Grown-up check. Creating an account and paying are for adults only (UK GDPR Art 8 /
+   ICO Children's Code), so both sit behind a simple question a young child can't
+   answer. It is a speed bump, NOT identity verification - the register form also
+   carries an explicit "I am 18 or over" declaration. Passed once per modal opening. */
+let _adultPassed = false, _gateNext = null, _gateAnswer = 0;
+function _newGateQuestion(msg){
+  const a = 12 + Math.floor(Math.random()*8), b = 3 + Math.floor(Math.random()*7);
+  _gateAnswer = a*b;
+  const q = document.getElementById('gateQuestion'); if(q) q.textContent = a + ' × ' + b + ' = ?';
+  const inp = document.getElementById('gateAnswer'); if(inp) inp.value = '';
+  const st = document.getElementById('gateStatus'); if(st) st.textContent = msg || '';
+}
+function _requireAdult(next){
+  if(_adultPassed) return true;
+  _gateNext = next; _newGateQuestion(); showUpgradeView('gate');
+  setTimeout(() => { try{ document.getElementById('gateAnswer')?.focus(); }catch(e){} }, 50);
+  return false;
+}
+function checkAdultGate(){
+  const v = parseInt(document.getElementById('gateAnswer')?.value, 10);
+  if(v !== _gateAnswer){ _newGateQuestion('Not quite - try this new one'); return; }
+  _adultPassed = true;
+  const next = _gateNext; _gateNext = null;
+  if(next === 'checkout') _startStripeCheckout(); else showUpgradeView(next || 'register');
+}
+window.checkAdultGate = checkAdultGate;
+
 function showUpgradeView(view){
-  const viewMap = { marketing:'upgradeMarketingView', login:'upgradeLoginView', register:'upgradeRegisterView' };
+  if(view === 'register' && !_requireAdult('register')) return;
+  const viewMap = { marketing:'upgradeMarketingView', login:'upgradeLoginView', register:'upgradeRegisterView', gate:'upgradeGateView' };
   Object.values(viewMap).forEach(id => {
     const el = document.getElementById(id);
     if(el) el.classList.toggle('upgradeView-hidden', id !== viewMap[view]);
@@ -1452,36 +1487,15 @@ window.showUpgradeView = showUpgradeView;
 window.openUpgradeModal = openUpgradeModal;
 
 function _markCurrentTierCard(){
-  document.getElementById('tierCardGuest')?.classList.toggle('tierCard-current', !isLoggedIn);
-  document.getElementById('tierCardMember')?.classList.toggle('tierCard-current', isLoggedIn && !isPaid);
+  // Two plans now: Free (no account needed) and Pro.
+  document.getElementById('tierCardGuest')?.classList.toggle('tierCard-current', !isPaid);
   document.getElementById('tierCardPro')?.classList.toggle('tierCard-current', isPaid);
-
-  // "Current plan" belongs on whichever card the user is actually on. The Guest
-  // card said it whenever the user was LOGGED IN, which is precisely when Guest
-  // is NOT their plan — a signed-in Member was told the free tier was current
-  // while the Member card showed nothing at all (its CTA was hidden outright).
-  // Selected by card, not by .tierCta-ghost: the member button below borrows that
-  // same class for its "Current plan" state, so a class-based lookup would be one
-  // DOM reorder away from grabbing the wrong button.
   const guestCta = document.querySelector('#tierCardGuest .tierCta');
   if(guestCta){
-    guestCta.textContent = isLoggedIn ? '' : "You're here";
-    guestCta.style.display = isLoggedIn ? 'none' : '';
+    guestCta.textContent = isLoggedIn ? 'Your plan' : 'No account needed';
+    guestCta.style.display = isPaid ? 'none' : '';
   }
-  // Signed-in free member: the sign-up button is meaningless, but the card is
-  // their plan and should say so. Reuse the ghost styling so it reads as a
-  // label rather than something to press, and disable it so the register view
-  // can't be reached from a button that no longer offers registration.
-  const memberCta = document.querySelector('#tierCardMember .tierCta');
-  if(memberCta){
-    const memberIsCurrent = isLoggedIn && !isPaid;
-    memberCta.style.display = isPaid ? 'none' : '';
-    memberCta.textContent = memberIsCurrent ? 'Current plan' : 'Sign up free';
-    memberCta.disabled = memberIsCurrent;
-    memberCta.classList.toggle('tierCta-ghost', memberIsCurrent);
-  }
-  // Same logic for the marketing view's "Already have an account? Log in"
-  // footer — nonsense to offer a login to someone who is already logged in.
+  // "Grown-up with an account? Log in" is meaningless to someone already logged in.
   const marketingFooter = document.getElementById('upgradeMarketingFooter');
   if(marketingFooter) marketingFooter.style.display = isLoggedIn ? 'none' : '';
 }
@@ -1491,11 +1505,13 @@ function _highlightProCard(){
 }
 
 async function handleSubscribeCta(){
+  // Gate first for everyone: a child on a parent's logged-in device must not reach checkout.
   if(!isLoggedIn){
     _upgradePath = 'subscribe';
-    showUpgradeView('register');
+    showUpgradeView('register');       // gated inside showUpgradeView
     return;
   }
+  if(!_requireAdult('checkout')) return;
   await _startStripeCheckout();
 }
 window.handleSubscribeCta = handleSubscribeCta;
@@ -1523,8 +1539,7 @@ async function _startStripeCheckout(){
 /* -------------------- AI SONG FLOW -------------------- */
 function handleAiBtn(){
   // Guests: greyed → free sign-up. Members: greyed → pitch Pro. Paid → generate.
-  if(!isLoggedIn){ openUpgradeModal('ai'); return; }
-  if(!isPaid){ openUpgradeModal('subscribe'); return; }
+  if(!isPaid){ openUpgradeModal('ai'); return; }
   openAiModal();
 }
 window.handleAiBtn = handleAiBtn;
@@ -1819,7 +1834,7 @@ async function _renderAccount(){
   let html = '';
   html += `<div class="acctHeader">`;
   html += `<div class="acctEmail">${_acctEsc(user.email || 'Signed in')}</div>`;
-  html += `<div class="acctBadge ${isPro ? 'acctBadge-pro' : ''}">${isPro ? 'Pro' : 'Free member'}</div>`;
+  html += `<div class="acctBadge ${isPro ? 'acctBadge-pro' : ''}">${isPro ? 'Pro' : 'Free account'}</div>`;
   html += `</div>`;
 
   if(isPro){
@@ -1841,7 +1856,8 @@ async function _renderAccount(){
 
   html += `<div class="acctSeqTitle">My library</div>`;
   html += `<div class="acctSeqList" id="acctSeqList"></div>`;
-  html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button></div>`;
+  html += `<div class="acctFooter"><button class="acctLogout" id="acctLogoutBtn">Log out</button> <button class="acctDelete" id="acctDeleteBtn">Delete my account and data</button> <a class="acctPrivacy" href="/privacy.html" target="_blank" rel="noopener">Privacy</a></div>`;
+  html += `<div class="acctManageMsg" id="acctDeleteMsg"></div>`;
 
   body.innerHTML = html;
 
@@ -1849,8 +1865,37 @@ async function _renderAccount(){
   document.getElementById('acctManageBtn')?.addEventListener('click', openBillingPortal);
   document.getElementById('acctUpgradeBtn')?.addEventListener('click', ()=>{ closeAccountModal(); openUpgradeModal('subscribe'); });
   document.getElementById('acctLogoutBtn')?.addEventListener('click', ()=>{ logout(); closeAccountModal(); });
+  document.getElementById('acctDeleteBtn')?.addEventListener('click', () => deleteMyAccount(isPro));
 
   _renderLibrary(document.getElementById('acctSeqList'), seqs, closeAccountModal);
+}
+
+// "Delete my account and data": cancels any subscription, then erases the profile,
+// saved tunes, tracks and the sign-in itself (server side: functions deleteMyAccount).
+// Two explicit confirmations because it cannot be undone.
+async function deleteMyAccount(isPro){
+  const msg = document.getElementById('acctDeleteMsg');
+  const btn = document.getElementById('acctDeleteBtn');
+  if(!confirm('Delete your account and everything saved in it?' + (isPro ? ' Your Pro subscription will be cancelled.' : '') + ' This cannot be undone.')) return;
+  const typed = prompt('To confirm, type DELETE');
+  if(!typed || typed.trim().toUpperCase() !== 'DELETE') return;
+  if(btn) btn.disabled = true;
+  if(msg) msg.textContent = 'Deleting…';
+  try{
+    const { getFunctions, httpsCallable } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js");
+    const { app } = await import("./js/firebase-init.js");
+    await httpsCallable(getFunctions(app, 'europe-west1'), 'deleteMyAccount')({});
+    try{ sessionStorage.removeItem('kidseq_logged_in'); sessionStorage.removeItem('kidseq_tier'); }catch(e){}
+    try{ const { auth } = await import("./js/firebase-init.js"); const { signOut } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js"); await signOut(auth); }catch(e){}
+    isLoggedIn = false; isPaid = false;
+    applyLockState();
+    closeAccountModal();
+    alert('Your account and data have been deleted.');
+  }catch(e){
+    console.error('[deleteMyAccount]', e);
+    if(msg) msg.textContent = (e && e.message) ? e.message : 'Couldn\'t delete your account - please try again.';
+    if(btn) btn.disabled = false;
+  }
 }
 
 // Pro: open the Stripe billing portal to manage/cancel the subscription.
@@ -1999,6 +2044,7 @@ async function doRegister(){
   const btn      = document.getElementById('registerSubmit');
   if(!email || !password){ if(statusEl) statusEl.textContent = 'Enter email and password'; return; }
   if(password.length < 6){ if(statusEl) statusEl.textContent = 'Password must be at least 6 characters'; return; }
+  if(!document.getElementById('registerAdult')?.checked){ if(statusEl) statusEl.textContent = 'Please confirm you are a grown-up (18 or over)'; return; }
   if(btn) btn.disabled = true;
   if(statusEl) statusEl.textContent = '';
   try{
@@ -9568,7 +9614,6 @@ function printSheet(){
   // window.printSheet is global, so guard on the same thing the marks do: a view
   // with no measured template can't produce a sheet anyone could scan back.
   if(!_currentSheetId()) return;
-  if(!isLoggedIn){ openUpgradeModal('print'); return; }
   try{ stop(); }catch(e){}
   try{ window.print(); }catch(e){ console.warn('print failed', e); }
 }

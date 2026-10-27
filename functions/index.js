@@ -3,6 +3,12 @@ const { defineSecret, defineString } = require("firebase-functions/params");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { getAuth } = require("firebase-admin/auth");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const {
+  AUDIO_REPORT_RETENTION_DAYS, SCANLOG_RETENTION_DAYS,
+  cutoffMs, isStaleFreeAccount,
+} = require("./account-data");
 const crypto = require("crypto");
 const { isPayingSubscription } = require("./subscription-state");
 const { attemptGate, beginAttempt, succeedAttempt, failAttempt } = require("./ai-attempts");
@@ -385,5 +391,125 @@ exports.stripeWebhook = onRequest(
     }
 
     res.json({ received: true });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Account erasure + data retention (safeguarding rebuild, 2026-10-12)
+//
+// What we keep, and for how long, is promised in public/privacy.html. The
+// numbers live in account-data.js - change them together.
+// ---------------------------------------------------------------------------
+
+// Remove everything WE hold about a user: Firestore (profile, saved tunes, scan
+// logs - recursively), Storage (generated tracks) and the sign-in account itself.
+// The Stripe customer record is deliberately NOT touched here: tax and
+// accounting law requires invoices to be kept, and Stripe holds them as the
+// merchant of record. Auth is deleted LAST so a failure part-way leaves an
+// account the user can still sign in to and retry.
+async function eraseUser(uid) {
+  await db.recursiveDelete(db.doc(`users/${uid}`));
+  try {
+    await getStorage().bucket(STORAGE_BUCKET).deleteFiles({ prefix: `users/${uid}/`, force: true });
+  } catch (e) {
+    console.error(`[erase] storage cleanup failed for ${uid}:`, e.message);
+    throw e;
+  }
+  try {
+    await getAuth().deleteUser(uid);
+  } catch (e) {
+    if (e.code !== "auth/user-not-found") throw e;
+  }
+}
+
+// "Delete my account and data" button. Cancels any live Stripe subscription
+// FIRST (and aborts without deleting anything if that fails) so nobody is left
+// being charged for an account that no longer exists.
+exports.deleteMyAccount = onCall(
+  { region: "europe-west1", secrets: [stripeSecretKey], timeoutSeconds: 120 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Login required");
+    const uid = request.auth.uid;
+
+    const snap = await db.doc(`users/${uid}`).get();
+    const customerId = snap.exists ? snap.data().stripeCustomerId : null;
+
+    if (customerId) {
+      try {
+        const stripe = stripeClient();
+        const subs = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 100 });
+        for (const sub of subs.data) {
+          if (sub.status !== "canceled" && sub.status !== "incomplete_expired") {
+            await stripe.subscriptions.cancel(sub.id);
+          }
+        }
+      } catch (e) {
+        console.error(`[deleteMyAccount] could not cancel subscription for ${uid}:`, e.message);
+        throw new HttpsError("internal", "We couldn't cancel your subscription, so nothing was deleted. Please try again.");
+      }
+    }
+
+    try {
+      await eraseUser(uid);
+    } catch (e) {
+      console.error(`[deleteMyAccount] erase failed for ${uid}:`, e.message);
+      throw new HttpsError("internal", "Something went wrong deleting your data. Please try again.");
+    }
+    console.log(`[deleteMyAccount] erased ${uid}`);
+    return { ok: true };
+  }
+);
+
+// Daily housekeeping:
+//  - audioReports older than 30 days (anonymous device diagnostics)
+//  - scanlogs older than 30 days (opt-in scanner debug uploads, contain a photo)
+//  - free accounts that have not signed in for 2 years (never a paying one)
+exports.purgeOldData = onSchedule(
+  { schedule: "every day 03:30", timeZone: "Europe/London", region: "europe-west1", timeoutSeconds: 540 },
+  async () => {
+    const now = Date.now();
+
+    // audioReports: single-field query on createdAt, deleted in batches.
+    const reportCutoff = new Date(cutoffMs(now, AUDIO_REPORT_RETENTION_DAYS));
+    let removedReports = 0;
+    for (;;) {
+      const snap = await db.collection("audioReports").where("createdAt", "<", reportCutoff).limit(400).get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      removedReports += snap.size;
+      if (snap.size < 400) break;
+    }
+
+    // Per-account passes. Walking the Auth user list (not a collection-group
+    // query) keeps this on single-collection indexes that exist by default.
+    const scanCutoff = new Date(cutoffMs(now, SCANLOG_RETENTION_DAYS));
+    let erasedAccounts = 0, removedScanlogs = 0, pageToken;
+    do {
+      const page = await getAuth().listUsers(500, pageToken);
+      for (const u of page.users) {
+        try {
+          const userSnap = await db.doc(`users/${u.uid}`).get();
+          const tier = userSnap.exists ? userSnap.data().tier : "free";
+          if (isStaleFreeAccount({
+            lastSignInMs: Date.parse(u.metadata.lastSignInTime || ""),
+            createdMs: Date.parse(u.metadata.creationTime || ""),
+            tier,
+          }, now)) {
+            await eraseUser(u.uid);
+            erasedAccounts++;
+            continue;
+          }
+          const logs = await db.collection(`users/${u.uid}/scanlogs`).where("at", "<", scanCutoff).get();
+          for (const d of logs.docs) { await d.ref.delete(); removedScanlogs++; }
+        } catch (e) {
+          console.error(`[purgeOldData] skipped ${u.uid}:`, e.message);
+        }
+      }
+      pageToken = page.pageToken;
+    } while (pageToken);
+
+    console.log(`[purgeOldData] audioReports=${removedReports} scanlogs=${removedScanlogs} inactiveAccounts=${erasedAccounts}`);
   }
 );

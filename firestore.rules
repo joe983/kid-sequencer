@@ -37,27 +37,9 @@ service cloud.firestore {
       allow read, update, delete: if false;
     }
 
-    // ---------------------------------------------------------------
-    // Public leaderboard for the "Late for Music Class" runner game
-    // (school-brand-game-app). Isolated from /users — anyone may READ
-    // the board; CREATE is allowed only for well-formed rows; no client
-    // edits or deletes. Added 2026-08-19.
-    // ---------------------------------------------------------------
-    match /runnerScores/{scoreId} {
-      allow read: if true;
-      allow create: if isValidRunnerScore();
-      allow update, delete: if false;
-    }
-
-    function isValidRunnerScore() {
-      let d = request.resource.data;
-      return d.keys().hasOnly(['name', 'level', 'score', 'look', 'sortKey', 'createdAt'])
-        && d.name is string && d.name.size() > 0 && d.name.size() <= 10
-        && d.level is int && d.level >= 0 && d.level <= 100000
-        && d.score is int && d.score >= 0 && d.score <= 1000000000
-        && d.sortKey is int
-        && (!('look' in d.keys()) || d.look is map)
-        && d.createdAt == request.time;
-    }
+    // The public "runnerScores" leaderboard rules were REMOVED 2026-10-12 (safeguarding
+    // rebuild): children could type a free-text name that was shown to every player and
+    // the collection was world-writable. The game now keeps its board per-device. Any
+    // leftover rows are unreachable from clients and can be deleted in the console.
   }
 }
