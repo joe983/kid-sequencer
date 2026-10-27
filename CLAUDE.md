@@ -595,7 +595,14 @@ Rules that keep it working:
 - Resume on **any** non-running state — iOS uses `"interrupted"` (call, Siri, lock screen), not just `"suspended"`; the old `=== "suspended"` check left it stuck. `resume()` is raced against 1.5 s because on iOS it can hang forever.
 - Resume on **every** touch (capture-phase `pointerdown`/`touchend`) and on `visibilitychange` → visible, because iOS only honours `resume()` inside a gesture.
 - Rebuild only a context that says `"running"` while its clock won't move for 2 s, and at most `MAX_AUDIO_REBUILDS` (2) per page load. Never rebuild on idle.
-- ⚠️ iPadOS Safari reports a **Mac** user agent, so `iosStartSilentVideo()` (keyed on `iP(hone|ad|od)` in the UA) never runs on an iPad. Harmless; the debug panel shows `video n/a` there.
+- ⚠️ iPadOS Safari reports a **Mac** user agent — `_isIOSDevice()` also accepts a Mac UA with `maxTouchPoints > 1`. Any new iOS-only path must use it (or `_IOS_AUDIO`), never `iP(hone|ad|od)` alone.
+
+### Silent mode (ring/silent switch, iPad Control Centre bell) — 2026-10-27
+Web audio is "ambient" on iOS, so silent mode mutes it while `<audio>`/`<video>` play through. Two mechanisms, both iOS-only (`_IOS_AUDIO`), both set up at **page start**:
+- **iOS 17+:** `navigator.audioSession.type = "playback"`.
+- **Older iOS (school iPads are 15.6.1, no `navigator.audioSession`):** an unmuted, looping, near-silent `<audio>` (`_silentAudio()`: in-memory 8 kHz WAV data URI, ±1 LSB — no file, no network) is played by `iosStartSilentAudio()` on taps, which puts the page in WebKit's media-playback category. **Order matters** (WebKit bug 237322): the category only reaches a web-audio output that starts *after* it changed, and the context is created on the first `pointerdown` — which iOS doesn't let start media. So a context that reached "running" before the clip was confirmed playing (`_silentOn`, set by the `playing` event) gets its output restarted ONCE when the clip starts (`_onSilentPlaying`: `suspend()`→`resume()`, **same context**, never a rebuild). Shown as `silent playing (restarted N)` on `?audiodebug=1`; reports carry `silentAudio` + `silentRearms`.
+- Replaced the old hidden `<video>` + `silent.mp4` (live 2026-10-27: an iPadOS 15.6.1 iPad had it "playing", engine running, still muted). Don't `pause()` the clip to "restart" it — `iosStartSilentAudio` also runs after awaits, outside the gesture, where a restart is refused.
+- Verified only in headless Chrome emulating iPad/iPhone UAs; the real check is a device in silent mode.
 
 ### Kick drum WaveShaper
 `shaper.oversample = "2x"` in `playKick`. Do not raise back to `"4x"` — it halves CPU cost with no audible difference at 44100 Hz for a kids' app.

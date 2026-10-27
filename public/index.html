@@ -2388,7 +2388,7 @@ function _noteCtxState(state){
   else if(!_ctxStuckSince) _ctxStuckSince = performance.now();
 }
 function ensureAudioRunning(fromGesture){
-  iosStartSilentVideo();                 // restarts the keep-alive video if iOS paused it
+  iosStartSilentAudio();                 // restarts the silent clip if iOS paused it
   if (!audioCtx) return;
   if (audioCtx.state === "running") return;
   const now = performance.now();
@@ -2405,7 +2405,7 @@ function ensureAudioRunning(fromGesture){
 // iOS only lets resume() succeed inside a gesture, so retry on every touch, and
 // when the page comes back to the foreground.
 ["pointerdown","touchend"].forEach(ev =>
-  document.addEventListener(ev, () => { if(audioCtx) ensureAudioRunning(true); }, { capture:true, passive:true }));
+  document.addEventListener(ev, () => { if(audioCtx) ensureAudioRunning(true); else iosStartSilentAudio(); }, { capture:true, passive:true }));
 document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible") ensureAudioRunning();
 });
@@ -2736,7 +2736,7 @@ function _ahSample(){
     _ahLastRec = {
       sid: _ahSid, tab: _tabId, loads15m: _loadsRecent,
       session: navigator.audioSession ? navigator.audioSession.type : "n/a",
-      silentVideo: (() => { const v = document.getElementById("iosSilentVideo"); return !_isIOSDevice() ? "n/a" : !v ? "none" : v.paused ? "paused" : "playing"; })(), sinceLoadSec: Math.round(performance.now() / 1000),
+      silentAudio: _silentState(), silentRearms: _silentRearms, sinceLoadSec: Math.round(performance.now() / 1000),
       outputLatency: audioCtx.outputLatency, baseLatency: audioCtx.baseLatency, otherTabs: _otherTabsAlive(), otherTabStops: _otherTabStops,
       t: Date.now(), lastPlayAt: _ahLastPlayAt, bad: _ahBad,
       path: location.pathname + location.search, ua: navigator.userAgent,
@@ -2991,9 +2991,6 @@ if(AUDIO_DEBUG){
     document.body.appendChild(pre);
     const ua = navigator.userAgent || "";
     const safari = (ua.match(/Version\/([\d.]+)/) || [])[1] || "?";
-    // iPadOS Safari reports a Mac user agent, so the silent-video hack (keyed on
-    // "iPad" in the UA) doesn't run there — say so rather than show "PAUSED".
-    const videoHack = _isIOSDevice();
     setInterval(() => {
       // Meters, clock and the NaN / dead-output events come from the self-report
       // sampler (_ahSample, once a second); the panel only displays them.
@@ -3001,13 +2998,12 @@ if(AUDIO_DEBUG){
       const meter = Object.keys(m).map(k => k + " " + m[k]).join("  ");
       const t = audioCtx ? audioCtx.currentTime : -1;
       const moving = audioCtx ? _ahMoving : "-";
-      const v = document.getElementById("iosSilentVideo");
-      const video = !videoHack ? "n/a" : v ? (v.paused ? "PAUSED" : "playing") : "-";
+      const silent = _silentState() + (_silentRearms ? " (restarted " + _silentRearms + ")" : "");
       const lead = Number.isFinite(_schedMinLead) ? (_schedMinLead * 1000).toFixed(0) + "ms" : "-";
       pre.textContent =
         `state ${audioCtx ? audioCtx.state : "none"}  clock moving ${moving}  t=${t.toFixed(1)}  ` +
         `rate ${audioCtx ? audioCtx.sampleRate : "-"}  Safari ${safari}  touch ${navigator.maxTouchPoints || 0}\n` +
-        `contexts ${_audioCtxCount}  rebuilds ${_audioResetCount}  live nodes ${liveNodes.size}  video ${video}\n` +
+        `contexts ${_audioCtxCount}  rebuilds ${_audioResetCount}  live nodes ${liveNodes.size}  silent ${silent}\n` +
         `this run: worst tick late ${_tickMaxLate.toFixed(0)}ms  min lead ${lead}  ` +
         `late steps ${_schedLate}  dropped ${_schedDropped}\n` +
         `levels: ${meter || "-"}\n` +
@@ -3860,53 +3856,112 @@ function makeInstrumentBuses(ctx, masterOut){
 }
 
 
-// iOS Safari: when the hardware silent/ringer switch is OFF, WebAudio may be muted.
-// Workaround: start a looping *silent video* from a user gesture and keep it playing.
-// Requires `silent.mp4` deployed next to this HTML.
-let __iosSilentVideoStarted = false;
-/* Live data 2026-10-09: on school iPads the app kept producing sound internally (engine
-   running, clock real-time, output meter -7 dB) while students heard nothing and kept
-   refreshing — refresh didn't help, a reboot did. iOS treats web audio as "ambient" by
-   default: silenced by the iPad's mute setting and pre-empted by other audio. This
-   workaround was meant to fix that but was keyed on "iPad" in the user agent, and iPadOS
-   reports itself as a Mac, so it NEVER ran on an iPad. Now: Safari 16.4+ is told the
-   page is media playback (navigator.audioSession), and the silent-video session keeper
-   also runs on iPads (Mac UA + touch). */
+/* iOS/iPadOS silent mode. Web audio is "ambient" by default there: the ring/silent
+   switch (Control Centre's bell on an iPad) mutes it, while <audio>/<video> play through.
+   - iOS 17+: navigator.audioSession.type = "playback" moves the page's audio over.
+   - Older iOS (the school iPads are on 15.6.1 — no navigator.audioSession): an unmuted
+     looping near-silent <audio> element makes WebKit put the page in the media
+     playback category, and web audio rides along.
+   Live data 2026-10-09: the old workaround was keyed on "iPad" in the user agent and
+   iPadOS reports a Mac, so it never ran on an iPad — fixed with the touch check below.
+   Live data 2026-10-27: an iPadOS 15.6.1 iPad, silent-video "playing", engine running,
+   clock moving — still no sound in silent mode. The ORDER matters on old iOS: the
+   category only reaches a web-audio output that starts AFTER it changed (WebKit bug
+   237322: start the silent media, then the AudioContext). Here the context started
+   first: it's created on the first pointerdown, which on iOS is not allowed to start
+   media, and the old silent VIDEO had to load over the network after the tap anyway.
+   So: (1) the silent clip is an in-memory WAV loaded at page start, ready before the
+   first tap, so play() inside the tap changes the category at once; (2) a context that
+   was already running when the clip started has its output restarted once
+   (suspend → resume, same context — see "AudioContext lifecycle"), so it comes back up
+   in the playback category. */
 function _isIOSDevice(){
   const ua = navigator.userAgent || "";
   return /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
 }
+const _IOS_AUDIO = _isIOSDevice();
 function _setAudioSessionPlayback(){
   try{
     if(navigator.audioSession && navigator.audioSession.type !== "playback") navigator.audioSession.type = "playback";
   }catch(e){}
 }
-function iosStartSilentVideo(){
-  _setAudioSessionPlayback();
-  const isIOS = _isIOSDevice();
-  if(!isIOS) return;
-
-  const v = document.getElementById("iosSilentVideo");
-  if(!v) return;
-  // iOS can pause the video on an interruption; the flag alone would never restart it.
-  if(__iosSilentVideoStarted && !v.paused) return;
-
-  // The file must contain silence; keep element unmuted so iOS treats it as a real media session.
-  v.muted = false;
-  v.volume = 1.0;
-
-  try{
-    const p = v.play();
-    if(p && typeof p.then === "function"){
-      p.then(() => { __iosSilentVideoStarted = true; })
-       .catch(() => { __iosSilentVideoStarted = false; });
-    }else{
-      __iosSilentVideoStarted = true;
-    }
-  }catch(e){
-    __iosSilentVideoStarted = false;
-  }
+// 0.5 s of mono 8 kHz 16-bit PCM at ±1 LSB (-90 dBFS, inaudible). WebKit only asks
+// whether an element CAN produce audio (unmuted, volume > 0, has an audio track) — but a
+// true-zero file is one heuristic away from being ignored, so it isn't quite silent.
+function _silentWavUri(){
+  const rate = 8000, n = 4000, size = 44 + n * 2;
+  const d = new DataView(new ArrayBuffer(size));
+  const str = (o, s) => { for(let i = 0; i < s.length; i++) d.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, "RIFF"); d.setUint32(4, size - 8, true); str(8, "WAVE");
+  str(12, "fmt "); d.setUint32(16, 16, true); d.setUint16(20, 1, true); d.setUint16(22, 1, true);
+  d.setUint32(24, rate, true); d.setUint32(28, rate * 2, true); d.setUint16(32, 2, true); d.setUint16(34, 16, true);
+  str(36, "data"); d.setUint32(40, n * 2, true);
+  for(let i = 0; i < n; i++) d.setInt16(44 + i * 2, (i & 1) ? 1 : -1, true);
+  const u = new Uint8Array(d.buffer);
+  let bin = "";
+  for(let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+  return "data:audio/wav;base64," + btoa(bin);
 }
+let _silentEl = null;
+let _silentRearmCtx = null;   // a context that started before the clip did (restart it once)
+let _silentRearms = 0;
+let _silentOn = false;        // the clip has actually started (a "playing" event), not just play() called
+function _silentAudio(){
+  if(!_IOS_AUDIO) return null;
+  if(_silentEl) return _silentEl;
+  const a = document.createElement("audio");
+  a.setAttribute("x-webkit-airplay", "deny");   // no AirPlay picker / route for it
+  a.disableRemotePlayback = true;
+  a.loop = true;
+  a.preload = "auto";
+  a.src = _silentWavUri();
+  a.addEventListener("playing", () => { _silentOn = true; _onSilentPlaying(); });
+  a.addEventListener("pause", () => { _silentOn = false; });
+  try{ a.load(); }catch(e){}
+  _silentEl = a;
+  return a;
+}
+// Called when the context reaches "running": if the clip wasn't audible yet, this output
+// started in the ambient (muted) category and needs one restart once the clip plays.
+function _silentNoteCtxRunning(ctx){
+  if(_IOS_AUDIO && !navigator.audioSession && !_silentOn) _silentRearmCtx = ctx;
+}
+function _onSilentPlaying(){
+  const ctx = audioCtx;
+  if(!ctx || ctx !== _silentRearmCtx || ctx.state !== "running") return;
+  _silentRearmCtx = null;
+  _silentRearms++;
+  _adbg("silent clip playing -> restarting output in the playback category");
+  // A context that has started once may resume without a gesture on WebKit.
+  ctx.suspend().then(() => { if(ctx === audioCtx) return ctx.resume(); }).catch(() => {});
+}
+// For the debug panel / self-reports: "n/a" off iOS; "loading" = play() called, not ready yet.
+function _silentState(){
+  if(!_IOS_AUDIO) return "n/a";
+  if(!_silentEl) return "none";
+  if(_silentOn) return "playing";
+  return _silentEl.paused ? "paused" : "starting";
+}
+function iosStartSilentAudio(){
+  _setAudioSessionPlayback();
+  const a = _silentAudio();
+  // Not `paused`: a refused play() can leave it false for a moment, and the real tap that
+  // follows would then skip the clip. Until it has actually started, every tap asks again
+  // (play() on a clip that's already starting is harmless). Never pause() here — this also
+  // runs after awaits, outside the gesture, where a restart would be refused.
+  if(!a || _silentOn) return;
+  // Unmuted at full volume, or iOS doesn't count it as media playback. The clip is silent.
+  a.muted = false;
+  a.volume = 1.0;
+  try{
+    const p = a.play();
+    if(p && typeof p.catch === "function") p.catch(() => {});   // outside a gesture: retried on the next tap
+  }catch(e){}
+}
+// At page start, not in the first tap: the session type isn't gesture-gated, and the clip
+// has to be loaded BEFORE the tap for play() to switch the category inside it.
+_setAudioSessionPlayback();
+_silentAudio();
 
 /* Master volume as the fader last set it (<seq-volume-fader> writes
    window.__kidseqMasterLevel; 0.65 = fader at the top). The fader lives in its own
@@ -3918,7 +3973,7 @@ function _masterLevel(){
 }
 
 function getAudio(){
-  iosStartSilentVideo();
+  iosStartSilentAudio();
   if(!audioCtx){
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     _audioCtxCount++;
@@ -3926,7 +3981,7 @@ function getAudio(){
     const _c = audioCtx;
     _c.onstatechange = () => {
       _adbg("ctx#" + _audioCtxCount + (_c === audioCtx ? "" : " (old)") + " state -> " + _c.state);
-      if(_c === audioCtx) _noteCtxState(_c.state);
+      if(_c === audioCtx){ _noteCtxState(_c.state); if(_c.state === "running") _silentNoteCtxRunning(_c); }
     };
 
     window.audioCtx = audioCtx;
@@ -5455,7 +5510,7 @@ function playInstrument(freq, steps){
 /* -------------------- PLAYBACK -------------------- */
 async function play(){
   _announcePlay();
-  iosStartSilentVideo();
+  iosStartSilentAudio();
   await ensureAudioReady();
 
   stop();
@@ -10594,11 +10649,6 @@ window.KidSequencer = {
   customElements.define('seq-volume-fader', SeqVolumeFader);
 })();
 </script>
-<!-- iOS silent-mode workaround: hidden looping silent video.
-       Deploy a tiny `silent.mp4` next to this HTML (same folder). -->
-<video id="iosSilentVideo" loop="" playsinline="" preload="auto" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;" webkit-playsinline="">
-<source src="silent.mp4" type="video/mp4"/>
-</video>
 
 <script>
 /* Tap-feedback (micro press + blue glow) for primary action buttons */
