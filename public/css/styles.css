@@ -2476,11 +2476,11 @@ html.js-loading #contentWrap{
    (notes, playhead, .selected highlights, login button) hidden.
    No custom worksheet — just the running app desaturated. ---- */
 @media print {
-  /* Default the printout to landscape. Browsers honour this by opening the
-     print preview in landscape; the user can still override to portrait in
-     the dialog, which the orientation fallback block below handles. 10mm
-     margin ≈ Chrome's "Default" so #viewport (sized to match below) fills the
-     real printable area exactly in the common case → perfectly centred. */
+  /* Default the printout to landscape. Chromium and Firefox honour this, and
+     the 10mm margin ≈ Chrome's "Default", so #viewport (sized to match below)
+     fills the real printable area exactly → perfectly centred. WebKit on
+     iPad/iPhone ignores it (paper and orientation come from its print dialog),
+     which is why the print box is smaller there — see _printBox. */
   @page { size: A4 landscape; margin: 10mm; }
 
   /* Desaturate the whole page in B&W (cheap, prints reliably) and force
@@ -2496,23 +2496,37 @@ html.js-loading #contentWrap{
     print-color-adjust: exact;
     overflow: visible !important;
   }
+  /* On screen html/body are pinned to the window (height:100%, overflow
+     hidden), and on phones and tablets html.stageScaled re-asserts the overflow
+     with !important and a MORE specific selector than the rule above, so it won
+     in print too. Whether that clips the sheet depends on what the engine
+     resolves 100% against when printing — WebKit evaluates print media queries
+     against the window, not the paper — so let the page grow with its content. */
+  html, body,
+  html.stageScaled, html.stageScaled body,
+  html.tabletScaled, html.tabletScaled body {
+    height: auto !important;
+    overflow: visible !important;
+  }
   /* Stray empty body sibling — keep it out of the print flow so it can't nudge
      #viewport off-centre. */
   #debug-info { display: none !important; }
 
   /* #viewport is normally position:fixed sized to the screen (--vvw/--vvh).
-     For print, repurpose it as an IN-FLOW box sized (in mm) to the A4
-     landscape printable area, clipping overflow. Being in normal flow at the
-     page area's size, it prints on exactly ONE page (the 1600x900 #page's
-     untransformed layout box is clipped, so it can't spill onto extra pages —
-     position:absolute alone does NOT prevent that) and, by filling the page
-     vertically, it lets the absolute-centred child sit dead-centre. The
-     position:relative makes it the containing block for #page so the 50%
-     offsets resolve against its known size (not the unreliable page ICB). */
+     For print, repurpose it as an IN-FLOW box sized to the print box, clipping
+     overflow. Being in normal flow at a size that fits the page, it prints on
+     exactly ONE page (the 1600x900 #page's untransformed layout box is clipped,
+     so it can't spill onto extra pages — position:absolute alone does NOT
+     prevent that). The position:relative makes it the containing block for
+     #page. --print-box-w/-h come from _printBox in index.html: the A4
+     landscape page area where the browser honours @page (so the sheet sits
+     dead-centre), and a smaller box under WebKit — Safari, and every browser
+     on iPad/iPhone — which ignores @page size and takes a footer off the page
+     height. The mm fallback is Chromium's page area, if the JS hasn't run. */
   #viewport {
     position: relative !important;
-    width: calc(297mm - 20mm) !important;
-    height: calc(210mm - 20mm) !important;
+    width: var(--print-box-w, calc(297mm - 20mm)) !important;
+    height: var(--print-box-h, calc(210mm - 20mm)) !important;
     overflow: hidden !important;
     margin: 0 auto !important;
   }
@@ -2616,8 +2630,8 @@ html.js-loading #contentWrap{
   html.printing-score body > *:not(#printScore){ display: none !important; }
   html.printing-score #printScore{
     display: block !important;
-    width: calc(297mm - 20mm);
-    height: calc(210mm - 20mm);
+    width: var(--print-box-w, calc(297mm - 20mm));   /* same box as #viewport */
+    height: var(--print-box-h, calc(210mm - 20mm));
     margin: 0 auto;
     overflow: hidden;
   }

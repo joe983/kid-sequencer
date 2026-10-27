@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=94">
+<link rel="stylesheet" href="css/styles.css?v=95">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -9239,10 +9239,53 @@ window.logout = logout;
 // Fit-to-page: the on-screen #page has a JS-driven `transform: scale(N)`
 // that adapts it to the viewport (N goes as low as ~0.2 on phones). For
 // print we ignore that and compute a fresh scale that maps #page's
-// natural pixel size to A4 landscape's printable area. CSS can't do this
+// natural pixel size into the print box (_printBox). CSS can't do this
 // arithmetic (px ÷ mm isn't valid), so it lives in beforeprint / afterprint.
 let _preprintPageTransform = null;
 let _preprintPageOrigin = null;
+
+/* The box the printed sheet is fitted into, in CSS px. #viewport and #printScore
+   are sized to it (--print-box-w/-h) and the stage is scaled to fit inside it.
+
+   Chromium and Firefox honour `@page { size: A4 landscape; margin: 10mm }`, so
+   the page area is known exactly and the sheet fills it.
+
+   WebKit — Safari, and every browser on an iPad or iPhone — gives no such
+   guarantee, so its box is sized to fit any page it can hand us:
+   - iOS ignores @page size. Paper and orientation come from the print dialog
+     (portrait unless changed; A4 or Letter by region), with the printer's margins.
+   - iOS always prints a URL/date footer, and Safari on a Mac can add a header
+     and footer. Both come off the page HEIGHT.
+   - WebKit fits a page to the paper's WIDTH only: it lays the page out 1.25x
+     wider than the paper (wider still if the document is, up to 2x) and scales
+     it down to fit. Nothing shrinks it to fit the height.
+   So Chromium's 277x190mm box, which the sheet fills to 98% of its height, ran
+   off the bottom of the page on an iPad in landscape: the instrument row and the
+   bottom corner marks were cut off.
+
+   900px is under 1.25x the width of landscape A4 or Letter (for margins up to
+   ~12mm on Letter, ~21mm on A4), so WebKit prints the box at its 1.25x scale,
+   0.8pt per px: 720x448pt, about 254x158mm. That leaves 50mm+ of the page height
+   for margins, header and footer. Wider margins only make WebKit shrink it more.
+   900px is also under 2x the width of a portrait page with side margins up to an
+   inch, so portrait never clips — it prints smaller, at the top of the page.
+
+   `navigator.vendor` is "Apple Computer, Inc." in every WebKit browser and in no
+   other engine. Script cannot see the printed page, so the engine is the only
+   thing to go on.                                                              */
+const PRINT_WEBKIT = /Apple/.test(navigator.vendor || '');
+const PRINT_BOX_WEBKIT = { w: 900, h: 560 };
+function _printBox(){
+  const MM = 96 / 25.4, MARGIN = 10;        // @page margin in styles.css
+  return PRINT_WEBKIT ? { w: PRINT_BOX_WEBKIT.w, h: PRINT_BOX_WEBKIT.h }
+                      : { w: (297 - 2 * MARGIN) * MM, h: (210 - 2 * MARGIN) * MM };
+}
+function _setPrintBox(box){
+  const root = document.documentElement.style;
+  root.setProperty('--print-box-w', box.w + 'px');
+  root.setProperty('--print-box-h', box.h + 'px');
+  return box;
+}
 
 /* ==================== SCANNABLE REGISTRATION MARKS (print only) ============
    The printed sheet is still the app's own printout — nothing on it moves or
@@ -9480,15 +9523,19 @@ function _applyPrintScale(){
   cw = 2 * Math.max(ccx - cx, cx + cw - ccx);
   ch = 2 * Math.max(ccy - cy, cy + ch - ccy);
 
-  // Printable area (A4 minus @page 10mm margin) in CSS px (1mm = 96/25.4 px).
-  // Computed per orientation; #page is positioned top:0/left:0 with origin 0 0,
-  // so the transform maps stage coords straight into the #viewport box.
-  const MM = 96 / 25.4, MARGIN = 10, SAFETY = 0.98;
-  const VWl = (297 - 2 * MARGIN) * MM, VHl = (210 - 2 * MARGIN) * MM; // landscape
-  const sL = Math.min(VWl / cw, VHl / ch) * SAFETY;
+  // Fit into the print box (see _printBox). #page is positioned top:0/left:0
+  // with origin 0 0, so the transform maps stage coords straight into the
+  // #viewport box, which is sized to the same box.
+  const box = _printBox(), SAFETY = 0.98;
+  const sL = Math.min(box.w / cw, box.h / ch) * SAFETY;
+  // Under WebKit the page height is unknown, so shrink the box to the sheet
+  // itself: any of the box past the page edge, even an empty part, prints a
+  // blank second page. Elsewhere the box is the page area, which centres it.
+  if(PRINT_WEBKIT){ box.w = Math.ceil(sL * cw); box.h = Math.ceil(sL * ch); }
+  _setPrintBox(box);
 
   // Place the content centre at the viewport centre.
-  const txL = VWl / 2 - sL * ccx, tyL = VHl / 2 - sL * ccy;
+  const txL = box.w / 2 - sL * ccx, tyL = box.h / 2 - sL * ccy;
 
   document.documentElement.style.setProperty('--print-tf-landscape', `translate(${txL}px, ${tyL}px) scale(${sL})`);
 
@@ -9539,7 +9586,8 @@ window.addEventListener('beforeprint', () => {
     host.setAttribute('aria-hidden', 'true');
     document.body.appendChild(host);   // score printing hides every OTHER body child
   }
-  host.innerHTML = _scoreSvg(null, 277, 190).svg;
+  const box = _setPrintBox(_printBox());      // drawn at the box's own shape
+  host.innerHTML = _scoreSvg(null, box.w, box.h).svg;
   document.documentElement.classList.add('printing-score');
 });
 window.addEventListener('afterprint', () => document.documentElement.classList.remove('printing-score'));
