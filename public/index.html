@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=100">
+<link rel="stylesheet" href="css/styles.css?v=103">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -675,23 +675,25 @@ const SHEET_GEOMETRY = {
      Print one of each and scan it before treating these as settled — see
      NEXT-SCAN.md. */
   "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
-                    grid: { u0: 0.06280, v0: 0.25636, u1: 0.95984, v1: 0.78337 },
-                    quadAspect: 1.893 },
+                    // Re-measured 2026-10-28: the layout had moved since 2026-09-05
+                    // (real desktop prints read ~1.72 on camera; stored 1.893 refused them).
+                    grid: { u0: 0.06280, v0: 0.22218, u1: 0.95984, v1: 0.67892 },
+                    quadAspect: 1.641 },
   /* /02 in 3/4 (/02?time=34): the same five rows over a 12-column bar. Measured
      2026-10-07 the same way as the two above (headless Chrome 1600x900, same run
      as a control that re-read "kidseq:main5"/"main3" within 0.0006 of the values
      committed above) — so it carries the same caveat: not yet paper-verified. */
   "kidseq:main5_34": { view: "five", timeSig: "3/4", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
-                    grid: { u0: 0.08134, v0: 0.25850, u1: 0.94783, v1: 0.78883 },
-                    quadAspect: 1.477 },
+                    grid: { u0: 0.08102, v0: 0.24117, u1: 0.94818, v1: 0.73695 },   // re-measured 2026-10-28
+                    quadAspect: 1.380 },
   /* /02 in 6/8 (/02?time=68): also 5 rows x 12 columns, with its own id so a scan
      routes back to 6/8 and reads dotted lengths (_legalNoteLens). Its tool column
      carries different buttons, but the same NUMBER of them, so the print bbox —
      and therefore every inset — measured identical to 3/4's (same run). Re-measure
      if 6/8 ever gains or loses a tool. Same not-paper-verified caveat. */
   "kidseq:main5_68": { view: "five", timeSig: "6/8", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
-                    grid: { u0: 0.08134, v0: 0.25850, u1: 0.94783, v1: 0.78883 },
-                    quadAspect: 1.477 },
+                    grid: { u0: 0.08102, v0: 0.24117, u1: 0.94818, v1: 0.73695 },   // re-measured 2026-10-28
+                    quadAspect: 1.380 },
   "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
                     grid: { u0: 0.06936, v0: 0.29922, u1: 0.93895, v1: 0.88894 },
                     quadAspect: 1.819 },
