@@ -1641,26 +1641,19 @@ body.loggedIn #robotLogo{
     .cam-use-pulse{ animation:camUsePulse 0.9s ease-in-out infinite; }
     .camActionClose{ background:#f5f5f5; border-color:#aaa; color:#666; box-shadow:0 3px 0 rgba(0,0,0,0.07); }
 
-    /* Landscape phones only */
+    /* Landscape phones only. The card is a plain .modalCard (header / .camStage /
+       .modalBtns): size it to the visible height and let the stage take the rest.
+       The block this replaced targeted classes that no longer exist and set
+       .camStage to aspect-ratio:unset with no height, collapsing it to 0 (an empty modal). */
     @media (max-height:500px) and (orientation:landscape){
-      /* Align card from the TOP of the overlay — prevents mode bar disappearing behind browser chrome */
-      #camModal{ align-items:flex-start; padding:8px; }
-      /* Card: JS sets exact height via window.innerHeight; CSS gives initial estimate */
-      /* (100svh = small viewport height = visible area; falls back to 100vh for older Safari) */
-      .camModalCard{ height:calc(100vh - 16px); height:calc(100svh - 16px); width:min(620px, calc(100vw - 16px)); }
-      /* Very compact mode bar */
-      .camModeBar{ padding:2px 8px; gap:4px; border-bottom-width:2px; }
-      .camModeBtn{ width:26px; height:26px; border-radius:6px; border-width:2px; }
-      .camModeBtn svg{ width:13px; height:13px; }
-      .camModeLabel{ font-size:9px; letter-spacing:0.1px; }
-      .camModalClose{ width:26px!important; height:26px!important; border-radius:6px!important; border-width:2px!important; font-size:13px!important; box-shadow:0 2px 0 rgba(0,0,0,0.07)!important; }
-      /* Body: side-by-side, centred, compact padding so stage gets maximum height */
-      .camBody{ flex-direction:row; align-items:center; justify-content:center; gap:8px; padding:6px 10px; flex:1; min-height:0; }
-      /* JS sets height/width on .camStage — CSS just removes the aspect-ratio constraint */
-      .camStage{ flex:none; aspect-ratio:unset; border-radius:8px; }
-      /* Action buttons: vertical stack, fixed width, symmetrical */
-      .camActions{ flex-direction:column; justify-content:center; align-items:stretch; gap:6px; width:64px; flex-shrink:0; }
-      .camActionBtn{ padding:8px 4px; font-size:11px; text-align:center; border-radius:8px; }
+      #camModal{ align-items:center; padding:8px; }
+      #camModal .modalCard{ display:flex; flex-direction:column; width:min(620px, calc(100vw - 16px));
+        height:calc(100vh - 16px); height:calc(100svh - 16px); }
+      #camModal .modalHeader{ padding:2px 10px; border-bottom-width:2px; flex:none; }
+      #camModal .modalClose{ width:30px; height:30px; border-radius:8px; border-width:2px; font-size:15px; box-shadow:none; }
+      #camModal .camStage{ flex:1 1 0; min-height:0; aspect-ratio:unset; border-radius:0; }
+      #camModal .modalBtns{ padding:4px; flex:none; }
+      #camModal .modalBtns .bigBtn{ padding:4px 18px; font-size:13px; }
     }
 
     /* Overlay: hidden by default (camera mode = plain viewfinder) */
