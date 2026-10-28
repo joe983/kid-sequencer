@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=98">
+<link rel="stylesheet" href="css/styles.css?v=99">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -855,6 +855,14 @@ try{ isLoggedIn = sessionStorage.getItem("kidseq_logged_in") === "1"; }catch(e){
 var isPaid = false;
 try{ isPaid = sessionStorage.getItem("kidseq_tier") === "paid"; }catch(e){}
 
+// WORKSHOP OPEN ACCESS (owner 2026-10-28): until this instant every visitor gets the
+// Pro sounds, rhythms and key picker with no account. It lapses by itself — nothing
+// to remember to switch off. Save/Load and AI stay account/server-gated (cloud writes
+// need a login; AI costs money per song). Delete this block + the 3 uses of
+// proOpen() to remove it for good.
+const WORKSHOP_OPEN_UNTIL = Date.parse("2026-11-19T00:00:00Z");   // 3 weeks, ends 18 Nov
+const proOpen = () => isPaid || Date.now() < WORKSHOP_OPEN_UNTIL;
+
 /* -------------------- CLOSE TAB/WINDOW LOGOUT (but NOT reload) -------------------- */
 (function(){
   const PENDING_KEY = "kidseq_logout_pending_v1";
@@ -1151,11 +1159,11 @@ const DRUM_STYLE_BUTTONS = () => ({
 });
 
 btnPiano.onclick   = () => { ensureAudioRunning(); setInstrument("piano"); };
-btnTrumpet.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("trumpet"); };
-btnStrings.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("strings"); };
-btnSynth.onclick   = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("synth"); };
+btnTrumpet.onclick = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("trumpet"); };
+btnStrings.onclick = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("strings"); };
+btnSynth.onclick   = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("synth"); };
 if(btnBass)  btnBass.onclick  = () => { ensureAudioRunning(); setInstrument("bass"); };
-if(btnBells) btnBells.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("bells"); };
+if(btnBells) btnBells.onclick = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } ensureAudioRunning(); setInstrument("bells"); };
 
 
 /* -------------------- DRUMS UI -------------------- */
@@ -1236,11 +1244,11 @@ function handleDrumClick(clickedStyle){
 }
 
 if(drumStyleTechEl)      drumStyleTechEl.onclick      = () => handleDrumClick("techno");
-if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("dnb"); };
-if(drumStyleGarageEl)    drumStyleGarageEl.onclick    = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("garage"); };
+if(drumStyleDnBEl)       drumStyleDnBEl.onclick       = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } handleDrumClick("dnb"); };
+if(drumStyleGarageEl)    drumStyleGarageEl.onclick    = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } handleDrumClick("garage"); };
 if(drumStyleDrillEl)     drumStyleDrillEl.onclick     = () => handleDrumClick("drill");
-if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("hiphop"); };
-if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => { if(!isPaid){ openUpgradeModal('subscribe'); return; } handleDrumClick("reggaeton"); };
+if(drumStyleHipHopEl)    drumStyleHipHopEl.onclick    = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } handleDrumClick("hiphop"); };
+if(drumStyleReggaetonEl) drumStyleReggaetonEl.onclick = () => { if(!proOpen()){ openUpgradeModal('subscribe'); return; } handleDrumClick("reggaeton"); };
 
 // Init: Techno selected by default (unmuted state), but actual sound will only start after first user gesture.
 syncAudioAndUI();
@@ -1334,8 +1342,8 @@ function applyLockState(){
   // Key selector is paid-tier only. Non-payers simply don't see the button (no
   // greyed/upsell state on this control). Also hidden in learning mode.
   const keyBtnEl = document.getElementById("keyBtn");
-  if(keyBtnEl) keyBtnEl.style.display = (isPaid && !LEARN_LEVEL) ? "" : "none";
-  if(!(isPaid && !LEARN_LEVEL)) closeKeyMenu(); // close picker if tier drops mid-open
+  if(keyBtnEl) keyBtnEl.style.display = (proOpen() && !LEARN_LEVEL) ? "" : "none";
+  if(!(proOpen() && !LEARN_LEVEL)) closeKeyMenu(); // close picker if tier drops mid-open
 
   // AI song button: greyed (.locked) for guests (tap opens free sign-up — owner
   // 2026-10-09: show it on the guest landing page) and for free Members (tap
@@ -1353,7 +1361,7 @@ function applyLockState(){
   // Pro-locked sounds (owner 2026-10-12, safeguarding rebuild): the free set is
   // Piano + Bass and Techno + Drill, no account needed; everything else shows the
   // "?" placeholder until the (adult) account is Pro. Free ones sit on the left.
-  const soundsLocked = !isPaid;
+  const soundsLocked = !proOpen();
   [
     "btnTrumpet", "btnSynth", "btnStrings", "btnBells",
     "drumStyleDnB", "drumStyleGarage", "drumStyleReggaeton", "drumStyleHipHop",
@@ -4656,8 +4664,12 @@ const NOTE_STEM_W  = 12, NOTE_STEM_TOP = 10, NOTE_HEAD_CY = 165;
 const _noteHead = (cx) =>
   `<ellipse cx="${cx}" cy="${NOTE_HEAD_CY}" rx="${NOTE_HEAD_RX}" ry="${NOTE_HEAD_RY}"`
   + ` transform="rotate(-18 ${cx} ${NOTE_HEAD_CY})"/>`;
-// The stem rides the head's right edge, as on the half note.
-const _noteStemX = (cx) => cx + NOTE_HEAD_RX - NOTE_STEM_W;
+// The stem rides the head's right edge, as on the half note. NOTE_STEM_SHIFT sets
+// it a little proud of the head: flush, the stem read as growing out of the ball's
+// top-right instead of standing beside it (owner 2026-10-28). The hand-written
+// tool SVGs (HALF_NOTE_SVG, DOTTED_*) carry the same offset — keep them in step.
+const NOTE_STEM_SHIFT = 0;
+const _noteStemX = (cx) => cx + NOTE_HEAD_RX - NOTE_STEM_W + NOTE_STEM_SHIFT;
 
 function _singleNoteSvg(flags){
   const headCx = 55, stemX = _noteStemX(headCx), stemW = NOTE_STEM_W;
@@ -4772,6 +4784,9 @@ function _beamedGroupSvg(n, beams, spacing){
   // Stems before beams, so the beams cap them cleanly.
   for(const cx of centres){
     s += _noteHead(cx)
+       // Same rounded foot as the single note's stem (_singleNoteSvg), so a stem set
+       // proud of the head ends in a round tip rather than a square corner. The beam
+       // drawn after covers the rounded top.
        + `<rect x="${_noteStemX(cx)}" y="${NOTE_STEM_TOP}" width="${NOTE_STEM_W}"`
        + ` height="${NOTE_HEAD_CY - NOTE_STEM_TOP}"/>`;
   }
@@ -5926,7 +5941,7 @@ function _renderKeyMenu(){
   });
 }
 function openKeyMenu(){
-  if(LEARN_LEVEL || !isPaid) return;   // button is hidden for these anyway; guard for safety
+  if(LEARN_LEVEL || !proOpen()) return;   // button is hidden for these anyway; guard for safety
   const menu = document.getElementById('keyMenu');
   const bd = document.getElementById('keyMenuBackdrop');
   const btn = document.getElementById('keyBtn');
@@ -6501,6 +6516,7 @@ async function openCameraModal(){
 
 function closeCameraModal(){
   _stopSheetScan();
+  _scanSessEnd();     // a hunt that never scanned reports itself (see _scanReport)
   camModalEl.classList.remove("show");
   camModalEl.setAttribute("aria-hidden", "true");
   try{
@@ -6713,6 +6729,9 @@ function _newScanDiag(src){
 }
 
 function _scanLogPush(rec){
+  // The live loop now builds a diag every frame for the hints and the failure
+  // report; the on-screen log and its photos stay debug-only.
+  if(!SCAN_DEBUG){ rec.img = null; return; }
   const prev = _scanLog[_scanLog.length - 1];
   // The live loop ticks ~8×/s. Collapsing an unchanged verdict into one row with
   // a repeat count keeps a 20-second hunt from burying the one manual attempt
@@ -7739,6 +7758,8 @@ function _processScanFrame(imgData, sheetId, corners, diag){
     diag.logged = true;
     _scanLogPush(diag);
   }
+  // Before routing, which can navigate away.
+  _scanSessDone(notes.length > 0, diag);
   _routeScannedNotes(geom, notes);
   return true;
 }
@@ -7795,45 +7816,206 @@ function _setScanStatus(state){
   camModalEl.classList.toggle("scan-locked",  state === "locked");
 }
 
+/* ---- why isn't it locking? (owner 2026-10-28) ----------------------------------
+   A scan that won't lock used to show "Point the camera at your worksheet" whatever
+   the reason, so nobody holding the iPad could tell what to change. Each refused
+   frame now maps to one plain instruction, shown in the status pill once the same
+   reason has held for a moment (a single odd frame never flips it). The mapping is
+   from the real refused photos in scan-fixtures/: the edge/uneven/not-outermost
+   refusals are nearly always the sheet overflowing the frame, so they say "move
+   back"; a lock the grid check refuses means a corner square is hidden; a quad
+   that isn't sheet-shaped says "hold it flat". */
+const SCAN_HINTS = {
+  dark:  "Need more light",
+  fit:   "Move back so the whole sheet fits",
+  marks: "Show all 4 black corner squares",
+  flat:  "Hold the camera flat above the sheet",
+};
+const SCAN_HINT_DARK   = 55;     // frame mean luminance; real photos read 119–142
+const SCAN_HINT_WAIT   = 1500;   // ms of scanning before any hint (give them time to aim)
+const SCAN_HINT_WINDOW = 10;     // recent frames considered…
+const SCAN_HINT_MIN    = 6;      // …of which this many must agree
+
+function _scanHintFor(diag){
+  const v = diag && diag.verdict, m = diag && diag.marks;
+  if(!v || v === "locking" || v === SCAN_FAIL.NO_FRAME || v === SCAN_FAIL.NO_SHEET) return null;
+  if(m && m.meanL < SCAN_HINT_DARK) return "dark";
+  // A big blob cut off by the frame edge = the table/background, i.e. the sheet
+  // doesn't fit (fa 0.03–0.12 on the real edge refusals; real marks are ~0.0003).
+  const bigEdge = !!(m && (m.misses || []).some(b => b.why === "edge" && b.fa >= 0.02));
+  if(v === SCAN_FAIL.FEW_BLOBS) return bigEdge ? "fit" : "marks";
+  if(v === SCAN_FAIL.COLLAPSED || v === SCAN_FAIL.UNEVEN || v === SCAN_FAIL.NOT_OUTER) return "fit";
+  // Locked onto four squares but the grid isn't where they say: one real mark is
+  // hidden (finger, cut off) and a printed tool icon stood in for it.
+  if(v === SCAN_FAIL.MISREG) return "marks";
+  if(v === SCAN_FAIL.BAD_QUAD || v === SCAN_FAIL.SINGULAR) return "flat";
+  return null;
+}
+
+// On .camStage, not the modal: the pill is .camStage::after, and CSS attr() only
+// reads the element that owns the pseudo-element.
+function _setScanHint(key){
+  const stage = camModalEl && camModalEl.querySelector(".camStage");
+  if(!stage) return;
+  if(key) stage.setAttribute("data-scan-hint", SCAN_HINTS[key]);
+  else stage.removeAttribute("data-scan-hint");
+}
+
+/* ---- failed scans report themselves (owner 2026-10-28) --------------------------
+   A scan failed in class and nothing recorded why: the debug log only exists if
+   someone switched ?scandebug=1 on BEFORE the failure. Now every camera opening
+   keeps a tally of its refusals, and one that doesn't end in a scan sends a report
+   to the same anonymous diagnostics collection as the audio reports (create-only,
+   30-day purge, same rule shape). Numbers only — the decision text the debug panel
+   shows — never the photo, no user id. Sent when: 20 s of scanning without a lock
+   ("slow"); the camera closed after ≥ 5 s without a scan ("gaveup"); Capture+Use
+   failed ("manual"); or it locked but read nothing ("empty"). At most 2 per opening. */
+const SCAN_REPORT_SLOW_MS   = 20000;
+const SCAN_REPORT_GAVEUP_MS = 5000;
+const SCAN_REPORT_MAX       = 2;
+let _scanSess = null;
+let _scanReportSink = null;                     // fixtures only (KidSequencer.Scan.reportSink)
+let _scanReportSlowMs = SCAN_REPORT_SLOW_MS;    // fixtures shorten it (Scan.reportSlowMs)
+
+function _scanSessStart(){
+  _scanSess = { opened: Date.now(), t0: 0, ticks: 0, tally: {}, last: {}, recent: [],
+                hint: null, hintsShown: {}, maxLock: 0, manual: 0, sent: [], done: false };
+  _setScanHint(null);
+}
+
+// Record one decided frame: tallies for the report, and the hint shown on screen.
+function _scanSessNote(diag){
+  const s = _scanSess;
+  if(!s || !diag || !diag.verdict) return;
+  const now = Date.now();
+  if(!s.t0) s.t0 = now;
+  s.ticks++;
+  s.tally[diag.verdict] = (s.tally[diag.verdict] || 0) + 1;
+  // Pixels never reach here: they only exist with ?scandebug=1, and
+  // _scanLogPush (always called first) drops them.
+  s.last[diag.verdict] = diag;
+  if(_scanLockCount > s.maxLock) s.maxLock = _scanLockCount;
+  if(!s.done && now - s.t0 >= _scanReportSlowMs) _scanReport("slow");
+  // Locking frames don't vote: the pill shows "Hold steady…" over any hint
+  // (styles.css), and a wrong lock that the grid check then refuses goes
+  // locking, locking, refused — its refusals must still add up to a hint.
+  if(diag.src !== "live" || diag.verdict === "locking") return;
+
+  s.recent.push(_scanHintFor(diag));
+  if(s.recent.length > SCAN_HINT_WINDOW) s.recent.shift();
+  let key = null;
+  if(now - s.t0 >= SCAN_HINT_WAIT){
+    const c = {};
+    for(const k of s.recent) if(k) c[k] = (c[k] || 0) + 1;
+    for(const k in c) if(c[k] >= SCAN_HINT_MIN && (!key || c[k] > c[key])) key = k;
+    // Keep the current hint through a brief wobble rather than blinking it off.
+    if(!key && s.hint && (c[s.hint] || 0) >= 3) key = s.hint;
+  }
+  if(key !== s.hint){
+    s.hint = key;
+    if(key) s.hintsShown[key] = (s.hintsShown[key] || 0) + 1;
+    _setScanHint(key);
+  }
+}
+
+// A frame was fully read: a scan with notes ends the session; a blank read reports.
+function _scanSessDone(ok, diag){
+  const s = _scanSess;
+  if(!s) return;
+  if(diag){
+    if(!diag.verdict) diag.verdict = ok ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
+    _scanSessNote(diag);
+  }
+  if(ok){ s.done = true; _setScanHint(null); }
+  else _scanReport("empty");
+}
+
+function _scanSessEnd(){
+  const s = _scanSess;
+  if(s && !s.done && s.t0 && Date.now() - s.t0 >= SCAN_REPORT_GAVEUP_MS) _scanReport("gaveup");
+  _scanSess = null;
+  _setScanHint(null);
+}
+
+function _scanReport(trigger){
+  const s = _scanSess;
+  if(!s || s.sent.length >= SCAN_REPORT_MAX) return;
+  // "slow" and "gaveup" describe the same hunt — one of them is enough.
+  if((trigger === "slow" || trigger === "gaveup") && s.sent.some(t => t === "slow" || t === "gaveup")) return;
+  s.sent.push(trigger);
+  let css = "";
+  try{ css = (document.querySelector('link[href*="styles.css"]').getAttribute("href").match(/v=(\d+)/) || [])[1] || ""; }catch(e){}
+  const base = {
+    kind: "scan", trigger, ua: navigator.userAgent, touch: navigator.maxTouchPoints || 0,
+    vp: window.innerWidth + "x" + window.innerHeight, dpr: window.devicePixelRatio || 1,
+    path: location.pathname, view: VIEW, timeSig: TIME_SIG, sheet: String(_currentSheetId()),
+    video: camVideoEl ? camVideoEl.videoWidth + "x" + camVideoEl.videoHeight : "?",
+    secs: s.t0 ? +((Date.now() - s.t0) / 1000).toFixed(1) : 0, ticks: s.ticks,
+    tally: s.tally, hint: s.hint, hintsShown: s.hintsShown, maxLock: s.maxLock,
+    manual: s.manual, css, debug: SCAN_DEBUG, records: {},
+  };
+  // The decision text for the latest frame of each refusal, most frequent first,
+  // as much as fits the rule's 9000-char cap.
+  const order = Object.keys(s.last).sort((a, b) => (s.tally[b] || 0) - (s.tally[a] || 0));
+  for(const v of order){
+    let txt = "";
+    try{ txt = _scanDebugLines(s.last[v]).slice(0, 2400); }catch(e){ continue; }
+    base.records[v] = txt;
+    if(JSON.stringify(base).length > 8800){ delete base.records[v]; break; }
+  }
+  const report = JSON.stringify(base).slice(0, 9000);
+  if(_scanReportSink){ try{ _scanReportSink(report); }catch(e){} return; }
+  _ahSend(report, "scan " + trigger);
+}
+
 function _scanTick(ts){
   _scanRafId = requestAnimationFrame(_scanTick);
   if(ts - _scanLastTick < SCAN_TICK_MS) return;
   _scanLastTick = ts;
-  const diag = SCAN_DEBUG ? _newScanDiag("live") : null;
+  // Always built now (hints + failure report need the reason); the debug panel
+  // and its photos still only exist with ?scandebug=1. Decisions never read it.
+  const diag = _newScanDiag("live");
   const sheetId = _currentSheetId();
   if(!sheetId){
-    if(diag){ diag.verdict = SCAN_FAIL.NO_SHEET; _scanLogPush(diag); }
+    diag.verdict = SCAN_FAIL.NO_SHEET; _scanLogPush(diag);
     return;
   }
   const imgData = _scanFrameImageData();
   if(!imgData){
-    if(diag){ diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag); }
+    diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag);
     return;
   }
-  if(diag) diag.img = imgData;
+  if(SCAN_DEBUG) diag.img = imgData;
 
   const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag);
 
   if(sheetId && corners){
     _scanLockCount++;
-    if(diag){
-      diag.lock = _scanLockCount + "/" + SCAN_LOCK_FRAMES;
-      diag.verdict = "locking";   // overwritten by _processScanFrame on the lock frame
-    }
+    diag.lock = _scanLockCount + "/" + SCAN_LOCK_FRAMES;
+    diag.verdict = "locking";   // overwritten by _processScanFrame on the lock frame
     _setScanStatus(_scanLockCount >= SCAN_LOCK_FRAMES ? "locked" : "locking");
     if(_scanLockCount >= SCAN_LOCK_FRAMES){
       _stopSheetScan();
-      _processScanFrame(imgData, sheetId, corners, diag);
+      // One that reads notes was noted by _processScanFrame (before it routed).
+      if(_processScanFrame(imgData, sheetId, corners, diag)) return;
+      // Refused at the grid check (locked onto the wrong four squares): keep
+      // looking. This used to leave the loop stopped, so the scanner sat on
+      // "Point the camera…" until the camera was closed and reopened — the
+      // in-class "never locked on" of 2026-10-28. scan-loop-test.js pins it.
+      _startSheetScan();
     }
   } else {
     _scanLockCount = 0;
     _setScanStatus(null);
   }
   // _processScanFrame logs its own record before it routes (which can navigate).
-  if(diag && !diag.logged) _scanLogPush(diag);
+  // Log first: _scanLogPush takes the debug photo, then drops the pixels.
+  if(!diag.logged) _scanLogPush(diag);
+  _scanSessNote(diag);
 }
 
 function _startSheetScan(){
+  if(!_scanSess) _scanSessStart();
   _scanLockCount = 0; _scanLastTick = 0;
   // Show the panel as soon as scanning starts, so the flag visibly took effect
   // before the first frame rather than after a confusing silent failure.
@@ -7874,17 +8056,20 @@ function camCapture(){
 function camImport(){
   if(!camCapturedDataUrl) camCapture();
   if(!camCanvasEl.width) return;
-  const diag = SCAN_DEBUG ? _newScanDiag("use") : null;
+  const diag = _newScanDiag("use");
   const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
-  if(diag) diag.img = imgData;
+  if(SCAN_DEBUG) diag.img = imgData;
   const sheetId = _currentSheetId();
-  if(!sheetId && diag) diag.verdict = SCAN_FAIL.NO_SHEET;
+  if(!sheetId) diag.verdict = SCAN_FAIL.NO_SHEET;
+  if(_scanSess) _scanSess.manual++;
   const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag) : null;
   const ok = sheetId && corners && _processScanFrame(imgData, sheetId, corners, diag);
-  if(diag && !diag.logged) _scanLogPush(diag);
+  if(!diag.logged) _scanLogPush(diag);
   if(ok){
     _stopSheetScan();
   }else{
+    _scanSessNote(diag);
+    _scanReport("manual");
     try{ showSaveToast("error"); }catch(e){}
     // In debug mode the panel already says exactly which check refused and with
     // what numbers; a modal alert on top of it just costs a tap per attempt.
@@ -9811,7 +9996,7 @@ function _scoreSvg(spans, W, H){
         }
       });
       if(e.base === 16) continue;
-      e.sx = up ? e.x + rx * 0.93 - stemW / 2 : e.x - rx * 0.93 + stemW / 2;
+      e.sx = up ? e.x + rx * 1.07 - stemW / 2 : e.x - rx * 0.93 + stemW / 2;
       const from = up ? y(lo) : y(hi);
       e.stemEnd = beamed ? beamY : (up ? y(hi) - STEM : y(lo) + STEM);
       line(e.sx, from, e.sx, e.stemEnd, stemW);
@@ -10067,7 +10252,13 @@ window.KidSequencer = {
     format: _scanDebugLines,
     get debug(){ return SCAN_DEBUG; },
     set debug(v){ SCAN_DEBUG = !!v; },
-    get log(){ return _scanLog; }
+    get log(){ return _scanLog; },
+    // Failure reports + hints (scan-tests.html). `reportSink`, when set, receives
+    // each report string INSTEAD of Firestore, so fixtures never write diagnostics.
+    hintFor: _scanHintFor,
+    get session(){ return _scanSess; },
+    set reportSink(fn){ _scanReportSink = typeof fn === "function" ? fn : null; },
+    set reportSlowMs(ms){ _scanReportSlowMs = ms > 0 ? ms : SCAN_REPORT_SLOW_MS; }
   },
   Auth: { logout }
 };

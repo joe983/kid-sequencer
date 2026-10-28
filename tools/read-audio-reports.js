@@ -1,5 +1,6 @@
 // Read the app's audio self-reports (Firestore `audioReports`, written by
-// index.html `_ahReportPrevious`). Read-only. Clients can't read that collection,
+// index.html `_ahReportPrevious`) and the worksheet scanner's failure reports
+// (same collection, `kind: "scan"`, written by `_scanReport`). Read-only. Clients can't read that collection,
 // so this borrows the Firebase CLI's own login (`firebase login`) through
 // firebase-tools' auth helpers — the token stays in memory, never printed or saved.
 //
@@ -51,6 +52,15 @@ async function accessToken(){
     if(full){ console.log(JSON.stringify({ at, ...r }, null, 1)); continue; }
     const dev = /iPad|Macintosh/.test(r.ua || "") && r.touch > 1 ? "iPad" : /iPhone/.test(r.ua || "") ? "iPhone" : (r.ua || "?").slice(0, 40);
     const safari = ((r.ua || "").match(/Version\/([\d.]+)/) || [])[1] || "-";
+    // Worksheet-scanner failure reports share this collection (index.html _scanReport).
+    if(r.kind === "scan"){
+      console.log(`\n${at}  SCAN (${r.trigger})  ${dev} Safari ${safari}  ${r.path}  sheet ${r.sheet}  css v${r.css}`);
+      console.log(`  ${r.secs}s, ${r.ticks} frames  video ${r.video}  hint ${r.hint || "-"}  shown ${JSON.stringify(r.hintsShown || {})}  maxLock ${r.maxLock}  manual ${r.manual}`);
+      console.log(`  refusals ${JSON.stringify(r.tally)}`);
+      for(const [v, txt] of Object.entries(r.records || {}))
+        console.log(`  --- ${v} ---\n` + String(txt).split("\n").map(l => "    " + l).join("\n"));
+      continue;
+    }
     if(r.kind === "glitch"){
       console.log(`\n${at}  GLITCH (${r.trigger})  ${dev} Safari ${safari}  ${r.path}`);
       console.log(`  played ${r.playedSec}s  ${r.instrument}  drums ${r.drumsOn ? r.drumStyle : "off"}  ${r.bpm} bpm  ${r.notes} notes  latency base ${r.baseLatency} out ${r.outputLatency}`);

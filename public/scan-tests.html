@@ -26,6 +26,7 @@ Open this page and read the table; every case states what it expects and why it 
 <div id="summary">running…</div>
 <table id="out"><thead><tr><th>case</th><th>verdict</th><th>notes read</th><th>expected</th><th>why this case exists</th></tr></thead><tbody></tbody></table>
 <iframe id="app" src="index.html?scandebug=0"></iframe>
+<script src="scan-loop-test.js"></script>
 
 <script>
 /* ============================================================================
@@ -439,6 +440,29 @@ async function run(){
     addRow(t.file, d ? d.verdict : "-", got, want, t.why, pass);
     results.push({name:t.file, pass});
     if(!pass) fails.push(t.file);
+    // A refused real photo must come with an instruction for the person holding
+    // the camera — "Point the camera at your worksheet" for every reason is how a
+    // failed scan in class went unexplained (2026-10-28).
+    if(t.refuse && d){
+      const h = S.hintFor(d), hp = !!h;
+      addRow(t.file + " · hint", d.verdict, h || "(none)", "a hint", "a refusal tells the user what to change", hp);
+      results.push({name:t.file + " hint", pass:hp});
+      if(!hp) fails.push(t.file + " hint");
+    }
+  }
+
+  /* The live loop itself, with a fake camera (scan-loop-test.js). Takes ~15 s. */
+  if(typeof scanLoopTests === "function"){
+    let loop = [];
+    try{ loop = await scanLoopTests(app, makeSheet, CELLS, OVER); }
+    catch(e){ loop = [{name:"loop · harness", pass:false, detail:e.message}]; }
+    for(const t of loop){
+      addRow(t.name, "-", t.detail, "pass", "the real scan loop, driven by a fake camera", t.pass);
+      results.push({name:t.name, pass:t.pass});
+      if(!t.pass) fails.push(t.name);
+    }
+  }else{
+    fails.push("scan-loop-test.js not loaded");
   }
 
   const el = document.getElementById("summary");

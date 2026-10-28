@@ -1690,6 +1690,10 @@ body.loggedIn #robotLogo{
       max-width:90%; padding:6px 12px; border-radius:999px; pointer-events:none;
       background:rgba(0,0,0,0.55); color:#fff; font-weight:800; font-size:12px; line-height:1.2;
       white-space:nowrap; text-align:center; }
+    /* Why it isn't locking (set on .camStage by the scan loop, index.html SCAN_HINTS —
+       attr() only reads the pseudo-element's own element). Before the locking/locked
+       rules on purpose: same specificity, so "Hold steady…" wins. */
+    #camModal .camStage[data-scan-hint]::after{ content:attr(data-scan-hint); background:rgba(176,52,32,0.88); }
     #camModal.scan-locking .camStage::after{ content:"Hold steady…"; background:rgba(196,140,0,0.85); }
     #camModal.scan-locked  .camStage::after{ content:"Got it!"; background:rgba(28,165,70,0.9); }
     /* Hide the badge once a still has been captured (preview showing, not the live video). */

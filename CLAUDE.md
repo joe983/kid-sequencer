@@ -497,8 +497,30 @@ Shim `requestAnimationFrame`→`setTimeout` and call
 without a camera, draw the fixture straight into `#camCanvas` and set its width:
 `camCapture()` bails (no video) but leaves the canvas you prepared.
 
+### Hints + automatic failure reports (2026-10-28)
+- **Live-loop bug fixed:** a frame that locked 3× and then failed the grid check
+  (`grid-misregistered`) stopped the loop for good — the camera sat on "Point the
+  camera at your worksheet" until closed and reopened (seen in class). `_scanTick`
+  now restarts the loop after a refused lock. Pinned by `public/scan-loop-test.js`,
+  which drives the REAL loop with a fake camera (canvas `captureStream` +
+  stubbed `getUserMedia`).
+- **The pill says why** (`SCAN_HINTS` / `_scanHintFor`): need more light · move back
+  so the whole sheet fits · show all 4 black corner squares · hold the camera flat.
+  Shown after 1.5 s once 6 of the last 10 refusals agree; locking frames don't vote
+  and "Hold steady…" outranks it in CSS. The attribute lives on `.camStage`, not the
+  modal — CSS `attr()` only reads the pseudo-element's own element (it rendered an
+  empty pill when set on the modal).
+- **Failed scans report themselves** (`_scanReport`) into the anonymous `audioReports`
+  collection as `kind:"scan"` (existing create-only rule, 30-day purge): after 20 s
+  without a lock, on closing after ≥ 5 s without a scan, on a failed Capture+Use, or
+  on a lock that reads nothing. ≤ 2 per camera opening; decision text only, never the
+  photo. Read with `node tools/read-audio-reports.js`. Disclosed in `privacy.html`
+  and DPIA stream B. A diag is now built every live frame for this (the debug
+  panel + photos are still `?scandebug=1`-only); `Scan.reportSink` lets fixtures
+  capture reports instead of writing to Firestore — **never run fixtures without it.**
+
 ### Fixtures — `public/scan-tests.html`
-`node serve.js` → <http://localhost:3000/scan-tests.html>. 67 checks (three sheet templates): synthetic
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 90 checks (three sheet templates + the live loop, ~15 s): synthetic
 sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
 4-10px, scribble densities), the full 1→16 note-length snapping table, and the
 owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.
@@ -666,3 +688,12 @@ Rules that keep it working:
 - **Music notation in the app is DRAWN, never a font character** — the 5-note view's quarter shipped as the `♩` CHARACTER, flex-centred by its em box and then nudged down `0.36em` by a correction measured against the desktop stack (`"Noto Music"`/`"Bravura"`/`"Arial Unicode MS"`/`"Segoe UI Symbol"`). iOS and iPadOS have **none** of those fonts, fall back to `serif`, place the ink differently, and the correction became the error — the glyph sat visibly low on iPhone/iPad, and only that one, because every other length was already SVG. Fixed 2026-08-04 by drawing it (`_singleNoteSvg(0)`); an SVG is centred by its own box on every platform. **Don't reintroduce a per-glyph `translateY` nudge — draw the note.** The same trap is still live in one place: the **quarter TOOL BUTTON** (`toolSteps` steps 4, `symbol: "♩"`) is the last artwork in the set that isn't drawn. Drawing it also needs a `printMarkInsets()` check, because `#toolsList` feeds the printed bbox. (Learning mode's separate `data-kind` glyph nudges at styles.css ~2663 are a different feature and were left alone.)
 - **`SHOW_LESSONS_BTN` hides the Rhythm Trail entry point (2026-08-04, owner: "just for now")** — one `const` in the CONFIG block sets `#lessonsBtn` to `display:none`; flipping it to `true` restores the button and needs no other edit. The course is NOT disabled: lesson data, narration sprite and mascot still ship, `goToLessons()` is still wired, `?lesson=a1..a5` and `?level=N` still run. Hidden rather than deleted on purpose — `syncTopBarLoginPosition()` anchors the login pill to the last *visible* button in `#controls` (it filters on `offsetWidth/offsetHeight`, so `display:none` is handled and the pill re-centres against Print), and `_applyPrintScale`'s content bbox feeds the scanner's `SHEET_GEOMETRY`. Verified with the button hidden: `printMarkInsets()` delta **0.00000 on all four insets**. Any future change to the `#topBar` button row must repeat that check.
 - **Bash-guard false-positives in THIS repo (buildatscale plugin hook)** — *(only where that plugin is installed: as of 2026-10-07 it is NOT on the `T.Joe_DLTS` machine — no `bash-guard.sh` under `~/.claude` — so these workarounds are unnecessary there; they still apply on the `Joe_C` machine if it has the plugin.)* `~/.claude/plugins/.../buildatscale/hooks/bash-guard.sh` rule 9 ("data exfiltration") greps the command for `(curl|wget|nc|netcat).*(-d|--data|<).*(\$|/users/|/home/|/etc/)`. The substring `nc` is in **"seque​ncer"** AND in **"bra​nch"**, so almost any `git` command that names the absolute repo path (`C:/Users/.../kid-sequencer-repo`) *and* uses `-d`/`-D` (e.g. `git branch -d`), a `<` redirect/heredoc, or a `$`var will be BLOCKED. Workarounds: (1) run git from the repo-root cwd with **relative** paths so the string "sequencer" never appears in the command; (2) use `git commit -F <msgfile>` (write the message with the Write tool) instead of `-m "$(cat <<'EOF'…)"` heredocs; (3) keep `git branch -d/-D` in a command with no absolute `/Users/` path. Also: `git worktree remove --force` is blocked by the separate `git-block-force-push.sh` hook — instead `rm -rf .claude/worktrees/<name>` (relative path) then `git worktree prune` + `git branch -D`.
+
+<!-- handover:start -->
+## Session Handover
+
+**Status:** Live-classroom audio session: the app now self-reports audio health to Firestore `audioReports` (read with `node tools/read-audio-reports.js`). Skipping fixed by rendering synth bass + drums into samples (confirmed on 2 sessions); reboot-only cut-out fix (`8af0e7c`, iOS audio session "playback") is live but unconfirmed (T-017). All pushed; `main` = `origin/main`.
+**Last updated:** 2026-10-09
+
+Full context: [docs/handover/CURRENT.md](docs/handover/CURRENT.md) · todos: [docs/handover/TODOS.md](docs/handover/TODOS.md)
+<!-- handover:end -->
