@@ -527,6 +527,14 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   and DPIA stream B. A diag is now built every live frame for this (the debug
   panel + photos are still `?scandebug=1`-only); `Scan.reportSink` lets fixtures
   capture reports instead of writing to Firestore — **never run fixtures without it.**
+- **With `?scandebug=1` every camera opening reports (2026-10-29):** a scan that reads
+  sends `trigger:"ok"` with `read:{sheet, here, scores, badges, notes}`, and closing
+  sends `gaveup` however short the hunt. A scan that switches page waits up to
+  `SCAN_REPORT_WAIT_MS` (2.5 s) for its report first — a page switch kills an
+  unfinished Firestore write. Also: the session now starts when the camera OPENS,
+  `video.play()` is capped at 1.5 s, and pictureless frames are tallied as `no-frame`;
+  before that, a camera that never gave a picture could never report. The reader
+  prints `READ sheet …` and the notes.
 
 ### Fixtures — `public/scan-tests.html`
 `node serve.js` → <http://localhost:3000/scan-tests.html>. 112 checks (every sheet template, cross-sheet identification + two end-to-end page switches, the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic

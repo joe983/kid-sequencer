@@ -1,6 +1,7 @@
 // Read the app's audio self-reports (Firestore `audioReports`, written by
-// index.html `_ahReportPrevious`) and the worksheet scanner's failure reports
-// (same collection, `kind: "scan"`, written by `_scanReport`). Read-only. Clients can't read that collection,
+// index.html `_ahReportPrevious`) and the worksheet scanner's reports (same
+// collection, `kind: "scan"`, written by `_scanReport` — failures always, every
+// scan with ?scandebug=1 on). Read-only. Clients can't read that collection,
 // so this borrows the Firebase CLI's own login (`firebase login`) through
 // firebase-tools' auth helpers — the token stays in memory, never printed or saved.
 //
@@ -54,8 +55,11 @@ async function accessToken(){
     const safari = ((r.ua || "").match(/Version\/([\d.]+)/) || [])[1] || "-";
     // Worksheet-scanner failure reports share this collection (index.html _scanReport).
     if(r.kind === "scan"){
-      console.log(`\n${at}  SCAN (${r.trigger})  ${dev} Safari ${safari}  ${r.path}  sheet ${r.sheet}  css v${r.css}`);
-      console.log(`  ${r.secs}s, ${r.ticks} frames  video ${r.video}  hint ${r.hint || "-"}  shown ${JSON.stringify(r.hintsShown || {})}  maxLock ${r.maxLock}  manual ${r.manual}`);
+      console.log(`\n${at}  SCAN (${r.trigger})  ${dev} Safari ${safari}  ${r.path}  sheet ${r.sheet}  css v${r.css}${r.debug ? "  debug" : ""}`);
+      console.log(`  ${r.secs}s, ${r.ticks} frames${r.openSecs != null ? ` (camera open ${r.openSecs}s)` : ""}  video ${r.video}  hint ${r.hint || "-"}  shown ${JSON.stringify(r.hintsShown || {})}  maxLock ${r.maxLock}  manual ${r.manual}`);
+      // A frame that was read (debug "ok", or "empty"): which sheet won, and the notes.
+      if(r.read) console.log(`  READ sheet ${r.read.sheet}${r.read.here ? " (this page)" : " -> its own page"}  scores ${JSON.stringify(r.read.scores)}` +
+                             `${r.read.badges ? "  badges " + JSON.stringify(r.read.badges) : ""}\n  notes ${r.read.notes || "(none)"}`);
       console.log(`  refusals ${JSON.stringify(r.tally)}`);
       for(const [v, txt] of Object.entries(r.records || {}))
         console.log(`  --- ${v} ---\n` + String(txt).split("\n").map(l => "    " + l).join("\n"));

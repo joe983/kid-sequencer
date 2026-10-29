@@ -115,6 +115,47 @@ async function scanLoopTests(app, makeSheet, CELLS, OVER){
     r = null; try{ r = JSON.parse(reports[0]); }catch(e){}
     out.push({ name: "loop · closing without a scan reports", pass: !!r && r.trigger === "gaveup" && reports.length === 1,
                detail: r ? ("trigger " + r.trigger + ", " + r.secs + " s") : "no report" });
+
+    /* ---- debug mode reports every scan (owner 2026-10-29: a /02 sheet "never
+       locked on" and left no report, so nothing showed what happened) ---- */
+    S.debug = true;
+    try{
+      reports.length = 0;
+      st = await openWith(good);
+      for(let i = 0; i < 40 && isOpen(); i++) await wait(150);
+      close(st);
+      r = null; try{ r = JSON.parse(reports[0]); }catch(e){}
+      const ok = !!r && r.trigger === "ok" && !!r.read && r.read.sheet === "main" && r.read.here === true &&
+                 r.read.notes === "0:0+1 3:5+1 7:12+1";
+      out.push({ name: "loop · debug: a good scan reports what it read", pass: ok && reports.length === 1,
+                 detail: r ? (r.trigger + " " + JSON.stringify(r.read)) : "no report" });
+
+      reports.length = 0;
+      st = await openWith(over);
+      await wait(900);
+      close(st);                    // well under the 5 s floor a normal opening needs
+      await wait(100);
+      r = null; try{ r = JSON.parse(reports[0]); }catch(e){}
+      out.push({ name: "loop · debug: a short hunt still reports", pass: !!r && r.trigger === "gaveup",
+                 detail: r ? ("trigger " + r.trigger + ", camera open " + r.openSecs + " s") : "no report" });
+
+      /* A camera that gives no picture: play() never settled and the loop never
+         started, so this failure could never report. Now it starts anyway and
+         every pictureless frame is tallied. */
+      reports.length = 0;
+      S.reportSlowMs = 1500;
+      W.navigator.mediaDevices.getUserMedia = async () => new W.MediaStream();
+      await W.openCameraModal();
+      await wait(2200);
+      if(isOpen()) W.closeCameraModal();
+      await wait(100);
+      r = null; try{ r = JSON.parse(reports[0]); }catch(e){}
+      out.push({ name: "loop · no camera picture still reports", pass: !!r && r.tally && r.tally["no-frame"] > 0,
+                 detail: r ? ("trigger " + r.trigger + ", tally " + JSON.stringify(r.tally)) : "no report" });
+    }finally{
+      S.debug = false;
+      S.reportSlowMs = 0;
+    }
   }finally{
     W.clearInterval(pump);
     S.reportSink = null;

@@ -2882,8 +2882,9 @@ function _ahCheckStarted(){
 })();
 
 // Write one report (a JSON string, ≤ 9000 chars — the Firestore rule's limit).
+// Returns the send, so a caller about to navigate can wait for it (_processScanFrame).
 function _ahSend(report, label){
-  (async () => {
+  return (async () => {
     try{
       const { db } = await import("./js/firebase-init.js");
       const { collection, addDoc, serverTimestamp } =
@@ -6532,6 +6533,9 @@ async function openCameraModal(){
 
     camModalEl.classList.add("show");
     camModalEl.setAttribute("aria-hidden", "false");
+    // The session (and its report) starts when the camera opens, not when the
+    // first frame arrives, so a camera that never starts still has one to close.
+    if(!_scanSess) _scanSessStart();
 
     const primaryConstraints = { video: { facingMode: { ideal: "environment" } }, audio: false };
     const fallbackConstraints = { video: true, audio: false };
@@ -6548,7 +6552,11 @@ async function openCameraModal(){
     }
 
     camVideoEl.srcObject = camStream;
-    await camVideoEl.play().catch(()=>{});
+    // play() can stay pending for good when the camera gives no picture, and the
+    // loop below used to start only once it settled — so that failure never even
+    // began a scan, let alone reported one. The loop copes with no frames yet
+    // (they count as no-frame), so it starts after 1.5 s regardless.
+    await Promise.race([camVideoEl.play().catch(()=>{}), new Promise(r => setTimeout(r, 1500))]);
     // Start the live auto-detect loop: find the corner markers each frame and
     // auto-import once locked. This is the only import path with a UI.
     _startSheetScan();
@@ -7941,8 +7949,15 @@ function _processScanFrame(imgData, quad, diag){
     _scanLogPush(diag);
   }
   // Before routing, which can navigate away.
-  _scanSessDone(notes.length > 0, diag);
-  _routeScannedNotes(pick.id, notes);
+  const sent = _scanSessDone(notes.length > 0, diag, notes);
+  const route = () => _routeScannedNotes(pick.id, notes);
+  // A report still being sent dies with the page if routing navigates, so a scan
+  // of another page's sheet waits for it — capped, so a slow network never
+  // strands the scan. Applying in place keeps the page, so it never waits.
+  if(sent && pick.id !== _currentSheetId()){
+    _setScanStatus("locked");
+    Promise.race([sent, new Promise(r => setTimeout(r, SCAN_REPORT_WAIT_MS))]).then(route, route);
+  } else route();
   return true;
 }
 
@@ -8054,10 +8069,17 @@ function _setScanHint(key){
    30-day purge, same rule shape). Numbers only — the decision text the debug panel
    shows — never the photo, no user id. Sent when: 20 s of scanning without a lock
    ("slow"); the camera closed after ≥ 5 s without a scan ("gaveup"); Capture+Use
-   failed ("manual"); or it locked but read nothing ("empty"). At most 2 per opening. */
+   failed ("manual"); or it locked but read nothing ("empty"). At most 2 per opening.
+
+   With ?scandebug=1 on (owner 2026-10-29: a /02 sheet "never locked on" and left no
+   report at all) every opening reports how it ended: a scan that read notes sends
+   "ok" with what it picked and read, and closing the camera sends "gaveup" however
+   short the hunt. A camera that never delivers a picture counts too — its frames
+   used to be dropped before the tally, so that failure could never report. */
 const SCAN_REPORT_SLOW_MS   = 20000;
 const SCAN_REPORT_GAVEUP_MS = 5000;
 const SCAN_REPORT_MAX       = 2;
+const SCAN_REPORT_WAIT_MS   = 2500;   // a scan that switches page waits this long for its report
 let _scanSess = null;
 let _scanReportSink = null;                     // fixtures only (KidSequencer.Scan.reportSink)
 let _scanReportSlowMs = SCAN_REPORT_SLOW_MS;    // fixtures shorten it (Scan.reportSlowMs)
@@ -8103,30 +8125,38 @@ function _scanSessNote(diag){
   }
 }
 
-// A frame was fully read: a scan with notes ends the session; a blank read reports.
-function _scanSessDone(ok, diag){
+// A frame was fully read: a scan with notes ends the session; a blank read reports,
+// and so does a good one in debug mode. Returns the report's send (or null) so a
+// scan about to switch page can wait for it.
+function _scanSessDone(ok, diag, notes){
   const s = _scanSess;
-  if(!s) return;
+  if(!s) return null;
   if(diag){
     if(!diag.verdict) diag.verdict = ok ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
     _scanSessNote(diag);
   }
-  if(ok){ s.done = true; _setScanHint(null); }
-  else _scanReport("empty");
+  if(ok){
+    s.done = true; _setScanHint(null);
+    return SCAN_DEBUG ? _scanReport("ok", diag, notes) : null;
+  }
+  return _scanReport("empty", diag, notes);
 }
 
 function _scanSessEnd(){
   const s = _scanSess;
-  if(s && !s.done && s.t0 && Date.now() - s.t0 >= SCAN_REPORT_GAVEUP_MS) _scanReport("gaveup");
+  if(s && !s.done && (SCAN_DEBUG || (s.t0 && Date.now() - s.t0 >= SCAN_REPORT_GAVEUP_MS))) _scanReport("gaveup");
   _scanSess = null;
   _setScanHint(null);
 }
 
-function _scanReport(trigger){
+/* `diag`/`notes`, for a frame that was read: which sheet it picked and why, and the
+   notes it read, so a report says what a scan DID rather than only what it refused. */
+function _scanReport(trigger, diag, notes){
   const s = _scanSess;
-  if(!s || s.sent.length >= SCAN_REPORT_MAX) return;
+  // A debug "ok" ends the opening, so it always goes — even after two failures.
+  if(!s || (trigger !== "ok" && s.sent.length >= SCAN_REPORT_MAX)) return null;
   // "slow" and "gaveup" describe the same hunt — one of them is enough.
-  if((trigger === "slow" || trigger === "gaveup") && s.sent.some(t => t === "slow" || t === "gaveup")) return;
+  if((trigger === "slow" || trigger === "gaveup") && s.sent.some(t => t === "slow" || t === "gaveup")) return null;
   s.sent.push(trigger);
   let css = "";
   try{ css = (document.querySelector('link[href*="styles.css"]').getAttribute("href").match(/v=(\d+)/) || [])[1] || ""; }catch(e){}
@@ -8136,12 +8166,19 @@ function _scanReport(trigger){
     path: location.pathname, view: VIEW, timeSig: TIME_SIG, sheet: String(_currentSheetId()),
     video: camVideoEl ? camVideoEl.videoWidth + "x" + camVideoEl.videoHeight : "?",
     secs: s.t0 ? +((Date.now() - s.t0) / 1000).toFixed(1) : 0, ticks: s.ticks,
+    openSecs: +((Date.now() - s.opened) / 1000).toFixed(1),
     tally: s.tally, hint: s.hint, hintsShown: s.hintsShown, maxLock: s.maxLock,
     manual: s.manual, css, debug: SCAN_DEBUG, records: {},
   };
+  if(diag && diag.sheet){
+    base.read = { sheet: diag.sheet, here: "kidseq:" + diag.sheet === _currentSheetId(), scores: diag.idScores || null,
+                  badges: diag.badges || null,
+                  notes: (notes || []).map(n => n.row + ":" + n.start + "+" + n.len).join(" ") };
+  }
   // The decision text for the latest frame of each refusal, most frequent first,
-  // as much as fits the rule's 9000-char cap.
+  // as much as fits the rule's 9000-char cap. The frame that was read goes first.
   const order = Object.keys(s.last).sort((a, b) => (s.tally[b] || 0) - (s.tally[a] || 0));
+  if(diag && diag.verdict && order.includes(diag.verdict)) order.unshift(...order.splice(order.indexOf(diag.verdict), 1));
   for(const v of order){
     let txt = "";
     try{ txt = _scanDebugLines(s.last[v]).slice(0, 2400); }catch(e){ continue; }
@@ -8149,8 +8186,9 @@ function _scanReport(trigger){
     if(JSON.stringify(base).length > 8800){ delete base.records[v]; break; }
   }
   const report = JSON.stringify(base).slice(0, 9000);
-  if(_scanReportSink){ try{ _scanReportSink(report); }catch(e){} return; }
-  _ahSend(report, "scan " + trigger);
+  // A sink may return a promise, so fixtures can check a page switch waits for it.
+  if(_scanReportSink){ let p = null; try{ p = _scanReportSink(report); }catch(e){} return p && p.then ? p : null; }
+  return _ahSend(report, "scan " + trigger);
 }
 
 function _scanTick(ts){
@@ -8167,7 +8205,9 @@ function _scanTick(ts){
   }
   const imgData = _scanFrameImageData();
   if(!imgData){
-    diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag);
+    // Tallied like any refusal: a camera that never gives a picture is a failed
+    // scan too, and used to be the one kind that could never report.
+    diag.verdict = SCAN_FAIL.NO_FRAME; _scanLogPush(diag); _scanSessNote(diag);
     return;
   }
   if(SCAN_DEBUG) diag.img = imgData;
