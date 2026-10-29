@@ -425,7 +425,17 @@ above the grid (3/4: columns 1/5/9, 6/8: 1/7), judged as a fraction of column 1'
 because absolute darkness changes with distance; can't tell → this page's time sig, else
 3/4. `_routeScannedNotes(id)` applies in place only when `id === _currentSheetId()`,
 otherwise stashes `{notes, sheet}` and navigates (`/`, `/02`, `/02?time=34|68`, `/03`);
-`_applyPendingScanImport` drops a stash whose `sheet` isn't the landing page's. ?level=N
+`_applyPendingScanImport` drops a stash whose `sheet` isn't the landing page's.
+**Four-square agreement check (2026-10-29):** a lock that passes the line check must also
+pass `_fourCornerOffsets` — every 3x3 block of cells is located on its own (`_gridProbe`) and
+their scatter around the typical offset must be ≤ `SCAN_FOUR_RMS` (0.26 cells). Why: with one
+corner square covered (a thumb), a blurred frame let a nearby button stand in, the line check
+passed it at 30-39, and it read a note short — reproduced on real frame real-03. Measured over
+1,540 rendered photos: correct 0-0.24, misreads 0.274+, real frames 0.03-0.13; synthetic
+fixtures reach 0.254 because `makeSheet` draws rows centred in the slot (not as printed —
+fixing that broke 8 reading fixtures, left for another day). **Reading a sheet from three
+squares was built and REJECTED**: cells near a hidden corner carry a smooth bias no agreement
+test can see, and it misread with every check passing. Don't rebuild it without new evidence. ?level=N
 pages now scan too (they always navigate); lessons have no candidates. `_currentSheetId()`
 still means "the sheet THIS page prints" (print marks, in-place test). The debug panel
 shows `fits …` and `sheet X  registration …  badges …`.

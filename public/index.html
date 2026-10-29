@@ -6954,6 +6954,7 @@ function _scanDebugLines(rec){
   if(q) L.push("quad aspect " + q.aspect + " (need " + q.aspectLo + "-" + q.aspectHi +
                ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)" +
                (rec.fits ? "  fits " + (rec.fits.join(",") || "none") : ""));
+  for(const a of (rec.agree || [])) L.push("grid agreement " + a + "  (rms need <= " + SCAN_FOUR_RMS + ")");
   if(rec.idScores) L.push("sheet " + (rec.sheet || "?") + "  registration " +
     Object.keys(rec.idScores).map(k => k + " " + rec.idScores[k]).join(", ") + " / need " + SCAN_REG_MIN +
     (rec.badges ? "  badges 1:" + rec.badges.b0 + " 5:" + rec.badges.b4 + " 7:" + rec.badges.b6 +
@@ -7836,6 +7837,105 @@ function _scanCandidates(){
   return ids.sort((a, b) => (b === here) - (a === here));
 }
 
+/* ---- do the four squares agree with the printed grid? (owner 2026-10-29) -------
+   A hand holding the sheet hid one corner square, and on a blurred frame the corner
+   search took a nearby button in its place. The line check passed that lock at
+   30-39, and the scan read the sheet with a note missing — reproduced on a real
+   camera frame (real-03 with its bottom-left square covered). The four corners only
+   ever check the grid as a whole; a stand-in square bends it toward itself, and the
+   blocks of cells nearest the stand-in come out shifted where the rest line up. So
+   every four-square lock is now also checked block by block (_fourCornerOffsets).
+
+   (Reading a sheet from THREE squares when the fourth is hidden was built and
+   tested the same day, and is NOT shipped: on 1,100 covered-corner photos, cells
+   measured near a hidden corner carry a small smooth bias that no agreement test
+   can see, and it read wrong notes with every check passing. Keep the corners clear.) */
+/* How far the blocks of cells may scatter (cells, rms around their typical
+   offset) from where four found squares put them. Measured over 1,540 photos of
+   all five sheets as printed (guest and Pro, flat, tilted, blurred, a corner
+   covered): every correct read 0-0.24 (typically 0.11); every stand-in lock that
+   misread 0.274-0.348. The five real camera frames: 0.03-0.13. The synthetic
+   fixture sheets reach 0.254 — their rows are drawn centred in the slot, not as
+   printed — which is what sets this at 0.26 rather than 0.25. The margin to the
+   nearest misread is narrow; if it ever refuses good real scans, the log says so
+   ("grid agreement spread ...") and it can be re-opened against that. */
+const SCAN_FOUR_RMS   = 0.26;
+const SCAN_GRID_BLOCK = 15;    // a block of cells counts as found at this local registration
+
+/* The grid, cut into blocks of up to 3x3 cells (one centred on every cell, every
+   other cell on big grids), and a way to find where one block really is: slide
+   the template up to 0.4 of a cell each way around where H puts it, and take the
+   offset where its printed lines and cells line up best. Within ±0.4 of a cell the
+   peak is unique — the next one is a whole cell away. */
+function _gridProbe(imgData, geom){
+  const g = geom.grid, { rows: R, cols: C, cellFrac } = geom;
+  const toS = gu => g.u0 + gu * (g.u1 - g.u0), toT = gv => g.v0 + gv * (g.v1 - g.v0);
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const stepB = R * C > 40 ? 2 : 1, blocks = [];
+  for(let r = Math.min(1, R - 1); r < R; r += stepB) for(let c = Math.min(1, C - 1); c < C; c += stepB){
+    const r0 = Math.max(0, r - 1), r1 = Math.min(R - 1, r + 1), c0 = Math.max(0, c - 1), c1 = Math.min(C - 1, c + 1);
+    blocks.push({ r0, r1, c0, c1, gu: (c0 + c1 + 1) / 2 / C, gv: (r0 + r1 + 1) / 2 / R });
+  }
+  // Local registration of one block with the template shifted (du, dv) cells.
+  const score = (H, b, du, dv) => {
+    const P = (gu, gv) => H(toS(gu + du / C), toT(gv + dv / R));
+    const lines = [], inner = [];
+    for(let c = b.c0; c <= b.c1 + 1; c++) for(let i = 0; i < 10; i++){
+      const p = P(Math.min(1, c / C), (b.r0 + 0.1 + (b.r1 + 0.8 - b.r0) * i / 9) / R);
+      lines.push(_lumAt(imgData, p.x, p.y));
+    }
+    for(let r = b.r0; r <= b.r1 + 1; r++) for(let i = 0; i < 10; i++){
+      const p = P((b.c0 + 0.1 + (b.c1 + 0.8 - b.c0) * i / 9) / C, Math.min(1, r / R));
+      lines.push(_lumAt(imgData, p.x, p.y));
+    }
+    for(let r = b.r0; r <= b.r1; r++) for(let c = b.c0; c <= b.c1; c++)
+      for(const [a, e] of [[-0.15, -0.15], [0.15, -0.15], [-0.15, 0.15], [0.15, 0.15]]){
+        const p = P((c + cellFrac * (0.5 + a)) / C, (r + 0.5 + e) / R);
+        inner.push(_lumAt(imgData, p.x, p.y));
+      }
+    return med(inner) - med(lines);
+  };
+  const measure = (H, b) => {
+    let best = { du: 0, dv: 0, sc: -Infinity };
+    for(const [span, step] of [[0.4, 0.2], [0.1, 0.05]]){
+      const cu = best.du, cv = best.dv;
+      for(let dv = -span; dv <= span + 1e-9; dv += step) for(let du = -span; du <= span + 1e-9; du += step){
+        const sc = score(H, b, cu + du, cv + dv);
+        if(sc > best.sc) best = { du: cu + du, dv: cv + dv, sc };
+      }
+    }
+    // A peak at the edge of the search may be the slope of a neighbour's: no reading.
+    if(best.sc < SCAN_GRID_BLOCK || Math.abs(best.du) > 0.42 || Math.abs(best.dv) > 0.42) return null;
+    return { du: best.du, dv: best.dv };     // cells the block sits from where H puts it
+  };
+  return { blocks, measure };
+}
+
+/* Do the four squares agree with the printed grid? With the right four, every
+   block of cells sits where they put it (to within the template's own error). With
+   a stand-in — a covered square replaced by a nearby button — the grid bends
+   toward the stand-in and the blocks near it come out shifted: this caught a scan
+   that the line check passed at 30-39 and that dropped a note. Returns the
+   offsets, or null when there is too little grid to judge. */
+function _fourCornerOffsets(imgData, corners, geom){
+  const P = _gridProbe(imgData, geom);
+  const H = _homographyUnitToQuad(corners);
+  if(!H) return null;
+  const offs = [];
+  for(const b of P.blocks){ const o = P.measure(H, b); if(o) offs.push(o); }
+  if(!offs.length) return null;
+  // Judged as the SPREAD around the typical offset, not the offsets themselves: a
+  // template a little off its print shifts every block the same way (harmless —
+  // the reader samples cell middles), while a stand-in square bends the grid, so
+  // blocks far from it sit right and blocks near it sit wrong.
+  const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+  const mu = med(offs.map(o => o.du)), mv = med(offs.map(o => o.dv));
+  const dev = offs.map(o => Math.hypot(o.du - mu, o.dv - mv));
+  return { found: offs.length, of: P.blocks.length,
+           rms: +Math.sqrt(dev.reduce((a, e) => a + e * e, 0) / dev.length).toFixed(3),
+           max: +Math.max(...dev).toFixed(3), shift: +Math.hypot(mu, mv).toFixed(3) };
+}
+
 /* The marks, plus every candidate whose shape they fit. The quad recorded for the
    log is checked against the first fit (or this page's sheet when none fits), so
    the band printed next to the measured aspect is one it was actually held to. */
@@ -7851,7 +7951,9 @@ function _sheetQuadFrom(imgData, ids, diag){
 }
 
 /* Registration under each candidate that fits the quad; the highest wins, and an
-   exact tie goes to the earlier one (this page's own). Returns the chosen id with
+   exact tie goes to the earlier one (this page's own). A candidate that passes the
+   line check must then pass the block-by-block one (_fourCornerOffsets) — a stand-in
+   corner square passes the first and fails the second. Returns the chosen id with
    its grid mapper, or null with the verdict set. `variant` false keeps a 12-column
    pick as given (a forced template, in diagnose). */
 function _identifySheet(imgData, quad, diag, variant){
@@ -7865,10 +7967,16 @@ function _identifySheet(imgData, quad, diag, variant){
     if(!gridPoint) continue;
     const reg = _gridRegistration(imgData, geom, gridPoint);
     scores[_shortSheet(id)] = Math.round(reg);
+    if(reg >= SCAN_REG_MIN){
+      const a = _fourCornerOffsets(imgData, quad.corners, geom);
+      if(diag) (diag.agree = diag.agree || []).push(_shortSheet(id) + " " + (a ? "spread " + a.rms + " max " + a.max + " shift " + a.shift + " blocks " + a.found + "/" + a.of : "no blocks"));
+      // Refused here = misregistered, below: same verdict, same hint.
+      if(!a || a.rms > SCAN_FOUR_RMS){ scores[_shortSheet(id)] = Math.round(reg) + " but grid disagrees"; continue; }
+    }
     if(!best || reg > best.reg) best = { id, reg, gridPoint };
   }
   if(diag){ diag.idScores = scores; diag.reg = best ? best.reg : null; }
-  if(!best){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return null; }
+  if(!best){ if(diag) diag.verdict = Object.keys(scores).length ? SCAN_FAIL.MISREG : SCAN_FAIL.NO_INSETS; return null; }
   // Last gate, and the only one that checks the thing we actually care about.
   if(best.reg < SCAN_REG_MIN){ if(diag) diag.verdict = SCAN_FAIL.MISREG; return null; }
   if(variant !== false && best.id === "kidseq:main5_34"){
