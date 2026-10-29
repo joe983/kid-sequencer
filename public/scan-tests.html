@@ -162,6 +162,93 @@ async function imageDataFromUrl(url){
   return g.getImageData(0,0,c.width,c.height);
 }
 
+/* A "photo" of a real printed sheet: one of the print-*.png renders laid on a
+   grey table in a camera-sized frame, optionally turned. With `cells`, those
+   squares are coloured in first — placed through the sheet's OWN geometry off
+   the marks the detector finds, so they land where a child would colour. */
+async function printPhoto(S, file, sheetId, o){
+  o = Object.assign({ w: 340, rot: 0, cells: [] }, o);
+  const bmp = await createImageBitmap(await (await fetch("scan-fixtures/" + file, {cache:"no-store"})).blob());
+  const cv = document.createElement("canvas");
+  cv.width = FRAME_W; cv.height = FRAME_H;
+  const g = cv.getContext("2d", {willReadFrequently:true});
+  g.fillStyle = "#7d7d7d"; g.fillRect(0, 0, FRAME_W, FRAME_H);
+  const h = o.w * bmp.height / bmp.width;
+  // A camera averages the light over each pixel, so a thin printed line comes out
+  // grey, never gone. The default (low) quality downscale samples instead, and at
+  // ~3x it drops the 2px grid lines outright: the right template then registered
+  // 0 on a sheet it reads at 34 when the lines survive.
+  g.imageSmoothingQuality = "high";
+  g.save(); g.translate(FRAME_W / 2, FRAME_H / 2); g.rotate(o.rot * Math.PI / 180);
+  g.drawImage(bmp, -o.w / 2, -h / 2, o.w, h); g.restore();
+  if(o.cells.length){
+    const corners = S.cornerMarkersFrom(g.getImageData(0, 0, FRAME_W, FRAME_H));
+    if(!corners) throw new Error(file + ": marks not found, cannot colour cells");
+    const G = S.SHEET_GEOMETRY[sheetId];
+    const gp = S.gridMapper(S.homographyUnitToQuad(corners), G);
+    g.fillStyle = "#2244cc";
+    for(const [r, c] of o.cells){
+      const p = [gp((c + 0.06) / G.cols, (r + 0.1) / G.rows), gp((c + G.cellFrac - 0.06) / G.cols, (r + 0.1) / G.rows),
+                 gp((c + G.cellFrac - 0.06) / G.cols, (r + 0.9) / G.rows), gp((c + 0.06) / G.cols, (r + 0.9) / G.rows)];
+      g.beginPath(); g.moveTo(p[0].x, p[0].y); for(let i = 1; i < 4; i++) g.lineTo(p[i].x, p[i].y);
+      g.closePath(); g.fill();
+    }
+  }
+  return g.getImageData(0, 0, FRAME_W, FRAME_H);
+}
+
+/* The five printable sheets, rendered through the app's real print path
+   (headless Chrome, A4 landscape page area, beforeprint + print media).
+   RE-RENDER THESE whenever the printed layout or SHEET_GEOMETRY changes — they
+   are the only fixtures that look like the paper rather than like the template. */
+const PRINTS = [
+  { file:"print-main.png",     sheet:"kidseq:main",     cells:[[0,0],[3,5],[7,12]], want:"0:0+1 3:5+1 7:12+1" },
+  { file:"print-main5.png",    sheet:"kidseq:main5",    cells:[[0,0],[2,5],[4,12]], want:"0:0+1 2:5+1 4:12+1" },
+  { file:"print-main5_34.png", sheet:"kidseq:main5_34", cells:[[0,0],[2,4],[4,11]], want:"0:0+1 2:4+1 4:11+1" },
+  { file:"print-main5_68.png", sheet:"kidseq:main5_68", cells:[[0,0],[2,6],[4,11]], want:"0:0+1 2:6+1 4:11+1" },
+  { file:"print-main3.png",    sheet:"kidseq:main3",    cells:[[0,0],[1,2],[2,5]],  want:"0:0+1 1:2+1 2:5+1" }
+];
+
+/* End to end: a sheet that isn't this page's, shown to the real camera loop, must
+   open its own page with the notes on it. A second iframe, because this one
+   navigates. `want` is in that page's MODEL rows (/02 is a window over rows 3-7). */
+async function crossSheetRoute(S, fromPath, print, wantPath, wantNotes){
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const fr = document.createElement("iframe");
+  fr.style.cssText = "position:absolute;left:-9999px;width:900px;height:600px;border:0";
+  const loaded = () => new Promise(r => fr.addEventListener("load", r, { once: true }));
+  let l = loaded(); fr.src = fromPath; document.body.appendChild(fr); await l;
+  try{
+    const W = fr.contentWindow, D = fr.contentDocument;
+    W.requestAnimationFrame = cb => W.setTimeout(() => cb(W.performance.now()), 16);
+    W.cancelAnimationFrame = id => W.clearTimeout(id);
+    try{ W.KidSequencer.Sequencer.buildGrid(); }catch(e){}
+    W.KidSequencer.Scan.reportSink = () => {};
+    const img = await printPhoto(S, print.file, print.sheet, { cells: print.cells });
+    const cv = D.createElement("canvas"); cv.width = FRAME_W; cv.height = FRAME_H;
+    const g = cv.getContext("2d"); g.putImageData(img, 0, 0);
+    const pump = W.setInterval(() => { g.fillStyle = "rgba(255,255,255,0.004)"; g.fillRect(0, 0, 1, 1); }, 60);
+    const stream = cv.captureStream(15);
+    W.navigator.mediaDevices.getUserMedia = async () => stream;
+    l = loaded();
+    await W.openCameraModal();
+    const navigated = await Promise.race([l.then(() => true), wait(8000).then(() => false)]);
+    if(!navigated) return { pass:false, detail:"stayed on " + fromPath + " (no navigation in 8 s)" };
+    const W2 = fr.contentWindow;
+    const path = W2.location.pathname + W2.location.search;
+    let notes = [];
+    for(let i = 0; i < 40; i++){
+      await wait(100);
+      try{ notes = W2.KidSequencer.Sequencer.notes; }catch(e){}
+      if(notes.length) break;
+    }
+    const got = fmtNotes(notes);
+    return { pass: path === wantPath && got === wantNotes, detail: path + "  " + (got || "(no notes)") };
+  }finally{
+    fr.remove();
+  }
+}
+
 const CELLS = [[0,0],[3,5],[7,12]];
 const WANT  = "0:0+1 3:5+1 7:12+1";
 const ASKEW  = [{x:52,y:44},{x:388,y:26},{x:396,y:272},{x:36,y:288}];
@@ -449,6 +536,49 @@ async function run(){
       results.push({name:t.file + " hint", pass:hp});
       if(!hp) fails.push(t.file + " hint");
     }
+  }
+
+  /* Which sheet is it? (owner 2026-10-29: a /03 sheet scanned with another page
+     open was refused.) Every printable sheet, read with NO template given — the
+     way the camera reads now — from this page, the full sequencer. Blank sheets
+     at three distances/angles must name the right sheet; a coloured one must also
+     read its notes in that sheet's own rows and columns. 3/4 and 6/8 print the
+     same grid, so those two prove the beat-badge test. */
+  const short = id => id.replace("kidseq:", "");
+  for(const p of PRINTS){
+    for(const [tag, o] of [["near", { w: 380, rot: -3 }], ["mid", { w: 320, rot: 4 }], ["far", { w: 230 }]]){
+      let d = null, err = null;
+      try{ d = S.diagnose(await printPhoto(S, p.file, p.sheet, o)); }catch(e){ err = e.message; }
+      const pass = !!d && d.sheet === short(p.sheet);
+      addRow("id · " + short(p.sheet) + " " + tag, d ? d.verdict : "-",
+             d ? ("sheet " + d.sheet + "  " + JSON.stringify(d.idScores || {}) + (d.badges ? " badges " + d.badges.v : "")) : err,
+             "sheet " + short(p.sheet), "any sheet scans from any page — the photo says which it is", pass);
+      results.push({name:"id · " + short(p.sheet) + " " + tag, pass});
+      if(!pass) fails.push("id · " + short(p.sheet) + " " + tag);
+    }
+    let d = null, err = null;
+    try{ d = S.diagnose(await printPhoto(S, p.file, p.sheet, { w: 340, rot: 2, cells: p.cells })); }catch(e){ err = e.message; }
+    const got = d ? fmtNotes(d.notes) : err;
+    const pass = !!d && d.verdict === "ok" && d.sheet === short(p.sheet) && got === p.want;
+    addRow("id · " + short(p.sheet) + " coloured", d ? d.verdict : "-", got, p.want,
+           "read on another page's scanner, the notes come back in their own sheet's rows and columns", pass);
+    results.push({name:"id · " + short(p.sheet) + " coloured", pass});
+    if(!pass) fails.push("id · " + short(p.sheet) + " coloured");
+  }
+  const P = Object.fromEntries(PRINTS.map(p => [short(p.sheet), p]));
+  for(const [from, sheet, path, want, why] of [
+    ["/",   "main3",    "/03",         "0:0+1 1:2+1 2:5+1",
+     "THE report: a /03 sheet scanned with the full sequencer open opens /03 with its notes"],
+    ["/03", "main5_68", "/02?time=68", "3:0+1 5:6+1 7:11+1",
+     "a 6/8 sheet from /03 opens /02 in 6/8 — /02 shows model rows 3-7, so sheet row 0 is model row 3"]
+  ]){
+    let r;
+    try{ r = await crossSheetRoute(S, from, P[sheet], path, want); }
+    catch(e){ r = { pass:false, detail:"harness: " + e.message }; }
+    const name = "cross · " + sheet + " from " + from;
+    addRow(name, "-", r.detail, path + "  " + want, why, r.pass);
+    results.push({name, pass:r.pass});
+    if(!r.pass) fails.push(name);
   }
 
   /* The live loop itself, with a fake camera (scan-loop-test.js). Takes ~15 s. */

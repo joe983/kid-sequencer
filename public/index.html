@@ -6944,8 +6944,13 @@ function _scanDebugLines(rec){
   }
   const q = rec.quad;
   if(q) L.push("quad aspect " + q.aspect + " (need " + q.aspectLo + "-" + q.aspectHi +
-               ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)");
-  if(rec.reg != null) L.push("grid registration " + rec.reg + " / need " + SCAN_REG_MIN);
+               ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)" +
+               (rec.fits ? "  fits " + (rec.fits.join(",") || "none") : ""));
+  if(rec.idScores) L.push("sheet " + (rec.sheet || "?") + "  registration " +
+    Object.keys(rec.idScores).map(k => k + " " + rec.idScores[k]).join(", ") + " / need " + SCAN_REG_MIN +
+    (rec.badges ? "  badges 1:" + rec.badges.b0 + " 5:" + rec.badges.b4 + " 7:" + rec.badges.b6 +
+                  " 9:" + rec.badges.b8 + " -> " + rec.badges.v : ""));
+  else if(rec.reg != null) L.push("grid registration " + rec.reg + " / need " + SCAN_REG_MIN);
   const gr = rec.grid;
   if(gr){
     L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
@@ -6983,23 +6988,21 @@ function _scanDebugRender(rec){
    read-only twin of camImport. Lets the corner/quad/grid decisions be exercised
    against fixture images (see the headless harness) and lets a saved photo be
    re-diagnosed later without a camera. */
+/* With a sheetId, that template alone (fixtures that test one template's reading);
+   without, every candidate, exactly as the camera does — diag.sheet says which won. */
 function _scanDiagnose(imgData, sheetId){
   const diag = _newScanDiag("probe");
-  const id = sheetId || _currentSheetId();
-  if(!id){ diag.verdict = SCAN_FAIL.NO_SHEET; return diag; }
-  const geom = SHEET_GEOMETRY[id];
-  const corners = _sheetCornersFrom(imgData, geom, diag);
-  if(!corners) return diag;
-  diag.corners = corners;
-  const mapPoint = _homographyUnitToQuad(corners);
-  if(!mapPoint){ diag.verdict = SCAN_FAIL.SINGULAR; return diag; }
-  const gridPoint = _gridMapper(mapPoint, geom);
-  if(!gridPoint){ diag.verdict = SCAN_FAIL.NO_INSETS; return diag; }
+  const ids = sheetId ? (SHEET_GEOMETRY[sheetId] && SHEET_GEOMETRY[sheetId].grid ? [sheetId] : [])
+                      : _scanCandidates();
+  if(!ids.length){ diag.verdict = sheetId ? SCAN_FAIL.NO_INSETS : SCAN_FAIL.NO_SHEET; return diag; }
+  const quad = _sheetQuadFrom(imgData, ids, diag);
+  if(!quad) return diag;
+  diag.corners = quad.corners;
   // Same gates, same order as _processScanFrame — a probe that skipped one would
   // report a pass the real path refuses, which is worse than no probe at all.
-  diag.reg = _gridRegistration(imgData, geom, gridPoint);
-  if(diag.reg < SCAN_REG_MIN){ diag.verdict = SCAN_FAIL.MISREG; return diag; }
-  const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
+  const pick = _identifySheet(imgData, quad, diag, !sheetId);
+  if(!pick) return diag;
+  const notes = _scanNotesFromFrame(imgData, SHEET_GEOMETRY[pick.id], pick.gridPoint, diag);
   diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
   diag.notes = notes;
   return diag;
@@ -7680,10 +7683,13 @@ function _applyScannedNotes(notes){
    Each of the three views prints its own sheet now, so "does this sheet belong
    here" is a comparison of sheet identity, not of level key — /02 and /03 both
    carry a null levelKey, as does the full grid, and matching on that alone
-   would drop an 8-row worksheet onto a 3-row grid. */
-function _routeScannedNotes(geom, notes){
+   would drop an 8-row worksheet onto a 3-row grid. Compared as ids, because
+   view + time signature alone also matches a ?level=N page, whose VIEW is the
+   full one but whose grid is not. */
+function _routeScannedNotes(sheetId, notes){
+  const geom = SHEET_GEOMETRY[sheetId];
   const ts = geom.timeSig || "4/4";
-  if(geom.view === VIEW && ts === TIME_SIG){
+  if(sheetId === _currentSheetId()){
     // Close FIRST so a successful scan always dismisses the modal and reveals the
     // grid — even if applying the notes below were to throw, the camera never
     // stays stuck open over the result.
@@ -7692,7 +7698,7 @@ function _routeScannedNotes(geom, notes){
     try{ showSaveToast("loaded"); }catch(e){}
     return;
   }
-  try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes })); }catch(e){}
+  try{ sessionStorage.setItem("kidseq_scan_import", JSON.stringify({ notes, sheet: sheetId })); }catch(e){}
   if(ts !== "4/4"){ location.assign(_timeSigUrl(ts)); return; }   // /02?time=…
   const base = VIEW_URL[geom.view] || VIEW_URL.full;
   location.assign(geom.levelKey ? (base + "?level=" + encodeURIComponent(geom.levelKey)) : base);
@@ -7794,18 +7800,137 @@ function _sheetCornersFrom(imgData, geom, diag){
   return null;
 }
 
-function _processScanFrame(imgData, sheetId, corners, diag){
-  const geom = SHEET_GEOMETRY[sheetId];
-  if(!geom) return false;
-  if(diag) diag.corners = corners;
-  const mapPoint = _homographyUnitToQuad(corners);
-  if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return false; }
-  const gridPoint = _gridMapper(mapPoint, geom);
-  if(!gridPoint){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return false; }
+/* ---- which sheet is in front of the camera? (owner 2026-10-29) ----------------
+   A sheet used to be read only as the page's own: a /03 worksheet scanned with
+   the full sequencer open was refused, so a class had to open the right page
+   before scanning. Now every printable sheet is a candidate on every page, and
+   the photo decides; a sheet that isn't this page's opens its own page with the
+   notes on it (_routeScannedNotes).
+
+   The corner marks bound each sheet in a different SHAPE (quadAspect), which
+   narrows the field, but the bands overlap — 3/4's 1.380 and the full sheet's
+   1.438 are 4% apart. The grid check settles it: each template predicts where
+   ITS grid lines are, and only the right one finds them. Measured on the real
+   print path (all five sheets rendered, each read against every template): the
+   right template 36–69, every wrong one 0 or below, or refused for shape.
+
+   3/4 and 6/8 are the exception — the same 5x12 grid in the same place — so they
+   are one candidate here and the beat badges above the grid decide (see
+   _sheet12Variant). */
+const SCAN_SHEET_IDS = ["kidseq:main", "kidseq:main5", "kidseq:main5_34", "kidseq:main3"];
+const _shortSheet = id => String(id).replace("kidseq:", "");
+
+// This page's own sheet first: it wins an exact tie (see _identifySheet).
+function _scanCandidates(){
+  if(LESSON) return [];                   // the camera is hidden in lessons anyway
+  const ids = SCAN_SHEET_IDS.filter(id => SHEET_GEOMETRY[id] && SHEET_GEOMETRY[id].grid);
+  const here = _currentSheetId() === "kidseq:main5_68" ? "kidseq:main5_34" : _currentSheetId();
+  return ids.sort((a, b) => (b === here) - (a === here));
+}
+
+/* The marks, plus every candidate whose shape they fit. The quad recorded for the
+   log is checked against the first fit (or this page's sheet when none fits), so
+   the band printed next to the measured aspect is one it was actually held to. */
+function _sheetQuadFrom(imgData, ids, diag){
+  const corners = _cornerMarkersFrom(imgData, diag);
+  if(!corners) return null;
+  const fits = ids.filter(id => _quadLooksLikeSheet(corners, SHEET_GEOMETRY[id], null));
+  _quadLooksLikeSheet(corners, SHEET_GEOMETRY[fits[0] || ids[0]], diag);
+  if(diag) diag.fits = fits.map(_shortSheet);
+  if(fits.length) return { corners, fits };
+  if(diag){ diag.verdict = SCAN_FAIL.BAD_QUAD; diag.corners = corners; }
+  return null;
+}
+
+/* Registration under each candidate that fits the quad; the highest wins, and an
+   exact tie goes to the earlier one (this page's own). Returns the chosen id with
+   its grid mapper, or null with the verdict set. `variant` false keeps a 12-column
+   pick as given (a forced template, in diagnose). */
+function _identifySheet(imgData, quad, diag, variant){
+  const mapPoint = _homographyUnitToQuad(quad.corners);
+  if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return null; }
+  let best = null;
+  const scores = {};
+  for(const id of quad.fits){
+    const geom = SHEET_GEOMETRY[id];
+    const gridPoint = _gridMapper(mapPoint, geom);
+    if(!gridPoint) continue;
+    const reg = _gridRegistration(imgData, geom, gridPoint);
+    scores[_shortSheet(id)] = Math.round(reg);
+    if(!best || reg > best.reg) best = { id, reg, gridPoint };
+  }
+  if(diag){ diag.idScores = scores; diag.reg = best ? best.reg : null; }
+  if(!best){ if(diag) diag.verdict = SCAN_FAIL.NO_INSETS; return null; }
   // Last gate, and the only one that checks the thing we actually care about.
-  const reg = _gridRegistration(imgData, geom, gridPoint);
-  if(diag) diag.reg = reg;
-  if(reg < SCAN_REG_MIN){ if(diag){ diag.verdict = SCAN_FAIL.MISREG; diag.logged = true; _scanLogPush(diag); } return false; }
+  if(best.reg < SCAN_REG_MIN){ if(diag) diag.verdict = SCAN_FAIL.MISREG; return null; }
+  if(variant !== false && best.id === "kidseq:main5_34"){
+    const v = _sheet12Variant(imgData, SHEET_GEOMETRY[best.id], best.gridPoint, diag);
+    if(v === "6/8") best.id = "kidseq:main5_68";
+    else if(!v && TIME_SIG === "6/8") best.id = "kidseq:main5_68";   // can't tell: stay on this page's
+  }
+  if(diag) diag.sheet = _shortSheet(best.id);
+  return best;
+}
+
+/* 3/4 or 6/8? Both print five rows of 12 squares in the same place; the numbered
+   beat badges above the grid differ — 3/4 puts them over columns 1, 5 and 9, 6/8
+   over 1 and 7. Each window covers where a badge would be (centred over the
+   square, 0.15–0.65 of a row above the grid, measured off the print path).
+
+   A badge is a thin ring round a thin digit, and from a sheet held further back
+   those lines are a pixel or less wide: an inked-or-not test per sample point
+   either hits them or misses them, and read the same 6/8 badge as 0.03 at one
+   distance and 0.16 at a smaller one. So this measures average DARKNESS against
+   the paper around it, interpolated between pixels — a blurred line keeps its
+   total darkness however thin it gets.
+
+   How dark a badge looks still depends on distance, so no fixed bar works.
+   Column 1's badge is on BOTH sheets: it is the measure of what a badge looks
+   like in this photo, and the others are judged as a fraction of it. Returns
+   "3/4", "6/8" or null (can't tell). */
+const SCAN_TS_BADGE_SEEN = 0.02;  // column 1's badge must be at least this dark
+const SCAN_TS_BADGE_REL  = 0.5;   // a badge reads ≥ this fraction of column 1's; an empty slot < it
+function _sheet12Variant(imgData, geom, gridPoint, diag){
+  const { rows: R, cols: C, cellFrac } = geom;
+  const F = _lumField(imgData);
+  const W = imgData.width, H = imgData.height;
+  const lum = (x, y) => {                       // bilinear, so sub-pixel lines count
+    const x0 = Math.max(0, Math.min(W - 2, Math.floor(x))), y0 = Math.max(0, Math.min(H - 2, Math.floor(y)));
+    const fx = Math.max(0, Math.min(1, x - x0)), fy = Math.max(0, Math.min(1, y - y0));
+    return (_lumAt(imgData, x0, y0) * (1 - fx) + _lumAt(imgData, x0 + 1, y0) * fx) * (1 - fy) +
+           (_lumAt(imgData, x0, y0 + 1) * (1 - fx) + _lumAt(imgData, x0 + 1, y0 + 1) * fx) * fy;
+  };
+  const S = 12;
+  const inkAbove = c => {
+    let dark = 0;
+    for(let iy = 0; iy < S; iy++) for(let ix = 0; ix < S; ix++){
+      const u = (c + (0.18 + 0.64 * (ix + 0.5) / S) * cellFrac) / C;
+      const v = -(0.15 + 0.5 * (iy + 0.5) / S) / R;
+      const p = gridPoint(u, v);
+      const ref = F.localMean(p.x, p.y);
+      if(ref > 0) dark += Math.max(0, 1 - lum(p.x, p.y) / ref);
+    }
+    return dark / (S * S);
+  };
+  const b0 = inkAbove(0), b4 = inkAbove(4), b6 = inkAbove(6), b8 = inkAbove(8);
+  const bar = b0 * SCAN_TS_BADGE_REL;
+  const v = b0 < SCAN_TS_BADGE_SEEN ? null
+          : (b4 >= bar && b8 >= bar && b6 < bar) ? "3/4"
+          : (b6 >= bar && b4 < bar && b8 < bar) ? "6/8" : null;
+  if(diag) diag.badges = { b0: +b0.toFixed(3), b4: +b4.toFixed(3), b6: +b6.toFixed(3),
+                           b8: +b8.toFixed(3), v: v || "?" };
+  return v;
+}
+
+function _processScanFrame(imgData, quad, diag){
+  if(diag) diag.corners = quad.corners;
+  const pick = _identifySheet(imgData, quad, diag);
+  if(!pick){
+    if(diag && diag.verdict === SCAN_FAIL.MISREG){ diag.logged = true; _scanLogPush(diag); }
+    return false;
+  }
+  const geom = SHEET_GEOMETRY[pick.id];
+  const gridPoint = pick.gridPoint;
   const notes = _scanNotesFromFrame(imgData, geom, gridPoint, diag);
   if(diag){
     diag.verdict = notes.length ? SCAN_FAIL.OK : SCAN_FAIL.EMPTY;
@@ -7817,7 +7942,7 @@ function _processScanFrame(imgData, sheetId, corners, diag){
   }
   // Before routing, which can navigate away.
   _scanSessDone(notes.length > 0, diag);
-  _routeScannedNotes(geom, notes);
+  _routeScannedNotes(pick.id, notes);
   return true;
 }
 
@@ -7834,6 +7959,9 @@ function _applyPendingScanImport(){
   let payload = null;
   try{ payload = JSON.parse(raw); }catch(e){ return; }
   if(!payload || !Array.isArray(payload.notes)) return;
+  // Notes are in the scanned sheet's own rows and columns: never put them on a
+  // different grid (a redirect that landed somewhere else, a stale tab).
+  if(payload.sheet && payload.sheet !== _currentSheetId()) return;
   _applyScannedNotes(payload.notes);
   try{ showSaveToast("loaded"); }catch(e){}
 }
@@ -8032,8 +8160,8 @@ function _scanTick(ts){
   // Always built now (hints + failure report need the reason); the debug panel
   // and its photos still only exist with ?scandebug=1. Decisions never read it.
   const diag = _newScanDiag("live");
-  const sheetId = _currentSheetId();
-  if(!sheetId){
+  const ids = _scanCandidates();
+  if(!ids.length){
     diag.verdict = SCAN_FAIL.NO_SHEET; _scanLogPush(diag);
     return;
   }
@@ -8044,9 +8172,9 @@ function _scanTick(ts){
   }
   if(SCAN_DEBUG) diag.img = imgData;
 
-  const corners = _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag);
+  const quad = _sheetQuadFrom(imgData, ids, diag);
 
-  if(sheetId && corners){
+  if(quad){
     _scanLockCount++;
     diag.lock = _scanLockCount + "/" + SCAN_LOCK_FRAMES;
     diag.verdict = "locking";   // overwritten by _processScanFrame on the lock frame
@@ -8054,7 +8182,7 @@ function _scanTick(ts){
     if(_scanLockCount >= SCAN_LOCK_FRAMES){
       _stopSheetScan();
       // One that reads notes was noted by _processScanFrame (before it routed).
-      if(_processScanFrame(imgData, sheetId, corners, diag)) return;
+      if(_processScanFrame(imgData, quad, diag)) return;
       // Refused at the grid check (locked onto the wrong four squares): keep
       // looking. This used to leave the loop stopped, so the scanner sat on
       // "Point the camera…" until the camera was closed and reopened — the
@@ -8116,11 +8244,11 @@ function camImport(){
   const diag = _newScanDiag("use");
   const imgData = _imageDataFromCanvasScaled(camCanvasEl, SCAN_WORK_W);
   if(SCAN_DEBUG) diag.img = imgData;
-  const sheetId = _currentSheetId();
-  if(!sheetId) diag.verdict = SCAN_FAIL.NO_SHEET;
+  const ids = _scanCandidates();
+  if(!ids.length) diag.verdict = SCAN_FAIL.NO_SHEET;
   if(_scanSess) _scanSess.manual++;
-  const corners = sheetId ? _sheetCornersFrom(imgData, SHEET_GEOMETRY[sheetId], diag) : null;
-  const ok = sheetId && corners && _processScanFrame(imgData, sheetId, corners, diag);
+  const quad = ids.length ? _sheetQuadFrom(imgData, ids, diag) : null;
+  const ok = !!quad && _processScanFrame(imgData, quad, diag);
   if(!diag.logged) _scanLogPush(diag);
   if(ok){
     _stopSheetScan();
@@ -10279,7 +10407,9 @@ window.KidSequencer = {
     goToView,
     toggleNoteView,
     get view(){ return VIEW; },
-    get fiveNote(){ return _fiveNote; }
+    get fiveNote(){ return _fiveNote; },
+    // Read-only, in model rows (scan-tests.html checks what a scan put on the grid).
+    get notes(){ return notesByRow.flatMap((row, r) => row.map(n => ({ row: r, start: n.start, len: n.len }))); }
   },
   Camera: {
     openCameraModal,
@@ -10297,6 +10427,7 @@ window.KidSequencer = {
     applyPending: _applyPendingScanImport,
     applyNotes: _applyScannedNotes,          // headless: place a scanned note list on this page
     currentSheetId: _currentSheetId,
+    candidates: _scanCandidates,
     gridMapper: _gridMapper,
     sheetCornersFrom: _sheetCornersFrom,
     quadLooksLikeSheet: _quadLooksLikeSheet,

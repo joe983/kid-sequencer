@@ -413,13 +413,22 @@ doc's history — see the dead-CSS note below for what's still lying around.
     .modalHint            ← "Tip:" text (always shown)
 ```
 
-### Which sheet is it? — `_currentSheetId()`, not a QR
-The printed sheet carries **no QR**. At the scanner's 420px working width a code small
-enough to fit would be under jsQR's decode floor (~25 modules over 14mm is <1px per
-module) — dead ink. Learning mode hides the Print button, so the main grid is the only
-printable sheet and the template is simply "the page you're on". `_currentSheetId()`
-returns `"kidseq:main"`, or **`null`** where nothing can be printed (disables scanning
-rather than guessing).
+### Which sheet is it? — the photo decides, not the page (2026-10-29)
+The printed sheet carries **no QR** (at the 420px working width a code that fits is
+below any decoder's floor). Until 2026-10-29 the template was "the page you're on", so a
+/03 sheet scanned with `/` open was refused. Now **any sheet scans from any page**:
+`_scanCandidates()` = every printable sheet (page's own first), `_sheetQuadFrom()` keeps
+those whose `quadAspect` the marks fit, and `_identifySheet()` takes the highest grid
+registration (measured: right sheet 36–89, every wrong one ≤ 1). 3/4 and 6/8 print the
+same 5×12 grid, so they are ONE candidate and `_sheet12Variant()` reads the beat badges
+above the grid (3/4: columns 1/5/9, 6/8: 1/7), judged as a fraction of column 1's badge
+because absolute darkness changes with distance; can't tell → this page's time sig, else
+3/4. `_routeScannedNotes(id)` applies in place only when `id === _currentSheetId()`,
+otherwise stashes `{notes, sheet}` and navigates (`/`, `/02`, `/02?time=34|68`, `/03`);
+`_applyPendingScanImport` drops a stash whose `sheet` isn't the landing page's. ?level=N
+pages now scan too (they always navigate); lessons have no candidates. `_currentSheetId()`
+still means "the sheet THIS page prints" (print marks, in-place test). The debug panel
+shows `fits …` and `sheet X  registration …  badges …`.
 
 ### Geometry — 4 printed corner marks
 Four solid black squares print just outside the content (above title box, above tempo,
@@ -520,7 +529,7 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   capture reports instead of writing to Firestore — **never run fixtures without it.**
 
 ### Fixtures — `public/scan-tests.html`
-`node serve.js` → <http://localhost:3000/scan-tests.html>. 90 checks (three sheet templates + the live loop, ~15 s): synthetic
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 112 checks (every sheet template, cross-sheet identification + two end-to-end page switches, the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
 sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
 4-10px, scribble densities), the full 1→16 note-length snapping table, and the
 owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.
@@ -560,11 +569,11 @@ These target elements that no longer exist and are safe to delete, but **verify 
 touching `.camStage`** — the landscape-phone block also restyles it:
 `.camModeBar` / `.camModeBtn` / `.camModeLabel` / `.camModeSpacer` (~1562–1567, 1594–1597),
 `.camOverlay.mode-sheet` (~1641), `.camOverlay.mode-qr` (~1648–1665), `#saveToast.qr`
-(~1396 — `showSaveToast('qr')` is never called), and the landscape block ~1588–1606
-(`.camModalCard` / `.camBody` / `.camActions` / `.camActionBtn`; the card is now a plain
-`.modalCard`). That landscape block still sets `.camStage{flex:none; aspect-ratio:unset}`
-while the JS that used to set an explicit height is gone — **check the scan modal on a
-landscape phone before trusting it.**
+(~1396 — `showSaveToast('qr')` is never called). The old landscape block (it collapsed
+`.camStage` to zero height on landscape phones — an empty modal) was REPLACED 2026-10-28
+(`?v=103`): portrait phones get a 3:4 camera box; landscape phones (`max-height:500px`)
+give the 4:3 picture the full height, hide the title and button row, and float the × over
+it. Verified on the owner's iPhone in landscape.
 
 ### CSS cache busting
 The `<link>` tag uses `css/styles.css?v=N`. Bump `N` on every deploy that changes styles.css (currently `?v=84` — check `public/index.html` for the live number; this doc note lags).
