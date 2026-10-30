@@ -2840,6 +2840,21 @@ function _ahCheckStarted(){
   }, 400);
 }
 
+/* ---- reports wait on the device until they arrive (owner 2026-10-30: 6 debug scans,
+   2 in the log) ----
+   A scan that opens another page gave its report 2.5 s to reach the server and then
+   switched page, which cancels a write still in flight (no Firestore offline cache
+   here) — on a slow connection the report was simply lost. Every report is now saved
+   on the device BEFORE it is sent and removed once the server has it, and each page
+   sends whatever is still waiting. Each report carries its own document id and the
+   rules allow create only, so one that did arrive before the page switched is
+   refused as an update when sent again: never stored twice. Above _ahReportPrevious,
+   which sends while the script is still being read. */
+const AH_OUTBOX_KEY  = "kidseq_report_outbox";
+const AH_OUTBOX_MAX  = 8;        // at most this many waiting (~9 KB each)
+const AH_OUTBOX_DAYS = 7;        // and none older (the server would purge it in 30 anyway)
+const AH_FLUSH_MS    = 2000;     // after load, so it stays out of the page's way
+
 // Previous load's record → send it if that load ended in trouble or was refreshed mid-play.
 (function _ahReportPrevious(){
   let prev = null, navType = "?", prevKey = null;
@@ -2881,21 +2896,72 @@ function _ahCheckStarted(){
   _ahSend(report, prev.bad ? "bad" : "refresh");
 })();
 
-// Write one report (a JSON string, ≤ 9000 chars — the Firestore rule's limit).
-// Returns the send, so a caller about to navigate can wait for it (_processScanFrame).
-function _ahSend(report, label){
-  return (async () => {
-    try{
-      const { db } = await import("./js/firebase-init.js");
-      const { collection, addDoc, serverTimestamp } =
-        await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
-      await addDoc(collection(db, "audioReports"), { v: 1, report: report.slice(0, 9000), createdAt: serverTimestamp() });
-      _adbg("sent audio report (" + label + ")");
-    }catch(e){
-      _adbg("audio report failed: " + (e && e.code || e));
-    }
-  })();
+// Fixtures (scan-tests.html) set localStorage "kidseq_report_test" so nothing they do
+// reaches Firestore: "1" delivers into "kidseq_report_test_log" instead, "hang" never
+// delivers (a connection too slow to finish before the page switches).
+function _ahTestMode(){ try{ return localStorage.getItem("kidseq_report_test"); }catch(e){ return null; } }
+
+function _ahNewId(){
+  const b = new Uint8Array(15);
+  try{ crypto.getRandomValues(b); }catch(e){ for(let i = 0; i < b.length; i++) b[i] = Math.random() * 256; }
+  return Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
 }
+function _ahOutbox(){
+  try{ const a = JSON.parse(localStorage.getItem(AH_OUTBOX_KEY) || "[]"); return Array.isArray(a) ? a : []; }
+  catch(e){ return []; }
+}
+function _ahOutboxSave(a){
+  try{ if(a.length) localStorage.setItem(AH_OUTBOX_KEY, JSON.stringify(a)); else localStorage.removeItem(AH_OUTBOX_KEY); }catch(e){}
+}
+function _ahOutboxFresh(){
+  const cutoff = Date.now() - AH_OUTBOX_DAYS * 864e5;
+  return _ahOutbox().filter(x => x && x.id && typeof x.report === "string" && x.t > cutoff);
+}
+function _ahOutboxDrop(id){ _ahOutboxSave(_ahOutbox().filter(x => x && x.id !== id)); }
+
+async function _ahDeliver(item){
+  const test = _ahTestMode();
+  if(test){
+    if(test === "hang") return;
+    let log = [];
+    try{ log = JSON.parse(localStorage.getItem("kidseq_report_test_log") || "[]"); }catch(e){}
+    if(!log.some(x => x.id === item.id)){
+      log.push({ id: item.id, label: item.label, report: item.report });
+      try{ localStorage.setItem("kidseq_report_test_log", JSON.stringify(log.slice(-50))); }catch(e){}
+    }
+    _ahOutboxDrop(item.id);
+    return;
+  }
+  try{
+    const { db } = await import("./js/firebase-init.js");
+    const { doc, setDoc, serverTimestamp } =
+      await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+    await setDoc(doc(db, "audioReports", item.id), { v: 1, report: item.report, createdAt: serverTimestamp() });
+    _ahOutboxDrop(item.id);
+    _adbg("sent audio report (" + item.label + ")");
+  }catch(e){
+    // Refused: it already arrived (a resend is an update, which the rules forbid) or
+    // it breaks the rule — sending it again can't help either way. Anything else
+    // (offline, a slow import) keeps it for the next page.
+    if(e && e.code === "permission-denied") _ahOutboxDrop(item.id);
+    _adbg("audio report failed: " + (e && e.code || e));
+  }
+}
+
+// Write one report (a JSON string, ≤ 9000 chars — the Firestore rule's limit). It is
+// on the device before this returns, so the caller may switch page straight away.
+function _ahSend(report, label){
+  const item = { id: _ahNewId(), t: Date.now(), label: String(label || ""), report: report.slice(0, 9000) };
+  _ahOutboxSave(_ahOutboxFresh().concat(item).slice(-AH_OUTBOX_MAX));
+  return _ahDeliver(item);
+}
+
+function _ahFlushOutbox(){
+  const a = _ahOutboxFresh();
+  _ahOutboxSave(a);                // forget the expired ones
+  return Promise.all(a.map(_ahDeliver));
+}
+setTimeout(_ahFlushOutbox, AH_FLUSH_MS);
 
 /* ---- Glitch recorder (owner 2026-10-09: "the music keeps playing, but like a skipping
    CD, glitchy, cutting in and out" — every now and again, school iPads, Safari 15) ----
@@ -8056,16 +8122,10 @@ function _processScanFrame(imgData, quad, diag){
     diag.logged = true;
     _scanLogPush(diag);
   }
-  // Before routing, which can navigate away.
-  const sent = _scanSessDone(notes.length > 0, diag, notes);
-  const route = () => _routeScannedNotes(pick.id, notes);
-  // A report still being sent dies with the page if routing navigates, so a scan
-  // of another page's sheet waits for it — capped, so a slow network never
-  // strands the scan. Applying in place keeps the page, so it never waits.
-  if(sent && pick.id !== _currentSheetId()){
-    _setScanStatus("locked");
-    Promise.race([sent, new Promise(r => setTimeout(r, SCAN_REPORT_WAIT_MS))]).then(route, route);
-  } else route();
+  // Before routing, which can navigate away. Its report is saved on the device
+  // before this returns and the next page sends it (_ahSend), so nothing waits.
+  _scanSessDone(notes.length > 0, diag, notes);
+  _routeScannedNotes(pick.id, notes);
   return true;
 }
 
@@ -8134,10 +8194,10 @@ function _setScanStatus(state){
    back"; a lock the grid check refuses means a corner square is hidden; a quad
    that isn't sheet-shaped says "hold it flat". */
 const SCAN_HINTS = {
-  dark:  "Need more light",
-  fit:   "Move back so the whole sheet fits",
-  marks: "Show all 4 black corner squares",
-  flat:  "Hold the camera flat above the sheet",
+  dark:  "More Light",
+  fit:   "Move Back",
+  marks: "Show corners",
+  flat:  "Hold flat",
 };
 const SCAN_HINT_DARK   = 55;     // frame mean luminance; real photos read 119–142
 const SCAN_HINT_WAIT   = 1500;   // ms of scanning before any hint (give them time to aim)
@@ -8187,7 +8247,6 @@ function _setScanHint(key){
 const SCAN_REPORT_SLOW_MS   = 20000;
 const SCAN_REPORT_GAVEUP_MS = 5000;
 const SCAN_REPORT_MAX       = 2;
-const SCAN_REPORT_WAIT_MS   = 2500;   // a scan that switches page waits this long for its report
 let _scanSess = null;
 let _scanReportSink = null;                     // fixtures only (KidSequencer.Scan.reportSink)
 let _scanReportSlowMs = SCAN_REPORT_SLOW_MS;    // fixtures shorten it (Scan.reportSlowMs)
@@ -8234,8 +8293,7 @@ function _scanSessNote(diag){
 }
 
 // A frame was fully read: a scan with notes ends the session; a blank read reports,
-// and so does a good one in debug mode. Returns the report's send (or null) so a
-// scan about to switch page can wait for it.
+// and so does a good one in debug mode.
 function _scanSessDone(ok, diag, notes){
   const s = _scanSess;
   if(!s) return null;
@@ -8294,9 +8352,8 @@ function _scanReport(trigger, diag, notes){
     if(JSON.stringify(base).length > 8800){ delete base.records[v]; break; }
   }
   const report = JSON.stringify(base).slice(0, 9000);
-  // A sink may return a promise, so fixtures can check a page switch waits for it.
-  if(_scanReportSink){ let p = null; try{ p = _scanReportSink(report); }catch(e){} return p && p.then ? p : null; }
-  return _ahSend(report, "scan " + trigger);
+  if(_scanReportSink){ try{ _scanReportSink(report); }catch(e){} return; }
+  _ahSend(report, "scan " + trigger);
 }
 
 function _scanTick(ts){
@@ -10595,6 +10652,13 @@ window.KidSequencer = {
     get session(){ return _scanSess; },
     set reportSink(fn){ _scanReportSink = typeof fn === "function" ? fn : null; },
     set reportSlowMs(ms){ _scanReportSlowMs = ms > 0 ? ms : SCAN_REPORT_SLOW_MS; }
+  },
+  // Diagnostics reports waiting on this device (scan-tests.html, with
+  // localStorage "kidseq_report_test" set so nothing reaches Firestore).
+  Reports: {
+    get outbox(){ return _ahOutbox(); },
+    send: _ahSend,
+    flush: _ahFlushOutbox
   },
   Auth: { logout }
 };

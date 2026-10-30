@@ -523,8 +523,8 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   now restarts the loop after a refused lock. Pinned by `public/scan-loop-test.js`,
   which drives the REAL loop with a fake camera (canvas `captureStream` +
   stubbed `getUserMedia`).
-- **The pill says why** (`SCAN_HINTS` / `_scanHintFor`): need more light · move back
-  so the whole sheet fits · show all 4 black corner squares · hold the camera flat.
+- **The pill says why** (`SCAN_HINTS` / `_scanHintFor`): "More Light" · "Move Back" ·
+  "Show corners" · "Hold flat" (owner's wording, 2026-10-30 — short on purpose).
   Shown after 1.5 s once 6 of the last 10 refusals agree; locking frames don't vote
   and "Hold steady…" outranks it in CSS. The attribute lives on `.camStage`, not the
   modal — CSS `attr()` only reads the pseudo-element's own element (it rendered an
@@ -539,15 +539,26 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   capture reports instead of writing to Firestore — **never run fixtures without it.**
 - **With `?scandebug=1` every camera opening reports (2026-10-29):** a scan that reads
   sends `trigger:"ok"` with `read:{sheet, here, scores, badges, notes}`, and closing
-  sends `gaveup` however short the hunt. A scan that switches page waits up to
-  `SCAN_REPORT_WAIT_MS` (2.5 s) for its report first — a page switch kills an
-  unfinished Firestore write. Also: the session now starts when the camera OPENS,
+  sends `gaveup` however short the hunt. Also: the session now starts when the camera OPENS,
   `video.play()` is capped at 1.5 s, and pictureless frames are tallied as `no-frame`;
   before that, a camera that never gave a picture could never report. The reader
   prints `READ sheet …` and the notes.
+- **Every report waits on the device until it arrives (2026-10-30)** — all reports
+  (scan + audio) go through `_ahSend`, which saves them in localStorage
+  `kidseq_report_outbox` BEFORE sending and removes them once Firestore has them;
+  every page sends what's still waiting `AH_FLUSH_MS` after load. Why: a scan that
+  opens another page used to give its report 2.5 s and then navigate, which cancels
+  an unfinished write (no Firestore offline cache) — 4 of 6 debug scans in a real
+  test never arrived. So scans no longer wait before switching page. Each report has
+  its own doc id (`setDoc`, not `addDoc`) and the rules allow create only, so a resend
+  of one that DID arrive is refused (`permission-denied` → dropped), never stored
+  twice. Max 8 waiting, 7 days. **The fixtures set localStorage `kidseq_report_test`
+  in their `<head>` so nothing reaches Firestore** ("1" → `kidseq_report_test_log`,
+  "hang" → never delivers); a fixture with a stalled network checks the next page
+  sends the report.
 
 ### Fixtures — `public/scan-tests.html`
-`node serve.js` → <http://localhost:3000/scan-tests.html>. 112 checks (every sheet template, cross-sheet identification + two end-to-end page switches, the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 116 checks (every sheet template, cross-sheet identification + three end-to-end page switches — one with a stalled network to prove its report survives — the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
 sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
 4-10px, scribble densities), the full 1→16 note-length snapping table, and the
 owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.

@@ -68,7 +68,7 @@ async function scanLoopTests(app, makeSheet, CELLS, OVER){
       // alternates "Hold steady…" with the hint, so sample it rather than once.
       const said = new Set();
       for(let i = 0; i < 30; i++){ await wait(100); said.add(pill()); }
-      const hintSeen = said.has("Show all 4 black corner squares") ? "Show all 4 black corner squares"
+      const hintSeen = said.has("Show corners") ? "Show corners"
                      : [...said].join(" | ");
       show(good);
       for(let i = 0; i < 40 && isOpen(); i++) await wait(150);
@@ -77,7 +77,7 @@ async function scanLoopTests(app, makeSheet, CELLS, OVER){
       out.push({ name: "loop · refused lock", pass: !stillOpen,
                  detail: stillOpen ? "loop stopped after the refused lock: good sheet never read"
                                    : "good sheet read after a refused lock" });
-      out.push({ name: "loop · hint on refused lock", pass: hintSeen === "Show all 4 black corner squares",
+      out.push({ name: "loop · hint on refused lock", pass: hintSeen === "Show corners",
                  detail: "pill said: " + (hintSeen || "(nothing)") });
       out.push({ name: "loop · scan that succeeds sends nothing", pass: reports.length === 0,
                  detail: reports.length + " report(s)" });
@@ -102,7 +102,7 @@ async function scanLoopTests(app, makeSheet, CELLS, OVER){
                detail: reports.map(s => s.length + " chars").join(", ") || "none" });
     out.push({ name: "loop · one report per hunt", pass: reports.length === 1,
                detail: reports.length + " report(s)" });
-    out.push({ name: "loop · overflow hint", pass: hint === "Move back so the whole sheet fits",
+    out.push({ name: "loop · overflow hint", pass: hint === "Move Back",
                detail: "pill said: " + (hint || "(nothing)") });
 
     /* ---- gaveupReport ---- */

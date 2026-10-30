@@ -18,6 +18,17 @@
   .want{color:#8b93a1}
   iframe{position:absolute;left:-9999px;width:900px;height:600px;border:0}
 </style>
+<script>
+/* Nothing these fixtures do may reach Firestore: while this is set, index.html
+   delivers every diagnostics report into localStorage instead (_ahDeliver). Set
+   here, before the app iframe exists — the app can send while it loads. run()
+   puts it back at the end. */
+try{
+  localStorage.setItem("kidseq_report_test", "1");
+  localStorage.removeItem("kidseq_report_outbox");
+  localStorage.removeItem("kidseq_report_test_log");
+}catch(e){}
+</script>
 </head>
 <body>
 <h1>Worksheet scanner — fixtures</h1>
@@ -211,8 +222,11 @@ const PRINTS = [
 
 /* End to end: a sheet that isn't this page's, shown to the real camera loop, must
    open its own page with the notes on it. A second iframe, because this one
-   navigates. `want` is in that page's MODEL rows (/02 is a window over rows 3-7). */
-async function crossSheetRoute(S, fromPath, print, wantPath, wantNotes){
+   navigates. `want` is in that page's MODEL rows (/02 is a window over rows 3-7).
+   `withReport`: debug on, so the scan reports, over a "connection" that never
+   finishes — the report must still be on the device when the next page loads, and
+   that page must send it (owner 2026-10-30: 4 of 6 such scans never reached the log). */
+async function crossSheetRoute(S, fromPath, print, wantPath, wantNotes, withReport){
   const wait = ms => new Promise(r => setTimeout(r, ms));
   const fr = document.createElement("iframe");
   fr.style.cssText = "position:absolute;left:-9999px;width:900px;height:600px;border:0";
@@ -223,7 +237,12 @@ async function crossSheetRoute(S, fromPath, print, wantPath, wantNotes){
     W.requestAnimationFrame = cb => W.setTimeout(() => cb(W.performance.now()), 16);
     W.cancelAnimationFrame = id => W.clearTimeout(id);
     try{ W.KidSequencer.Sequencer.buildGrid(); }catch(e){}
-    W.KidSequencer.Scan.reportSink = () => {};
+    if(withReport){
+      localStorage.removeItem("kidseq_report_outbox");
+      localStorage.removeItem("kidseq_report_test_log");
+      localStorage.setItem("kidseq_report_test", "hang");
+      W.KidSequencer.Scan.debug = true;
+    }else W.KidSequencer.Scan.reportSink = () => {};
     const img = await printPhoto(S, print.file, print.sheet, { cells: print.cells });
     const cv = D.createElement("canvas"); cv.width = FRAME_W; cv.height = FRAME_H;
     const g = cv.getContext("2d"); g.putImageData(img, 0, 0);
@@ -243,8 +262,23 @@ async function crossSheetRoute(S, fromPath, print, wantPath, wantNotes){
       if(notes.length) break;
     }
     const got = fmtNotes(notes);
-    return { pass: path === wantPath && got === wantNotes, detail: path + "  " + (got || "(no notes)") };
+    let pass = path === wantPath && got === wantNotes, detail = path + "  " + (got || "(no notes)");
+    if(withReport){
+      const isScan = x => { try{ return JSON.parse(x.report).kind === "scan"; }catch(e){ return false; } };
+      const waiting = W2.KidSequencer.Reports.outbox.filter(isScan);
+      let r = null; try{ r = JSON.parse(waiting[0].report); }catch(e){}
+      const right = !!r && r.trigger === "ok" && !!r.read && "kidseq:" + r.read.sheet === print.sheet;
+      localStorage.setItem("kidseq_report_test", "1");          // the connection recovers
+      await W2.KidSequencer.Reports.flush();
+      let log = []; try{ log = JSON.parse(localStorage.getItem("kidseq_report_test_log") || "[]").filter(isScan); }catch(e){}
+      const left = W2.KidSequencer.Reports.outbox.filter(isScan).length;
+      pass = pass && waiting.length === 1 && right && log.length === 1 && left === 0;
+      detail += "  ·  report waiting on the next page " + waiting.length + (right ? " (ok, " + r.read.sheet + ")" : " (wrong)") +
+                ", sent " + log.length + ", still waiting " + left;
+    }
+    return { pass, detail };
   }finally{
+    localStorage.setItem("kidseq_report_test", "1");
     fr.remove();
   }
 }
@@ -566,16 +600,18 @@ async function run(){
     if(!pass) fails.push("id · " + short(p.sheet) + " coloured");
   }
   const P = Object.fromEntries(PRINTS.map(p => [short(p.sheet), p]));
-  for(const [from, sheet, path, want, why] of [
+  for(const [from, sheet, path, want, why, withReport] of [
     ["/",   "main3",    "/03",         "0:0+1 1:2+1 2:5+1",
      "THE report: a /03 sheet scanned with the full sequencer open opens /03 with its notes"],
     ["/03", "main5_68", "/02?time=68", "3:0+1 5:6+1 7:11+1",
-     "a 6/8 sheet from /03 opens /02 in 6/8 — /02 shows model rows 3-7, so sheet row 0 is model row 3"]
+     "a 6/8 sheet from /03 opens /02 in 6/8 — /02 shows model rows 3-7, so sheet row 0 is model row 3"],
+    ["/",   "main5",    "/02",         "3:0+1 5:5+1 7:12+1",
+     "debug report of a scan that switches page, network stalled: the next page still sends it", true]
   ]){
     let r;
-    try{ r = await crossSheetRoute(S, from, P[sheet], path, want); }
+    try{ r = await crossSheetRoute(S, from, P[sheet], path, want, withReport); }
     catch(e){ r = { pass:false, detail:"harness: " + e.message }; }
-    const name = "cross · " + sheet + " from " + from;
+    const name = "cross · " + sheet + " from " + from + (withReport ? " · report" : "");
     addRow(name, "-", r.detail, path + "  " + want, why, r.pass);
     results.push({name, pass:r.pass});
     if(!r.pass) fails.push(name);
@@ -607,6 +643,9 @@ document.getElementById("app").addEventListener("load", () => {
     const el = document.getElementById("summary");
     el.textContent = "harness error: " + e.message; el.className = "bad";
     window.__scanTests = { total:0, fails:["harness error: "+e.message], results:[] };
+  }).finally(() => {
+    // Nothing test-made is left waiting to be sent from a later localhost page.
+    try{ ["kidseq_report_test", "kidseq_report_outbox", "kidseq_report_test_log"].forEach(k => localStorage.removeItem(k)); }catch(e){}
   });
 });
 </script>
