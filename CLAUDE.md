@@ -443,7 +443,16 @@ scored 13-28 as a /02 sheet (pass mark 20) because /02's 17 column lines land on
 sheet's 9 and halfway across its squares in between — the median check can't see that. Right
 template 0.88-1.00 on every real frame and blurred render, wrong one ≤ 0.47. Columns only: the
 synthetic `makeSheet` rows sit 0.06 down their slot, so its row lines miss (moving them broke
-reading fixtures again). Shown as `column lines` in the debug panel and in `read.lines` of reports. ?level=N
+reading fixtures again). Shown as `column lines` in the debug panel and in `read.lines` of reports.
+**Both ways up (2026-11-02):** the four squares look the same either way round and corners are
+named by where they sit in the picture, so an upside-down sheet put the template upside down:
+an iPhone in portrait refused 59 clean locks (registration -15, 0% column lines). `_identifySheet`
+now tries every candidate with the corners turned half round too. When the SAME sheet passes
+both ways (the 3-note sheet's grid is nearly centred: wrong way up to 39 vs right way 48), the
+beat-1 badge above the first column decides (`_badgeInk`, shared with the 3/4-6/8 test): right
+way ≥ 0.043, wrong way 0.000 over 104 renders. 712/712 readable photos read correctly either
+way up; stress test unchanged. Shown as `(upside down)` in the debug panel, `read.upsideDown` in
+reports. Sideways is still refused as the wrong shape (hint "Hold flat"). ?level=N
 pages now scan too (they always navigate); lessons have no candidates. `_currentSheetId()`
 still means "the sheet THIS page prints" (print marks, in-place test). The debug panel
 shows `fits …` and `sheet X  registration …  badges …`.
@@ -566,7 +575,7 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   sends the report.
 
 ### Fixtures — `public/scan-tests.html`
-`node serve.js` → <http://localhost:3000/scan-tests.html>. 118 checks (every sheet template, cross-sheet identification incl. a blurred 3-note sheet the /02 template must not win, three end-to-end page switches — one with a stalled network to prove its report survives — the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 123 checks (every sheet template, cross-sheet identification incl. a blurred 3-note sheet the /02 template must not win, every sheet upside down, three end-to-end page switches — one with a stalled network to prove its report survives — the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
 sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
 4-10px, scribble densities), the full 1→16 note-length snapping table, and the
 owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.

@@ -7034,7 +7034,7 @@ function _scanDebugLines(rec){
                ")  skewH " + q.skewH + " skewV " + q.skewV + " (max 3)" +
                (rec.fits ? "  fits " + (rec.fits.join(",") || "none") : ""));
   for(const a of (rec.agree || [])) L.push("grid agreement " + a + "  (rms need <= " + SCAN_FOUR_RMS + ")");
-  if(rec.idScores) L.push("sheet " + (rec.sheet || "?") + "  registration " +
+  if(rec.idScores) L.push("sheet " + (rec.sheet || "?") + (rec.upsideDown ? " (upside down)" : "") + "  registration " +
     Object.keys(rec.idScores).map(k => k + " " + rec.idScores[k]).join(", ") + " / need " + SCAN_REG_MIN +
     (rec.lineFrac ? "  column lines " + Object.keys(rec.lineFrac).map(k => k + " " + rec.lineFrac[k] + "%").join(", ") +
                     " / need " + Math.round(SCAN_LINES_MIN * 100) + "%" : "") +
@@ -8044,32 +8044,66 @@ function _sheetQuadFrom(imgData, ids, diag){
    line check must then pass the block-by-block one (_fourCornerOffsets) — a stand-in
    corner square passes the first and fails the second. Returns the chosen id with
    its grid mapper, or null with the verdict set. `variant` false keeps a 12-column
-   pick as given (a forced template, in diagnose). */
+   pick as given (a forced template, in diagnose).
+
+   Both ways up (owner 2026-11-02: an iPhone held in portrait over the sheet found
+   all four squares in a clean rectangle and refused 59 locks in a row). The four
+   squares look the same either way round, so the corners are named by where they
+   sit in the PICTURE — and an upside-down sheet then puts the template upside down
+   on it. Its grid isn't centred on the sheet, so that scored -15 with no column
+   line found (renders: -67 to -79), and the 3-note sheet, whose grid nearly is
+   centred, could pass upside down and read its notes back to front. So every
+   candidate is also tried with the corners turned half round, and the grid lines
+   decide; an exact tie stays the right way up. */
 function _identifySheet(imgData, quad, diag, variant){
-  const mapPoint = _homographyUnitToQuad(quad.corners);
-  if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return null; }
+  const c = quad.corners;
+  const turns = [{ corners: c, label: "" }, { corners: [c[2], c[3], c[0], c[1]], label: " upside down" }];
   let best = null;
+  const passed = [];
   const scores = {};
-  for(const id of quad.fits){
-    const geom = SHEET_GEOMETRY[id];
-    const gridPoint = _gridMapper(mapPoint, geom);
-    if(!gridPoint) continue;
-    const { reg, lines } = _gridRegistration(imgData, geom, gridPoint);
-    scores[_shortSheet(id)] = Math.round(reg);
-    if(diag) (diag.lineFrac = diag.lineFrac || {})[_shortSheet(id)] = Math.round(lines * 100);
-    if(reg >= SCAN_REG_MIN && lines < SCAN_LINES_MIN){
-      scores[_shortSheet(id)] = Math.round(reg) + " but " + Math.round(lines * 100) + "% of column lines";
-      continue;
+  for(const turn of turns){
+    const mapPoint = _homographyUnitToQuad(turn.corners);
+    if(!mapPoint){ if(diag) diag.verdict = SCAN_FAIL.SINGULAR; return null; }
+    for(const id of quad.fits){
+      const geom = SHEET_GEOMETRY[id];
+      const gridPoint = _gridMapper(mapPoint, geom);
+      if(!gridPoint) continue;
+      const key = _shortSheet(id) + turn.label;
+      const { reg, lines } = _gridRegistration(imgData, geom, gridPoint);
+      scores[key] = Math.round(reg);
+      if(diag) (diag.lineFrac = diag.lineFrac || {})[key] = Math.round(lines * 100);
+      if(reg >= SCAN_REG_MIN && lines < SCAN_LINES_MIN){
+        scores[key] = Math.round(reg) + " but " + Math.round(lines * 100) + "% of column lines";
+        continue;
+      }
+      if(reg >= SCAN_REG_MIN){
+        const a = _fourCornerOffsets(imgData, turn.corners, geom);
+        if(diag) (diag.agree = diag.agree || []).push(key + " " + (a ? "spread " + a.rms + " max " + a.max + " shift " + a.shift + " blocks " + a.found + "/" + a.of : "no blocks"));
+        // Refused here = misregistered, below: same verdict, same hint.
+        if(!a || a.rms > SCAN_FOUR_RMS){ scores[key] = Math.round(reg) + " but grid disagrees"; continue; }
+      }
+      const cand = { id, reg, gridPoint, corners: turn.corners, upsideDown: !!turn.label };
+      if(reg >= SCAN_REG_MIN) passed.push(cand);
+      if(!best || reg > best.reg) best = cand;
     }
-    if(reg >= SCAN_REG_MIN){
-      const a = _fourCornerOffsets(imgData, quad.corners, geom);
-      if(diag) (diag.agree = diag.agree || []).push(_shortSheet(id) + " " + (a ? "spread " + a.rms + " max " + a.max + " shift " + a.shift + " blocks " + a.found + "/" + a.of : "no blocks"));
-      // Refused here = misregistered, below: same verdict, same hint.
-      if(!a || a.rms > SCAN_FOUR_RMS){ scores[_shortSheet(id)] = Math.round(reg) + " but grid disagrees"; continue; }
-    }
-    if(!best || reg > best.reg) best = { id, reg, gridPoint };
   }
-  if(diag){ diag.idScores = scores; diag.reg = best ? best.reg : null; }
+  // The same sheet passing BOTH ways up (the 3-note sheet's grid is nearly
+  // centred: the wrong way scored up to 39 against the right way's 48). The
+  // grid can't settle it, but the beat-1 badge printed above the first column
+  // can: the wrong way up, that window is blank paper below the grid.
+  const other = best && passed.find(p => p.id === best.id && p.upsideDown !== best.upsideDown);
+  if(other){
+    const geom = SHEET_GEOMETRY[best.id];
+    const [mine] = _badgeInk(imgData, geom, best.gridPoint, [0]);
+    const [theirs] = _badgeInk(imgData, geom, other.gridPoint, [0]);
+    if(diag) diag.turnBadge = { kept: +mine.toFixed(3), other: +theirs.toFixed(3) };
+    if(theirs > mine) best = other;
+  }
+  if(diag){
+    diag.idScores = scores; diag.reg = best ? best.reg : null;
+    // The overlay and the log name the corners as the SHEET has them.
+    if(best && best.upsideDown && best.reg >= SCAN_REG_MIN){ diag.corners = best.corners; diag.upsideDown = true; }
+  }
   if(!best){ if(diag) diag.verdict = Object.keys(scores).length ? SCAN_FAIL.MISREG : SCAN_FAIL.NO_INSETS; return null; }
   // Last gate, and the only one that checks the thing we actually care about.
   if(best.reg < SCAN_REG_MIN){ if(diag) diag.verdict = SCAN_FAIL.MISREG; return null; }
@@ -8100,7 +8134,9 @@ function _identifySheet(imgData, quad, diag, variant){
    "3/4", "6/8" or null (can't tell). */
 const SCAN_TS_BADGE_SEEN = 0.02;  // column 1's badge must be at least this dark
 const SCAN_TS_BADGE_REL  = 0.5;   // a badge reads ≥ this fraction of column 1's; an empty slot < it
-function _sheet12Variant(imgData, geom, gridPoint, diag){
+/* How dark the badge window above each of `cols` is, as a fraction of the paper
+   around it. Shared by the 3/4-6/8 test and the which-way-up one. */
+function _badgeInk(imgData, geom, gridPoint, cols){
   const { rows: R, cols: C, cellFrac } = geom;
   const F = _lumField(imgData);
   const W = imgData.width, H = imgData.height;
@@ -8111,7 +8147,7 @@ function _sheet12Variant(imgData, geom, gridPoint, diag){
            (_lumAt(imgData, x0, y0 + 1) * (1 - fx) + _lumAt(imgData, x0 + 1, y0 + 1) * fx) * fy;
   };
   const S = 12;
-  const inkAbove = c => {
+  return cols.map(c => {
     let dark = 0;
     for(let iy = 0; iy < S; iy++) for(let ix = 0; ix < S; ix++){
       const u = (c + (0.18 + 0.64 * (ix + 0.5) / S) * cellFrac) / C;
@@ -8121,8 +8157,10 @@ function _sheet12Variant(imgData, geom, gridPoint, diag){
       if(ref > 0) dark += Math.max(0, 1 - lum(p.x, p.y) / ref);
     }
     return dark / (S * S);
-  };
-  const b0 = inkAbove(0), b4 = inkAbove(4), b6 = inkAbove(6), b8 = inkAbove(8);
+  });
+}
+function _sheet12Variant(imgData, geom, gridPoint, diag){
+  const [b0, b4, b6, b8] = _badgeInk(imgData, geom, gridPoint, [0, 4, 6, 8]);
   const bar = b0 * SCAN_TS_BADGE_REL;
   const v = b0 < SCAN_TS_BADGE_SEEN ? null
           : (b4 >= bar && b8 >= bar && b6 < bar) ? "3/4"
@@ -8366,7 +8404,7 @@ function _scanReport(trigger, diag, notes){
   };
   if(diag && diag.sheet){
     base.read = { sheet: diag.sheet, here: "kidseq:" + diag.sheet === _currentSheetId(), scores: diag.idScores || null,
-                  lines: diag.lineFrac || null, badges: diag.badges || null,
+                  lines: diag.lineFrac || null, badges: diag.badges || null, upsideDown: !!diag.upsideDown,
                   notes: (notes || []).map(n => n.row + ":" + n.start + "+" + n.len).join(" ") };
   }
   // The decision text for the latest frame of each refusal, most frequent first,

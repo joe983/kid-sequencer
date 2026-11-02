@@ -205,13 +205,20 @@ async function printPhoto(S, file, sheetId, o){
       g.closePath(); g.fill();
     }
   }
+  let out = cv;
   if(o.blur){                                  // a soft focus, after the colouring
     const c2 = document.createElement("canvas"); c2.width = FRAME_W; c2.height = FRAME_H;
     const g2 = c2.getContext("2d", {willReadFrequently:true});
-    g2.filter = "blur(" + o.blur + "px)"; g2.drawImage(cv, 0, 0);
-    return g2.getImageData(0, 0, FRAME_W, FRAME_H);
+    g2.filter = "blur(" + o.blur + "px)"; g2.drawImage(out, 0, 0);
+    out = c2;
   }
-  return g.getImageData(0, 0, FRAME_W, FRAME_H);
+  if(o.flip){                                  // the coloured sheet, photographed the other way up
+    const c3 = document.createElement("canvas"); c3.width = FRAME_W; c3.height = FRAME_H;
+    const g3 = c3.getContext("2d", {willReadFrequently:true});
+    g3.translate(FRAME_W, FRAME_H); g3.rotate(Math.PI); g3.drawImage(out, 0, 0);
+    out = c3;
+  }
+  return out.getContext("2d").getImageData(0, 0, FRAME_W, FRAME_H);
 }
 
 /* The five printable sheets, rendered through the app's real print path
@@ -604,6 +611,21 @@ async function run(){
            "read on another page's scanner, the notes come back in their own sheet's rows and columns", pass);
     results.push({name:"id · " + short(p.sheet) + " coloured", pass});
     if(!pass) fails.push("id · " + short(p.sheet) + " coloured");
+
+    /* Upside down (owner 2026-11-02: an iPhone in portrait over the sheet refused
+       59 clean locks). The same coloured sheet, photo turned over: the notes must
+       come back exactly as written, in the sheet's own rows and columns. */
+    {
+      const name = "id · " + short(p.sheet) + " upside down";
+      let d = null, err = null;
+      try{ d = S.diagnose(await printPhoto(S, p.file, p.sheet, { w: 340, rot: 2, cells: p.cells, blur: 0.8, flip: true })); }catch(e){ err = e.message; }
+      const got = d ? fmtNotes(d.notes) : err;
+      const ok = !!d && d.verdict === "ok" && d.sheet === short(p.sheet) && d.upsideDown === true && got === p.want;
+      addRow(name, d ? d.verdict + (d.upsideDown ? " (upside down)" : "") : "-", got, p.want,
+             "the four squares look the same either way round; the grid lines decide which way up the sheet is", ok);
+      results.push({name, pass: ok});
+      if(!ok) fails.push(name);
+    }
   }
   /* A 3-note sheet a little out of focus (owner 2026-10-30: real photos scored it
      13-28 as a /02 sheet against 38-47 as itself). The /02 template must pass the
