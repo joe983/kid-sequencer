@@ -6714,6 +6714,19 @@ const SCAN_FILL_MIN     = 0.20;
    a half-coloured sheet still 115 — against 0 for the missing-mark impostor and
    -1 for a sheet coloured edge to edge. 20 sits clear of both ends. */
 const SCAN_REG_MIN      = 20;
+/* ...and column line by column line (owner 2026-10-30). The check above is a median
+   over ALL the predicted lines, and a template that shares only some of the sheet's
+   lines can pass it: blurred, a 3-note sheet scored 13-28 as the 16-column /02 sheet
+   (the right one 38-47), because /02's column lines land on the 3-note sheet's 9
+   and halfway across its squares in between. So each column line is also judged on
+   its own — there when it is at least half the pass mark darker than the squares —
+   and a template must find at least this fraction of them on the paper. Columns
+   only: they are where the sheets differ (17, 13 and 9 lines), and the synthetic
+   fixtures draw rows with a margin the print doesn't have, so their row lines fall
+   between rows. Measured (median of 40 points per line): the right template
+   0.88-1.00 on all 10 real camera frames and every blurred render, the wrong one
+   never above 0.47. */
+const SCAN_LINES_MIN    = 0.7;
 const SCAN_GAP_JOIN     = 0.50; // fraction of the joining threshold a gap must hit
 /* A hand-drawn run tapers at its ends. Measured on a real four-cell scribble:
    0.14 / 0.75 / 0.86 / 0.64 — the first cell fell under the bar and the note came
@@ -7023,6 +7036,8 @@ function _scanDebugLines(rec){
   for(const a of (rec.agree || [])) L.push("grid agreement " + a + "  (rms need <= " + SCAN_FOUR_RMS + ")");
   if(rec.idScores) L.push("sheet " + (rec.sheet || "?") + "  registration " +
     Object.keys(rec.idScores).map(k => k + " " + rec.idScores[k]).join(", ") + " / need " + SCAN_REG_MIN +
+    (rec.lineFrac ? "  column lines " + Object.keys(rec.lineFrac).map(k => k + " " + rec.lineFrac[k] + "%").join(", ") +
+                    " / need " + Math.round(SCAN_LINES_MIN * 100) + "%" : "") +
     (rec.badges ? "  badges 1:" + rec.badges.b0 + " 5:" + rec.badges.b4 + " 7:" + rec.badges.b6 +
                   " 9:" + rec.badges.b8 + " -> " + rec.badges.v : ""));
   else if(rec.reg != null) L.push("grid registration " + rec.reg + " / need " + SCAN_REG_MIN);
@@ -7651,15 +7666,21 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
    The printed grid lines are the answer key: sample where they are PREDICTED to
    be and compare against the cell interiors. A correct lock puts ink under the
    lines and paper inside the cells; a wrong one puts the same thing under both.
-   Returns that gap in luminance — bigger is better registered. See SCAN_REG_MIN
-   for the measured spread. */
+   Returns that gap in luminance as `reg` — bigger is better registered — and the
+   fraction of column lines that are there on their own as `lines`. See
+   SCAN_REG_MIN and SCAN_LINES_MIN for the measured spreads. */
 function _gridRegistration(imgData, geom, mapPoint){
   const { rows: R, cols: C, cellFrac } = geom;
-  const border = [], interior = [];
+  const border = [], columns = [], interior = [];
   const N = 40;
-  for(let c=0; c<=C; c++) for(let i=0; i<N; i++){
-    const p = mapPoint(Math.min(1, c / C), 0.02 + 0.96 * i / (N - 1));
-    border.push(_lumAt(imgData, p.x, p.y));
+  for(let c=0; c<=C; c++){
+    const l = [];
+    for(let i=0; i<N; i++){
+      const p = mapPoint(Math.min(1, c / C), 0.02 + 0.96 * i / (N - 1));
+      l.push(_lumAt(imgData, p.x, p.y));
+    }
+    columns.push(l);
+    border.push(...l);
   }
   for(let r=0; r<=R; r++) for(let i=0; i<N; i++){
     const p = mapPoint(0.02 + 0.96 * i / (N - 1), Math.min(1, r / R));
@@ -7670,7 +7691,9 @@ function _gridRegistration(imgData, geom, mapPoint){
     interior.push(_lumAt(imgData, p.x, p.y));
   }
   const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
-  return med(interior) - med(border);
+  const inner = med(interior);
+  const present = columns.filter(l => inner - med(l) >= SCAN_REG_MIN / 2).length;
+  return { reg: inner - med(border), lines: present / columns.length };
 }
 
 /* ---- apply a scanned note list onto the CURRENT page's grid ----
@@ -8031,8 +8054,13 @@ function _identifySheet(imgData, quad, diag, variant){
     const geom = SHEET_GEOMETRY[id];
     const gridPoint = _gridMapper(mapPoint, geom);
     if(!gridPoint) continue;
-    const reg = _gridRegistration(imgData, geom, gridPoint);
+    const { reg, lines } = _gridRegistration(imgData, geom, gridPoint);
     scores[_shortSheet(id)] = Math.round(reg);
+    if(diag) (diag.lineFrac = diag.lineFrac || {})[_shortSheet(id)] = Math.round(lines * 100);
+    if(reg >= SCAN_REG_MIN && lines < SCAN_LINES_MIN){
+      scores[_shortSheet(id)] = Math.round(reg) + " but " + Math.round(lines * 100) + "% of column lines";
+      continue;
+    }
     if(reg >= SCAN_REG_MIN){
       const a = _fourCornerOffsets(imgData, quad.corners, geom);
       if(diag) (diag.agree = diag.agree || []).push(_shortSheet(id) + " " + (a ? "spread " + a.rms + " max " + a.max + " shift " + a.shift + " blocks " + a.found + "/" + a.of : "no blocks"));
@@ -8338,7 +8366,7 @@ function _scanReport(trigger, diag, notes){
   };
   if(diag && diag.sheet){
     base.read = { sheet: diag.sheet, here: "kidseq:" + diag.sheet === _currentSheetId(), scores: diag.idScores || null,
-                  badges: diag.badges || null,
+                  lines: diag.lineFrac || null, badges: diag.badges || null,
                   notes: (notes || []).map(n => n.row + ":" + n.start + "+" + n.len).join(" ") };
   }
   // The decision text for the latest frame of each refusal, most frequent first,

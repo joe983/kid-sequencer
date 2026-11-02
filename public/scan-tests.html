@@ -205,6 +205,12 @@ async function printPhoto(S, file, sheetId, o){
       g.closePath(); g.fill();
     }
   }
+  if(o.blur){                                  // a soft focus, after the colouring
+    const c2 = document.createElement("canvas"); c2.width = FRAME_W; c2.height = FRAME_H;
+    const g2 = c2.getContext("2d", {willReadFrequently:true});
+    g2.filter = "blur(" + o.blur + "px)"; g2.drawImage(cv, 0, 0);
+    return g2.getImageData(0, 0, FRAME_W, FRAME_H);
+  }
   return g.getImageData(0, 0, FRAME_W, FRAME_H);
 }
 
@@ -598,6 +604,23 @@ async function run(){
            "read on another page's scanner, the notes come back in their own sheet's rows and columns", pass);
     results.push({name:"id · " + short(p.sheet) + " coloured", pass});
     if(!pass) fails.push("id · " + short(p.sheet) + " coloured");
+  }
+  /* A 3-note sheet a little out of focus (owner 2026-10-30: real photos scored it
+     13-28 as a /02 sheet against 38-47 as itself). The /02 template must pass the
+     overall line check here — or this case proves nothing — and be turned away by
+     the column-line check (SCAN_LINES_MIN). */
+  for(const o of [{ blur: 2.2 }, { blur: 2.3, w: 360, rot: 2 }]){
+    const name = "id · main3 blurred " + JSON.stringify(o);
+    let d = null, err = null;
+    try{ d = S.diagnose(await printPhoto(S, "print-main3.png", "kidseq:main3", o)); }catch(e){ err = e.message; }
+    const s5 = d && d.idScores ? String(d.idScores.main5) : "";
+    const pass = !!d && d.sheet === "main3" && parseInt(s5, 10) >= 20 && /column lines/.test(s5);
+    addRow(name, d ? d.verdict : "-",
+           d ? ("sheet " + d.sheet + "  " + JSON.stringify(d.idScores || {}) + "  column lines % " + JSON.stringify(d.lineFrac || {})) : err,
+           "sheet main3, /02 over 20 but short of column lines",
+           "the /02 template shares half the 3-note sheet's column lines; only those on their own tell them apart", pass);
+    results.push({name, pass});
+    if(!pass) fails.push(name);
   }
   const P = Object.fromEntries(PRINTS.map(p => [short(p.sheet), p]));
   for(const [from, sheet, path, want, why, withReport] of [

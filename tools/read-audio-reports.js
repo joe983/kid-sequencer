@@ -59,6 +59,7 @@ async function accessToken(){
       console.log(`  ${r.secs}s, ${r.ticks} frames${r.openSecs != null ? ` (camera open ${r.openSecs}s)` : ""}  video ${r.video}  hint ${r.hint || "-"}  shown ${JSON.stringify(r.hintsShown || {})}  maxLock ${r.maxLock}  manual ${r.manual}`);
       // A frame that was read (debug "ok", or "empty"): which sheet won, and the notes.
       if(r.read) console.log(`  READ sheet ${r.read.sheet}${r.read.here ? " (this page)" : " -> its own page"}  scores ${JSON.stringify(r.read.scores)}` +
+                             `${r.read.lines ? "  lines % " + JSON.stringify(r.read.lines) : ""}` +
                              `${r.read.badges ? "  badges " + JSON.stringify(r.read.badges) : ""}\n  notes ${r.read.notes || "(none)"}`);
       console.log(`  refusals ${JSON.stringify(r.tally)}`);
       for(const [v, txt] of Object.entries(r.records || {}))
