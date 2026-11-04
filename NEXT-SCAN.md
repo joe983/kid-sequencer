@@ -86,13 +86,48 @@ be reprinted. **When the sheet is next reprinted, do this first**, then:
 
 ### 2. Light colouring
 
-The fill bar sits at 0.15 ink (0.20 before 2026-11-04 — see Round 7). The
-owner's pencil colouring now reads 0.34 and up, and no empty square has read
-above 0.08. A tapered run end can still come in under the bar, which is why
-`SCAN_FILL_EXTEND` exists (a cell touching a filled one is held to half the bar).
-The faint r6c6 mark on the July sheet (real-02/03/05) reads 0.04-0.31 depending
-on the frame: below 0.10 it can't be told from an empty square, so those
-fixtures allow it to be missed (never invented).
+A square is filled at 0.14 AVERAGE DARKNESS (Round 8; it was an ink count at
+0.20, then 0.15). Real pencil on iPad and iPhone measured 0.23-0.49, empty squares
+0.00-0.09. There is no taper rule any more. Colouring much fainter than the
+lightest pencil measured (0.23) will be missed — the options are "colour it in
+firmly" on the sheet or a lower bar, which trades against grainy-iPad empties.
+
+---
+
+## Round 8 (2026-11-04) — judge squares on average darkness, not an ink count
+
+**Symptom (first live iPhone scans after Round 7).** The 5-row sheet's four-square
+pencil bar read whole on the iPad but as 2+1 on two iPhone scans, and a later iPhone
+portrait scan read a single square as a pair (`0:0+2`).
+
+**Two wrong fixes first.** (1) Loosening the per-pixel ink test (`SCAN_FILL_RATIO`
+0.70 -> 0.78) made the light iPhone squares read 0.66 instead of 0.17 in emulation,
+but the iPad's grain and the blurred halos of printed lines then read as ink: one iPad
+scan returned 9 notes for 4. Reverted (`ad7efab`). (2) I had only emulated the
+iPhone's softness, not the iPad's grain — see the rule below.
+
+**What fixed the diagnosis: per-square numbers in the report** (`67bc165`: `read.ink`,
+`read.dark`, `fill`, `noise`, `cam`, `orient`). On the iPad the same four pencil
+squares read 90/94/43/76 on the ink count but 34/34/30/33 on average darkness; the iPhone
+81/62/28/68 vs 35/31/26/32. The invented `0:0+2` was an ink count of 10% (the taper
+rule's floor) on a square whose average darkness was 3%.
+
+**The decision now.** `_scanNotesFromFrame` computes, per square, the mean of
+`max(0, 1 - lum/localMean)` over a 10x10 grid in the window (`darkMap`) and fills a square at
+`max(SCAN_DARK_MIN 0.14, blank + SCAN_DARK_MARGIN 0.10)`. Averages survive both soft
+and grainy pictures where a yes/no count does not. The taper rule (`SCAN_FILL_EXTEND`,
+core window) is gone. The ink count is still computed for the report and the join fallback.
+
+**Measured.** Owner photos x emulations (720 clean, 480 soft, 480 softer, 360, and 640/480
+with added grain sd 18-30 lum and a 35% shading gradient): weakest coloured square 0.25-0.40,
+strongest empty 0.08. Live reports: empty 0.00-0.09, coloured 0.23-0.49. Stress 140/140
+correct, 0 wrong in 1,400; scan-tests 124/124 (three synthetic scribbles restated at the
+faint end of REAL pencil, 9-11 strokes, because 7-8 read 0.13-0.16 — fainter than any pencil
+measured; the July frames now also read their faint r6c6).
+
+**Rule: before pushing any change to how a square is judged, test it on a GRAINY picture and
+a SOFT picture of the owner's photos** (`ratio.mjs`/`grade.mjs`-style harness: downscale, blur,
+JPEG, add noise, stretch to 720), not just one.
 
 ---
 

@@ -6705,23 +6705,16 @@ const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local pa
    reading steady to a few hundredths (2026-11-04). Read once per locked frame. */
 const SCAN_CELL_SAMPLES = 10;
 const SCAN_BLANK_PCT    = 0.20; // this percentile of cells is taken as blank
-const SCAN_FILL_MARGIN  = 0.10; // ink fraction a filled cell must clear it by
-/* Absolute floor. Measured on a real scanned sheet: blank cells read 0.00 ink
-   (p50, p80, p90 and p95 all zero — the sample window sits inside the cell, away
-   from the printed border) while the four coloured ones read 0.39, 0.81, 0.94
-   and 0.94. With the blank population at literally zero there is no reason to
-   sit as high as the original 0.22.
-
-   The floor used to be 0.20 to sit above a 0.17 "bleed" from the printed cell
-   borders. That bleed was the template's fault: it put a quarter of every
-   square in the gap, so the window's left edge sat on the border. With the
-   squares where the print has them and the window clear of the border
-   (SCAN_CELL_INSET), the bleed is gone. Measured 2026-11-04 over the owner's
-   five photos (pencil, shadow, a double-sided sheet showing through) and the ten
-   real frames: no empty square above 0.08; the owner's pencil colouring 0.34 and
-   up. 0.15 keeps about twice the worst empty square, and catches sparse
-   colouring the old floor dropped (synthetic loose scribble reads 0.17-0.18). */
-const SCAN_FILL_MIN     = 0.15;
+/* A square is filled when its average darkness against the paper round it clears
+   the blank cells' by this margin, and never less than the floor. Measured
+   2026-11-04 from the first debug reports that carried every square's number, on
+   an iPad (landscape and portrait) and an iPhone (both) scanning the owner's
+   5-row sheet in pencil: empty squares 0.00-0.03, up to 0.09 beside a dark run
+   under a shading gradient; coloured squares 0.23-0.49, the lightest single square
+   0.23-0.25 and the lightest square of a four-square bar 0.26-0.30. The floor sits
+   at the geometric middle of the nearest two (0.09 and 0.23). */
+const SCAN_DARK_MARGIN  = 0.10;
+const SCAN_DARK_MIN     = 0.14;
 
 /* Registration check. Every geometry test upstream asks "is this quad plausible";
    none asks the question that actually matters — "did the grid land where we
@@ -6764,12 +6757,6 @@ const SCAN_GAP_CONTRAST = 20;   // lum units between blank gap and ink to judge 
    a tapered run (real-05); 0.10 and 0.08 both read everything 0.15 did plus that,
    with every empty square at 0.00-0.06 — 0.10 keeps more room from the border. */
 const SCAN_CELL_INSET   = 0.10;
-/* A hand-drawn run tapers at its ends. Measured on a real four-cell scribble:
-   0.14 / 0.75 / 0.86 / 0.64 — the first cell fell under the bar and the note came
-   back a cell short of what the child drew. A cell TOUCHING a filled one is held
-   to this fraction of the bar instead. It can only ever extend an existing run,
-   never invent a note from nothing, so the downside is bounded. */
-const SCAN_FILL_EXTEND  = 0.50;
 
 /* Corner-mark detection thresholds. Every one of these was set from a measured
    scan log rather than guessed — see the two rounds recorded in NEXT-SCAN.md.
@@ -7081,16 +7068,16 @@ function _scanDebugLines(rec){
   if(gr){
     L.push("paper " + gr.white + " (local x" + gr.fillRatio + ")  lum p05 " + gr.p05 + " p50 " + gr.p50 +
            " p95 " + gr.p95 + "  notes " + gr.notes);
-    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt +
-           ", extends a run at " + gr.extendAt);
+    L.push("blank baseline " + gr.blank + " -> filled at " + gr.fillAt + " (average darkness)" +
+           (gr.noise ? "  grain sd " + gr.noise.sd : ""));
     if(gr.legal) L.push("note lengths " + gr.legal +
       (gr.snaps && gr.snaps.length ? "   snapped " + gr.snaps.join(" ") : "   snapped none"));
-    for(const row of (gr.cellMap || [])){
-      // Relative to the decisions, so near-misses are visible: '#' well over,
-      // 'H' over the bar, '+' only good enough to extend a neighbouring run.
+    for(const row of (gr.darkMap || [])){
+      // Relative to the bar, so near-misses are visible: '#' well over, 'H' over,
+      // '+' over half of it, '.' well under.
       L.push("  " + row.map(v => v >= gr.fillAt * 1.5 ? "#"
                                : v >= gr.fillAt       ? "H"
-                               : v >= gr.extendAt     ? "+" : ".").join(""));
+                               : v >= gr.fillAt * 0.5 ? "+" : ".").join(""));
     }
     // Every pair of coloured neighbours: did the gap between them read as coloured?
     if(gr.joins && gr.joins.length) L.push("gaps (joined below " + SCAN_GAP_WHITE + "): " + gr.joins.join(", "));
@@ -7606,12 +7593,6 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   // (the strip the pre-2026-11-04 geometry called the gap). Now only the fallback
   // for colouring too faint to judge the gap's brightness — see gapJoined.
   const gapU  = (c, t) => (c + SCAN_GAP_FROM + t * (1 - SCAN_GAP_FROM)) / C;
-  // The middle half of the cell only. Used for the taper rule below: a coloured
-  // neighbour bleeding across a sub-pixel misregistration lands on the cell EDGE
-  // nearest it, while a genuinely (if faintly) coloured cell has ink through its
-  // middle. Sampling the core is what tells those two apart — they are
-  // indistinguishable by amount, both measuring ~0.15 of the full cell.
-  const coreU = (c, t) => (c + (0.25 + t * 0.5) * cellFrac) / C;
 
   const S = SCAN_CELL_SAMPLES, SS = S * S;
   const darkFraction = (uFn, r, c) => {
@@ -7623,37 +7604,47 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     return dark / SS;
   };
 
-  // Measure every cell first, then let the sheet's own blank cells set the bar.
-  const cellInk = [], gapInk = [], coreInk = [], flat = [];
+  /* Measure every cell, then let the sheet's own blank cells set the bar.
+
+     A square is judged on how much DARKER than the paper round it its window is,
+     averaged over the whole window — not on how many of its points pass a yes/no
+     brightness test. Pencil is thin strokes with paper between them, and a soft
+     picture (the iPhone's 480x640 video) or a grainy one (the iPad's) moves a
+     yes/no count by tens of points while the average barely moves: the same
+     four-square pencil bar read 90/94/43/76 on the count and 34/34/30/33 on the
+     average (owner's iPad, 2026-11-04), and a lighter square flipped between 17 and
+     38 on the count on the iPhone against 23-28 on the average. Empty squares sit
+     at 0-9. The count is still taken, for the report and the join fallback. */
+  const DS = 10;
+  const cellInk = [], gapInk = [], darkMap = [], qStat = [], flat = [];
   for(let r=0; r<R; r++){
-    const cr = [], gr = [], kr = [];
+    const cr = [], gr = [], dr = [], qr = [];
     for(let c=0; c<C; c++){
-      const v = darkFraction(cellU, r, c);
-      cr.push(v); flat.push(v);
+      cr.push(darkFraction(cellU, r, c));
       gr.push(darkFraction(gapU, r, c));
-      kr.push(darkFraction(coreU, r, c));
+      let sum = 0, qs = 0, qq = 0;
+      for(let iy=0; iy<DS; iy++) for(let ix=0; ix<DS; ix++){
+        const p = mapPoint(cellU(c, (ix + 0.5) / DS), rowV(r, (iy + 0.5) / DS));
+        const ref = F.localMean(p.x, p.y);
+        const q = ref > 0 ? _lumAt(imgData, p.x, p.y) / ref : 1;
+        sum += Math.max(0, 1 - q); qs += q; qq += q * q;
+      }
+      const d = sum / (DS * DS);
+      dr.push(d); qr.push([qs, qq]); flat.push(d);
     }
-    cellInk.push(cr); gapInk.push(gr); coreInk.push(kr);
+    cellInk.push(cr); gapInk.push(gr); darkMap.push(dr); qStat.push(qr);
   }
   const sorted = flat.slice().sort((a, b) => a - b);
   const blank = sorted[Math.floor(sorted.length * SCAN_BLANK_PCT)] || 0;
-  const fillAt = Math.max(SCAN_FILL_MIN, blank + SCAN_FILL_MARGIN);
+  const fillAt = Math.max(SCAN_DARK_MIN, blank + SCAN_DARK_MARGIN);
 
-  // Primary decision, then one taper pass. Neighbours are tested against the
-  // ORIGINAL set, never the extended one, so a row of faint cells cannot cascade
-  // into a run that was never drawn.
-  const primary = cellInk.map(row => row.map(v => v >= fillAt));
-  // Never below 0.10, what it was before SCAN_FILL_MIN came down to 0.15: at 0.075
-  // a square reading 0.07 beside a run was pulled in as a note.
-  const extendAt = Math.max(0.10, fillAt * SCAN_FILL_EXTEND);
-  // Judged on the CORE, not the whole cell. Half a pixel of registration error
-  // is enough for a filled cell to spill into its neighbour's window at ~0.17 —
-  // the same magnitude as the genuine tapered end this rule exists to catch, so
-  // no threshold separates them. Where the ink SITS does: leakage hugs the
-  // shared edge, a real stroke crosses the middle.
-  const filled = primary.map((row, r) => row.map((on, c) =>
-    on || (coreInk[r][c] >= extendAt &&
-           ((c > 0 && primary[r][c - 1]) || (c < C - 1 && primary[r][c + 1])))));
+  // No taper rule any more: it let a square beside a run in on a 10% ink count
+  // (iPhone portrait read a single square as a pair while the square's average
+  // darkness was 3%). A tapered end of a hand-drawn run still averages well above
+  // an empty square, so it clears the one bar on its own.
+  const extendAt = fillAt;
+  const primary = darkMap.map(row => row.map(v => v >= fillAt));
+  const filled = primary;
 
   const cellFilled = (r, c) => filled[r][c];
 
@@ -7738,29 +7729,11 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     diag.grid.extendAt = +extendAt.toFixed(2);
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
 
-    /* Numbers for the report (no decision reads them): how dark each square is on
-       average against the paper round it — a graded measure that, unlike the ink
-       count above, is not thrown by a soft picture or by grain — and how grainy the
-       picture is, as the spread of blank squares' brightness against their paper.
-       With these a scan that goes wrong can be diagnosed from the log alone. */
-    const DS = 10, dark = [], q2 = [];
+    // Average darkness per square (what the decision reads), and how grainy the
+    // picture is: the spread of blank squares' brightness against their paper.
+    diag.grid.darkMap = darkMap.map(row => row.map(v => +v.toFixed(2)));
     let qs = 0, qq = 0, qn = 0;
-    for(let r=0; r<R; r++){
-      const row = [];
-      for(let c=0; c<C; c++){
-        let sum = 0;
-        for(let iy=0; iy<DS; iy++) for(let ix=0; ix<DS; ix++){
-          const p = mapPoint(cellU(c, (ix + 0.5) / DS), rowV(r, (iy + 0.5) / DS));
-          const ref = F.localMean(p.x, p.y);
-          const q = ref > 0 ? _lumAt(imgData, p.x, p.y) / ref : 1;
-          sum += Math.max(0, 1 - q);
-          if(!primary[r][c]){ qs += q; qq += q * q; qn++; }
-        }
-        row.push(+(sum / (DS * DS)).toFixed(2));
-      }
-      dark.push(row);
-    }
-    diag.grid.darkMap = dark;
+    for(let r=0; r<R; r++) for(let c=0; c<C; c++) if(!primary[r][c]){ qs += qStat[r][c][0]; qq += qStat[r][c][1]; qn += DS * DS; }
     if(qn){ const m = qs / qn; diag.grid.noise = { mean: +m.toFixed(3), sd: +Math.sqrt(Math.max(0, qq / qn - m * m)).toFixed(3) }; }
   }
 

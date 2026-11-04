@@ -467,6 +467,12 @@ last square); registration samples border centres (`_gridLineAt`) ±1 camera px.
 "kidseq:main"'s insets were re-measured (0.20951/0.82240); the July real frames are
 the OLD 4-circle layout. **If the printed cell size, gap or border ever changes,
 change these fractions with it.** Full record: NEXT-SCAN.md Round 7.
+**A square is judged on its AVERAGE DARKNESS against the paper round it** (`darkMap`,
+bar 0.14), not on a count of pixels passing a brightness test — the count swung 17-94 on one
+pencil square between iPad (grainy) and iPhone (soft video) while the average held 25-35.
+Don't loosen the per-pixel ink test (0.78 invented notes on the iPad), and test any
+change to square-reading on a grainy AND a soft picture. Reports (`?scandebug=1`) carry
+every square's numbers (`read.ink`/`read.dark`), grain, and the camera. NEXT-SCAN.md Round 8.
 
 ### Geometry — 4 printed corner marks
 Four solid black squares print just outside the content (above title box, above tempo,
