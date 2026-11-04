@@ -457,6 +457,17 @@ pages now scan too (they always navigate); lessons have no candidates. `_current
 still means "the sheet THIS page prints" (print marks, in-place test). The debug panel
 shows `fits …` and `sheet X  registration …  badges …`.
 
+### Template = the printed squares (corrected 2026-11-04)
+`cellFrac`/`gapFrac`/`borderFrac` are the PRINTED square, gap and 3px border per
+pitch, straight from the CSS (64+4, 78+4, 140+4 px) — every sheet used to say a
+guessed 0.72, which put each square's border inside the cell window: every EMPTY
+square read 0.17 against a 0.20 bar (the invented notes) and a light pencil block
+was lost among them. `_gridMapper` scales slots by C/(C−gapFrac) (no gap after the
+last square); registration samples border centres (`_gridLineAt`) ±1 camera px.
+"kidseq:main"'s insets were re-measured (0.20951/0.82240); the July real frames are
+the OLD 4-circle layout. **If the printed cell size, gap or border ever changes,
+change these fractions with it.** Full record: NEXT-SCAN.md Round 7.
+
 ### Geometry — 4 printed corner marks
 Four solid black squares print just outside the content (above title box, above tempo,
 below AI button, below note-length tools), placed symmetrically about the content

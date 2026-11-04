@@ -656,25 +656,38 @@ const CURRENT_LEVEL_KEY = (LEARN_LEVEL && !LESSON) ? _lvlParam : null;
    A template WITHOUT `grid` is not scannable — the scanner skips it rather than
    falling back to an assumption. The lvl* sheets are in that state: learning
    mode hides #printBtn (.learning-mode #printBtn{display:none}), so there is no
-   way to print one yet. Give them measured insets if that changes. */
+   way to print one yet. Give them measured insets if that changes.
+
+   cellFrac / gapFrac / borderFrac are the PRINTED square, gap and border as
+   fractions of one square+gap pitch — straight from the CSS: a .cell is
+   var(--cell) square with a 3px border, cells sit var(--gap) = 4px apart, and the
+   print caps --cell at 64 (full), 78 (five-note) and 140 (three-note). So 64/68,
+   78/82 and 140/144. The grid has no gap after its last square, which
+   _gridMapper accounts for.
+
+   Until 2026-11-04 every sheet said cellFrac 0.72 — a guess that put a quarter
+   of each square into the "gap" and spread 16 slots over 15 gaps. The cell
+   reader's window then sat on each square's left border (every empty square
+   read 0.17 against a 0.20 bar) and the line checks predicted borders where the
+   paper gap is. A pencil-coloured square on a real sheet (owner photo) was lost
+   between the two. See NEXT-SCAN.md. */
 const SHEET_GEOMETRY = {
-  "kidseq:main": { view: "full", levelKey: null, rows: 8, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
-                   grid: { u0: 0.07425, v0: 0.20202, u1: 0.95248, v1: 0.83115 },
+  /* Re-measured 2026-11-04 (printMarkInsets, 1600x900). The vertical insets had
+     drifted ~0.1 of a row at each end from the 2026-07 values (0.20202/0.83115):
+     an owner photo of a printed sheet shows the real rows where these put them. */
+  "kidseq:main": { view: "full", levelKey: null, rows: 8, cols: 16, cellFrac: 64/68, gapFrac: 4/68, borderFrac: 3/68,
+                   grid: { u0: 0.07449, v0: 0.20951, u1: 0.95223, v1: 0.82240 },
                    quadAspect: 1.438 },
   /* The two simpler faces print their own sheets (see VIEW ROUTING). Each is a
      different printed layout — different row count, cell size and, on /03, a
      different column count — so each needs its own measured insets and aspect;
      re-derive with printMarkInsets() from that view and paste back.
 
-     ⚠️ These two are measured, NOT yet confirmed against a real printed sheet.
-     printMarkInsets() reads "kidseq:main" as v0 0.20939 / v1 0.82296 where the
-     committed (production-verified) values are 0.20202 / 0.83115 — a ~0.008
-     vertical disagreement that predates this work and reproduces identically on
-     unmodified main, so the same bias probably sits in the two rows below. The
-     horizontal insets agree to 5 decimal places on main, so u0/u1 are trusted.
-     Print one of each and scan it before treating these as settled — see
-     NEXT-SCAN.md. */
-  "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 0.72, gapFrac: 0.28,
+     The "~0.008 vertical disagreement" once noted here was "kidseq:main"'s
+     committed insets being out of date, not the measurement: a photo of a real
+     8-row print matched printMarkInsets() (2026-11-04). These rows re-measure to
+     within 0.0004 of the values below, and real prints of each read correctly. */
+  "kidseq:main5": { view: "five",  levelKey: null, rows: 5, cols: 16, cellFrac: 78/82, gapFrac: 4/82, borderFrac: 3/82,
                     // Re-measured 2026-10-28: the layout had moved since 2026-09-05
                     // (real desktop prints read ~1.72 on camera; stored 1.893 refused them).
                     grid: { u0: 0.06280, v0: 0.22218, u1: 0.95984, v1: 0.67892 },
@@ -683,7 +696,7 @@ const SHEET_GEOMETRY = {
      2026-10-07 the same way as the two above (headless Chrome 1600x900, same run
      as a control that re-read "kidseq:main5"/"main3" within 0.0006 of the values
      committed above) — so it carries the same caveat: not yet paper-verified. */
-  "kidseq:main5_34": { view: "five", timeSig: "3/4", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
+  "kidseq:main5_34": { view: "five", timeSig: "3/4", levelKey: null, rows: 5, cols: 12, cellFrac: 78/82, gapFrac: 4/82, borderFrac: 3/82,
                     grid: { u0: 0.08102, v0: 0.24117, u1: 0.94818, v1: 0.73695 },   // re-measured 2026-10-28
                     quadAspect: 1.380 },
   /* /02 in 6/8 (/02?time=68): also 5 rows x 12 columns, with its own id so a scan
@@ -691,10 +704,10 @@ const SHEET_GEOMETRY = {
      carries different buttons, but the same NUMBER of them, so the print bbox —
      and therefore every inset — measured identical to 3/4's (same run). Re-measure
      if 6/8 ever gains or loses a tool. Same not-paper-verified caveat. */
-  "kidseq:main5_68": { view: "five", timeSig: "6/8", levelKey: null, rows: 5, cols: 12, cellFrac: 0.72, gapFrac: 0.28,
+  "kidseq:main5_68": { view: "five", timeSig: "6/8", levelKey: null, rows: 5, cols: 12, cellFrac: 78/82, gapFrac: 4/82, borderFrac: 3/82,
                     grid: { u0: 0.08102, v0: 0.24117, u1: 0.94818, v1: 0.73695 },   // re-measured 2026-10-28
                     quadAspect: 1.380 },
-  "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 0.72, gapFrac: 0.28,
+  "kidseq:main3": { view: "three", levelKey: null, rows: 3, cols: 8,  cellFrac: 140/144, gapFrac: 4/144, borderFrac: 3/144,
                     grid: { u0: 0.06936, v0: 0.29922, u1: 0.93895, v1: 0.88894 },
                     quadAspect: 1.819 },
   "kidseq:lvl1": { levelKey: "1", rows: 1, cols: 8,  cellFrac: 0.72, gapFrac: 0.28 },
@@ -6686,7 +6699,11 @@ const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local pa
    — including any printed border bleeding into the sample window — and a filled
    cell has to clear that baseline by a margin. Self-calibrating survives biro vs
    pencil vs crayon, and light vs heavy hands, which no constant does. */
-const SCAN_CELL_SAMPLES = 6;    // per axis, so 36 samples per cell
+/* Per axis, so 100 samples per cell. Was 6 (36): against 1px pencil strokes ~2px
+   apart, 36 points measured where they happened to land — the same synthetic
+   scribble read 0.08 or 0.47 for a sub-pixel move of the window. 10 holds the
+   reading steady to a few hundredths (2026-11-04). Read once per locked frame. */
+const SCAN_CELL_SAMPLES = 10;
 const SCAN_BLANK_PCT    = 0.20; // this percentile of cells is taken as blank
 const SCAN_FILL_MARGIN  = 0.10; // ink fraction a filled cell must clear it by
 /* Absolute floor. Measured on a real scanned sheet: blank cells read 0.00 ink
@@ -6695,13 +6712,16 @@ const SCAN_FILL_MARGIN  = 0.10; // ink fraction a filled cell must clear it by
    and 0.94. With the blank population at literally zero there is no reason to
    sit as high as the original 0.22.
 
-   The floor is not zero, though, because of what a fixture caught: a half-pixel
-   registration error is enough to graze the sample window along the printed cell
-   borders, and every cell then reads 0.17 — with only half the cells affected,
-   the 20th-percentile blank estimate stays at 0.00 and does not absorb it. 0.20
-   sits above that bleed while leaving 2x headroom under the lightest real
-   colouring measured (0.39). */
-const SCAN_FILL_MIN     = 0.20;
+   The floor used to be 0.20 to sit above a 0.17 "bleed" from the printed cell
+   borders. That bleed was the template's fault: it put a quarter of every
+   square in the gap, so the window's left edge sat on the border. With the
+   squares where the print has them and the window clear of the border
+   (SCAN_CELL_INSET), the bleed is gone. Measured 2026-11-04 over the owner's
+   five photos (pencil, shadow, a double-sided sheet showing through) and the ten
+   real frames: no empty square above 0.08; the owner's pencil colouring 0.34 and
+   up. 0.15 keeps about twice the worst empty square, and catches sparse
+   colouring the old floor dropped (synthetic loose scribble reads 0.17-0.18). */
+const SCAN_FILL_MIN     = 0.15;
 
 /* Registration check. Every geometry test upstream asks "is this quad plausible";
    none asks the question that actually matters — "did the grid land where we
@@ -6728,6 +6748,22 @@ const SCAN_REG_MIN      = 20;
    never above 0.47. */
 const SCAN_LINES_MIN    = 0.7;
 const SCAN_GAP_JOIN     = 0.50; // fraction of the joining threshold a gap must hit
+const SCAN_GAP_FROM     = 0.72; // the faint-colouring join window starts this far into the slot (see gapU)
+/* Neighbours stay ONE note unless the gap between them is clearly white (see
+   gapJoined) — colouring meant to join must never split. Measured 2026-11-04:
+   coloured across the gap, the owner's photos at 720/480/360px -0.41..0.40, the
+   older test frames up to 0.53 (a pen bar with a light patch at one gap), renders
+   0.00; coloured separately, 144 renders of all three sheets 0.38..1.38, median
+   0.84. Below this bar a pair joins, which is what every pair did before. */
+const SCAN_GAP_WHITE    = 0.6;
+const SCAN_GAP_CONTRAST = 20;   // lum units between blank gap and ink to judge a ridge at all (photos: 47-85)
+/* The cell window keeps this fraction of the square clear at each edge, so the
+   3px printed border (0.05 of the square) stays out of it: with the border in the
+   window every EMPTY square read 0.17 against the 0.20 bar. Measured 2026-11-04 on
+   the owner's five photos and the ten real frames: 0.15 lost the leading square of
+   a tapered run (real-05); 0.10 and 0.08 both read everything 0.15 did plus that,
+   with every empty square at 0.00-0.06 — 0.10 keeps more room from the border. */
+const SCAN_CELL_INSET   = 0.10;
 /* A hand-drawn run tapers at its ends. Measured on a real four-cell scribble:
    0.14 / 0.75 / 0.86 / 0.64 — the first cell fell under the bar and the note came
    back a cell short of what the child drew. A cell TOUCHING a filled one is held
@@ -7056,6 +7092,8 @@ function _scanDebugLines(rec){
                                : v >= gr.fillAt       ? "H"
                                : v >= gr.extendAt     ? "+" : ".").join(""));
     }
+    // Every pair of coloured neighbours: did the gap between them read as coloured?
+    if(gr.joins && gr.joins.length) L.push("gaps (joined below " + SCAN_GAP_WHITE + "): " + gr.joins.join(", "));
   }
   return L.join("\n");
 }
@@ -7559,9 +7597,15 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   };
 
   // Slot c spans u∈[c/C,(c+1)/C]: first cellFrac is the square, the rest is the gap.
-  const cellU = (c, t) => (c + t * cellFrac) / C;            // t∈[0,1] across the cell
-  const gapU  = (c, t) => (c + cellFrac + t * gapFrac) / C;  // t∈[0,1] across the gap
-  const rowV  = (r, t) => (r + 0.15 + t * 0.70) / R;         // vertical band inside the row
+  // The cell window is the middle 70% of the square each way, clear of its 3px
+  // printed border: a window reaching the border read 0.17 on every EMPTY square.
+  const IN = SCAN_CELL_INSET;
+  const cellU = (c, t) => (c + (IN + t * (1 - 2 * IN)) * cellFrac) / C;   // t∈[0,1] across the cell
+  const rowV  = (r, t) => (r + (IN + t * (1 - 2 * IN)) * cellFrac) / R;   // and down it
+  // The old join window: the right quarter of the square, its border and the gap
+  // (the strip the pre-2026-11-04 geometry called the gap). Now only the fallback
+  // for colouring too faint to judge the gap's brightness — see gapJoined.
+  const gapU  = (c, t) => (c + SCAN_GAP_FROM + t * (1 - SCAN_GAP_FROM)) / C;
   // The middle half of the cell only. Used for the taper rule below: a coloured
   // neighbour bleeding across a sub-pixel misregistration lands on the cell EDGE
   // nearest it, while a genuinely (if faintly) coloured cell has ink through its
@@ -7599,7 +7643,9 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
   // ORIGINAL set, never the extended one, so a row of faint cells cannot cascade
   // into a run that was never drawn.
   const primary = cellInk.map(row => row.map(v => v >= fillAt));
-  const extendAt = fillAt * SCAN_FILL_EXTEND;
+  // Never below 0.10, what it was before SCAN_FILL_MIN came down to 0.15: at 0.075
+  // a square reading 0.07 beside a run was pulled in as a note.
+  const extendAt = Math.max(0.10, fillAt * SCAN_FILL_EXTEND);
   // Judged on the CORE, not the whole cell. Half a pixel of registration error
   // is enough for a filled cell to spill into its neighbour's window at ~0.17 —
   // the same magnitude as the genuine tapered end this rule exists to catch, so
@@ -7610,7 +7656,71 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
            ((c > 0 && primary[r][c - 1]) || (c < C - 1 && primary[r][c + 1])))));
 
   const cellFilled = (r, c) => filled[r][c];
-  const gapJoined  = (r, c) => gapInk[r][c] >= fillAt * SCAN_GAP_JOIN;
+
+  /* Do two coloured neighbours make ONE note? Only if the colouring crosses the
+     printed gap between them (owner 2026-11-04: squares coloured separately are
+     separate notes). The gap is 4 print px between two 3px borders — about two
+     camera pixels — so it is judged by brightness, not by an ink count: across the
+     middle of the squares' height, take the brightest point across the gap in each
+     row, then the median down the rows. A gap left white keeps a bright ridge
+     between the borders; one coloured over is as dark as the squares. Scored
+     against this sheet's own blank gaps (1 = as white as an empty gap, 0 = as dark
+     as the ink): joined below SCAN_GAP_WHITE. Too faint to show a ridge either way
+     (blank gap and ink within SCAN_GAP_CONTRAST) falls back to the ink count. */
+  const lumMed = (pts) => { const v = pts.map(p => _lumAt(imgData, p.x, p.y)).sort((a, b) => a - b); return v[v.length >> 1]; };
+  const cellLumCache = {};
+  const cellLum = (r, c) => {
+    const k = r * C + c;
+    if(cellLumCache[k] == null){
+      const pts = [];
+      for(let iy=0; iy<6; iy++) for(let ix=0; ix<6; ix++) pts.push(mapPoint(cellU(c, (ix + 0.5) / 6), rowV(r, (iy + 0.5) / 6)));
+      cellLumCache[k] = lumMed(pts);
+    }
+    return cellLumCache[k];
+  };
+  // The gap is 1-2 camera pixels wide and the grid lands within about a pixel of
+  // it, so each row looks for the brightest pixel within one camera pixel either
+  // side of the predicted centre (as the line check does): three samples spread
+  // across the gap itself all rounded onto a border pixel in sharp frames.
+  const ridgeAt = (r, c) => {
+    const rows = [], u = (c + cellFrac + 0.5 * gapFrac) / C;
+    for(let i=0; i<12; i++){
+      const v = (r + (0.2 + 0.6 * i / 11) * cellFrac) / R;
+      const p = mapPoint(u, v), q = mapPoint(u + 0.001, v);
+      const len = Math.hypot(q.x - p.x, q.y - p.y) || 1, ox = (q.x - p.x) / len, oy = (q.y - p.y) / len;
+      let best = 0;
+      for(const k of [-1, -0.5, 0, 0.5, 1]) best = Math.max(best, _lumAt(imgData, p.x + k * ox, p.y + k * oy));
+      rows.push(best);
+    }
+    // The darker quarter of the rows: a white gap is white nearly all the way
+    // down, while a bar coloured across with one lighter patch is still dark in
+    // most rows — that must stay one note.
+    rows.sort((a, b) => a - b);
+    return rows[Math.floor(rows.length * 0.25)];
+  };
+  let blankRidge = null;
+  const blankRidgeLum = () => {
+    if(blankRidge === null){
+      const all = [];
+      for(let r=0; r<R; r++) for(let c=0; c<C-1; c++) if(!primary[r][c] && !primary[r][c + 1]) all.push(ridgeAt(r, c));
+      all.sort((a, b) => a - b);
+      blankRidge = all.length ? all[all.length >> 1] : 255;
+    }
+    return blankRidge;
+  };
+  const joins = [];
+  const gapJoined = (r, c) => {
+    const ink = Math.min(cellLum(r, c), cellLum(r, c + 1)), B = blankRidgeLum();
+    if(!(B - ink >= SCAN_GAP_CONTRAST)){
+      const j = gapInk[r][c] >= fillAt * SCAN_GAP_JOIN;
+      if(diag) joins.push(r + ":" + c + "|" + (c + 1) + " faint, ink count " + gapInk[r][c].toFixed(2) + (j ? " joined" : " apart"));
+      return j;
+    }
+    const score = (ridgeAt(r, c) - ink) / (B - ink);
+    const j = score < SCAN_GAP_WHITE;
+    if(diag) joins.push(r + ":" + c + "|" + (c + 1) + " gap " + score.toFixed(2) + (j ? " joined" : " apart"));
+    return j;
+  };
 
   // Full dark-fraction maps for the log. Computed in their own pass (rather than
   // sniffed from the note loop, which short-circuits) so every cell is reported,
@@ -7639,9 +7749,11 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     let c = 0;
     while(c < C){
       if(cellFilled(r, c)){
-        const start = c; let len = 1;
-        while(c + 1 < C && cellFilled(r, c + 1) && gapJoined(r, c)){ len++; c++; }
-        runs.push({ start, len });
+        const start = c; let len = 1, real = primary[r][c];
+        while(c + 1 < C && cellFilled(r, c + 1) && gapJoined(r, c)){ len++; c++; if(primary[r][c]) real = true; }
+        // A cell let in only as the faint end of a neighbouring run is not a note
+        // on its own: if its gap reads white it never joined that run, so drop it.
+        if(real) runs.push({ start, len });
       }
       c++;
     }
@@ -7655,6 +7767,7 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     });
   }
   if(diag){
+    diag.grid.joins  = joins;
     diag.grid.notes  = notes.length;
     diag.grid.legal  = legal.join("/");
     diag.grid.snaps  = snaps;
@@ -7673,21 +7786,29 @@ function _gridRegistration(imgData, geom, mapPoint){
   const { rows: R, cols: C, cellFrac } = geom;
   const border = [], columns = [], interior = [];
   const N = 40;
+  /* A printed border is about one camera pixel wide, and the four corner squares
+     put it to within about a pixel, not on it: on a real sheet a single sample at
+     the predicted centre moved a line's score by ±50 for a one-pixel slip and found
+     59-67% of the column lines (2026-11-04). So each sample takes the darkest of
+     the predicted point and one camera pixel either side, ACROSS the line — enough
+     for that pixel of error and no more, so a wrong template's lines, which miss
+     the borders by whole squares, gain next to nothing. */
+  const across = (u, v, du, dv) => {
+    const p = mapPoint(u, v), q = mapPoint(u + du, v + dv);
+    const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+    const ox = dx / len, oy = dy / len;
+    return Math.min(_lumAt(imgData, p.x, p.y), _lumAt(imgData, p.x - ox, p.y - oy), _lumAt(imgData, p.x + ox, p.y + oy));
+  };
   for(let c=0; c<=C; c++){
     const l = [];
-    for(let i=0; i<N; i++){
-      const p = mapPoint(Math.min(1, c / C), 0.02 + 0.96 * i / (N - 1));
-      l.push(_lumAt(imgData, p.x, p.y));
-    }
+    for(let i=0; i<N; i++) l.push(across(_gridLineAt(geom, c, C) / C, 0.02 + 0.96 * i / (N - 1), 0.001, 0));
     columns.push(l);
     border.push(...l);
   }
-  for(let r=0; r<=R; r++) for(let i=0; i<N; i++){
-    const p = mapPoint(0.02 + 0.96 * i / (N - 1), Math.min(1, r / R));
-    border.push(_lumAt(imgData, p.x, p.y));
-  }
+  for(let r=0; r<=R; r++) for(let i=0; i<N; i++)
+    border.push(across(0.02 + 0.96 * i / (N - 1), _gridLineAt(geom, r, R) / R, 0, 0.001));
   for(let r=0; r<R; r++) for(let c=0; c<C; c++){
-    const p = mapPoint((c + cellFrac * 0.5) / C, (r + 0.5) / R);
+    const p = mapPoint((c + cellFrac * 0.5) / C, (r + cellFrac * 0.5) / R);
     interior.push(_lumAt(imgData, p.x, p.y));
   }
   const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
@@ -7826,13 +7947,29 @@ function _currentSheetId(){
 
 /* The homography maps the unit square onto the 4 corner MARKS, which bound the
    whole printed sheet. Compose the grid insets on top so callers can keep
-   addressing the note grid in plain 0..1 coordinates. */
+   addressing the note grid in plain 0..1 coordinates.
+
+   Callers address SLOTS: u = (c + x) / C, where slot c is square c followed by
+   the gap after it. The printed grid box (the insets) has no gap after its last
+   square, so it is C - gapFrac pitches wide, not C — without this, a 16-column
+   grid drifted right by most of a gap by the last column. Same down the rows. */
 function _gridMapper(mapPoint, geom){
   const g = geom && geom.grid;
   if(!g) return null;                      // no insets ⇒ refuse rather than mis-sample
   const du = g.u1 - g.u0, dv = g.v1 - g.v0;
   if(!(du > 0 && dv > 0)) return null;
-  return (u, v) => mapPoint(g.u0 + u * du, g.v0 + v * dv);
+  const gf = geom.gapFrac || 0;
+  const su = du * geom.cols / (geom.cols - gf), sv = dv * geom.rows / (geom.rows - gf);
+  return (u, v) => mapPoint(g.u0 + u * su, g.v0 + v * sv);
+}
+
+/* Where printed line k (0..n) of a grid with n squares sits, in slot units: the
+   centre of square k's left border, and for k = n the last square's right border.
+   The checks that ask "is there a line here" must sample ink, and a slot boundary
+   (k itself) is the edge of the border with the paper gap right beside it. */
+function _gridLineAt(geom, k, n){
+  const bf = geom.borderFrac || 0;
+  return k < n ? k + bf / 2 : n - (geom.gapFrac || 0) - bf / 2;
 }
 
 /* Sanity-check a detected marker quad before trusting it.
@@ -7947,8 +8084,14 @@ function _scanCandidates(){
    fixture sheets reach 0.254 — their rows are drawn centred in the slot, not as
    printed — which is what sets this at 0.26 rather than 0.25. The margin to the
    nearest misread is narrow; if it ever refuses good real scans, the log says so
-   ("grid agreement spread ...") and it can be re-opened against that. */
-const SCAN_FOUR_RMS   = 0.26;
+   ("grid agreement spread ...") and it can be re-opened against that.
+
+   Re-measured 2026-11-04 after the template was corrected to the printed squares
+   (see SHEET_GEOMETRY): every correct read of the 140 uncovered renders 0.023-0.207
+   (p95 0.172), the owner's five photos 0.044-0.155, the real frames 0.064-0.12; the
+   six stand-in locks that then read wrong 0.230-0.257. A truer template tightened
+   the correct reads, so the bar comes down with them. */
+const SCAN_FOUR_RMS   = 0.22;
 const SCAN_GRID_BLOCK = 15;    // a block of cells counts as found at this local registration
 
 /* The grid, cut into blocks of up to 3x3 cells (one centred on every cell, every
@@ -7958,7 +8101,9 @@ const SCAN_GRID_BLOCK = 15;    // a block of cells counts as found at this local
    peak is unique — the next one is a whole cell away. */
 function _gridProbe(imgData, geom){
   const g = geom.grid, { rows: R, cols: C, cellFrac } = geom;
-  const toS = gu => g.u0 + gu * (g.u1 - g.u0), toT = gv => g.v0 + gv * (g.v1 - g.v0);
+  // Same slot-to-print scaling as _gridMapper (no gap after the last square).
+  const gf = geom.gapFrac || 0;
+  const toS = gu => g.u0 + gu * (g.u1 - g.u0) * C / (C - gf), toT = gv => g.v0 + gv * (g.v1 - g.v0) * R / (R - gf);
   const med = a => { const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
   const stepB = R * C > 40 ? 2 : 1, blocks = [];
   for(let r = Math.min(1, R - 1); r < R; r += stepB) for(let c = Math.min(1, C - 1); c < C; c += stepB){
@@ -7970,16 +8115,16 @@ function _gridProbe(imgData, geom){
     const P = (gu, gv) => H(toS(gu + du / C), toT(gv + dv / R));
     const lines = [], inner = [];
     for(let c = b.c0; c <= b.c1 + 1; c++) for(let i = 0; i < 10; i++){
-      const p = P(Math.min(1, c / C), (b.r0 + 0.1 + (b.r1 + 0.8 - b.r0) * i / 9) / R);
+      const p = P(_gridLineAt(geom, c, C) / C, (b.r0 + 0.1 + (b.r1 + 0.8 - b.r0) * i / 9) / R);
       lines.push(_lumAt(imgData, p.x, p.y));
     }
     for(let r = b.r0; r <= b.r1 + 1; r++) for(let i = 0; i < 10; i++){
-      const p = P((b.c0 + 0.1 + (b.c1 + 0.8 - b.c0) * i / 9) / C, Math.min(1, r / R));
+      const p = P((b.c0 + 0.1 + (b.c1 + 0.8 - b.c0) * i / 9) / C, _gridLineAt(geom, r, R) / R);
       lines.push(_lumAt(imgData, p.x, p.y));
     }
     for(let r = b.r0; r <= b.r1; r++) for(let c = b.c0; c <= b.c1; c++)
       for(const [a, e] of [[-0.15, -0.15], [0.15, -0.15], [-0.15, 0.15], [0.15, 0.15]]){
-        const p = P((c + cellFrac * (0.5 + a)) / C, (r + 0.5 + e) / R);
+        const p = P((c + cellFrac * (0.5 + a)) / C, (r + cellFrac * (0.5 + e)) / R);
         inner.push(_lumAt(imgData, p.x, p.y));
       }
     return med(inner) - med(lines);

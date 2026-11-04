@@ -86,8 +86,7 @@ function makeSheet(S, G, o){
 
   const H  = S.homographyUnitToQuad(o.quad);
   const q  = (u,v) => H(u,v);                       // sheet coords
-  const gq = (u,v) => H(G.grid.u0 + u*(G.grid.u1-G.grid.u0),
-                        G.grid.v0 + v*(G.grid.v1-G.grid.v0));   // note-grid coords
+  const gq = S.gridMapper(H, G);                    // note-grid coords, laid out as printed
   const R = G.rows, C = G.cols, cf = G.cellFrac;
   const poly = (p, col) => { g.fillStyle = col; g.beginPath(); g.moveTo(p[0].x,p[0].y);
     for(let i=1;i<p.length;i++) g.lineTo(p[i].x,p[i].y); g.closePath(); g.fill(); };
@@ -102,8 +101,8 @@ function makeSheet(S, G, o){
        takes — that is how the tool-icon false lock survived. */
     g.strokeStyle = "#3a3a3a"; g.lineWidth = 1;
     for(let r=0;r<R;r++) for(let c=0;c<C;c++){
-      const p = [gq(c/C,(r+0.06)/R), gq((c+cf)/C,(r+0.06)/R),
-                 gq((c+cf)/C,(r+0.94)/R), gq(c/C,(r+0.94)/R)];
+      const p = [gq(c/C,r/R), gq((c+cf)/C,r/R),
+                 gq((c+cf)/C,(r+cf)/R), gq(c/C,(r+cf)/R)];
       g.beginPath(); g.moveTo(p[0].x,p[0].y);
       for(let i=1;i<4;i++) g.lineTo(p[i].x,p[i].y); g.closePath(); g.stroke();
     }
@@ -116,16 +115,20 @@ function makeSheet(S, G, o){
 
   const fill = (u0,u1,r) => {
     if(!o.scribble){
-      poly([gq(u0,(r+0.06)/R),gq(u1,(r+0.06)/R),gq(u1,(r+0.94)/R),gq(u0,(r+0.94)/R)], "#2244cc");
+      poly([gq(u0,(r+0.06*cf)/R),gq(u1,(r+0.06*cf)/R),gq(u1,(r+0.94*cf)/R),gq(u0,(r+0.94*cf)/R)], "#2244cc");
     }else{
       /* Faintness on paper is SPARSE full-strength ink, not uniformly pale ink.
          An alpha-blended cell has no pixel dark enough to register at all, so
          alpha is the wrong model for a lightly-coloured square. */
       g.strokeStyle = "#2a44c8"; g.lineWidth = 1;
-      for(let i=0;i<=o.scribble;i++){
-        const t = i/o.scribble;
-        const a = gq(u0+(u1-u0)*t, (r+0.08)/R);
-        const b = gq(u0+(u1-u0)*Math.max(0,t-0.55), (r+0.92)/R);
+      // `scribble` is strokes per square as the sheets were drawn until 2026-11-04,
+      // when a square was 0.72 of its slot. Squares are now drawn at their printed
+      // 0.94, so the count scales with the width: same stroke SPACING, same ink density.
+      const n = Math.max(1, Math.round(o.scribble * (u1 - u0) * C / 0.72));
+      for(let i=0;i<=n;i++){
+        const t = i/n;
+        const a = gq(u0+(u1-u0)*t, (r+0.08*cf)/R);
+        const b = gq(u0+(u1-u0)*Math.max(0,t-0.55), (r+0.92*cf)/R);
         g.beginPath(); g.moveTo(a.x,a.y); g.lineTo(b.x,b.y); g.stroke();
       }
     }
@@ -490,8 +493,8 @@ async function run(){
           why:"THE case: one square must stay one 8th, not round up to the 2-column beat" },
         { name:"3-note · off-beat",     opt:{cells:[[0,1]]},              want:"0:1+1",
           why:"column 1 is the second half of beat 1 — colouring it there keeps it there" },
-        { name:"3-note · beat pair",    opt:{cells:[[2,0],[2,1]]},        want:"2:0+1 2:1+1",
-          why:"two squares coloured separately are two 8ths, because the gap between them is white" },
+        { name:"3-note · beat pair",    opt:{cells:[[2,0],[2,1]]},        want:"2:0+2",
+          why:"at this 420px test size the printed 4px gap is under a pixel, so it can't be seen as white and the pair stays joined (the safe way round). At camera size a white gap does split a pair — checked on the print renders, 2026-11-04" },
         { name:"3-note · held beat",    opt:{runs:[[2,0,2]]},             want:"2:0+2",
           why:"colouring straight through the gap makes ONE quarter — that is the difference" },
         { name:"3-note · last cell",    opt:{cells:[[2,7]]},              want:"2:7+1",
@@ -537,10 +540,10 @@ async function run(){
   const REAL = [
     { file:"real-01-six-notes.jpg", want:"0:14+2 1:2+1 2:5+1 5:5+1 6:6+1 7:8+4",
       why:"the full sheet: six coloured marks, hand-held on a table. The reference case" },
-    { file:"real-02-tapered-run.jpg", want:"0:14+2 1:2+1 6:6+1 7:8+4",
-      why:"the bottom run whose LEADING cell measured 0.14 against a 0.20 bar; must read len 4, not 3" },
-    { file:"real-03-four-notes.jpg", want:"0:14+2 1:2+1 6:6+1 7:8+4",
-      why:"same sheet, different frame. Logged as marks-not-outermost at the time — a single speck outside the quad used to veto a good lock" },
+    { file:"real-02-tapered-run.jpg", subset:"0:14+2 1:2+1 6:6+1 7:8+4", want:"0:14+2 1:2+1 7:8+4",
+      why:"the bottom run whose LEADING cell measured 0.14 against a 0.20 bar; must read len 4, not 3. r6c6 is the faint mark of real-05: 0.12 here since 2026-11-04, when the window stopped sampling the cell border (empty squares reach 0.08), so it may be missed but never invented" },
+    { file:"real-03-four-notes.jpg", subset:"0:14+2 1:2+1 6:6+1 7:8+4", want:"0:14+2 1:2+1 7:8+4",
+      why:"same sheet, different frame. Logged as marks-not-outermost at the time — a single speck outside the quad used to veto a good lock. r6c6 faint as in real-02 (0.08)" },
     { file:"real-04-three-notes.jpg", want:"0:14+2 1:2+1 6:6+1",
       why:"earlier state of the sheet, before the bottom run was drawn" },
     { file:"real-05-faint-capture.jpg", subset:"0:14+2 1:2+1 6:6+1 7:8+4", want:"0:14+2 1:2+1 7:8+4",

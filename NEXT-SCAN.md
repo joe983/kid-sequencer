@@ -86,11 +86,63 @@ be reprinted. **When the sheet is next reprinted, do this first**, then:
 
 ### 2. Light colouring
 
-The fill bar sits at 0.20 ink. The faintest square measured on a real sheet was
-0.39, and a tapered run end came in at **0.14** — under the bar, which is why
+The fill bar sits at 0.15 ink (0.20 before 2026-11-04 — see Round 7). The
+owner's pencil colouring now reads 0.34 and up, and no empty square has read
+above 0.08. A tapered run end can still come in under the bar, which is why
 `SCAN_FILL_EXTEND` exists (a cell touching a filled one is held to half the bar).
-A child colouring faintly in pencil could still fall under. Either accept it, or
-print "colour it in firmly" on the sheet. Not a code fix.
+The faint r6c6 mark on the July sheet (real-02/03/05) reads 0.04-0.31 depending
+on the frame: below 0.10 it can't be told from an empty square, so those
+fixtures allow it to be missed (never invented).
+
+---
+
+## Round 7 (2026-11-04) — the template never matched the print
+
+**Symptom.** On the owner's iPhone, the 8-row sheet kept dropping one pencil
+block (row 3, columns 5-6), and an earlier scan of the same sheet invented
+three notes. The same sheet photographed still failed to lock at all
+(registration 3, needs 20). Owner photos of all five printed sheets are the
+evidence for everything below.
+
+**Cause — three geometry errors, found by drawing the template over the photos:**
+1. `cellFrac: 0.72` on every sheet. The print is a 64px square with a 4px gap
+   (78/4 on the five-row sheets, 140/4 on the 3-note sheet), i.e. 0.94-0.97.
+   The template put a quarter of every square in the "gap". The cell window
+   therefore sat on each square's left border, and **every empty square read
+   0.17 against a 0.20 bar** — the invented notes, and the reason a real light
+   block (reading 0.1-0.2) could not be told from an empty one.
+2. The grid box has 15 gaps across, not 16; the slots drifted right by most of
+   a gap by column 16. `_gridMapper` now scales slots by C/(C - gapFrac).
+3. "kidseq:main"'s vertical insets were out of date by ~0.1 row each end
+   (0.20202/0.83115 vs `printMarkInsets()` 0.20951/0.82240). The old
+   "~0.008 disagreement" caveat was this. The July frames (real-01..05, with 4
+   tool circles) are the OLD layout; every sheet printed since has 5 circles.
+
+**And the line checks predicted lines at slot boundaries** — the paper gap
+beside a border. Registration now samples border centres (`_gridLineAt`) with
+one camera pixel of tolerance across the line. Tried and rejected on the way:
+the darkest point across the whole border|gap|border strip (wrong templates
+found lines too: 16 one-corner-covered stand-ins read wrong), and sliding the
+whole template to the best registration (it moved the reading window; a 4-cell
+run split).
+
+**Reading changes, each measured on the 5 photos + 10 frames + fixtures:**
+`SCAN_CELL_INSET` 0.10 (window clear of the border; 0.15 lost a tapered run's
+first cell, 0.04 misread photo 3), `SCAN_CELL_SAMPLES` 6→10 (36 points measured
+1px strokes by luck: 0.08 vs 0.47 for a sub-pixel move), `SCAN_FILL_MIN`
+0.20→0.15, `SCAN_FOUR_RMS` 0.26→0.22 (correct reads now ≤ 0.207, the stand-ins
+that slipped through 0.230+). Joining: neighbours stay ONE note unless the real
+4px gap between them reads clearly white (`gapJoined`, `SCAN_GAP_WHITE` 0.6 —
+brightest pixel within 1 camera px of the gap centre, darker quarter of the rows).
+Coloured across: the owner's photos ≤ 0.40. Coloured separately: renders 0.38-1.38,
+median 0.84, so most separate pairs now split; the rest join, as every pair did
+before (the old window sat on the square's own edge). `extendAt` is floored at
+0.10, and a run made only of extended cells is dropped.
+
+**Result:** the 5 photos read exactly what is on the paper at 720/480/360 px;
+stress test 140/140 uncovered correct (was 130 + 10 refused), 0 wrong in 1,400
+covered; scan-tests 123/123 (two expectations restated: the synthetic "beat
+pair" had a fake 28% gap; real-02/03's faint r6c6 → subset).
 
 ---
 
