@@ -139,6 +139,19 @@ median 0.84, so most separate pairs now split; the rest join, as every pair did
 before (the old window sat on the square's own edge). `extendAt` is floored at
 0.10, and a run made only of extended cells is dropped.
 
+**Round 7b (same day, from the first live iPhone scans).** The 5-row sheet's
+4-square quarter note read whole on the iPad and as 2+1 on the iPhone (two scans):
+its two lighter squares scored 0.15-0.22 on the iPhone against a 0.15 bar. Cause: the
+live video is 480x640 stretched to 720; pencil strokes and the paper between them blur
+to a mid-grey just above 70% of paper, so a per-pixel ink test (`SCAN_FILL_RATIO`)
+counts nothing. Emulating that path on the owner's photos (`ratio.mjs`: 720 clean,
+480 soft, 480 softer, 360) the weakest coloured square was 0.17 at 0.70, 0.66 at
+0.78; the strongest empty square 0.01 -> 0.07 (0.85: 0.10, too near the bar). Now
+0.78. The old July frames now also read their faint r6c6 mark, so those fixtures
+expect it. **No photo ever reached the logs** (the debug "send" has never delivered);
+reports carry text only — adding each square's number to the report would let the next
+miss be diagnosed from the data alone.
+
 **Result:** the 5 photos read exactly what is on the paper at 720/480/360 px;
 stress test 140/140 uncovered correct (was 130 + 10 refused), 0 wrong in 1,400
 covered; scan-tests 123/123 (two expectations restated: the synthetic "beat
