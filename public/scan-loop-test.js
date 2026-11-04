@@ -130,6 +130,17 @@ async function scanLoopTests(app, makeSheet, CELLS, OVER){
       out.push({ name: "loop · debug: a good scan reports what it read", pass: ok && reports.length === 1,
                  detail: r ? (r.trigger + " " + JSON.stringify(r.read)) : "no report" });
 
+      /* The numbers behind a read (2026-11-04), so a misread can be diagnosed from
+         the log alone: every square's ink share and average darkness, the bar it was
+         judged against, grain, and the camera. All of it must also fit the rules'
+         9000-character cap, or the whole report is dropped. */
+      const rd = r && r.read, shape = a => Array.isArray(a) && a.length === 8 && a.every(row => row.split(" ").length === 16);
+      out.push({ name: "loop · debug: the report carries every square's numbers",
+                 pass: !!rd && shape(rd.ink) && shape(rd.dark) && Array.isArray(rd.fill) && rd.fill.length === 3 &&
+                       !!rd.noise && typeof rd.noise.sd === "number" && !!rd.frame && !!rd.paper && !!r.orient &&
+                       reports[0].length <= 9000,
+                 detail: rd ? ("fill " + JSON.stringify(rd.fill) + ", noise " + JSON.stringify(rd.noise) + ", " + reports[0].length + " chars") : "no read" });
+
       reports.length = 0;
       st = await openWith(over);
       await wait(900);

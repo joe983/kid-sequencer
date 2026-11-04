@@ -61,6 +61,13 @@ async function accessToken(){
       if(r.read) console.log(`  READ sheet ${r.read.sheet}${r.read.upsideDown ? " UPSIDE DOWN" : ""}${r.read.here ? " (this page)" : " -> its own page"}  scores ${JSON.stringify(r.read.scores)}` +
                              `${r.read.lines ? "  lines % " + JSON.stringify(r.read.lines) : ""}` +
                              `${r.read.badges ? "  badges " + JSON.stringify(r.read.badges) : ""}\n  notes ${r.read.notes || "(none)"}`);
+      // The numbers behind that read (2026-11-04+): per-square ink share and average darkness, in %.
+      if(r.read && r.read.ink){
+        console.log(`  fill [blank bar taper] ${JSON.stringify(r.read.fill)}  noise ${JSON.stringify(r.read.noise)}  frame ${JSON.stringify(r.read.frame)}  paper ${JSON.stringify(r.read.paper)}`);
+        console.log(`  cam ${JSON.stringify(r.cam || null)}  orient ${r.orient || "?"}`);
+        console.log("  ink% | dark%");
+        r.read.ink.forEach((row, i) => console.log("   " + row.split(" ").map(v => v.padStart(3)).join("") + "  |" + (r.read.dark ? r.read.dark[i].split(" ").map(v => v.padStart(3)).join("") : "")));
+      }
       console.log(`  refusals ${JSON.stringify(r.tally)}`);
       for(const [v, txt] of Object.entries(r.records || {}))
         console.log(`  --- ${v} ---\n` + String(txt).split("\n").map(l => "    " + l).join("\n"));

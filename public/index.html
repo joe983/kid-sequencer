@@ -7737,6 +7737,31 @@ function _scanNotesFromFrame(imgData, geom, mapPoint, diag){
     diag.grid.fillAt   = +fillAt.toFixed(2);
     diag.grid.extendAt = +extendAt.toFixed(2);
     diag.grid.pts     = pts;   // cell centres in image coords, for the overlay
+
+    /* Numbers for the report (no decision reads them): how dark each square is on
+       average against the paper round it — a graded measure that, unlike the ink
+       count above, is not thrown by a soft picture or by grain — and how grainy the
+       picture is, as the spread of blank squares' brightness against their paper.
+       With these a scan that goes wrong can be diagnosed from the log alone. */
+    const DS = 10, dark = [], q2 = [];
+    let qs = 0, qq = 0, qn = 0;
+    for(let r=0; r<R; r++){
+      const row = [];
+      for(let c=0; c<C; c++){
+        let sum = 0;
+        for(let iy=0; iy<DS; iy++) for(let ix=0; ix<DS; ix++){
+          const p = mapPoint(cellU(c, (ix + 0.5) / DS), rowV(r, (iy + 0.5) / DS));
+          const ref = F.localMean(p.x, p.y);
+          const q = ref > 0 ? _lumAt(imgData, p.x, p.y) / ref : 1;
+          sum += Math.max(0, 1 - q);
+          if(!primary[r][c]){ qs += q; qq += q * q; qn++; }
+        }
+        row.push(+(sum / (DS * DS)).toFixed(2));
+      }
+      dark.push(row);
+    }
+    diag.grid.darkMap = dark;
+    if(qn){ const m = qs / qn; diag.grid.noise = { mean: +m.toFixed(3), sd: +Math.sqrt(Math.max(0, qq / qn - m * m)).toFixed(3) }; }
   }
 
   const legal = _legalNoteLens(geom);
@@ -8547,10 +8572,27 @@ function _scanReport(trigger, diag, notes){
     tally: s.tally, hint: s.hint, hintsShown: s.hintsShown, maxLock: s.maxLock,
     manual: s.manual, css, debug: SCAN_DEBUG, records: {},
   };
+  // The camera as the page was given it, and how the device was held.
+  try{
+    const st = camVideoEl && camVideoEl.srcObject && camVideoEl.srcObject.getVideoTracks()[0].getSettings();
+    if(st) base.cam = { w: st.width, h: st.height, fps: st.frameRate ? Math.round(st.frameRate) : null, facing: st.facingMode || null };
+  }catch(e){}
+  try{ base.orient = (screen.orientation && screen.orientation.type) || (window.innerWidth > window.innerHeight ? "landscape" : "portrait"); }catch(e){}
   if(diag && diag.sheet){
+    // Per-square figures as rows of whole percents: ink = share of the square's
+    // points that read as ink (what the decision uses); dark = average darkness
+    // against the paper (graded). fill = [blank estimate, bar, taper bar] in %.
+    const pct = (map) => (map || []).map(row => row.map(v => Math.round(v * 100)).join(" "));
+    const g = diag.grid;
     base.read = { sheet: diag.sheet, here: "kidseq:" + diag.sheet === _currentSheetId(), scores: diag.idScores || null,
                   lines: diag.lineFrac || null, badges: diag.badges || null, upsideDown: !!diag.upsideDown,
-                  notes: (notes || []).map(n => n.row + ":" + n.start + "+" + n.len).join(" ") };
+                  notes: (notes || []).map(n => n.row + ":" + n.start + "+" + n.len).join(" "),
+                  ink: g ? pct(g.cellMap) : null, dark: g ? pct(g.darkMap) : null,
+                  fill: g ? [g.blank, g.fillAt, g.extendAt].map(v => Math.round(v * 100)) : null,
+                  noise: g ? g.noise || null : null,
+                  frame: diag.marks ? { w: diag.marks.w, h: diag.marks.h, meanL: diag.marks.meanL, ink: +(diag.marks.maskFrac * 100).toFixed(1) } : null,
+                  paper: g ? { white: g.white, p05: g.p05, p50: g.p50, p95: g.p95 } : null,
+                  agree: diag.agree || null };
   }
   // The decision text for the latest frame of each refusal, most frequent first,
   // as much as fits the rule's 9000-char cap. The frame that was read goes first.
