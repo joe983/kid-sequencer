@@ -6685,16 +6685,7 @@ const SCAN_WORK_W      = 720;   // working resolution width for QR + marker dete
                                 // (min(w,h)/8) scales with this automatically. See NEXT-SCAN.md §1.
 const SCAN_LOCK_FRAMES = 3;     // consecutive good frames before auto-capture
 const SCAN_TICK_MS     = 130;   // throttle detection cadence (CC labelling is heavy)
-/* A pixel is ink if darker than this fraction of the paper around it. Was 0.70.
-   Pencil is sparse strokes with paper showing between them, and the live iPhone
-   video is only 480x640, stretched: strokes and gaps blur into one mid-grey that
-   sat just above 70% of paper, so a lightly coloured square counted no ink at all
-   (owner's 5-row sheet, 2026-11-04: the same bar read all four squares on the iPad
-   and dropped the lighter two on the iPhone, 0.17 vs a 0.15 bar). Measured on the
-   five owner photos x four camera emulations (720 clean, 480 soft, 480 softer, 360):
-   weakest coloured square 0.17 at 0.70 -> 0.66 at 0.78; strongest empty square
-   0.01 -> 0.07. 0.85 leaves empties at 0.10, too close to the 0.15 bar. */
-const SCAN_FILL_RATIO  = 0.78;
+const SCAN_FILL_RATIO  = 0.70;  // a pixel is ink if darker than 70% of local paper
 
 /* How a cell is judged filled. A child does not flood a square with solid
    colour — they SCRIBBLE it, and a biro hatch leaves most of the paper showing
