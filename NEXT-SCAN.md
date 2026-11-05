@@ -134,6 +134,20 @@ settles a NEAR tie (`SCAN_TURN_TIE` 0.65; the 3-note sheet's real tie is 39/48 =
 Three repeated grainy runs: no wrong-way reads. The July frames' faint r6c6 (0.14-0.15)
 is back to "may be missed, never invented".
 
+**A button standing in for a hidden ring (2026-11-05, iPad portrait, sat at a table).**
+Three scans of the /02 sheet (photo 3) in a row read wrong notes, upside down and a row
+out. All three picked a "bottom-right mark" ~40 px above the real one and 0.65 of the
+other marks' size: the round AI button just above that corner. With only three rings
+visible the pick falls back to the solid pool, where the button (a solid disc in soft
+video) is the corner-most blob; the twisted grid then fitted the turned template better
+(31 vs -27, 82% column lines) and passed. New refusal `marks-mixed` (hint "Show corners"):
+when some picks are rings and some aren't, a solid pick SMALLER than the rings
+(`SCAN_STANDIN_REL` 0.9) is a stand-in. Blur also closes real rings, but a ring closed
+by blur gets bigger (167-194 px vs 90-124 for its neighbours), and every stand-in
+measured 0.36-0.65 — refusing every mixed pick broke the blurred-3-note fixtures.
+Reports now print `ring` on each picked corner and the pool. Not reproduced from a
+real iPad frame (no photo upload yet): the fixture hides the ring on the printed sheets.
+
 **6/8 time is switched off (`SHOW_TIME_68 = false`, 2026-11-05, owner: "temporarily").**
 Only the /02 time-signature button changes: it cycles 4/4 <-> 3/4. The unlinked
 `/02?time=68` page, the 6/8 sheet geometry, the scanner's 3/4-vs-6/8 reading and the

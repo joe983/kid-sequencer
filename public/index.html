@@ -6849,6 +6849,10 @@ const SCAN_RING_HOLE_PX  = 6;      // …and at least this many pixels
    throw the mark away before its hole was ever examined. A 15% wall reaches
    0.51, so this admits every wall thickness worth printing. */
 const SCAN_RING_SOL_MIN  = 0.45;
+/* A solid corner pick among ring picks is a stand-in (a button where a ring is
+   hidden) when its area is under this share of the rings' — stand-ins measured
+   0.36-0.65, a real ring blurred shut 1.4-1.9 (see _cornerMarkersFrom). */
+const SCAN_STANDIN_REL   = 0.9;
 
 let _scanRafId    = 0;
 let _scanLockCount= 0;
@@ -6889,6 +6893,7 @@ const SCAN_FAIL = {
   FEW_BLOBS: "few-blobs",          // <4 mark candidates survived the shape filters
   COLLAPSED: "corners-collapsed",  // two "corners" resolved to the same blob
   UNEVEN:    "marks-uneven",       // the four picked blobs aren't one printed size
+  MIXED:     "marks-mixed",        // some picked corners are rings, some aren't: one is a stand-in
   NOT_OUTER: "marks-not-outermost",// mark-like ink sits OUTSIDE the quad we picked
   MISREG:    "grid-misregistered", // the printed grid isn't where the lock predicts
   BAD_QUAD:  "quad-implausible",   // aspect/skew say that isn't a photo of the sheet
@@ -7057,7 +7062,8 @@ function _scanDebugLines(rec){
              " sol " + b.solidity.toFixed(2) + " @" + Math.round(b.cx) + "," + Math.round(b.cy));
     }
     if(m.picked){
-      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy + "(" + p.area + "px)").join(" "));
+      L.push("picked " + m.picked.map(p => p.cx + "," + p.cy + "(" + p.area + "px" + (p.ring ? " ring" : "") + ")").join(" ") +
+             (m.pool ? "   pool " + m.pool + " (" + m.ringed + " rings)" : ""));
       L.push("  minSep " + m.minSepGot + " / need " + m.minSepReq +
              "   size spread " + m.spread + " / max " + m.spreadMax +
              (m.outside != null ? "   outside " + m.outside + " (by " + m.outsideBy + " / tol " + m.outsideTol + ")" : ""));
@@ -7460,10 +7466,29 @@ function _cornerMarkersFrom(imgData, diag){
     diag.marks.minSepGot = +worst.toFixed(1);
     diag.marks.spread    = +spread.toFixed(2);
     diag.marks.spreadMax = SCAN_MARK_SPREAD;
-    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh, area: c.area }));
+    diag.marks.picked = pts.map(c => ({ cx: Math.round(c.cx), cy: Math.round(c.cy), bw: c.bw, bh: c.bh, area: c.area,
+                                        ring: ringed.includes(c) }));
   }
   if(worst < minSep){ if(diag) diag.verdict = SCAN_FAIL.COLLAPSED; return null; }
   if(spread > SCAN_MARK_SPREAD){ if(diag) diag.verdict = SCAN_FAIL.UNEVEN; return null; }
+  /* Every sheet prints its four marks in ONE shape — all rings, or (older sheets)
+     all solid. A pick that mixes the two has a stand-in among them. Seen on the
+     iPad 2026-11-05: the bottom-right ring was hidden, only three rings were
+     visible so the pick fell back to the solid pool, and the round AI button
+     just above that corner (a solid disc in soft video) took its place. The quad
+     passed every shape test and the grid then read upside down and a row out,
+     three times in a row. Refusing costs a frame; the next one usually sees all four.
+     But blur can close a REAL ring's hole too, and a ring that closes gets BIGGER
+     (its hole fills in: 167-194 px against 90-124 for the rings beside it), while
+     every stand-in measured was SMALLER (0.36-0.65 of the rings). So only a solid
+     pick smaller than the rings counts as a stand-in. */
+  const ringAreas = pts.filter(c => ringed.includes(c)).map(c => c.area).sort((a, b) => a - b);
+  if(ringAreas.length && ringAreas.length < 4){
+    const ringMid = ringAreas[ringAreas.length >> 1];
+    if(pts.some(c => !ringed.includes(c) && c.area < ringMid * SCAN_STANDIN_REL)){
+      if(diag) diag.verdict = SCAN_FAIL.MIXED; return null;
+    }
+  }
 
   /* The marks bound the WHOLE sheet, so every other mark-like blob — the tool
      icons, the title block, anything printed — necessarily sits inside them. If
@@ -8445,7 +8470,7 @@ function _scanHintFor(diag){
   if(v === SCAN_FAIL.COLLAPSED || v === SCAN_FAIL.UNEVEN || v === SCAN_FAIL.NOT_OUTER) return "fit";
   // Locked onto four squares but the grid isn't where they say: one real mark is
   // hidden (finger, cut off) and a printed tool icon stood in for it.
-  if(v === SCAN_FAIL.MISREG) return "marks";
+  if(v === SCAN_FAIL.MISREG || v === SCAN_FAIL.MIXED) return "marks";
   if(v === SCAN_FAIL.BAD_QUAD || v === SCAN_FAIL.SINGULAR) return "flat";
   return null;
 }

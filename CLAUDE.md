@@ -426,6 +426,10 @@ because absolute darkness changes with distance; can't tell → this page's time
 3/4. `_routeScannedNotes(id)` applies in place only when `id === _currentSheetId()`,
 otherwise stashes `{notes, sheet}` and navigates (`/`, `/02`, `/02?time=34|68`, `/03`);
 `_applyPendingScanImport` drops a stash whose `sheet` isn't the landing page's.
+**Mixed ring/solid corners (2026-11-05):** `marks-mixed` refuses a pick where a SOLID
+corner sits among ring corners and is smaller than them (`SCAN_STANDIN_REL` 0.9) — the iPad
+misread three scans when the AI button stood in for a hidden bottom-right ring. Don't make
+it refuse every mixed pick: blur closes real rings, and a closed ring is BIGGER, not smaller.
 **Four-square agreement check (2026-10-29):** a lock that passes the line check must also
 pass `_fourCornerOffsets` — every 3x3 block of cells is located on its own (`_gridProbe`) and
 their scatter around the typical offset must be ≤ `SCAN_FOUR_RMS` (0.26 cells). Why: with one
@@ -592,7 +596,7 @@ without a camera, draw the fixture straight into `#camCanvas` and set its width:
   sends the report.
 
 ### Fixtures — `public/scan-tests.html`
-`node serve.js` → <http://localhost:3000/scan-tests.html>. 123 checks (every sheet template, cross-sheet identification incl. a blurred 3-note sheet the /02 template must not win, every sheet upside down, three end-to-end page switches — one with a stalled network to prove its report survives — the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
+`node serve.js` → <http://localhost:3000/scan-tests.html>. 139 checks (every sheet template, cross-sheet identification incl. a blurred 3-note sheet the /02 template must not win, every sheet upside down, every sheet with its bottom-right ring hidden, three end-to-end page switches — one with a stalled network to prove its report survives — the live loop; ~25 s). `scan-fixtures/print-*.png` are the five sheets rendered through the REAL print path (headless Chrome, 1047×718 viewport, `beforeprint` then print media, screenshot) — **re-render them when the printed layout or `SHEET_GEOMETRY` changes**. Also: synthetic
 sheets (shadow, dim, askew, overflow, four missing-mark variants, mark sizes
 4-10px, scribble densities), the full 1→16 note-length snapping table, and the
 owner's **real camera frame** committed at `public/scan-fixtures/real-sheet-01.jpg`.

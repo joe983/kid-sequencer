@@ -208,6 +208,12 @@ async function printPhoto(S, file, sheetId, o){
       g.closePath(); g.fill();
     }
   }
+  if(o.hideBR){                                // a hand or shadow over the bottom-right mark
+    const q = S.cornerMarkersFrom(g.getImageData(0, 0, FRAME_W, FRAME_H));
+    if(!q) throw new Error(file + ": marks not found, cannot hide one");
+    const r = Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) * o.hideBR;
+    g.fillStyle = "#f2f2f2"; g.fillRect(q[2].x - r, q[2].y - r, 2 * r, 2 * r);
+  }
   let out = cv;
   if(o.blur){                                  // a soft focus, after the colouring
     const c2 = document.createElement("canvas"); c2.width = FRAME_W; c2.height = FRAME_H;
@@ -634,6 +640,21 @@ async function run(){
       results.push({name, pass: ok});
       if(!ok) fails.push(name);
     }
+  }
+  /* A hidden corner ring (iPad 2026-11-05: the bottom-right ring was covered, the
+     round AI button just above it stood in, and the twisted grid read upside down
+     and a row out, three scans running). Wrong notes are the failure; refusing is
+     fine, and so is a correct read. */
+  for(const p of PRINTS) for(const o of [{ blur: 0.8 }, { blur: 1.6 }, { blur: 1.2, w: 360, rot: 2 }]){
+    const name = "id · " + short(p.sheet) + " bottom-right ring hidden " + JSON.stringify(o);
+    let d = null, err = null;
+    try{ d = S.diagnose(await printPhoto(S, p.file, p.sheet, Object.assign({ cells: p.cells, hideBR: 0.06 }, o))); }catch(e){ err = e.message; }
+    const got = d ? fmtNotes(d.notes) : err;
+    const pass = !!d && (d.verdict !== "ok" || (got === p.want && d.sheet === short(p.sheet)));
+    addRow(name, d ? d.verdict + (d.upsideDown ? " (upside down)" : "") : "-", got, "refused, or " + p.want,
+           "a printed button must never stand in for a hidden corner ring", pass);
+    results.push({name, pass});
+    if(!pass) fails.push(name);
   }
   /* A 3-note sheet a little out of focus (owner 2026-10-30: real photos scored it
      13-28 as a /02 sheet against 38-47 as itself). The /02 template must pass the
