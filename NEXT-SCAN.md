@@ -391,7 +391,7 @@ the 16x8 periodicity, not the ink extent.
 
 ## Diagnostics
 
-`?scandebug=1` (sticky) puts a panel on screen reporting why every frame was
+`?scandebug=1` (this browser tab only, 30 min — never stored on the device, 2026-11-05) puts a panel on screen reporting why every frame was
 refused and with what numbers, plus `send` to upload the log and the camera frame
 to Firestore under `users/{uid}/scanlogs`. See the "Scan diagnostics" section of
 CLAUDE.md. Keep it: three rounds of guessing produced nothing, and every fix

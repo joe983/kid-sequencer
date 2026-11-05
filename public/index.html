@@ -2441,25 +2441,42 @@ document.addEventListener("visibilitychange", () => {
   if(document.visibilityState === "visible") ensureAudioRunning();
 });
 
-/* ?audiodebug=1 — on-screen audio health panel (sticky via localStorage). Off by
-   default and behaviour-neutral. The iPad is the machine that fails, so the panel
-   has to live on the page: state / is the clock moving / contexts created / resets /
-   live nodes / worst tick lateness / recent events.
-   Sticky for AUDIO_DEBUG_TTL_MS only: the stored value is an expiry time, so a flag
-   left on a family iPad can't keep a green panel over a child's screen for good.
-   The old stored value "1" reads as long expired and is cleared. */
-const AUDIO_DEBUG_TTL_MS = 6 * 60 * 60 * 1000;
-const AUDIO_DEBUG = (() => {
+/* Debug panels (?scandebug=1, ?audiodebug=1) are for the owner's own testing and
+   must NEVER appear on a child's screen. So a flag is kept in THIS TAB's
+   sessionStorage only, for DEBUG_FLAG_TTL_MS after the last page load: closing the
+   tab or the app ends it, and so does walking away. Never localStorage — until
+   2026-11-05 ?scandebug=1 was kept there for good, and a device that had once
+   opened the link showed the panel to everyone after (any such old entry is
+   removed here on load). A scan that changes page stays in the same tab, so
+   sessionStorage carries the flag across it; and the param is stripped from the
+   address bar as soon as it is read, so a bookmark, Add to Home Screen or a copied
+   link can't carry it either. ?x=0 switches it off at once. */
+const DEBUG_FLAG_TTL_MS = 30 * 60 * 1000;
+function _debugFlag(param, key){
+  let on = false;
+  try{ localStorage.removeItem(key); }catch(e){}
   try{
-    const q = new URLSearchParams(location.search).get("audiodebug");
-    if(q === "1") localStorage.setItem("kidseq_audiodebug", String(Date.now() + AUDIO_DEBUG_TTL_MS));
-    if(q === "0") localStorage.removeItem("kidseq_audiodebug");
-    const until = Number(localStorage.getItem("kidseq_audiodebug"));
-    if(until > Date.now()) return true;
-    localStorage.removeItem("kidseq_audiodebug");
-    return false;
-  }catch(e){ return false; }
-})();
+    const q = new URLSearchParams(location.search);
+    const v = q.get(param);
+    if(v !== null && v !== ""){
+      on = v !== "0";
+      q.delete(param);
+      const rest = q.toString();
+      try{ history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash); }catch(e){}
+    }else{
+      on = Number(sessionStorage.getItem(key)) > Date.now();
+    }
+    if(on) sessionStorage.setItem(key, String(Date.now() + DEBUG_FLAG_TTL_MS));
+    else   sessionStorage.removeItem(key);
+  }catch(e){}
+  return on;
+}
+
+/* ?audiodebug=1 — on-screen audio health panel. Off by default and
+   behaviour-neutral. The iPad is the machine that fails, so the panel has to live
+   on the page: state / is the clock moving / contexts created / resets / live
+   nodes / worst tick lateness / recent events. See _debugFlag for how long it stays. */
+const AUDIO_DEBUG = _debugFlag("audiodebug", "kidseq_audiodebug");
 // Recent audio events. Always kept (a few short strings) because the self-report
 // below sends them; the ?audiodebug panel just displays them.
 /* ---- Audio load control (2026-10-09) ----
@@ -6872,19 +6889,11 @@ let _scanWorkCanvas = null;
    function skips its bookkeeping (the `if(diag)` guards), and the failure alert
    fires exactly as before. The scan decisions themselves never read SCAN_DEBUG.
 
-   Turn on with ?scandebug=1, off with ?scandebug=0. The choice is STICKY
-   (localStorage) because a successful scan can navigate the page, which would
-   otherwise drop the flag mid-session. */
-let SCAN_DEBUG = false;
-try{
-  const _sd = new URLSearchParams(location.search).get("scandebug");
-  if(_sd !== null && _sd !== ""){
-    SCAN_DEBUG = _sd !== "0";
-    localStorage.setItem("kidseq_scandebug", SCAN_DEBUG ? "1" : "0");
-  }else{
-    SCAN_DEBUG = localStorage.getItem("kidseq_scandebug") === "1";
-  }
-}catch(e){}
+   Turn on with ?scandebug=1, off with ?scandebug=0. It lasts for this browser
+   TAB only (see _debugFlag): a successful scan can navigate the page, and the
+   same-tab sessionStorage carries the flag across that, but it is never
+   remembered on the device, so it can't show up for the next person to use it. */
+let SCAN_DEBUG = _debugFlag("scandebug", "kidseq_scandebug");
 
 /* Short, stable codes so a pasted log can be grepped and compared run to run. */
 const SCAN_FAIL = {
@@ -6990,7 +6999,7 @@ function _scanDebugEnsure(){
     mkBtn("copy", _scanDebugCopy),
     mkBtn("clear", () => { _scanLog.length = 0; _scanLastRec = null; _scanDebugRender(null); }),
     mkBtn("hide", () => { body.style.display = body.style.display === "none" ? "" : "none"; }),
-    mkBtn("off",  () => { try{ localStorage.setItem("kidseq_scandebug", "0"); }catch(e){} location.reload(); }));
+    mkBtn("off",  () => { try{ sessionStorage.removeItem("kidseq_scandebug"); }catch(e){} location.reload(); }));
 
   box.append(bar, body);
   document.body.appendChild(box);

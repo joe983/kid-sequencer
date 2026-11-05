@@ -514,9 +514,15 @@ point records **why** plus the numbers it decided on, into a panel pinned to the
 bottom of the screen — the phone holding the camera is the machine that has to
 display it.
 
-- **On/off:** `?scandebug=1` / `?scandebug=0`, sticky in `localStorage`
-  (`kidseq_scandebug`) because a successful scan navigates the page. The panel's
-  own `off` button clears it. **Off by default and behaviour-neutral** — no diag
+- **On/off:** `?scandebug=1` / `?scandebug=0`. **Lasts for that browser TAB only
+  (2026-11-05) — it must never show to a real user.** `_debugFlag()` keeps it in
+  `sessionStorage` for 30 min after the last page load (a scan that changes page stays
+  in the tab, so it carries across), strips the param from the address bar as soon as
+  it is read (no bookmark / Add to Home Screen / copied link can keep it), and deletes
+  the old permanent `localStorage['kidseq_scandebug']` on every load. It used to be
+  sticky in localStorage, so any device that had once opened the debug link showed the
+  panel to everyone afterwards. **Never store a debug flag in localStorage.** The
+  panel's own `off` button clears it. **Off by default and behaviour-neutral** — no diag
   object is allocated, every instrumented function skips its bookkeeping via
   `if(diag)`, and the failure `alert` fires exactly as before (verified: with the
   flag off a blank frame still alerts, log length 0, no panel in the DOM).
@@ -686,7 +692,7 @@ Rules that keep it working:
 - Stop works because every scheduled source goes through `trackNode()` → `liveNodes` → `stopAllAudioNow()` (a future-scheduled node stopped at 0 never sounds). A new voice that skips `trackNode` would play up to 300 ms after Stop (every current source is tracked — checked 2026-10-07; only the silent warm-up buffer isn't).
 - The melodic voice-count gain is set **at the slot** (`setTargetAtTime(gain, at, …)`), not at `currentTime`.
 
-`?audiodebug=1` (sticky for 6 hours — `AUDIO_DEBUG_TTL_MS`, the stored value is an expiry time so a forgotten flag can't leave the panel on a child's screen; `?audiodebug=0` clears it at once) shows a panel with: context state, whether the clock is moving, contexts created / rebuilds, live nodes, and this run's worst tick lateness, closest approach to a slot (`min lead`), late and dropped steps. Off by default and behaviour-neutral.
+`?audiodebug=1` (this browser tab only, 30 min after the last page load — `_debugFlag()`, same rule as `?scandebug=1`, never kept on the device so a forgotten flag can't leave the panel on a child's screen; `?audiodebug=0` clears it at once) shows a panel with: context state, whether the clock is moving, contexts created / rebuilds, live nodes, and this run's worst tick lateness, closest approach to a slot (`min lead`), late and dropped steps. Off by default and behaviour-neutral.
 
 ### AudioContext lifecycle — one context per page (2026-10-07)
 `ensureAudioReady()` used to **close and rebuild the whole AudioContext** on every Play after >25 s of quiet, and whenever the clock hadn't moved 40 ms after `resume()` (iOS often takes longer). A normal session therefore created context after context. The owner reported iPad audio dying after ~5 min until the iPad was rebooted; "audio dies until Safari is force-quit, reload doesn't help" is the reported pattern for pages that keep creating audio contexts, so the churn is the prime suspect — **not confirmed on the device yet** (check `contexts`/`rebuilds` on `?audiodebug=1` when it happens). Now:
