@@ -86,9 +86,9 @@ be reprinted. **When the sheet is next reprinted, do this first**, then:
 
 ### 2. Light colouring
 
-A square is filled at 0.14 AVERAGE DARKNESS (Round 8; it was an ink count at
-0.20, then 0.15). Real pencil on iPad and iPhone measured 0.23-0.49, empty squares
-0.00-0.09. There is no taper rule any more. Colouring much fainter than the
+A square is filled at 0.16 AVERAGE DARKNESS (Round 8; it was an ink count at
+0.20, then 0.15; first 0.14). Real pencil on iPad and iPhone measured 0.23-0.49, empty
+squares 0.00-0.11. There is no taper rule any more. Colouring much fainter than the
 lightest pencil measured (0.23) will be missed — the options are "colour it in
 firmly" on the sheet or a lower bar, which trades against grainy-iPad empties.
 
@@ -124,6 +124,20 @@ strongest empty 0.08. Live reports: empty 0.00-0.09, coloured 0.23-0.49. Stress 
 correct, 0 wrong in 1,400; scan-tests 124/124 (three synthetic scribbles restated at the
 faint end of REAL pencil, 9-11 strokes, because 7-8 read 0.13-0.16 — fainter than any pencil
 measured; the July frames now also read their faint r6c6).
+
+**Follow-up (2026-11-05).** 12 live scans, all correct: coloured 0.25+, empty up to 0.11
+(the 8-row sheet's bottom row, landscape) -> bar 0.14 -> 0.16. The grain emulation also
+showed an older fault: with heavy grain the WRONG way up could pass every check at
+registration ~30 against ~80 for the right way, and the beat-1 badge tiebreak (grain makes
+the empty badge window look inked) then picked it, giving wrong notes. The badge now only
+settles a NEAR tie (`SCAN_TURN_TIE` 0.65; the 3-note sheet's real tie is 39/48 = 0.81).
+Three repeated grainy runs: no wrong-way reads. The July frames' faint r6c6 (0.14-0.15)
+is back to "may be missed, never invented".
+
+**6/8 time is switched off (`SHOW_TIME_68 = false`, 2026-11-05, owner: "temporarily").**
+Only the /02 time-signature button changes: it cycles 4/4 <-> 3/4. The unlinked
+`/02?time=68` page, the 6/8 sheet geometry, the scanner's 3/4-vs-6/8 reading and the
+fixtures are untouched, so setting the switch back to true restores the third stop.
 
 **Rule: before pushing any change to how a square is judged, test it on a GRAINY picture and
 a SOFT picture of the owner's photos** (`ratio.mjs`/`grade.mjs`-style harness: downscale, blur,
