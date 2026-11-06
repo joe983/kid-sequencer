@@ -1424,17 +1424,17 @@ body.loggedIn #robotLogo{
        learning mode has its own toolFlash cue. Stops for good on the first
        tap on a note length (body.toolTouched, set in index.html). Locked
        circles don't hop — they're greyed out. */
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash){
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash){
       animation: potNudge 5s ease-in-out infinite;
       animation-delay: 1.2s;
       will-change: transform;
     }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(2){ animation-delay: 1.35s; }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(3){ animation-delay: 1.5s; }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(4){ animation-delay: 1.65s; }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(5){ animation-delay: 1.8s; }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(6){ animation-delay: 1.95s; }
-    html:not(.learning-mode) #toolsList .tool:not(.locked):not(.toolFlash):hover{
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(2){ animation-delay: 1.35s; }
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(3){ animation-delay: 1.5s; }
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(4){ animation-delay: 1.65s; }
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(5){ animation-delay: 1.8s; }
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):nth-child(6){ animation-delay: 1.95s; }
+    html:is(:not(.learning-mode), .beginner-view) #toolsList .tool:not(.locked):not(.toolFlash):hover{
       animation-play-state: paused;
     }
     body.toolTouched #toolsList .tool{
