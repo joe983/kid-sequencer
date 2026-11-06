@@ -1653,8 +1653,12 @@ body.loggedIn #robotLogo{
 
     /* Desktop: stage above (golden ratio), action buttons row below */
     .camBody{ display:flex; flex-direction:column; gap:10px; padding:10px; }
-    .camStage{ position:relative; background:#111; border-radius:10px; overflow:hidden; aspect-ratio:1.618; width:100%; }
-    #camVideo, #camPreview{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .camStage{ position:relative; background:#111; border-radius:10px; overflow:hidden; aspect-ratio:4/3; width:100%; max-height:calc(100svh - 190px); }
+    /* contain, not cover: the screen must show exactly the picture that is scanned.
+       cover cropped a 4:3 camera to the 1.618 box (iPad landscape lost the top and
+       bottom 9%), so the sheet looked well inside the frame while its corner marks
+       sat on the frame edge, and scans only worked held far above the sheet. */
+    #camVideo, #camPreview{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
     #camPreview{ display:none; }
     .camActions{ display:flex; flex-direction:row; justify-content:center; gap:10px; }
     .camActionBtn{ padding:10px 22px; font-size:13px; font-weight:800; border:3px solid #1d1d1d; border-radius:10px; background:#fff; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,0.10); transition:transform 0.08s,box-shadow 0.08s; text-align:center; line-height:1.3; font-family:inherit; }
@@ -1688,7 +1692,7 @@ body.loggedIn #robotLogo{
       #camModal .modalTitle{ display:none; }
       #camModal .modalClose{ width:34px; height:34px; border-radius:8px; border-width:2px; font-size:15px; box-shadow:none; }
       #camModal .camStage{ flex:none; width:auto; height:calc(100vh - 24px); height:calc(100svh - 24px);
-        aspect-ratio:4/3; max-width:calc(100vw - 24px); border-radius:0; }
+        aspect-ratio:4/3; max-width:calc(100vw - 24px); max-height:none; border-radius:0; }
       #camModal .modalBtns{ display:none; }
     }
 
