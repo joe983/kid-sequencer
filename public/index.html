@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=103">
+<link rel="stylesheet" href="css/styles.css?v=105">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -4454,6 +4454,8 @@ function buildTools(){
     toolsListEl.appendChild(tool);
   });
 }
+// First tap on a note length ends the idle hop for the session (same rule as the pots).
+if(toolsListEl) toolsListEl.addEventListener("pointerdown", () => document.body.classList.add("toolTouched"), { once: true });
 
 /* -------------------- GRID -------------------- */
 let noteLayerEls = [];
