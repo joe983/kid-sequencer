@@ -2590,7 +2590,10 @@ html.js-loading #contentWrap{
   .noteGroupStud,
   #playhead,
   #upgradeModal,
+  #toolBtns,
   #viewToggleBtn,
+  #colorsBtn,
+  #colorModal,
   #camModal,
   #saveModal,
   #loadModal,
@@ -3284,7 +3287,12 @@ html:not(.learning-mode) #toolsList{ align-items: center; }
 /* The toggle button. Visual vocabulary copied from #keyBtn (the app's other
    small square control); lit state from #staveBtn.active, the only existing
    aria-pressed mode toggle. */
-#viewToggleBtn{
+/* The view toggle and the colours button share one row: 58 + 8 + 58 = 124 = --toolW,
+   and the row is as tall as the toggle alone, so the column is no taller than it
+   was (the iPhone-landscape budget above still holds). */
+#toolBtns{ display: flex; gap: 8px; justify-content: center; flex: 0 0 auto; }
+#viewToggleBtn,
+#colorsBtn{
   width: 58px;
   height: 58px;
   /* No margin: #tools is a flex column with gap:14px, which already separates the
@@ -3304,13 +3312,21 @@ html:not(.learning-mode) #toolsList{ align-items: center; }
   flex: 0 0 auto;
   -webkit-appearance: none;
 }
-#viewToggleBtn svg{ width: 34px; height: 34px; display: block; }
-#viewToggleBtn:hover{ transform: translateY(-1px); box-shadow: 0 9px 0 rgba(0,0,0,0.08); }
-#viewToggleBtn:active{ transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,0.07); }
+#viewToggleBtn svg,
+#colorsBtn svg{ width: 34px; height: 34px; display: block; }
+#viewToggleBtn:hover,
+#colorsBtn:hover{ transform: translateY(-1px); box-shadow: 0 9px 0 rgba(0,0,0,0.08); }
+#viewToggleBtn:active,
+#colorsBtn:active{ transform: translateY(2px); box-shadow: 0 6px 0 rgba(0,0,0,0.07); }
 #viewToggleBtn.active{ background: #ffffff; }   /* black and white only (owner 2026-10-09) */
-/* Learning levels and lessons have their own fixed layout and no 8-row model. */
+/* Learning levels and lessons have their own fixed layout and no 8-row model. The
+   row is hidden too, or its empty box would still take a 14px gap in the column. */
 .learning-mode #viewToggleBtn,
-.lesson-mode #viewToggleBtn{ display: none; }
+.learning-mode #toolBtns,
+.lesson-mode #viewToggleBtn,
+.lesson-mode #toolBtns{ display: none; }
+/* /03 keeps both (the view cycle's way round, and the colours — it is a public face). */
+html.beginner-view #toolBtns{ display: flex; }
 /* …except /03, which is built on a learning level but is one of the three public
    faces, so it has to keep the way back round the cycle. Higher specificity than
    the rule above (id + class + element), so it wins without !important. */
@@ -3458,3 +3474,74 @@ html:not(.fiveNote) .noteGroupGlyph{ display: none !important; }
 .acctDelete { background:none; border:none; padding:0 4px; margin-left:10px; font:inherit; font-size:12px; font-weight:800; color:#b3261e; text-decoration:underline; cursor:pointer; }
 .acctDelete:disabled { opacity:.5; cursor:default; }
 .acctPrivacy { margin-left:10px; font-size:12px; font-weight:800; color:#555; }
+
+/* Note colours dialog (2026-11-07). Same vocabulary as the camera modal and the
+   small square buttons: 4px #1d1d1d borders, rounded corners, a flat offset shadow,
+   the app's selected blue (#d4e6ff). Selection is shown by a ring AND a tick, never
+   by colour alone — the colours are the thing being chosen. */
+#colorModal{ position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 10000; background: rgba(0,0,0,0.45); padding: 10px; box-sizing: border-box; }
+#colorModal.show{ display: flex; }
+#colorModal .colorCard{ width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; outline: none; }
+#colorModal .colorBody{ padding: 12px 14px 10px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.colorHint{ font-weight: 800; font-size: 13px; color: #1f2a44; opacity: 0.75; text-align: center; margin: 0 0 10px; }
+.colorPresets{ display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 14px; }
+.colorGrid{ display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px 6px; align-items: center; }
+.colorLetter{
+  justify-self: center; width: 100%; max-width: 48px; aspect-ratio: 1; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border: 3px solid #1d1d1d; border-radius: 12px;
+  font-weight: 900; font-size: 18px; color: #1d1d1d;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.07);
+  transition: background 150ms ease;
+}
+.colorSet{
+  font-family: "Comic Sans MS","Comic Sans","Trebuchet MS", Arial, sans-serif;
+  font-weight: 900; font-size: 13px; line-height: 1.15; text-align: center;
+  padding: 8px 14px; min-height: 40px; box-sizing: border-box;
+  border: 3px solid #1d1d1d; border-radius: 12px; background: #ffffff; color: #1d1d1d;
+  cursor: pointer; touch-action: manipulation; -webkit-appearance: none; overflow-wrap: anywhere;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.07);
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+.colorSet:hover{ transform: translateY(-1px); box-shadow: 0 5px 0 rgba(0,0,0,0.08); }
+.colorSet:active{ transform: translateY(2px); box-shadow: 0 2px 0 rgba(0,0,0,0.07); }
+.colorSet.on{ background: #d4e6ff; }
+.colorSw{
+  justify-self: center; width: 100%; max-width: 48px; aspect-ratio: 1; box-sizing: border-box; padding: 0;
+  border: 3px solid #1d1d1d; border-radius: 50%; cursor: pointer; position: relative;
+  touch-action: manipulation; -webkit-appearance: none;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.07);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.colorSw:hover{ transform: translateY(-1px); }
+.colorSw:active{ transform: translateY(2px) scale(0.96); }
+.colorSw svg{ position: absolute; inset: 14%; width: 72%; height: 72%; display: none; pointer-events: none; }
+.colorSw.sel{ box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px #1d1d1d; }
+.colorSw.sel svg{ display: block; }
+#colorModal .modalBtns{ padding: 10px 12px 14px; }
+#colorModal .modalBtns .bigBtn{ margin: 0; }
+/* Phones and short landscape windows: tighter, so five rows + the buttons fit. */
+@media (max-width: 500px), (max-height: 520px){
+  #colorModal{ padding: 6px; }
+  #colorModal .modalHeader{ padding: 6px 8px; border-bottom-width: 3px; }
+  #colorModal .modalClose{ width: 36px; height: 36px; border-radius: 10px; border-width: 3px; font-size: 16px; box-shadow: 0 4px 0 rgba(0,0,0,0.07); }
+  #colorModal .colorBody{ padding: 8px 10px 9px; }
+  .colorHint{ font-size: 12px; margin-bottom: 6px; }
+  .colorGrid{ gap: 6px 4px; }
+  .colorPresets{ gap: 6px; margin-bottom: 8px; }
+  .colorLetter{ font-size: 15px; border-width: 2px; border-radius: 9px; max-width: 38px; }
+  .colorSw{ max-width: 38px; border-width: 2px; }
+  .colorSet{ font-size: 11px; padding: 5px 9px; min-height: 30px; border-width: 2px; }
+  #colorModal .modalBtns{ padding: 6px 10px 10px; }
+  #colorModal .modalBtns .bigBtn{ font-size: 15px; padding: 6px 14px; min-width: 76px; border-width: 3px; }
+}
+@media (max-height: 420px){
+  .colorHint{ display: none; }
+}
+/* An upright phone has the height to spare, so its swatches can be bigger. */
+@media (max-width: 500px) and (min-height: 521px){
+  .colorLetter, .colorSw{ max-width: 46px; }
+}
+@media (prefers-reduced-motion: reduce){
+  .colorLetter, .colorSet, .colorSw{ transition: none; }
+}

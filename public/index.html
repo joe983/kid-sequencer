@@ -18,7 +18,7 @@
 <base href="/">
 <title>Kid Sequencer</title>
 <link rel="icon" type="image/svg+xml" href="images/favicon.svg">
-<link rel="stylesheet" href="css/styles.css?v=109">
+<link rel="stylesheet" href="css/styles.css?v=114">
 <!-- Rhythm Trail lesson data (pure data; the runner lives in the main IIFE) -->
 <script src="js/lessons-data.js?v=1"></script>
 </head>
@@ -107,7 +107,12 @@
 <div id="mainLayout">
 <div id="tools">
 <div id="toolsList"></div>
+<!-- The two small square buttons share one 124px row (58 + 8 + 58) so the column is no
+     taller than with the view toggle alone. Neither prints (see @media print). -->
+<div id="toolBtns">
 <button id="viewToggleBtn" type="button" aria-pressed="false" onclick="toggleNoteView()"></button>
+<button id="colorsBtn" type="button" aria-haspopup="dialog" aria-label="Change the note colours" title="Change the note colours" onclick="openColorModal()"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4C9 4 4 9.2 4 15.4 4 21.9 9.4 27 15.2 27c2 0 3-1 3-2.5 0-1-.7-1.7-.7-2.7 0-1.3 1-2.3 2.4-2.3H23c3.2 0 5-2.4 5-5.2C28 8.7 22.7 4 16 4z" fill="none" stroke="#1d1d1d" stroke-width="2.4" stroke-linejoin="round"/><circle cx="10" cy="14" r="2.1" fill="#1d1d1d"/><circle cx="15" cy="9.6" r="2.1" fill="#1d1d1d"/><circle cx="21.4" cy="11" r="2.1" fill="#1d1d1d"/><circle cx="9.8" cy="19.8" r="2.1" fill="#1d1d1d"/></svg></button>
+</div>
 </div>
 <div id="sequencerShell">
 <div id="beatHeader" aria-hidden="true"></div>
@@ -220,6 +225,26 @@
      survive on window.KidSequencer for headless verification — they have no UI. -->
 <div class="modalBtns">
 <button class="bigBtn" onclick="closeCameraModal()">Close</button>
+</div>
+</div>
+</div>
+
+<!-- Note colours: each note has four colours to choose from, plus three presets.
+     Built by _buildColorModal(); changes apply live. -->
+<div aria-hidden="true" id="colorModal">
+<div aria-label="Note colours" aria-modal="true" class="modalCard colorCard" role="dialog" tabindex="-1">
+<div class="modalHeader">
+<div class="modalTitle">Note colours</div>
+<button aria-label="Close" class="modalClose" onclick="closeColorModal()">×</button>
+</div>
+<div class="colorBody">
+<div class="colorHint">Pick a colour for each note, or start from a preset.</div>
+<div class="colorPresets"></div>
+<div class="colorGrid"></div>
+</div>
+<div class="modalBtns">
+<button class="bigBtn" onclick="resetNoteColours()">Reset</button>
+<button class="bigBtn" onclick="closeColorModal()">Done</button>
 </div>
 </div>
 </div>
@@ -746,6 +771,68 @@ if (LEARN_LEVEL) document.documentElement.style.setProperty("--learnRows", Strin
 
 const freqs = LEARN_LEVEL ? LEARN_LEVEL.freqs : [523.25,493.88,440.00,392.00,349.23,329.63,293.66,261.63];
 const rowColors = LEARN_LEVEL ? LEARN_LEVEL.rowColors : ["#FF0000","#FF4FD8","#7A5CFF","#3DA9FF","#00FF00","#FFFF00","#FF8C00","#FF0000"];
+
+/* --- Note colours -------------------------------------------------------------
+   Each note (C D E F G A B) has four colours to pick from. The choice is per NOTE
+   (a high C always matches C) and per DEVICE (localStorage, 7 digits, nothing
+   personal), so it survives switching between the three views — each is a page
+   load. `rowColors` is mutated IN PLACE, never reassigned: the grid, the
+   beamed-group studs, the staff and the score print all read it, so one write
+   recolours everything on the next redraw.
+   Applies to the three public faces only. ?level=N and ?lesson= colour-code their
+   notes on purpose (a lesson says "the red one"), so they never read the setting.
+   NOTE_COLOURS is deliberately written note by note, and each note's four options
+   sit in a different order from its neighbours', so no row of the dialog (and no
+   line of this table) lays a ready-made scheme out in sequence — you only get one
+   by picking its colours yourself. The presets below cover three sensible
+   starting points; one of the four options per note belongs to none of them.
+   Classic = what the app always shipped with. Pastel = the soft versions.
+   Colour-blind friendly = Okabe–Ito, ordered so NEIGHBOURING notes stay far
+   apart under protan/deutan vision (closest neighbours ~23 apart in Lab there,
+   against ~8 for Classic). Every colour keeps >= 3:1 against the dark note glyph
+   the 5-note view draws. Entries are [hex, spoken name]. */
+const NOTE_NAMES = ["C","D","E","F","G","A","B"];
+const NOTE_COLOURS = [
+  /* C */ [["#FF9AA2","Soft red"],["#D55E00","Vermilion"],["#E8262E","Red"],["#FF0000","Red"]],
+  /* D */ [["#F7931E","Orange"],["#FF8C00","Orange"],["#FFC48C","Soft orange"],["#F0E442","Yellow"]],
+  /* E */ [["#FFFF00","Yellow"],["#FFF3A0","Soft yellow"],["#009E73","Green"],["#FFE100","Yellow"]],
+  /* F */ [["#56B4E9","Sky blue"],["#3DB54A","Green"],["#00FF00","Green"],["#A8E6A1","Soft green"]],
+  /* G */ [["#9AD8F5","Soft blue"],["#0072B2","Blue"],["#1F8F4E","Dark green"],["#3DA9FF","Sky blue"]],
+  /* A */ [["#2E6BE6","Blue"],["#7A5CFF","Purple"],["#B9A7F5","Soft purple"],["#CC79A7","Pink-purple"]],
+  /* B */ [["#FF4FD8","Pink"],["#F5A8E3","Soft pink"],["#E69F00","Orange"],["#9157D6","Violet"]]
+];
+// A preset is the option number (0-3) to use for each of the seven notes.
+const COLOR_PRESETS = [
+  { label: "Classic",               pick: [3,1,0,2,3,1,0] },
+  { label: "Pastel",                pick: [0,2,1,3,0,2,1] },
+  { label: "Colour-blind friendly", pick: [1,3,2,0,1,3,2] }
+];
+const COLOR_DEFAULT = COLOR_PRESETS[0].pick;
+const COLOR_STORE_KEY = "kidseq_note_colors";
+const COLORS_ON = !LEARN_LEVEL || VIEW === "three";
+const _colorSel = COLOR_DEFAULT.slice();      // chosen option (0-3), per note
+try{
+  const s = localStorage.getItem(COLOR_STORE_KEY);
+  if(s && /^[0-3]{7}$/.test(s)) for(let i = 0; i < 7; i++) _colorSel[i] = +s[i];
+}catch(e){}
+// Which of the seven notes a grid row is (octave-folded, so row 0 and row 7 are both C).
+const _CMAJ_HZ = [261.63,293.66,329.63,349.23,392.00,440.00,493.88];
+function _pcOfFreq(f){
+  while(f >= 510) f /= 2;
+  while(f < 255)  f *= 2;
+  let best = 0;
+  for(let i = 1; i < 7; i++) if(Math.abs(Math.log(f / _CMAJ_HZ[i])) < Math.abs(Math.log(f / _CMAJ_HZ[best]))) best = i;
+  return best;
+}
+const _rowPc = freqs.map(_pcOfFreq);
+function _applyNoteColours(){
+  if(!COLORS_ON) return;
+  for(let r = 0; r < rowColors.length; r++){
+    const pc = _rowPc[r];
+    rowColors[r] = NOTE_COLOURS[pc][_colorSel[pc]][0];
+  }
+}
+_applyNoteColours();
 
 /* --- Five-note (C–G) beginner view ------------------------------------------
    An alternative face for the SAME 8×16 model: it renders and plays only the
@@ -2159,6 +2246,8 @@ window.addEventListener("keydown", (e) => {
   if (e.code !== "Space") return;
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA") return;
+  // The colours dialog sits over the grid: Space must not start the music behind it.
+  if (document.getElementById("colorModal")?.classList.contains("show")) { e.preventDefault(); return; }
   e.preventDefault();
   if (timer || startTimeout) stop();
   else play();
@@ -6140,6 +6229,95 @@ function closeKeyMenu(){
 window.openKeyMenu = openKeyMenu;
 window.closeKeyMenu = closeKeyMenu;
 
+/* -------------------- NOTE COLOURS MODAL -------------------- */
+// Above the grid, three preset buttons (a starting point for every note at once).
+// The grid: a letter row (each letter shows that note's CURRENT colour, so the top
+// of the dialog is a live preview), then four rows of swatches — four options per
+// note, in the order NOTE_COLOURS lists them. Tap a swatch to set one note.
+// Changes apply to the grid behind the dialog at once, so there is nothing to
+// confirm or cancel.
+const _CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12.5l4.2 4.2L18.5 7.8" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 12.5l4.2 4.2L18.5 7.8" fill="none" stroke="#1d1d1d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+let _colorModalBuilt = false, _colorOpener = null;
+function _colorModalEl(){ return document.getElementById("colorModal"); }
+function _buildColorModal(){
+  const m = _colorModalEl();
+  const grid = m?.querySelector(".colorGrid"), presets = m?.querySelector(".colorPresets");
+  if(!grid || !presets || _colorModalBuilt) return;
+  _colorModalBuilt = true;
+  const el = (cls, tag) => { const e = document.createElement(tag || "div"); e.className = cls; return e; };
+  COLOR_PRESETS.forEach((p, pi) => {
+    const b = el("colorSet", "button");
+    b.type = "button"; b.textContent = p.label; b.dataset.preset = pi;
+    b.setAttribute("aria-label", "Use " + p.label + " colours for every note");
+    b.addEventListener("click", () => { p.pick.forEach((v, pc) => { _colorSel[pc] = v; }); _commitColours(); });
+    presets.appendChild(b);
+  });
+  NOTE_NAMES.forEach((n, pc) => {
+    const l = el("colorLetter"); l.textContent = n; l.dataset.pc = pc; grid.appendChild(l);
+  });
+  for(let slot = 0; slot < 4; slot++){
+    NOTE_NAMES.forEach((n, pc) => {
+      const [hex, name] = NOTE_COLOURS[pc][slot];
+      const sw = el("colorSw", "button");
+      sw.type = "button"; sw.dataset.slot = slot; sw.dataset.pc = pc;
+      sw.style.background = hex;
+      sw.innerHTML = _CHECK_SVG;
+      const label = n + ": " + name;
+      sw.title = label; sw.setAttribute("aria-label", label);
+      sw.addEventListener("click", () => { _colorSel[pc] = slot; _commitColours(); });
+      grid.appendChild(sw);
+    });
+  }
+}
+function _paintColorModal(){
+  const m = _colorModalEl();
+  if(!m) return;
+  m.querySelectorAll(".colorLetter").forEach(l => {
+    const pc = +l.dataset.pc;
+    l.style.background = NOTE_COLOURS[pc][_colorSel[pc]][0];
+  });
+  m.querySelectorAll(".colorSw").forEach(sw => {
+    const on = _colorSel[+sw.dataset.pc] === +sw.dataset.slot;
+    sw.classList.toggle("sel", on);
+    sw.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  m.querySelectorAll(".colorSet").forEach(b => {
+    const pick = COLOR_PRESETS[+b.dataset.preset].pick;
+    b.classList.toggle("on", _colorSel.every((v, pc) => v === pick[pc]));
+  });
+}
+function _commitColours(){
+  _applyNoteColours();
+  redrawAllNotes();
+  _paintColorModal();
+  try{ localStorage.setItem(COLOR_STORE_KEY, _colorSel.join("")); }catch(e){}
+}
+function openColorModal(){
+  if(!COLORS_ON) return;
+  const m = _colorModalEl();
+  if(!m) return;
+  _buildColorModal();
+  _paintColorModal();
+  _colorOpener = document.getElementById("colorsBtn");
+  m.classList.add("show");
+  m.setAttribute("aria-hidden", "false");
+  m.querySelector(".colorCard")?.focus({ preventScroll: true });
+}
+function closeColorModal(){
+  const m = _colorModalEl();
+  if(!m) return;
+  m.classList.remove("show");
+  m.setAttribute("aria-hidden", "true");
+  try{ _colorOpener?.focus({ preventScroll: true }); }catch(e){}
+}
+function resetNoteColours(){ COLOR_DEFAULT.forEach((v, pc) => { _colorSel[pc] = v; }); _commitColours(); }
+window.openColorModal = openColorModal;
+window.closeColorModal = closeColorModal;
+window.resetNoteColours = resetNoteColours;
+document.getElementById("colorModal")?.addEventListener("click", e => {
+  if(e.target.id === "colorModal") closeColorModal();
+});
+
 /* -------------------- CLEAR -------------------- */
 function clearGrid(){
   pushUndo();
@@ -6596,6 +6774,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if(topupModal && topupModal.classList.contains("show")) closeTopupModal();
       const accountModal = document.getElementById("accountModal");
       if(accountModal && accountModal.classList.contains("show")) closeAccountModal();
+      const colorModal = document.getElementById("colorModal");
+      if(colorModal && colorModal.classList.contains("show")) closeColorModal();
     }
   });
   document.getElementById("aiModal")?.addEventListener("click", e => {
